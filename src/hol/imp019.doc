@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp019.doc   %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 1.28 $ $RCSfile: imp019.doc,v $
+% imp019.doc   %Z% $Date: 2005/05/07 12:08:26 $ $Revision: 1.29 $ $RCSfile: imp019.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for ICL HOL Parser}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP019}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.28 $%
+\def\SCCSversion{$Revision: 1.29 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
+\TPPdate{\FormatDate{$Date: 2005/05/07 12:08:26 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -87,6 +87,7 @@ Renamings from version 1.5 of DS/FMU/IED/WRK038.
 \item[Issue 1.27] Copyright and banner updates for open source release.
 \item[Issue 1.28] PPHol-specific updates for open source release
 \item[Issue 1.29] HOL now supports left-associative operators.
+\item]Issue 1.30] Now support floating point literals.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -159,6 +160,7 @@ fun Ûformat_hol_tokenÝ  (tok : HOL_TOKEN) : string = (
 	|	HTBinder  name	=> name 
 	|	HTInOp {name, ...}	=> name
 	|	HTName name	=> name
+	|	HTNumLit n	=> n
 	|	HTString s	=> "\"" ^ s ^ "\""
 	|	HTChar c	=> "`" ^ c ^ "`"
 	|	HTPostOp {name, ...}	=> name
@@ -387,7 +389,8 @@ datatype ('ty) ÛTMÝ	=	ÛBinderÝ of string * ('ty)TM * ('ty)TM
 		|	ÛIdÝ of string
 		|	ÛCharLitÝ of string
 		|	ÛStringLitÝ of string
-		|	ÛNumLitÝ of INTEGER;
+		|	ÛNatLitÝ of INTEGER
+		|	ÛFloatÝ of INTEGER * INTEGER * INTEGER;
 =TEX
 The partially parsed inputs for the parser will therefore have the following
 type:
@@ -418,13 +421,14 @@ fun Ûformat_tyÝ (ty : TY) : string = (
 =SML
 fun Ûneeds_brktsÝ (tm :('ty) TM) : bool = (
 	case tm of
-		SetDisplay tms => false
-	|	SetComprehension (v, tm) => false
-	|	ListDisplay tms => false
-	|	Id s => false
-	|	CharLit s =>false
-	|	StringLit s => false
-	|	NumLit s => false
+		SetDisplay _ => false
+	|	SetComprehension _ => false
+	|	ListDisplay _ => false
+	|	Id _ => false
+	|	CharLit _ =>false
+	|	StringLit _ => false
+	|	NatLit _ => false
+	|	Float _ => false
 	|	_ => true
 );
 =TEX
@@ -469,7 +473,8 @@ fun Ûformat_tmÝ (do_ty : 'ty -> string) (tm :('ty) TM) : string = (
 	) |	Id s => (s
 	) |	CharLit s =>( "`" ^ s ^ "`"
 	) |	StringLit s => ("\"" ^ s ^ "\""
-	) |	NumLit s => (string_of_integer s
+	) |	NatLit s => (string_of_integer s
+	) |	Float xpe => (string_of_float xpe
 	)
 ) and Ûformat_inner_tmÝ (do_ty : ('ty) -> string) (tm : ('ty)TM) : string = (
 	if needs_brkts tm
@@ -594,8 +599,13 @@ fun Ûred_appÝ (Parsed (Tm tm1)) (Parsed (Tm tm2)) : PP = (
 ) | red_app _ _ = stack_error "red_app";
 =TEX
 =SML
-fun Ûred_tmnameÝ (Token (HTName s, _)) : PP = (
-	Tm((if is_all_decimal s then NumLit o natural_of_string else Id) s)
+fun Ûred_tmnameÝ (Token (HTName s, _)) = (
+	Tm(Id s)
+) | red_tmname (Token (HTNumLit s, _)) = (
+	case num_lit_of_string s of
+		Value (n, Nil) =>	Tm(NatLit n)
+	|	Value (x, Value (p, e)) => Tm(Float (x, p, e))
+	|	_ => stack_error "red_tmname"
 ) | red_tmname _ = stack_error "red_tmname";
 =TEX
 =SML
@@ -797,6 +807,7 @@ fun ÛHOL_classifyÝ  (tok : HOL_TOKEN) : HOL_LEX_CLASS = (
 	|	HTInOp {name=",", ...}	=> HLComma
 	|	HTInOp _	=> HLInOp
 	|	HTName _	=> HLName
+	|	HTNumLit _ => HLName
 	|	HTString _	=> HLString
 	|	HTChar _	=> HLChar
 	|	HTPostOp _	=> HLPostOp

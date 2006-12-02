@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp016.doc   %Z% $Date: 2004/06/16 16:33:03 $ $Revision: 2.23 $ $RCSfile: imp016.doc,v $
+% imp016.doc   %Z% $Date: 2005/04/24 16:01:30 $ $Revision: 2.24 $ $RCSfile: imp016.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of Type Inference}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP016}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.23 $%
+\def\SCCSversion{$Revision: 2.24 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/06/16 16:33:03 $%
+\TPPdate{\FormatDate{$Date: 2005/04/24 16:01:30 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -127,6 +127,7 @@ type inference.
 \item[Issue 2.22] PPHol-specific updates for open source release
 \item[Issue 2.23] Type inference contexts are now implemented as efficient dictionaries.
 \item[Issue 2.24] Now uses {\tt app} rather than {\tt map} when appropriate.
+\item[Issue 2.25] Added support for floating point literals.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -321,6 +322,9 @@ fun Ûsub_tyÝ (env : ENV) : ENV = (
 );
 =TEX
 
+=SML
+val Û¯Ý = mk_ctype("¯", []);
+=TEX
 \subsection{Environment Management}
 
 The variable reference $ti\_context\_info$ is used to store the context.
@@ -366,12 +370,13 @@ fun Ûfv_setÝ ((Binder (s, a, b)) : 'a TM) : string list  = fv_set b diff fv_set 
   | fv_set (ListDisplay tl) =  list_cup (map fv_set tl)
   | fv_set (Id s) = (
 	case type_of_const s of
-		Value x => []
+		Value _ => []
 		|   Nil => [s]
 	)
-  | fv_set (CharLit c) = nil
-  | fv_set (StringLit s) = nil
-  | fv_set (NumLit i) = nil;
+  | fv_set (CharLit _) = []
+  | fv_set (StringLit _) = []
+  | fv_set (NatLit _) = []
+  | fv_set (Float _) = [];
 =TEX
 
 =SML
@@ -520,9 +525,10 @@ fun Ûfv_in_extmÝ ((Binder ("Ì", a, b)) : EXTYPE TM) : string list * int list = (
 	error "fv_in_extm" 16101 [fn() => "Invalid ListDisplay Construct"]
   | fv_in_extm (Id s) =
 	error "fv_in_extm" 16101 [fn() => "Invalid Id Construct"]
-  | fv_in_extm (CharLit c) = (nil,nil)
-  | fv_in_extm (StringLit s) = (nil,nil)
-  | fv_in_extm (NumLit s) = (nil,nil);
+  | fv_in_extm (CharLit _) = ([], [])
+  | fv_in_extm (StringLit _) = ([], [])
+  | fv_in_extm (NatLit _) = ([], [])
+  | fv_in_extm (Float _) = ([], []);
 
 =TEX
 =SML
@@ -1114,8 +1120,12 @@ to free variables chosen by $replaced$.
 	StringLit s, type_to_extype STRING)
 =TEX
 =SML
-  | ti env (NumLit i) = (
-	NumLit i, type_to_extype î)
+  | ti env (NatLit i) = (
+	NatLit i, type_to_extype î)
+=TEX
+=SML
+  | ti env (Float xpe) = (
+	Float xpe, type_to_extype ¯)
 =TEX
 =SML
 and
@@ -1181,7 +1191,7 @@ in
 end);
 =TEX
 Note that the only binder left is Ì when we get to resolve overloading so
-only the $Id: imp016.doc,v 2.23 2004/06/16 16:33:03 rda Exp rda $ case is interesting below (see how $ti$ handles binders above).
+only the $Id: imp016.doc,v 2.24 2005/04/24 16:01:30 rda Exp rda $ case is interesting below (see how $ti$ handles binders above).
 =SML
 fun Ûresolve_overloadingÝ (term : EXTYPE TM) : EXTYPE TM = (
 let	fun Ûres_ovlÝ (term as (TmTyped (Id s, ty))) = (
@@ -1223,7 +1233,8 @@ let	fun Ûres_ovlÝ (term as (TmTyped (Id s, ty))) = (
 	  | res_ovl (Id s) = error "res_ovl" 16101 [fn() => "Invalid Id Construct"]
 	  | res_ovl (CharLit c) = CharLit c
 	  | res_ovl (StringLit s) = StringLit s
-	  | res_ovl (NumLit i) = NumLit i;
+	  | res_ovl (NatLit i) = NatLit i
+	  | res_ovl (Float xpe) = Float xpe;
 in
 	if (!contains_overloaded_aliases)
 	then
@@ -1343,8 +1354,12 @@ fun Ûextm_to_termÝ (namemap : (int * string) list) ((Binder ("Ì", a, b))
 	mk_string s
 	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
 	)
-  | extm_to_term namemap (NumLit s) = (
+  | extm_to_term namemap (NatLit s) = (
 	mk_î s
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
+	)
+  | extm_to_term namemap (Float xpe) = (
+	mk_float xpe
 	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
 	);
 =TEX

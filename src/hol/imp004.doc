@@ -15,10 +15,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPproject{FST PROJECT}  %% Mandatory field
 \TPPtitle{Implementation for Derived Terms}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP004}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.12 $
+\def\SCCSversion{$Revision: 2.13 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
+\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $%
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -83,6 +83,7 @@ Added literals to $DEST\_TERM$.
 \item[Issue 2.11] Copyright and banner updates for open source release.
 \item[Issue 2.12] PPHol-specific updates for open source release
 \item[Issue 2.13] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 2.14] Support for floating point literals.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -436,6 +437,57 @@ fun Ûdest_ifÝ (tm : TERM) : (TERM * TERM * TERM) = (
 	handle (Fail _) => 
 	term_fail "dest_if" 4006 [tm]
 );
+=TEX
+\subsection{Floating Point Literals}
+=SML
+local
+	val nat_ty = mk_ctype("î",[]);
+	val int_ty = mk_ctype("ú",[]);
+	val real_ty = mk_ctype("¯",[]);
+	val nat_int_ty = mk_­_type(nat_ty, int_ty);
+	val nat_int = mk_const("îú", nat_int_ty);
+	val minus_ty = mk_­_type(int_ty, int_ty);
+	val minus = mk_const("~‰Z", minus_ty);
+	val float_ty = list_mk_­_type[nat_ty, int_ty, int_ty, real_ty];
+	val float = mk_const("Float", float_ty);
+	fun mk_int (n : INTEGER) : TERM = (
+		if	n @< 0
+		then	mk_app(minus, mk_int(@~ n))
+		else	mk_app(nat_int, mk_î n)
+	);
+	fun dest_int (tm : TERM) : INTEGER = (
+		let	val (f1, a1) = dest_app tm;
+		in	if	f1 =$ minus
+			then	let	val (f2, a2) = dest_app a1;
+				in	if	f2 =$ nat_int
+					then	@~(dest_î a2)
+					else	fail "" 0 []
+				end
+			else if	f1 =$ nat_int
+			then	dest_î a1
+			else	fail "" 0 []
+		end
+	);	
+		
+in
+fun Ûmk_floatÝ ((x, p, e): INTEGER * INTEGER * INTEGER) :TERM = (
+	let	val x_tm = mk_î x;
+		val p_tm = mk_int p;
+		val e_tm = mk_int e;
+	in	list_mk_app(float, [x_tm, p_tm, e_tm])
+	end	handle Fail _ => fail "mk_float" 4041 []
+);
+fun Ûdest_floatÝ (tm : TERM) : INTEGER * INTEGER * INTEGER = (
+	(case strip_app tm of
+		(flt, [x_tm, p_tm, e_tm]) =>
+		(dest_î x_tm, dest_int p_tm, dest_int e_tm)
+	|	_ => fail "" 0 [])
+	handle Fail _ => term_fail "dest_float" 4042 [tm]
+);
+fun Ûis_floatÝ (tm : TERM) : bool = (
+	(dest_float tm; true) handle Fail _ => false
+);
+end;
 =TEX
 \subsection{Let-terms}
 We implement $mk\_let$ to carry out three steps:
@@ -856,6 +908,7 @@ datatype ÛDEST_TERMÝ = ÛDVarÝ of string * TYPE |
 	ÛDÅÝ of TERM * TERM |
 	ÛDIfÝ of (TERM * TERM * TERM) |
 	ÛDîÝ of INTEGER |
+	ÛDFloatÝ of INTEGER * INTEGER * INTEGER |
 	ÛDCharÝ of string |
 	ÛDStringÝ of string;
 =TEX
@@ -966,8 +1019,13 @@ let
 			DSetComp(dest_set_comp tm)
 			handle (Fail _) =>
 			DApp(f, a)
-		) | "³" => D³ a
-		| _ => DApp(f, a));
+		) | "Float" => (
+			DFloat(dest_float tm)
+			handle (Fail _) =>
+			DApp(f, a)
+		) | "³" => (
+			D³ a
+		) | _ => DApp(f, a));
 		
 	fun aux (App (f, a)) = (aux1 (dest_simple_term f) f a)
 	| aux (Var v) = DVar v
@@ -1003,13 +1061,14 @@ fun Ûmk_termÝ ((DVar v) : DEST_TERM) : TERM = mk_var v
 | mk_term (D¶‰1 e) = mk_¶‰1 e
 | mk_term (DÅ s) = mk_Å s
 | mk_term (DIf ii) = mk_if ii
+| mk_term (DFloat xpe) = mk_float xpe
 | mk_term (DChar s) = mk_char s
 | mk_term (DString s) = mk_string s
 | mk_term (Dî n) = mk_î n;
 =TEX
  
 =SML
-end; (* of TypesAndTerms signature *)
+end; (* of TypesAndTerms structure *)
 =TEX
 =SML
 open TypesAndTerms;
