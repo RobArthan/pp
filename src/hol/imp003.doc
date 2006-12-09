@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  imp003.doc  %Z% $Date: 2005/12/16 10:34:27 $ $Revision: 2.30 $ $RCSfile: imp003.doc,v $
+%  imp003.doc  %Z% $Date: 2006/11/14 16:35:28 $ $Revision: 2.31 $ $RCSfile: imp003.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Types and Terms}
 \TPPref{DS/FMU/IED/IMP003}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.30 $
+\def\SCCSversion{$Revision: 2.31 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $%
+\TPPdate{\FormatDate{$Date: 2006/11/14 16:35:28 $%
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -99,6 +99,7 @@ initialisation module can hide that from the user.
 \item[Issue 2.27--2.29] Now uses string table for long and short identifiers alike; versions of constructors and destructors for compound types and constants using keys instead of string names are now provided.
 \item[Issue 2.30] The prefix for private interfaces is now $pp'$ rather than $icl'$.
 \item[Issue 2.31] Performance experiment on $mk\_app$ and $unchecked\_mk\_app$.
+\item[Issue 2.32] The types of object language types and terms are now equality types.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -116,9 +117,6 @@ None known.
 None known.
 \section{TYPES AND TERMS}
 =SML
-local 
-infix 3 =$$;
-in
 =TEX
 =SML
 structure €pp'TypesAndTerms› : pp'TypesAndTerms = struct
@@ -179,13 +177,19 @@ Names are represented as efficient dictionary keys.
 type €ID› = E_KEY;
 =TEX
 =SML
-abstype €TYPE› = 
+local
+datatype €TYPE› = 
 	€LVartype› of string |
 	€LCtype› of ID * TYPE list |
 	€L≠Type› of (TYPE * TYPE)
 and €TYPES_AND_TERMS_STATE›  =
 	€State› of E_KEY E_DICT ref
-with
+in
+=TEX
+Expose the types (but not the constructors, of course; although even if we did, the signature constraint on the structure would still hide them).
+=SML
+type €TYPE› = TYPE;
+type €TYPES_AND_TERMS_STATE› = TYPES_AND_TERMS_STATE;
 =TEX
 Management of the state:
 =SML
@@ -226,6 +230,7 @@ datatype €DEST_SIMPLE_TYPE› = €Vartype› of string |
  	€Ctype› of (string * TYPE list);
 =TEX
 \subsection{Functions for Types}
+The following is just for backwards compatibility.
 =SML
 val op €=:› : (TYPE * TYPE) -> bool = fn (x, y) => x = y;
 =TEX
@@ -342,8 +347,13 @@ datatype €pp'TERM›	 =
 	€pp'App› of pp'TERM * pp'TERM * TYPE |
 	€pp'SimpleÃ› of string * pp'TERM;
 in
-abstype €TERM› = typed of pp'TERM * TYPE
-with
+local
+datatype €TERM› = typed of pp'TERM * TYPE
+in
+=TEX
+Expose the type (but not the constructor, of course; although even if we did, the signature constraint on the structure would still hide it).
+=SML
+type €TERM› = TERM;
 =TEX
 The type of destroyed terms, and functions upon it:
 =SML
@@ -352,10 +362,9 @@ datatype €DEST_SIMPLE_TERM› = €Var› of string * TYPE |
 	€App› of TERM * TERM |
 	€SimpleÃ› of TERM * TERM;
 =TEX
-$=\$\$$ is a local function to express the equality of destroyed variables.
+The following is just for backwards compatibility.
 =SML
 val op €=$› : (TERM * TERM) -> bool = fn (x, y) => x = y;
-val op €=$$› : ((string * TYPE) * (string * TYPE)) -> bool = fn (x, y) => x = y;
 =TEX
 =SML
 val €pp'string_of_term_ref› : (TERM -> string) ref =
@@ -629,7 +638,7 @@ let	fun aux (tm1 as typed(pp'App _, _)) tm2 = (fn map2to1 =>
 		) | _ => false
 	) | aux _ _ = error "~=$" 3064 [];
  	in
-		(tm1 =$ tm2) orelse (aux tm1 tm2 [])
+		(tm1 = tm2) orelse (aux tm1 tm2 [])
 	end
 );
 =TEX
@@ -1217,9 +1226,9 @@ end;
 =TEX
 
 =SML
-end; (* of abstype defining TERM *)
-end; (* of local defining TERM *)
-end; (* of abstype defining TYPE *)
+end; (* of local datatype ...  in ... end defining TERM *)
+end; (* of local defining pp'TERM *)
+end; (* of local datatype ...  in ... end defining TYPE *)
 =TEX
 \subsection{Functions derived from Abstract Data Type $TYPE$ Part}
 Some of these functions could be improved by being placed within
@@ -1746,7 +1755,7 @@ are constants.
 =SML
 fun €term_consts› (tm : TERM) : (string * TYPE) list = (
 let	fun aux (App(f, a)) =
-		union (op =$$) (aux(dest_simple_term f)) (aux(dest_simple_term a))
+		aux(dest_simple_term f) cup aux(dest_simple_term a)
 	| aux (Var _) = []
 	| aux (Const c) = [c]
 	| aux (SimpleÃ (v, b)) = aux (dest_simple_term b)
@@ -1759,10 +1768,10 @@ are variables.
 =SML
 fun €term_vars› (tm : TERM) : (string * TYPE) list = (
 let	fun aux (App(f, a)) =
-		union (op =$$) (aux(dest_simple_term f)) (aux(dest_simple_term a))
+		aux(dest_simple_term f) cup aux(dest_simple_term a)
 	| aux (Var v) = [v]
 	| aux (Const c) = []
-	| aux (SimpleÃ (v, b)) = union (op =$$) [dest_var v] (aux (dest_simple_term b))
+	| aux (SimpleÃ (v, b)) = aux (dest_simple_term b) grab (dest_var v)
 in
 	aux (dest_simple_term tm)
 end);
@@ -1905,7 +1914,7 @@ substituting for subterms of a term which are variables.
 fun €var_subst›
 	(subs : (TERM * TERM) list)
 	(tm : TERM) = (
-	((pp'subst o map (Combinators.I ** dest_var)) (subs drop (op =$)) tm)
+	((pp'subst o map (Combinators.I ** dest_var)) (subs drop (op =)) tm)
 	handle complaint =>
 	pass_on complaint "dest_var" "var_subst"
 	handle complaint =>
@@ -1965,7 +1974,7 @@ in
 fun €subst›
 	(subs : (TERM * TERM) list)
 	(tm : TERM) = (
-	case subs drop (op =$) of
+	case subs drop (op =) of
 		[] => tm
 	|	subs' =>
 	let	val (xs, ys) = split subs';
@@ -2035,7 +2044,6 @@ fun €pp'string_of_type› (t : TYPE) : string = (
 =TEX
 =SML
 end; (* of structure pp'TypesAndTerms *)
-end; (* end of local *)
 =TEX
 We now open the structure for system build. The user will actually see
 the items provided by the structure via the opening of structure
