@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.39 2005/03/01 17:18:38 rda Exp rda $
+# $Id: configure.sh,v 1.40 2005/08/01 11:03:17 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -292,13 +292,16 @@ case "${PPDOCFORMAT:-}" in
 esac
 if	[ "$DOPDF" = y ]
 then	if	find_in_path dvipdfm >/dev/null 2>&1
-	then	echo "Generating code to produce PDF versions of the documents"
-	else	give_up "dvipdfm does not seem to be available and is needed if you specify PPDOCFORMAT=PDF"
+	then	DVI2PDF=dvipdfm
+	elif	find_in_path dvipdf >/dev/null 2>&1
+	then	DVI2PDF=dvipdf
+	else	give_up "dvipdfm or dvipdf must be available if you specify PPDOCFORMAT=PDF"
 	fi
+	echo "Generating code to produce PDF versions of the documents"
 elif	[ "$DOPS" = y ]
 then	if	find_in_path dvips >/dev/null 2>&1
 	then	echo "Generating code to produce PostScript versions of the documents"
-	else	give_up "dvips does not seem to be available and is needed if you specify PPDOCFORMAT=PS"
+	else	give_up "dvips must be available if you specify PPDOCFORMAT=PS"
 	fi
 fi
 #
@@ -422,10 +425,10 @@ then
 		out "cd $PPTARGETDIR/doc"
 	fi
 	if	[ "$DOPDF" = y ]
-	then	out "echo \"Converting documents to PDF (see $PPTARGETDIR/dvipdfm.log for messages)\""
+	then	out "echo \"Converting documents to PDF (see $PPTARGETDIR/$DVI2PDF.log for messages)\""
 		out 'for f in *.dvi'
-		out 'do	dvipdfm $f'
-		out "done >$PPTARGETDIR/dvipdfm.log 2>&1"
+		out "do	$DVI2PDF" '$f'
+		out "done >$PPTARGETDIR/$DVI2PDF.log 2>&1"
 	fi
 	if	[ "$DOPS" = y ]
 	then	out "echo \"Converting documents to PostScript (see $PPTARGETDIR/dvips.log for messages)\""
