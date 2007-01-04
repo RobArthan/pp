@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.19 2004/10/06 14:49:29 rda Exp rda $
+ * $Id: undo.c,v 2.22 2007/01/03 15:42:07 rda Exp $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -45,8 +45,8 @@ typedef struct undo_node {
 	Boolean moved_away;     /* true if the change is complete */
 	NAT first,              /* position in text of chars to */
 	    last;               /* be replaced by an undo */
-	char *oldtext;          /* deleted characters to put in */
-	NAT   oldtextSize;      /* current amount of space in the oldtext buffer */
+	char *old_text;          /* deleted characters to put in */
+	NAT   old_text_size;      /* current amount of space in the old_text buffer */
     Boolean was_null;
 	struct undo_node *next,
 	                 *prev;
@@ -78,26 +78,26 @@ typedef struct undo_details {
 
 
 static Boolean noMemory(UndoBuffer *ub);
-static void lowMemoryWarning(UndoBuffer *ub);
+static void low_memory_warning(UndoBuffer *ub);
 
 static char *emergencySpace = (char *) NULL;
 
 static char *lXtMalloc(size_t size, UndoBuffer *ub, Boolean *answer)
 {
-	char *retVal;
-	retVal = XtMalloc(size);
-	if (!retVal && emergencySpace) {
+	char *ret_val;
+	ret_val = XtMalloc(size);
+	if (!ret_val && emergencySpace) {
 		XtFree(emergencySpace);
 		emergencySpace = (char *) NULL;
-		retVal = XtMalloc(size);
-		if (retVal) {
-			lowMemoryWarning(ub);
+		ret_val = XtMalloc(size);
+		if (ret_val) {
+			low_memory_warning(ub);
 		}
 	}
-	if (!retVal) {
+	if (!ret_val) {
 		*answer = noMemory(ub);
 	}
-	return retVal;
+	return ret_val;
 }
 
 static void lXtFree(char *ptr)
@@ -109,102 +109,90 @@ static void lXtFree(char *ptr)
 
 static char *lXtRealloc(char *ptr, size_t size, UndoBuffer *ub, Boolean *answer)
 {
-	char *retVal;
-	retVal = XtRealloc(ptr, size);
-	if (!retVal && emergencySpace) {
+	char *ret_val;
+	ret_val = XtRealloc(ptr, size);
+	if (!ret_val && emergencySpace) {
 		XtFree(emergencySpace);
 		emergencySpace = (char *) NULL;
-		retVal = XtRealloc(ptr, size);
-		if (retVal) {
-			lowMemoryWarning(ub);
+		ret_val = XtRealloc(ptr, size);
+		if (ret_val) {
+			low_memory_warning(ub);
 		}
 	}
-	if (!retVal) {
+	if (!ret_val) {
 		*answer = noMemory(ub);
 	}
-	return retVal;
+	return ret_val;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Accessor functions to the undo structures
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char *oldtext(UndoBuffer *ub)
+static char *old_text(UndoBuffer *ub)
 {
 	static char emptyString[] = "";
 	if(ub->active == (UndoNode *) NULL) {
 		return emptyString;
 	}
-	if(ub->active->oldtext == (char *) NULL) {
+	if(ub->active->old_text == (char *) NULL) {
 		return emptyString;
 	}
-	return ub->active->oldtext;
+	return ub->active->old_text;
 }
 
-static void setOldtext(UndoBuffer *ub, char *value)
-{
-	/* NB the space for value is not allocated here */
-	if(ub->active == (UndoNode *) NULL) {
-		return;
-	}
-	if(ub->active->oldtext != (char *) NULL) {
-		lXtFree(ub->active->oldtext);
-	}
-	ub->active->oldtext     = value;
-	ub->active->oldtextSize = strlen(value) + 1;
-}
-static void clearOldtext(UndoBuffer *ub)
+static void clear_old_text(UndoBuffer *ub)
 
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
 	}
-	if(ub->active->oldtext == (char *) NULL) {
+	if(ub->active->old_text == (char *) NULL) {
 		return;
 	}
-	*(ub->active->oldtext) = '\0';
+	*(ub->active->old_text) = '\0';
 	/* Don't free anything now, it's possible the next thing done will *
 	 * be a realloc.  If it isn't the old value will be freed then.    */
 }
 
-static Boolean growOldtextTo(UndoBuffer *ub, NAT len, Boolean *answer)
+static Boolean grow_old_text_to(UndoBuffer *ub, NAT len, Boolean *answer)
 {
-	/* Make the oldtext buffer (at least) len+1 big */
+	/* Make the old_text buffer (at least) len+1 big */
 	char *ptr;
 
 	if(ub->active == (UndoNode *) NULL) {
 		return False;
 	}
 
-	if(len < ub->active->oldtextSize) {
+	if(len < ub->active->old_text_size) {
 		/* There's already enough space */
 		return True;
 	}
 
-	if(ub->active->oldtextSize == 0 || ub->active->oldtext == (char *) NULL) {
+	if(ub->active->old_text_size == 0 || ub->active->old_text == (char *) NULL) {
 		ptr = lXtMalloc(len+1, ub, answer);
 		if(ptr) {
 			*ptr = '\0';
 		}
 	} else {
-		ptr = ub->active->oldtext;
+		ptr = ub->active->old_text;
 		ptr = lXtRealloc(ptr, len+1, ub, answer);
 	}
 	if(!ptr) {
 		return False;
 	}
-	ub->active->oldtext     = ptr;
-	ub->active->oldtextSize = len+1;
+	ub->active->old_text     = ptr;
+	ub->active->old_text_size = len+1;
 
 	return True;
 }
 
 #define MIN_OT_SIZE 128
 #define OT_GROWTH_FACTOR 0.25
-static Boolean growOldtext(UndoBuffer *ub, Boolean *answer)
+static Boolean grow_old_text(UndoBuffer *ub, Boolean *answer)
 {
-	/* Make the oldtext buffer (at least) one character bigger */
+	/* Make the old_text buffer (at least) one character bigger */
 	NAT len,
-	    newSize;
+	    new_size;
 	char *ptr;
 
 	/* There's a fair chance that the next thing that will happen *
@@ -216,58 +204,58 @@ static Boolean growOldtext(UndoBuffer *ub, Boolean *answer)
 	}
 
 	len = 0;
-	if(ub->active->oldtextSize != 0 && ub->active->oldtext != (char *) NULL) {
-		len = strlen(ub->active->oldtext);
+	if(ub->active->old_text_size != 0 && ub->active->old_text != (char *) NULL) {
+		len = strlen(ub->active->old_text);
 	}
-	if(len+1 < ub->active->oldtextSize) {
+	if(len+1 < ub->active->old_text_size) {
 		/* There's already enough space */
 		return True;
 	}
 	
 	if(len+1 < MIN_OT_SIZE) {
-		newSize = MIN_OT_SIZE;
+		new_size = MIN_OT_SIZE;
 	} else {
-		newSize  = ub->active->oldtextSize;
-		newSize += newSize * OT_GROWTH_FACTOR;
-		if(newSize == ub->active->oldtextSize) {
-			newSize += MIN_OT_SIZE;
+		new_size  = ub->active->old_text_size;
+		new_size += new_size * OT_GROWTH_FACTOR;
+		if(new_size == ub->active->old_text_size) {
+			new_size += MIN_OT_SIZE;
 		}
 	}
-	if(ub->active->oldtextSize == 0 || ub->active->oldtext == (char *) NULL) {
-		ptr = lXtMalloc(newSize, ub, answer);
+	if(ub->active->old_text_size == 0 || ub->active->old_text == (char *) NULL) {
+		ptr = lXtMalloc(new_size, ub, answer);
 		if(!ptr) {
 			/* we're in real trouble, but try to be helpful */
-			newSize = len+2;
-			ptr = lXtMalloc(newSize, ub, answer);
+			new_size = len+2;
+			ptr = lXtMalloc(new_size, ub, answer);
 			if(ptr) {
-				lowMemoryWarning(ub);
+				low_memory_warning(ub);
 			}
 		}
 		if(ptr) {
 			*ptr = '\0';
 		}
 	} else {
-		ptr = ub->active->oldtext;
-		ptr = lXtRealloc(ptr, newSize, ub, answer);
+		ptr = ub->active->old_text;
+		ptr = lXtRealloc(ptr, new_size, ub, answer);
 		if(!ptr) {
 			/* as above, we're really in trouble, but try to be helpful */
-			newSize = len+2;
-			ptr = ub->active->oldtext;
-			ptr = lXtRealloc(ptr, newSize, ub, answer);
+			new_size = len+2;
+			ptr = ub->active->old_text;
+			ptr = lXtRealloc(ptr, new_size, ub, answer);
 			if(ptr) {
-				lowMemoryWarning(ub);
+				low_memory_warning(ub);
 			}
 		}
 	}
 	if(!ptr) {
 		return False;
 	}
-	ub->active->oldtext     = ptr;
-	ub->active->oldtextSize = newSize;
+	ub->active->old_text     = ptr;
+	ub->active->old_text_size = new_size;
 
 	return True;
 }
-static Boolean prefixOldtext(UndoBuffer *ub, char ch, Boolean *answer)
+static Boolean prefix_old_text(UndoBuffer *ub, char ch, Boolean *answer)
 {
 	char *p,
 	     this,
@@ -276,11 +264,11 @@ static Boolean prefixOldtext(UndoBuffer *ub, char ch, Boolean *answer)
 	if(ub->active == (UndoNode *) NULL) {
 		return False;
 	}
-	if(!growOldtext(ub, answer)) {
+	if(!grow_old_text(ub, answer)) {
 		return False;
 	}
 
-	for(p = ub->active->oldtext, prev = ch; prev; ++p) {
+	for(p = ub->active->old_text, prev = ch; prev; ++p) {
 		this = *p;
 		*p = prev;
 		prev = this;
@@ -289,18 +277,18 @@ static Boolean prefixOldtext(UndoBuffer *ub, char ch, Boolean *answer)
 
 	return True;
 }
-static Boolean affixOldtext(UndoBuffer *ub, char ch, Boolean *answer)
+static Boolean affix_old_text(UndoBuffer *ub, char ch, Boolean *answer)
 {
 	char *p;
 
 	if(ub->active == (UndoNode *) NULL) {
 		return False;
 	}
-	if(!growOldtext(ub, answer)) {
+	if(!grow_old_text(ub, answer)) {
 		return False;
 	}
 
-	p = ub->active->oldtext;
+	p = ub->active->old_text;
 	while (*p != '\0') {
 		p++;
 	}
@@ -434,7 +422,7 @@ static void setLast(UndoBuffer *ub, NAT value)
 
 /* Called if we appear to be low on memory (actually *
  * detecting this is a bit hit and miss, though)     */
-static void lowMemoryWarning(UndoBuffer *ub) {
+static void low_memory_warning(UndoBuffer *ub) {
 	memory_warning_dialog(ub->text_w, True);
 }
 
@@ -461,10 +449,10 @@ static Boolean freeUndoNodesInner(UndoBuffer *ub, UndoNode *nd)
 	(void) freeUndoNodesInner(ub, nd->next);
 	nd->next = (UndoNode *) NULL;
 	nd->prev = (UndoNode *) NULL;
-	if(nd->oldtext != (char *) NULL) {
-		lXtFree(nd->oldtext);
-		nd->oldtext     = (char *) NULL;
-		nd->oldtextSize = 0;
+	if(nd->old_text != (char *) NULL) {
+		lXtFree(nd->old_text);
+		nd->old_text     = (char *) NULL;
+		nd->old_text_size = 0;
 	}
 	lXtFree((char *) nd);
 	return True;
@@ -498,8 +486,8 @@ static Boolean newUndoNode(UndoBuffer *ub, Boolean *answer)
 	new->last          = 0;
 	new->in_business   = False;
 	new->changes_saved = False;
-	new->oldtext       = (char *) NULL;
-	new->oldtextSize   = 0;
+	new->old_text       = (char *) NULL;
+	new->old_text_size   = 0;
 	new->was_null      = False;
 	new->next          = (UndoNode *) NULL;
 	new->prev          = (UndoNode *) NULL;
@@ -755,26 +743,25 @@ static Boolean reinit_undo_buffer (
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor typed input:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean undoModifyCB(
+static Boolean monitor_typing(
 	Widget		text_w,
 	UndoBuffer *ub,
-	XtPointer	xtp_cbs,
+	XmTextVerifyCallbackStruct	*cbs,
 	Boolean    *noMA)
 {
-	XmTextVerifyCallbackStruct *cbs = xtp_cbs;
-	NAT len;
+	NAT len, lst = last(ub);
 	Widget *wp;
 
 	if(!cbs->text->length &&
 	   !ub->undoing &&
 	   cbs->endPos == cbs->startPos + 1 &&
-	   (cbs->endPos == last(ub) || cbs->startPos == last(ub)) &&
+	   (cbs->endPos == lst || cbs->startPos == lst) &&
 	   in_business(ub)) {
 		/* deleting single character at end of current typing thread */
-		if(cbs->endPos == last(ub)) {
-			if(last(ub) > first(ub)) {
+		if(cbs->endPos == lst) {
+			if(lst > first(ub)) {
 				/* deleting last char of current thread */
-				setLast(ub, last(ub) - 1);
+				setLast(ub, lst - 1);
 			} else {
 				/* deleting char before start of current thread */
 				char buf[2];
@@ -797,7 +784,7 @@ static Boolean undoModifyCB(
 					setMoved_away(ub, False);
 					setFirst(ub,      cbs->startPos);
 					setLast(ub,       cbs->startPos);
-					if(!prefixOldtext(ub, buf[0], noMA)) {
+					if(!prefix_old_text(ub, buf[0], noMA)) {
 						return False;
 					}
 				}
@@ -819,7 +806,7 @@ static Boolean undoModifyCB(
 				setUndo(ub, True);
 				setMoved_away(ub, False);
 				setLast(ub,       cbs->startPos);
-				if(!affixOldtext(ub, buf[0], noMA)) {
+				if(!affix_old_text(ub, buf[0], noMA)) {
 						return False;
 				}
 			}
@@ -832,15 +819,15 @@ static Boolean undoModifyCB(
 		if(!reinit_undo_buffer(ub, cbs, True, noMA)) {
 			return False;
 		}
-		if(!growOldtextTo(ub, len, noMA)) {
+		if(!grow_old_text_to(ub, len, noMA)) {
 			return False;
 		}
 		if(XmTextGetSubstring(ub->text_w,
                               cbs->startPos,
                               len,
                               len+1,
-                              oldtext(ub)) == XmCOPY_SUCCEEDED) {
-			char *ptr = oldtext(ub)+len;
+                              old_text(ub)) == XmCOPY_SUCCEEDED) {
+			char *ptr = old_text(ub)+len;
 			*ptr = '\0';
 
 			setMoved_away(ub, False);
@@ -859,9 +846,9 @@ static Boolean undoModifyCB(
 		setMoved_away(ub, False);
 		setFirst(ub,      cbs->startPos);
 		setLast(ub,       cbs->startPos + cbs->text->length);	
-		clearOldtext(ub);
+		clear_old_text(ub);
 	} else if(	moved_away(ub)	/* save or undo since last typing */
-	||	last(ub) != cbs->startPos /* started typing somewhere new */
+	||	lst != cbs->startPos /* started typing somewhere new */
 	||	cbs->text->length > 1) { /* multi-character insert: i.e., paste */
 		if(!reinit_undo_buffer(ub, cbs, True, noMA)) {
 			return False;
@@ -869,7 +856,7 @@ static Boolean undoModifyCB(
 		setLast(ub, cbs->startPos + cbs->text->length);
 	} else {
 		/* just carried on typing */
-		setLast(ub, last(ub) + cbs->text->length);
+		setLast(ub, lst + cbs->text->length);
 	}
 
 	if(ub->menu_ws && !ub->undoing) {
@@ -881,7 +868,19 @@ static Boolean undoModifyCB(
 
 	return True;
 }
-
+/*
+ * The following is a work-around for a problem with XmSetInsertionPosition
+ * which doesn't seem to work properly if called from within a modify/verify
+ * callback.
+ */
+typedef struct {Widget text_w; XmTextPosition pos;} insertion_info;
+static Boolean undo_modify_work_proc(XtPointer xtp)
+{
+	insertion_info *ii = xtp;
+	XmTextSetInsertionPosition(ii->text_w, ii->pos);
+	XtFree(xtp);
+	return True; /* don't want to be called again */
+}
 void undo_modify_cb(
 	Widget		text_w,
 	XtPointer	cbd,
@@ -890,6 +889,7 @@ void undo_modify_cb(
 	UndoBuffer *ub = cbd;
 	XmTextVerifyCallbackStruct *cbs = xtp_cbs;
 	Boolean noMemoryAnswer = False;
+	Position ignored_x, ignored_y;
 	if(!ub->enabled) {
 		return;
 	}
@@ -905,7 +905,17 @@ void undo_modify_cb(
 		show_modified(False);
 	}
 	text_verify_cb(text_w, cbd, xtp_cbs);
-	if(!undoModifyCB(text_w, ub, xtp_cbs, &noMemoryAnswer)) {
+	(void)monitor_typing(text_w, ub, cbs, &noMemoryAnswer);
+	if(	cbs->text->length == 0
+	&&	cbs->startPos < cbs->endPos
+	&&	!XmTextPosToXY(text_w, cbs->startPos, &ignored_x, &ignored_y)
+	&&	!XmTextPosToXY(text_w, cbs->endPos, &ignored_x, &ignored_y)) {
+		/* deleted text that's not currently on display; */
+		/* schedule work proc to move insertion position to tell user. */
+		insertion_info *ii = (insertion_info*)XtMalloc(sizeof *ii);
+		ii->text_w = text_w;
+		ii->pos = cbs->startPos;
+		XtAppAddWorkProc(app, undo_modify_work_proc, ii);
 	}
 }
 
@@ -934,14 +944,14 @@ static Boolean undo_redo(
 	}
 	ub->undoing = True;
 	setMoved_away(ub, True);
-	len = strlen(oldtext(ub));
+	len = strlen(old_text(ub));
 	if(amUndoing) {
 		setWas_null(ub, len == 0);
 	}
 	fst = first(ub);
 	lst = last(ub);
 	text_show_position(ub->text_w, fst);
-	XmTextReplace(ub->text_w, fst, lst, oldtext(ub));
+	XmTextReplace(ub->text_w, fst, lst, old_text(ub));
 
 	if(len) {
 		XmTextSetSelection(ub->text_w, fst, fst+len, CurrentTime);
@@ -951,7 +961,7 @@ static Boolean undo_redo(
 
 	ub->undoing = False;
 	if(!amUndoing && was_null(ub)) {
-		clearOldtext(ub);
+		clear_old_text(ub);
 	}
 	return True;
 }
