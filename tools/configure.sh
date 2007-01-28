@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.40 2005/08/01 11:03:17 rda Exp rda $
+# $Id: configure.sh,v 1.41 2006/12/11 16:12:22 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -35,8 +35,8 @@
 # PPTARGETDIR      - as PPHOME, overrides PPHOME if set and non-empty.
 #
 # PPTARGETS        - a space separated list of packages to include or "all" for
-#                  everything in the src directory.
-#                   (default: whichever of pptex hol zed daz xpp are there).
+#                    everything in the src directory.
+#                   (default: whichever of pptex hol zed daz qcz xpp are there).
 #
 # PPPOLYDBASE      - name of file containing the initial Poly/ML database
 #                   (default: /usr/lib/poly/ML_dbase)
@@ -57,7 +57,7 @@
 # retaining an existing setting for PPHOME.
 #
 # The package names in PPTARGETS if used must be taken from the list:
-# pptex dev hol zed daz xpp. This is mostly useful if you want to
+# pptex dev hol zed daz qcz xpp. This is mostly useful if you want to
 # install the development kit (possibly separately from the other packages).
 # The default is not to install it.
 #
@@ -141,9 +141,9 @@ echo "Using $PPTARGETDIR as the installation target directory"
 #
 # Check for user-defined target list:
 #
-SUPPORTEDTARGETS="dev pptex xpp hol zed daz"
+SUPPORTEDTARGETS="dev pptex xpp hol zed daz qcz"
 if	[ "${PPTARGETS:-}" = "" ]
-then	PPTARGETS="pptex xpp hol zed daz"
+then	PPTARGETS="pptex xpp hol zed daz qcz"
 	USERDEFINEDTARGETS=n
 elif	[ "${PPTARGETS:-}" = "all" ]
 then	PPTARGETS=$SUPPORTEDTARGETS
@@ -151,9 +151,9 @@ then	PPTARGETS=$SUPPORTEDTARGETS
 else	USERDEFINEDTARGETS=y
 	for f in $PPTARGETS
 	do	case "$f" in
-			dev|pptex|xpp|hol|zed|daz)
+			dev|pptex|xpp|hol|zed|daz|qcz)
 				true;;
-			*)	give_up "unrecognised package \"$f\" (not one of dev, pptex, xpp, hol, zed, daz)"
+			*)	give_up "unrecognised package \"$f\" (not one of dev, pptex, xpp, hol, zed, daz, qcz)"
 		esac
 	done
 fi
@@ -188,7 +188,7 @@ done
 #
 # Find an ML Compiler
 #
-if	[ "$dev" = y -o "$hol" = y -o "$zed" = y -o "$daz" = y ]
+if	[ "$dev" = y -o "$hol" = y -o "$zed" = y -o "$daz" = y -o "$qcz" = y ]
 then	if	[ "${PPCOMPILER:-}" != "" ]
 	then	case "$PPCOMPILER" in
 			POLYML) T="Poly/ML"; C="poly";;
@@ -389,10 +389,10 @@ out "fi"
 out "cat $CWD/src/version >$PPTARGETDIR/VERSION"
 #
 # Now go to the target directory, build the demos (and freeze the
-# databases, en passant, or explicitly for daz which doesn't have
+# databases, en passant, or explicitly for daz and qcz which don't have
 # demo scripts at the moment).
 #
-if	[ "$hol" = y -o "$zed" = y -o "$daz" = y ]
+if	[ "$hol" = y -o "$zed" = y -o "$daz" = y -o "$qcz" = y ]
 then
 	out "echo \"Moving to installation directory $PPTARGETDIR\" ..."
 	out "echo \"See $PPTARGETDIR/<package>.log for messages\""
@@ -411,6 +411,10 @@ then
 	if	[ "$daz" = y -a "$PPCOMPILER" = POLYML ]
 	then	out "echo Freezing daz database"
 		out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >daz.log 2>&1 || give_up $PPTARGETDIR/daz.log'
+	fi
+	if	[ "$qcz" = y -a "$PPCOMPILER" = POLYML ]
+	then	out "echo Freezing qcz database"
+		out '( pp_make_database -f -p qcz junk$$; rm junk$$.polydb ) >qcz.log 2>&1 || give_up $PPTARGETDIR/qcz.log'
 	fi
 fi
 TAB=
