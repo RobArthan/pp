@@ -10,7 +10,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: distclean.sh,v 1.8 2004/02/23 13:58:12 rda Exp rda $
+# $Id: distclean.sh,v 1.9 2004/02/23 15:40:24 rda Exp rda $
 #
 give_up(){
 	echo configure: $*
@@ -29,7 +29,7 @@ fi
 #
 MAKEFILES=
 TOKEEP="version clawz_version install.mkf index.html.src lemma1.gif newpplogo.gif"
-for f in pptex dev xpp hol zed daz clawz
+for f in pptex dev xpp hol zed daz clawz qcz
 do	if	[ -f $f.mkf ]
 	then	MAKEFILES="$MAKEFILES $f.mkf"
 		TOKEEP="$TOKEEP README.$f"
