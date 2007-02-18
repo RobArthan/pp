@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.340 $ $RCSfile: imp507.doc,v $ $Date: 2006/09/19 09:48:40 $
+% imp507.doc %Z% $Revision: 1.341 $ $RCSfile: imp507.doc,v $ $Date: 2007/01/23 15:59:32 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.340 $%
+\def\SCCSversion{$Revision: 1.341 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/09/19 09:48:40 $%
+\TPPdate{\FormatDate{$Date: 2007/01/23 15:59:32 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -276,6 +276,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.339] Issue 189: early type-checking now carried out for all procedures to avoid unsoundness problem in {\em vc\_body\_proc}.
 \item[Issue 1.340] Change to parametrisation of {\em new\_script} etc.
 \item[Issue 1.341] The Z output module now gives the ML bindings for {\em cn\_subprog\_ud\_key} etc.
+\item[Issue 1.342] Implemented new checks on global dependency lists.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2384,7 +2385,9 @@ fun €subprog_info› (block : BLOCK) : ID * Z_ID list= (
 		in	(#name (#informal_fun(formal_fun)), #globals formal_fun)
 		end
 	else	let	val formal_proc = #current_formal_proc block;
-		in	(#name formal_proc, #globals formal_proc)
+			val globs = #globals formal_proc;
+			val w = #w(#spec formal_proc);
+		in	(#name formal_proc, globs @ w)
 		end
 );
 =TEX
@@ -3576,7 +3579,7 @@ fun €add_init_vars_speclab› ({spec as {w, pre, post, ...},
 fun €terms_of_vcs›
 	(sl : SPECLAB)
 	(acc : TERM list)
-	(gs_pre_post :  Z_ID list OPT * TERM * TERM)
+	(pre_post :  TERM * TERM)
 	(vc as (decs, (asms, conc)) :: more : VC list) : TERM list = (
 	let	val tm = (
 		case (decs, asms) of
@@ -3585,9 +3588,9 @@ fun €terms_of_vcs›
 		|	(_, []) => mk_z_µ(mk_z_decl decs, mk_z_true, conc)
 		|	(_, _) => mk_z_µ(mk_z_decl decs, list_mk_± asms, conc));
 		val recur = terms_of_vcs sl;
-	in	recur (tm :: acc) gs_pre_post more
+	in	recur (tm :: acc) pre_post more
 	end
-) | terms_of_vcs sl acc (globals, pre, post) [] = (
+) | terms_of_vcs sl acc (pre, post) [] = (
 	let	fun report (env : CN_ENV) msg1 msg2 (term, vars) = (
 			z_free_var_report msg1 (Value term) (map string_of_term vars);
 			fail "term_of_vcs" msg2 []
@@ -3621,7 +3624,6 @@ fun €terms_of_vcs›
 =TEX
 =SML
 fun €call_vcs›
-	(globals : Z_ID list OPT)
 	((sl, st) : SPECLAB * STATEMENT) : TERM list * ROUTE OPT list * SPEC = (
 	let	val sl1 = add_init_vars_speclab sl;
 		val sl1_st = (sl1, st);
@@ -3632,7 +3634,7 @@ fun €call_vcs›
 		let 	val (vcs_routes, spc as {pre, post, ...}) = vcs sl1_st;
 			val seqs = map fst vcs_routes;
 			val routes = map snd vcs_routes;
-		in	(terms_of_vcs sl [] (globals, unquote pre, unquote post) seqs, routes, spc)
+		in	(terms_of_vcs sl [] (unquote pre, unquote post) seqs, routes, spc)
 		end
 	end
 );
@@ -3641,7 +3643,6 @@ The following is used where one subprogram specification statement refines anoth
 The refining specification statement is type-checked first which gives nicer error messages.
 =SML
 fun €call_vcs_spec›
-	(globals : Z_ID list OPT)
 	((sl1, spc) : SPECLAB * SPEC) : TERM list * ROUTE OPT list * SPEC = (
 	let	val sl0 : SPECLAB = {
 			spec = spc,
@@ -3653,9 +3654,9 @@ fun €call_vcs_spec›
 			block_name = #block_name sl1
 		};
 		val st0 = STNull SNImplicit;
-		val (_, _, spc1) = call_vcs globals (sl0, st0);
+		val (_, _, spc1) = call_vcs (sl0, st0);
 		val st1 = STSpecNoIvars{spec= spc1, label="", is_assertion = false};
-	in	call_vcs globals (sl1, st1)
+	in	call_vcs (sl1, st1)
 	end
 );
 =TEX
@@ -4114,7 +4115,7 @@ fun €vcs_speclabel_aux› (just_checking : bool) ({label, statement = s} : REFINED
 			in_scope = in_scope1,
 			block_name = block_name
 		};
-		val (vcs, routes, spec) = call_vcs Nil (speclab, statement)
+		val (vcs, routes, spec) = call_vcs (speclab, statement)
 	in	if just_checking then () 
 		else 	store_vcs (Value label, vcs, 
 				Value (speclab_update_spec(speclab,spec)), routes,
@@ -4779,7 +4780,7 @@ fun €vcs_body_proc_aux› (st : STATEMENT)
 			block_name = block_name1
 		};
 	in	(expanded_name block_name1,
-		 call_vcs (Value(#globals current_formal_proc1)) (speclab, st), speclab)
+		 call_vcs (speclab, st), speclab)
 	end	
 );
 =TEX
@@ -4979,7 +4980,7 @@ fun €form_proc_pack_body›
 	(block2 : BLOCK, formal_proc3 : FORMAL_PROC,
 		package4 : PACKAGE, speclab5 : SPECLAB, _ : ID list)
 	(form_proc: FORMAL_PROC) : SPEC = (
-	let	val (vcs, routes, spec) = call_vcs_spec (Value(#globals form_proc)) (speclab5, #spec form_proc);
+	let	val (vcs, routes, spec) = call_vcs_spec (speclab5, #spec form_proc);
 	in	store_vcs (
 			Nil, vcs, 
 			Value (speclab_update_spec(speclab5,spec)), routes,
@@ -5073,7 +5074,7 @@ fun €form_proc_pack_body_aux›
 			in_scope = in_scope5a,
 			block_name = block_name5
 		};
-		val (vcs, routes, spec) = call_vcs_spec (Value(#globals form_proc)) (speclab5a, #spec form_proc);
+		val (vcs, routes, spec) = call_vcs_spec (speclab5a, #spec form_proc);
 	in	store_vcs (
 			Nil, vcs, 
 			Value (speclab_update_spec(speclab5a,spec)), routes,
@@ -5128,7 +5129,7 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 			in_scope = in_scope4,
 			block_name = block_name2
 		};
-		val (resulting_vcs, routes, spec) = call_vcs_spec (Value(#globals form_proc)) (speclab4, #spec form_proc)
+		val (resulting_vcs, routes, spec) = call_vcs_spec (speclab4, #spec form_proc)
 	in	store_vcs (
 			Nil, resulting_vcs, 
 			Value (speclab_update_spec(speclab4,spec)), routes,
@@ -5144,7 +5145,7 @@ fun €check_formal_proc› (form_proc as
 	{name, spec, globals, formal_ids, par_names_defs} : FORMAL_PROC) : FORMAL_PROC = (
 	let	val block1 = block 1;
 		val block_name1 = #block_name(#declab block1);
-		val in_scope = subprog_flatten_env_aux (name, globals) (!blocks);
+		val in_scope = subprog_flatten_env_aux (name, globals @ #w spec) (!blocks);
 		val wp_env :WP_ENV = {
 			env = cn_env_of_in_scope in_scope,
 			till = mk_z_true,
@@ -5161,7 +5162,7 @@ fun €check_formal_proc› (form_proc as
 			in_scope = in_scope,
 			block_name = block_name1
 		};
-		val (_, _, tc_spec) = call_vcs (Value(#globals form_proc)) (speclab, (STNull SNImplicit));
+		val (_, _, tc_spec) = call_vcs (speclab, (STNull SNImplicit));
 	in	{name = name, spec = tc_spec, globals = globals,
 			formal_ids = formal_ids, par_names_defs = par_names_defs}
 	end
@@ -5795,7 +5796,7 @@ fun €form_fun_pack_body›
 		};
 		val speclab5a = speclab_update_spec(speclab5, spec5a);
 	in	if	globals = globals3
-		then	let	val (vcs, routes, spec) = call_vcs (Value globals) (speclab5a, st);
+		then	let	val (vcs, routes, spec) = call_vcs (speclab5a, st);
 			in	store_vcs (
 					Nil, vcs, 
 					Value (speclab_update_spec(speclab5,spec)), 
@@ -5886,7 +5887,7 @@ fun €form_fun_pack_body_aux›
 			block_name = block_name5
 		};
 		val globals = #globals form_fun;
-		val (vcs, routes, spec) = call_vcs (Value globals) (speclab5a, st);
+		val (vcs, routes, spec) = call_vcs (speclab5a, st);
 	in	case globals diff conc_zids of
 			[] => (
 			store_vcs (
@@ -5966,7 +5967,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 		val globals = #globals form_fun;
 		val globals3 = #globs subunit3;
 		val _ = check_globals_fun bn1 globals globals3;
-		val (vcs, routes, spec) = call_vcs (Value globals) (speclab4, st);
+		val (vcs, routes, spec) = call_vcs (speclab4, st);
 	in	store_vcs (
 			Nil, vcs, 
 			Value (speclab_update_spec(speclab4,spec)), routes,
@@ -6360,7 +6361,7 @@ fun €vcs_body_fun› (st : STATEMENT) : SPEC = (
 			in_scope = in_scope1,
 			block_name = block_name1
 		};
-		val (vcs, routes, spec) = call_vcs (Value(#globals current_formal_fun1)) (speclab, st);
+		val (vcs, routes, spec) = call_vcs (speclab, st);
 	in	store_vcs(
 			Value (expanded_name block_name1), vcs,
 			Value (speclab_update_spec(speclab,spec)), routes,
@@ -6676,7 +6677,7 @@ fun €vcs_aux_initial› (st : STATEMENT) : SPEC = (
 			in_scope = in_scope',
 			block_name = block_name1
 		};
-		val (vcs, routes, res_spec) = call_vcs Nil (speclab, st)
+		val (vcs, routes, res_spec) = call_vcs (speclab, st)
 	in	store_vcs(
 			Nil, vcs, 
 			Value (speclab_update_spec(speclab,res_spec)), routes,
@@ -8038,8 +8039,9 @@ and €do_declaration› (y as (DDeclarationKSlot (
 =TEX
 The following reflects the SID functions for $procedure\_specification$.
 Primarily to improve error behaviour in the presence of renamings or use clauses
-whcih clash with parameters, we make sture to call {\it fformal\_part}
+whcih clash with parameters, we make sure to call {\it fformal\_part}
 before expanding the frame.
+We call {\em curr\_form\_proc} twice: the first call is so that the formal procedure can be typechecked, the second call overwrites the current formal procedure in the environment with the typechecked one.
 =SML
 *)
 and €do_procedure_spec› (implicit : bool) (
@@ -8051,16 +8053,22 @@ and €do_procedure_spec› (implicit : bool) (
 	stub();
 	fformal_part formal_part;
 	let	val esp = expand_frame sp;
-		val eg = expand_names globals;
-		val all_globs = #w esp @ eg @ flat (map #idlist formal_part);
+		val egs = expand_names globals;
 		val par_names_defs = get_par_names_defs formal_part;
-		val formal_proc : FORMAL_PROC = check_formal_proc
-		{name=name, spec=esp, globals = all_globs, formal_ids = map mk_param_spec formal_part,
-			par_names_defs = par_names_defs};
-	in	check_19 current_cn_env (Value eg) esp;
-		curr_form_proc formal_proc;
-		form_proc implicit formal_proc;
-		stub_spec_proc formal_proc
+		val formal_proc : FORMAL_PROC = 
+		{name=name, spec=esp, globals = egs,
+		 formal_ids = map mk_param_spec formal_part,
+		 par_names_defs = par_names_defs};
+		val _ = 	curr_form_proc formal_proc;
+		val formal_proc1 = check_formal_proc formal_proc;
+		val gpno = Value {
+			globals = egs,
+			pars = map fst par_names_defs,
+			name = name};
+	in	curr_form_proc formal_proc1;
+		check_19 current_cn_env gpno esp;
+		form_proc implicit formal_proc1;
+		stub_spec_proc formal_proc1
 	end
 ) | €do_procedure_spec› (implicit : bool) (
 	{name, formal_part, spec as Nil, annotation, globals} : PROCEDURE_SPECIFICATION) = (
@@ -8090,17 +8098,23 @@ and €do_function_spec› (implicit : bool) (
 	do_annotation annotation;
 	stub();
 	fformal_part formal_part;
-	let	val informal_fun : INFORMAL_FUN =
+	let	val par_names_defs = get_par_names_defs formal_part;
+		val informal_fun : INFORMAL_FUN =
 		{name=designator,
 		formal_pars = map mk_param_spec formal_part,
-		par_names_defs = get_par_names_defs formal_part,
+		par_names_defs = par_names_defs,
 		return_type = curr_real_name return};
 		val spec = expand_frame sp;
 		val formal_fun : FORMAL_FUN =
 		{spec = spec, informal_fun = informal_fun, globals = globals, renames = Nil};
+		val egs = expand_names globals;
+		val gpno = Value {
+			globals = egs,
+			pars = map fst par_names_defs,
+			name = designator};
 	in	curr_form_fun formal_fun;
 		stub_spec_fun formal_fun;
-		check_19 current_cn_env (Value (expand_names globals)) spec;
+		check_19 current_cn_env gpno spec;
 		form_fun implicit formal_fun;
 		(true, globals, informal_fun)
 	end

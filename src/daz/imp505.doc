@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2006/06/30 10:21:16 $ $Revision: 1.144 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2006/09/18 16:09:35 $ $Revision: 1.145 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -26,7 +26,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.144 $%
+\def\SCCSversion{$Revision: 1.145 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -168,6 +168,7 @@ Adjusted checks etc. accordingly.
 \item[Issue 1.143] Under enhancement 117, checks on use of names in Z are now given a uniform treatment.
 \item[Issue 1.144] Stopped {\em vcs} rebinding the name {\em wp}.
 \item[Issue 1.145] {\em check\_1\_b} now reports on return statements with values in procedures and return statements without values in functions.
+\item[Issue 1.146] Implemented new checks on global dependency lists.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1744,6 +1745,14 @@ fun €checking_error› (msg : string) (n : int) (ins) = (
 );
 =TEX
 \subsection{The Checks}
+=TEX
+=SML
+fun €opt_s› ([_] : 'a list) (() : unit) : string = ""
+|  opt_s _ () = "s";
+=TEX
+=SML
+fun op €cap› (a, b) = (a cup b) diff (a diff b) diff (b diff a);
+=TEX
 =SML
 fun €check_1_a› (env : CN_ENV) (idl : Z_ID list, speclab : SPECLAB) = (
 	let	fun ada_id_or_aux_var v = (
@@ -1755,8 +1764,6 @@ fun €check_1_a› (env : CN_ENV) (idl : Z_ID list, speclab : SPECLAB) = (
 		);
 		val w = (#w o #spec) speclab;
 		val out_of_scope = idl drop ada_id_or_aux_var;
-		fun opt_s [_] () = ""
-		|  opt_s _ () = "s";
 	in
 		if	out_of_scope <> []
 		then	checking_error "check_1_a" 505065
@@ -1802,7 +1809,8 @@ fun €check_1_d› (p : ID, speclab as {wp_env = {env, ...}, ...}: SPECLAB) = (
 );
 =TEX
 =SML
-fun €check_19› (env : CN_ENV) (globs_opt : Z_ID list OPT) ({w, ...} : SPEC) : unit = (
+fun €check_19› (env : CN_ENV)
+	(globs_opt : {globals : Z_ID list, pars : Z_ID list, name : ID} OPT) ({w, ...} : SPEC) : unit = (
 let	fun aux (env:CN_ENV) (undec, noncanon, nonvar) (v::more) = (
 		case env v of
 			Value {info = EIEnvVar _, canon_name, ...} => (
@@ -1829,16 +1837,42 @@ let	fun aux (env:CN_ENV) (undec, noncanon, nonvar) (v::more) = (
 	);
 in	report 505082 (aux env ([], [], []) w);
 	(case globs_opt of 
-		Value globs => report 505086 (aux env ([], [], []) globs)
-	|	Nil => ())
+		Value {globals, pars, name} => (
+			report 505086 (aux env ([], [], []) globals);
+			(case globals cap pars of
+				[] => ()
+			|	some => fail "check_19" 505090
+				[opt_s some,
+				 fn () => format_list Combinators.I some ", ",
+				 fn () => name])
+	) |	Nil => ())
 end
+);
+=SML
+fun €check_21› (env : CN_ENV) ({name, globals, ...} : FORMAL_PROC) : unit  = (
+	let	fun aux acc [] = rev acc
+		|   aux acc (v::vs) = (
+			case env v of
+				Nil => (
+				fail "check_21" 505043 [fn() => v, fn () => name]
+			) |	Value{info as EIEnvVar{kind = VKOutOfScope, ...}, ...} => (
+				aux (v::acc) vs
+			) |	Value _ => aux acc vs
+		);
+		val bad_vs = aux [] globals;		
+	in	case bad_vs of
+			[] => ()
+		|	_::_ => (
+			fail "check_21" 505042
+			[opt_s bad_vs,
+			 fn() => format_list Combinators.I  bad_vs ", ",
+			 fn() => name]
+		)
+	end
 );
 =TEX
 \subsection{Anti-Aliasing Checks}
 
-=SML
-fun op €cap› (a, b) = (a cup b) diff (a diff b) diff (b diff a);
-=TEX
 =SML
 fun €free_var_names› (fv::rest : TERM list) : ID list = (
 		if is_z_lvar fv
@@ -1991,7 +2025,8 @@ fun €anti_aliasing_check› (speclab as {wp_env as {env, ...}, ...}: SPECLAB,
 		anti_aliasing_check_1 speclab formal_proc proc actuals_modes;
 		anti_aliasing_check_2 speclab formal_proc proc actuals_modes;
 		anti_aliasing_check_3 speclab formal_proc proc actuals_modes;
-		check_1_a env (proc_frame env formal_proc actuals_modes, speclab)
+		check_1_a env (proc_frame env formal_proc actuals_modes, speclab);
+		check_21 env formal_proc
 	end
 );
 =TEX
