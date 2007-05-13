@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.341 $ $RCSfile: imp507.doc,v $ $Date: 2007/01/23 15:59:32 $
+% imp507.doc %Z% $Revision: 1.342 $ $RCSfile: imp507.doc,v $ $Date: 2007/02/18 17:03:43 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.341 $%
+\def\SCCSversion{$Revision: 1.342 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/01/23 15:59:32 $%
+\TPPdate{\FormatDate{$Date: 2007/02/18 17:03:43 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -277,6 +277,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.340] Change to parametrisation of {\em new\_script} etc.
 \item[Issue 1.341] The Z output module now gives the ML bindings for {\em cn\_subprog\_ud\_key} etc.
 \item[Issue 1.342] Implemented new checks on global dependency lists.
+\item[Issue 1.343] Elements of a block name are now optional.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2073,7 +2074,7 @@ fun €block_block_name›  (blk as
 		in_scope},
 	...
 	} : BLOCK,
-	new_block_name : ID list) : BLOCK = (
+	new_block_name : ID OPT list) : BLOCK = (
 	block_declab(blk, 
 		{block_name = new_block_name,
 				flags = flags,
@@ -2277,8 +2278,8 @@ It is convenient to use this to tell the code which stores VCs the name of the c
 The following two functions assist in this.
 =SML
 fun €set_bottom_block_name› (n : ID) : unit = (
-	let	fun aux [] = [block_block_name(empty_block, [n])]
-		|   aux [blk] = [block_block_name(blk, [n])]
+	let	fun aux [] = [block_block_name(empty_block, [Value n])]
+		|   aux [blk] = [block_block_name(blk, [Value n])]
 		|   aux (blk :: more) = blk :: aux more;
 	in	blocks := aux (!blocks)
 	end
@@ -2287,7 +2288,7 @@ fun €set_bottom_block_name› (n : ID) : unit = (
 =SML
 fun €get_bottom_block_name› (() : unit) : ID = (
 	let	fun aux [] = ""
-		|   aux [{declab = {block_name as [n], ...}, ...} :BLOCK] = n
+		|   aux [{declab = {block_name as [Value n], ...}, ...} :BLOCK] = n
 		|   aux [{declab = {block_name as _, ...}, ...} :BLOCK] = ""
 		|   aux (blk :: more) = aux more;
 	in	aux (!blocks)
@@ -2302,16 +2303,30 @@ fun €suffixes› ([] : 'a list) : 'a list list = []
 |   suffixes (_ :: xs) = xs :: suffixes xs;
 =TEX
 =SML
-fun €pack_spec_prefix_info› (pack_name : ID list) : PREFIX_INFO = (
-	let	val canon = map trans_id pack_name;
+fun €full_block_name› (ns : ID OPT list) : ID list = (
+	map  (fn Value n => n | Nil => "") ns
+);
+=TEX
+=SML
+fun €ada_block_name› (ns : ID OPT list) : ID list = (
+	let	fun aux acc [] = map force_value acc
+		|   aux acc (Nil :: more) = aux more more
+		|   aux acc (Value _ :: more) = aux acc more;
+	in	aux ns ns
+	end
+);
+=TEX
+=SML
+fun €pack_spec_prefix_info› (pack_name : ID OPT list) : PREFIX_INFO = (
+	let	val canon = map trans_id (ada_block_name pack_name);
 		val aliases = suffixes canon;
 	in	{canon = canon, aliases = aliases}
 	end
 );
 =TEX
 =SML
-fun €body_prefix_info› (pack_name : ID list) : PREFIX_INFO = (
-	let	val base = map trans_id pack_name;
+fun €body_prefix_info› (pack_name : ID OPT list) : PREFIX_INFO = (
+	let	val base = map trans_id (ada_block_name pack_name);
 		val aliases = base :: suffixes base;
 	in	{canon = [], aliases = aliases}
 	end
@@ -2344,13 +2359,13 @@ fun €find_pack_spec_prefix_info› (():unit) : PREFIX_INFO = (
 );
 =TEX
 =SML
-fun €simple_name› ([] : Z_ID list) = ""
-|   simple_name [n] = n
+fun €simple_name› ([] : ID OPT list) : ID = ""
+|   simple_name [Value n] = n
 |   simple_name (_::more) = simple_name more;
 =TEX
 =SML
-fun €expanded_name› (ns : Z_ID list) : Z_ID = (
-	format_list Combinators.I ns "o"
+fun €expanded_name› (ns : ID OPT list) : Z_ID = (
+	format_list (fn Value n => n | Nil => "") ns "o"
 );
 =TEX
 \subsection{$flatten\_env$}
@@ -2362,10 +2377,10 @@ To restrict the scope of frame widening, the block names are also passed in and 
 The treatment of the using declarations is the obvious one, but this is not relevant in the current usage of this function.
 =SML
 fun €merge_declabs›
-	(block_name1 : ID list)
+	(block_name1 : ID OPT list)
 	({	dict=dict1,
 		dec_labels = dec_labels1} : IN_SCOPE)
-	(block_name2 : ID list)
+	(block_name2 : ID OPT list)
 	({	dict = _,
 		dec_labels = dec_labels2} : IN_SCOPE) : IN_SCOPE = (
 	{	dict = dict1,
@@ -3419,7 +3434,7 @@ fun (x : ID) €dot› (y : ID) = x ^ "." ^ y;
 =TEX
 The following forms the index string for $subunit\_env$, which is simply the Z translation of the expanded name of the subprogram.
 =SML
-val €subunit_env_index› : ID list -> ID -> Z_ID = prefix_trans_id;
+val €subunit_env_index› : ID OPT list -> ID -> Z_ID = prefix_trans_id o full_block_name;
 =TEX
 The following function returns the name of the parent of the script theory.
 =SML
@@ -3796,7 +3811,7 @@ fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
 		val package = case (s_lookup bn1 (!pack_env)) of
 			Value p => p
 		|	Nil => error "basic_decl_pack_spec" 507001 [fn () => bn1];
-		val para_info_opt = trans_basic_decl1 (current_cn_env, block_name1) basic_decl;
+		val para_info_opt = trans_basic_decl1 (current_cn_env, full_block_name block_name1) basic_decl;
 		val pfx_info = pack_spec_prefix_info block_name1;
 		val _ = update_envs_basic_decl pfx_info basic_decl;
 	in	pack_env :=
@@ -4315,13 +4330,13 @@ fun €remove_log_con_env› (() : unit) : unit = (
 =TEX
 \section{LOOPS}\label{LOOPS}
 \subsection{The SID function new\_scope\_loop}
-The first parameter of the following gives the name of the new declarative region, if any, e.g., a subprogram name.
-The block name is obtained by appending the supplied name to the name of the enclosing block.
-A {\em Nil} value corresponds to an unnamed declarative region, e.g., an unnamed loop.
-As a special case, if then name is given as an empty string, the block name in the top block is used as is.
+The following function does work that is common to several new\_scope functions.
+A new block is assumed just to have been pushed onto the environment.
+The first parameter gives the name of the new declarative region, e.g., a subprogram or loop name (which latter is optional) unless this has already been set in the top block by caller.
+The block name is obtained by appending the supplied name, if any, to the name of the enclosing block.
 The bottom block name is always treated as empty here.
 =SML
-fun €new_scope_common› (no : ID OPT)
+fun €new_scope_common› (no : ID OPT OPT)
 	(blk1 :: (more as (blk2 :: _)) : BLOCK list) : BLOCK list = (
 	let	val dict1 = #dict(#in_scope(#declab blk1));
 		val dict2 = #dict(#in_scope(#declab blk2));
@@ -4335,8 +4350,7 @@ fun €new_scope_common› (no : ID OPT)
 			[_] => []
 		|	_ => #block_name(#declab blk2);
 		val block_name1'' = case no of
-			Nil => []
-		|	Value "" => block_name1
+			Nil => block_name1
 		|	Value n => block_name2 @ [n];
 	in	block_block_name(block_dict(blk1, dict1''), block_name1'')
 		::more
@@ -4368,7 +4382,7 @@ fun €new_scope_loop› (loop_name  :  ID OPT) : unit = (
 					using_decs = [],
 					in_scope = in_scope});
 		val block1 = block_current_loop_name(block, loop_name);
-	in	blocks := new_scope_common loop_name (block1 :: !blocks)
+	in	blocks := new_scope_common (Value loop_name) (block1 :: !blocks)
 	end		
 );
 =TEX
@@ -4432,13 +4446,11 @@ fun €till_pred› (t : Z_TM) : unit = (
 fun €new_block› (no : ID OPT) : unit = (
 	let	val block1 = block 1;
 		val block_name1 = #block_name(#declab block1);
-		val block_name1' = case no of
-			Value n => block_name1 @ [n]
-		|	Nil => [];
+		val block_name1' = block_name1 @ [no];
 		val block1' = block_block_name(
 			block_body_flag (block1, true),
 			block_name1');
-	in	blocks := new_scope_common (Value"")(block1' :: tl(!blocks))
+	in	blocks := new_scope_common Nil (block1' :: tl(!blocks))
 	end
 );
 =TEX
@@ -4496,11 +4508,12 @@ fun €subunit_form_inf› (ident : ID, is_inf : bool) : unit = (
 				handle Fail _ =>
 				fail "subunit_form_inf" 507011
 						[fn()=>expanded_name block_name, fn()=>ident];
-			val su_name = prefix_trans_id block_name ident;
+			val fbn = full_block_name block_name;
+			val su_name = prefix_trans_id fbn ident;
 			val _ = new_parent_aux false (su_name ^ context_tag);
 			val in_scope' = #in_scope subunit1;
 			val block' = block_in_scope(block, in_scope');
-		in	blocks := new_scope_common (Value "")(block' :: tl (!blocks));
+		in	blocks := new_scope_common Nil (block' :: tl (!blocks));
 			if	is_inf
 			then	(
 				(if	#specif_flag subunit1
@@ -4528,7 +4541,7 @@ fun €subunit_inf› (ident : ID) : unit = (
 =SML
 fun €new_scope_proc_inf› (ident : ID) : unit = (
 	let	val block = block_flags(empty_block, false_flags);
-	in	blocks := new_scope_common(Value ident)(block :: !blocks)
+	in	blocks := new_scope_common(Value(Value ident))(block :: !blocks)
 	end		
 );
 =TEX
@@ -4548,7 +4561,7 @@ fun €new_scope_proc_form› (ident : ID) : unit = (
 			body_flag = false
 		};
 		val block = block_flags(empty_block, flags);
-	in	blocks := new_scope_common(Value ident)(block :: !blocks)
+	in	blocks := new_scope_common(Value(Value ident))(block :: !blocks)
 	end		
 );
 =TEX
@@ -4943,7 +4956,8 @@ fun €form_proc_pack_body_common›
 			return = mk_z_true,
 			fun_header = dummy_informal_fun
 		};
-		val vc_var_names4 = map (prefix_trans_id block_name2)
+		val fbn2 = full_block_name block_name2;
+		val vc_var_names4 = map (prefix_trans_id fbn2)
 			(flat (map #vars vc_vars4));
 		val vc_var_names2 = map trans_id (flat (map #vars vc_vars2));
 		val pack_body_var_names = vc_var_names2 diff vc_var_names4;
@@ -4964,8 +4978,9 @@ fun €form_proc_pack_body_common›
 			in_scope = in_scope5,
 			block_name = block_name2
 		};
+		val abn2 = ada_block_name block_name2;
 	in
-		Value (block2, formal_proc3, package4, speclab5, block_name2)
+		Value (block2, formal_proc3, package4, speclab5, abn2)
 	end
 		else if	implicit
 		andalso	not(bn1 mem #informal_procs package4)
@@ -5040,7 +5055,7 @@ fun €form_proc_pack_body_aux›
 		val w5 = frame_aux_conc cup (#w (#spec speclab5));
 		val block_name5 = #block_name speclab5;
 		val in_scope5 = #in_scope speclab5;
-		val pfx_info = body_prefix_info pack_name;
+		val pfx_info = body_prefix_info (map Value pack_name);
 		val in_scope5a = in_scope_vc_vars Nil pfx_info (in_scope5,  conc_vars);
 		val env5a = cn_env_of_in_scope in_scope5a;
 		val wp_env5a :WP_ENV = {
@@ -5244,7 +5259,7 @@ fun €new_scope_fun_inf› (ident : ID) : unit = (
 			body_flag = false
 		};
 		val block = block_flags(empty_block, flags);
-	in	blocks := new_scope_common(Value ident)(block :: !blocks)
+	in	blocks := new_scope_common(Value(Value ident))(block :: !blocks)
 	end		
 );
 =TEX
@@ -5265,7 +5280,7 @@ fun €new_scope_fun_form› (ident : ID) : unit = (
 			body_flag = false
 		};
 		val block = block_flags(empty_block, flags);
-	in	blocks := new_scope_common(Value ident)(block :: !blocks)
+	in	blocks := new_scope_common(Value(Value ident))(block :: !blocks)
 	end		
 );
 =TEX
@@ -6423,8 +6438,8 @@ fun €new_scope_pack_spec› (ident : ID)  (decl : DECLARATION PACKAGE_DECLARATION)
 		};
 		val block = block_block_name(
 				block_flags(empty_block, flags),
-				[ident]);
-	in	blocks := new_scope_common(Value "")(block :: !blocks);
+				[Value ident]);
+	in	blocks := new_scope_common Nil (block :: !blocks);
 		pack_env := s_extend ident (empty_package decl) (!pack_env) 
 	end	handle Fail _ => fail "new_scope_pack_spec" 507007 [fn () => ident]
 );
@@ -6529,7 +6544,7 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 		handle Fail _ => (
 			fail "new_scope_pack_body" 507143
 			[fn () => ident]));
-		blocks := new_scope_common (Value ident) (block :: !blocks)
+		blocks := new_scope_common (Value(Value ident)) (block :: !blocks)
 	end	
 );
 =TEX
@@ -7132,7 +7147,8 @@ fun €renames_object_pack_spec› (obj_ren : OBJECT_RENAMING) : unit = (
 			Value p => p
 		|	Nil => error "renames_object_pack_spec" 507001 [fn _=>bn1];
 		val pfx_info = pack_spec_prefix_info block_name1;
-	in	case renames_object_common block_name1 obj_ren of
+		val fbn1 = full_block_name block_name1;
+	in	case renames_object_common fbn1 obj_ren of
 			Nil => ()
 		|	Value renaming =>
 			pack_env :=
@@ -7495,8 +7511,8 @@ fun €new_scope_subunit› (ident : ID list) : unit = (
 		};
 		val block = block_block_name(
 			block_flags(empty_block, flags),
-			ident);
-	in	blocks := new_scope_common (Value"") (block :: !blocks)
+			map Value ident);
+	in	blocks := new_scope_common Nil (block :: !blocks)
 	end
 );
 =TEX
@@ -7540,7 +7556,7 @@ fun €new_scope_dec_replace› ({label, decls} : REPLACED_BY_DECL) : unit = (
 		spec_lab = #spec_lab empty_block,
 		till = #till empty_block,
 		var_inits = #var_inits empty_block};
-			in	blocks := new_scope_common (Value "") (block :: !blocks);
+			in	blocks := new_scope_common Nil (block :: !blocks);
 				dec_env := s_delete label (!dec_env)
 			end
 	) |	Nil => fail "new_scope_dec_replace" 507002
@@ -7630,7 +7646,7 @@ fun €new_scope_speclabel› (label : LABEL) : unit = (
 				label),
 			till),
 			block_name);
-	in	blocks := new_scope_common (Value"") (block1 :: !blocks)
+	in	blocks := new_scope_common Nil (block1 :: !blocks)
 	end
 );
 =TEX
