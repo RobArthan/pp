@@ -8,17 +8,17 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%Z% $Id: imp111.doc,v 1.40 2006/07/07 13:54:07 rda Exp rda $
+%Z% $Id: imp111.doc,v 1.41 2006/08/10 12:43:39 rda Exp $
 =TEX
-% %Z% $Id: imp111.doc,v 1.40 2006/07/07 13:54:07 rda Exp rda $
+% %Z% $Id: imp111.doc,v 1.41 2006/08/10 12:43:39 rda Exp $
 \documentstyle[11pt,TQ,hol1]{article}
 
 \TPPtitle{Implementation of the UNIX Interface for ProofPower under Solaris 2 and Linux}
 \TPPref{DS/FMU/IED/IMP099}
-\def\SCCSissue{$Revision: 1.40 $%
+\def\SCCSissue{$Revision: 1.41 $%
 }
 \TPPissue{\SCCSissue}
-\TPPdate{\FormatDate{$Date: 2006/07/07 13:54:07 $%
+\TPPdate{\FormatDate{$Date: 2006/08/10 12:43:39 $%
 }}
 \TPPproject{FST PROJECT}
 
@@ -102,6 +102,7 @@ path.
 \item[Issue 1.40]
 {\em pp\_make\_database} now leaves parent database in its original current theory.
 \item[Issue 1.41] {\em pp} now treats its -v flag properly and has a complementary -q flag.
+\item[Issue 1.42] Rationalised abuse of shell variable $hol\_current\_theory$ in $pp\_make\_database$ (which fixes a bug if there are `Q's in the theory names passed on the command line).
 \end{description}
 
 \subsection{Changes Forecast}
@@ -245,7 +246,7 @@ and the value of $pp'database\_info$.
 \subsection{Program {\tt hol}}
 =DUMP hol
 #! /bin/sh
-#	hol   From: $Id: imp111.doc,v 1.40 2006/07/07 13:54:07 rda Exp rda $ %Z%
+#	hol   From: $Id: imp111.doc,v 1.41 2006/08/10 12:43:39 rda Exp $ %Z%
 #
 # Shell script to start a ProofPower-HOL session
 PROGNAME=hol
@@ -256,7 +257,7 @@ pp -d hol $*
 \subsection{Program {\tt zed}}
 =DUMP zed
 #! /bin/sh
-#	zed   From: $Id: imp111.doc,v 1.40 2006/07/07 13:54:07 rda Exp rda $ %Z%
+#	zed   From: $Id: imp111.doc,v 1.41 2006/08/10 12:43:39 rda Exp $ %Z%
 #
 # Shell script to start a ProofPower-Z session
 PROGNAME=zed
@@ -267,7 +268,7 @@ pp -d zed $*
 \subsection{Program {\tt pp}}
 =DUMP pp
 #! /bin/sh
-#	pp   From: $Id: imp111.doc,v 1.40 2006/07/07 13:54:07 rda Exp rda $ %Z%
+#	pp   From: $Id: imp111.doc,v 1.41 2006/08/10 12:43:39 rda Exp $ %Z%
 #
 # Shell script to start a ProofPower session
 
@@ -588,7 +589,7 @@ save_and_quit();
 If the process fails through delete the child database.
 =DUMP pp_make_database
 #! /bin/sh
-#	pp_make_database   From: $Id: imp111.doc,v 1.40 2006/07/07 13:54:07 rda Exp rda $ %Z%
+#	pp_make_database   From: $Id: imp111.doc,v 1.41 2006/08/10 12:43:39 rda Exp $ %Z%
 #
 # Shell script to create a ProofPower child database
 
@@ -667,7 +668,7 @@ else
 	PPDATABASEPATH="."
 fi
 
-hol_current_theory=`echo $PARENT| grep "#" | sed -e "s/.*#//"`
+PCACHETHY=`echo $PARENT| grep "#" | sed -e "s/.*#//"`
 CDATABASE=`echo $NEWDB|sed -e "s/#.*//"`
 =TEX
 [PBC] Split child into dirname and basename
@@ -681,7 +682,6 @@ else
 	CBDATABASE=`basename $CDATABASE`
 fi
 
-export hol_current_theory
 =TEX
 Test for compiler to use
 
@@ -717,11 +717,11 @@ fi
 [PBC] Removed check to disallow suffix
 =DUMPMORE pp_make_database
 CBDATABASE=`basename $CBDATABASE .$HEAP_SUFFIX`
-CCACHE=`echo $NEWDB| grep "#" | sed -e "s/.*#//"`
-if test ""$CCACHE = ""
-then	CCACHE="cache'"$CBDATABASE
+CCACHETHY=`echo $NEWDB| grep "#" | sed -e "s/.*#//"`
+if test ""$CCACHETHY = ""
+then	CCACHETHY="cache'"$CBDATABASE
 fi
-if test ""$CCACHE = ""
+if test ""$CCACHETHY = ""
 then	
 	diag "No name for new cache theory"
 	exit 1
@@ -863,16 +863,16 @@ does not have write permissions.
 	echo "Freezing $PDATABASEN~"
 	$RUNML$PDATABASEN~ > $LOGFILE 2>&1 << ++++
 let	val cur_thy = get_current_theory_name ();
-in	if "$hol_current_theory"<>""
-	then (open_theory "$hol_current_theory"
+in	if "$PCACHETHY"<>""
+	then (open_theory "$PCACHETHY"
 		handle _ =>
-		(diag_string ("cannot open parent theory"^"$hol_current_theory");
+		(diag_string ("cannot open parent theory"^"$PCACHETHY");
 		PPCompiler.exit 1))
 	else (open_theory (hd(get_cache_theories())) handle _ =>
 		(diag_string ("cannot open cache theory in parent database");
 		PPCompiler.exit 1));
 	(
-		open_theory "$CCACHE";
+		open_theory "$CCACHETHY";
 		diag_string "New cache theory exists in parent database";
 		PPCompiler.exit 0
 	)
@@ -940,10 +940,10 @@ First a few sanity checks - quoted parent theories must
 exist, and the new cache theory name must neither be ``''
 nor currently exist.
 =DUMPMORE pp_make_database
-if "$hol_current_theory"<>""
-then (open_theory "$hol_current_theory"
+if "$PCACHETHY"<>""
+then (open_theory "$PCACHETHY"
 	handle _ =>
-	(diag_string ("cannot open parent theory"^"$hol_current_theory");
+	(diag_string ("cannot open parent theory"^"$PCACHETHY");
 	PPCompiler.exit 1))
 else  (open_theory (hd(get_cache_theories())) handle _ =>
 	(diag_string ("cannot open cache theory in parent database");
@@ -951,7 +951,7 @@ else  (open_theory (hd(get_cache_theories())) handle _ =>
 
 (
 	diag_string ("Current theory is " ^ get_current_theory_name());
-	open_theory "$CCACHE";
+	open_theory "$CCACHETHY";
 	diag_string "New cache theory exists in parent database";
 	PPCompiler.exit 0
 )
@@ -1022,19 +1022,19 @@ Now run the child database:
 	val pp'theory_hierarchy = Value (pp'Kernel.pp'new_hierarchy ());
 	pp'Kernel.pp'load_hierarchy (force_value pp'theory_hierarchy);
 	pp'new_kernel_interface_tables();
-	if "$hol_current_theory"<>""
-	then (open_theory "$hol_current_theory"
+	if "$PCACHETHY"<>""
+	then (open_theory "$PCACHETHY"
 		handle _ =>
-		(diag_string ("cannot open parent theory"^"$hol_current_theory");
+		(diag_string ("cannot open parent theory"^"$PCACHETHY");
 			PPCompiler.exit 1))
 	else  (open_theory (hd(get_cache_theories())) handle _ =>
 		(diag_string ("cannot open parent for cache theory");
 			PPCompiler.exit 1));
-	diag_string ("Creating cache theory $CCACHE as a child of " ^ get_current_theory_name());
-	new_theory "$CCACHE" handle _ =>
+	diag_string ("Creating cache theory $CCACHETHY as a child of " ^ get_current_theory_name());
+	new_theory "$CCACHETHY" handle _ =>
 		(diag_string ("cannot create cache theory");
 			PPCompiler.exit 1);
-	set_cache_theories ("$CCACHE" :: get_cache_theories());
+	set_cache_theories ("$CCACHETHY" :: get_cache_theories());
 	save_and_quit();
 ++++
 EXIT_STATUS=$?
@@ -1074,7 +1074,7 @@ At v0.8.2 and later this is just an alias of $pp\_list$.
 
 =DUMP hol_list
 #! /bin/sh
-#	hol_list   From: $Id: imp111.doc,v 1.40 2006/07/07 13:54:07 rda Exp rda $ %Z%
+#	hol_list   From: $Id: imp111.doc,v 1.41 2006/08/10 12:43:39 rda Exp $ %Z%
 # Shell script to list HOL theories - obsolete, use pp_list instead.
 pp_list $*
 =TEX
@@ -1082,7 +1082,7 @@ pp_list $*
 At v0.8.2 and later this is just an alias of $pp\_list$.
 =DUMP zed_list
 #! /bin/sh
-#	zed_list   From: $Id: imp111.doc,v 1.40 2006/07/07 13:54:07 rda Exp rda $ %Z%
+#	zed_list   From: $Id: imp111.doc,v 1.41 2006/08/10 12:43:39 rda Exp $ %Z%
 #
 # Shell script to list Z theories - obsolete, use pp_list instead.
 pp_list $*
@@ -1090,7 +1090,7 @@ pp_list $*
 \subsection{Program {\tt pp\_list}}
 =DUMP pp_list
 #! /bin/sh
-#	pp_list   From: $Id: imp111.doc,v 1.40 2006/07/07 13:54:07 rda Exp rda $ %Z%
+#	pp_list   From: $Id: imp111.doc,v 1.41 2006/08/10 12:43:39 rda Exp $ %Z%
 #
 # Shell script to list ProofPower theories
 PROGNAME=`basename $0`
