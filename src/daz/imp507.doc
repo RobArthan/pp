@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.342 $ $RCSfile: imp507.doc,v $ $Date: 2007/02/18 17:03:43 $
+% imp507.doc %Z% $Revision: 1.343 $ $RCSfile: imp507.doc,v $ $Date: 2007/05/13 14:55:58 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.342 $%
+\def\SCCSversion{$Revision: 1.343 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/02/18 17:03:43 $%
+\TPPdate{\FormatDate{$Date: 2007/05/13 14:55:58 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -278,6 +278,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.341] The Z output module now gives the ML bindings for {\em cn\_subprog\_ud\_key} etc.
 \item[Issue 1.342] Implemented new checks on global dependency lists.
 \item[Issue 1.343] Elements of a block name are now optional.
+\item[Issue 1.344] Allowed for rationalised abstract syntax for loops.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -4358,7 +4359,17 @@ fun €new_scope_common› (no : ID OPT OPT)
 ) | new_scope_common _ other = other;
 =TEX
 =SML
-fun €new_scope_loop› (loop_name  :  ID OPT) : unit = (
+fun €opt_name_of_loop_or_block_name›
+	(LBNoName : LOOP_OR_BLOCK_NAME) : ID OPT = (
+	Nil
+) | opt_name_of_loop_or_block_name (LBAdaName id) = (
+	Value id
+) | opt_name_of_loop_or_block_name (LBCNName id) = (
+	Value id
+);
+=TEX
+=SML
+fun €new_scope_loop› (loop_name  :  LOOP_OR_BLOCK_NAME) : unit = (
 	let	val block1 = block 1;
 		val {declab as {flags as 
 			{fun_flag, formal_body_flag, speclabel_flag, body_flag, ...},
@@ -4376,13 +4387,14 @@ fun €new_scope_loop› (loop_name  :  ID OPT) : unit = (
 			till_flag = false,
 			body_flag = body_flag
 		};
+		val ln = opt_name_of_loop_or_block_name loop_name;
 		val block = block_declab(block1, {
 					block_name = block_name,
 					flags = flags,
 					using_decs = [],
 					in_scope = in_scope});
-		val block1 = block_current_loop_name(block, loop_name);
-	in	blocks := new_scope_common (Value loop_name) (block1 :: !blocks)
+		val block1 = block_current_loop_name(block, ln);
+	in	blocks := new_scope_common (Value ln) (block1 :: !blocks)
 	end		
 );
 =TEX
@@ -4443,9 +4455,10 @@ fun €till_pred› (t : Z_TM) : unit = (
 =TEX
 \subsection{The SID function new\_block}
 =SML
-fun €new_block› (no : ID OPT) : unit = (
+fun €new_block› (bn : LOOP_OR_BLOCK_NAME) : unit = (
 	let	val block1 = block 1;
 		val block_name1 = #block_name(#declab block1);
+		val no = opt_name_of_loop_or_block_name bn;
 		val block_name1' = block_name1 @ [no];
 		val block1' = block_block_name(
 			block_body_flag (block1, true),
@@ -7826,7 +7839,7 @@ in the abstract syntax.
 It returns the inner statement of the loop (with frames expanded).
 =SML
 fun €do_for_loop› (t : Z_TM OPT, i : ID, stmt : STATEMENT,
-			tmark : TMARK OPT, dir : LOOP_DIRECTION, loop_name : ID OPT)
+			tmark : TMARK OPT, dir : LOOP_DIRECTION, loop_name : LOOP_OR_BLOCK_NAME)
 		: STATEMENT = (
 	new_scope_loop loop_name;
 	for_param (i, case tmark of Value t => t | _ => universal_discrete_type);
@@ -7874,38 +7887,31 @@ and €do_statement› (y as (STNull _) : STATEMENT) : STATEMENT = (y
 		val expanded_others =  check_fail (STNull SNImplicit) do_statement others;
 	in	STCase{s = expanded_s, others = expanded_others, e = e}
 	end
-) | do_statement (y as (STLoop {t= t, stmt}) : STATEMENT) = (
-	new_scope_loop Nil;
+) | do_statement (y as (STLoop {t, stmt, name}) : STATEMENT) = (
+	new_scope_loop name;
 	(case t of Value till => till_pred till | Nil => ());
 	let	val expanded_stmt = check_fail (STNull SNImplicit)  do_statement stmt;
 	in	end_scope();
-		STLoop{t = t, stmt = expanded_stmt}
+		STLoop{t = t, stmt = expanded_stmt, name = name}
 	end
-) | do_statement (y as (STNamedLoop {t, stmt, name}) : STATEMENT) = (
-	new_scope_loop (Value name);
-	(case t of Value till => till_pred till | Nil => ());
-	let	val expanded_stmt =  check_fail (STNull SNImplicit) do_statement stmt;
-	in	end_scope();
-		STNamedLoop{t = t, stmt = expanded_stmt, name = name}
-	end
-) | do_statement (y as (STWhile {loop as {t, stmt}, name, g}) : STATEMENT) = (
+) | do_statement (y as (STWhile {loop as {t, stmt, name = _}, name, g}) : STATEMENT) = (
 	new_scope_loop name;
 	(case t of Value till => till_pred till | Nil => ());
 	let	val expanded_stmt =  check_fail (STNull SNImplicit) do_statement stmt;
 	in	end_scope();
-		STWhile{loop = {t = t, stmt = expanded_stmt}, name = name, g = g}
+		STWhile{loop = {t = t, stmt = expanded_stmt, name = LBNoName}, name = name, g = g}
 	end
 ) | do_statement
-	(y as (STForStatic {name, i, tmark, range, dir, loop as {stmt, t}}) : STATEMENT) = (
+	(y as (STForStatic {name, i, tmark, range, dir, loop as {stmt, t, name = _}}) : STATEMENT) = (
 	let	val expanded_stmt = do_for_loop(t, i, stmt, tmark, dir, name);
 	in	STForStatic {name = name, i = i, tmark = tmark, range = range, dir = dir,
-			loop= {stmt=expanded_stmt, t = t}}
+			loop= {stmt=expanded_stmt, t = t, name = LBNoName}}
 	end
 ) | do_statement
-	(y as (STForTmark {name, i, tmark, dir, loop as {stmt, t}}) : STATEMENT) = (
+	(y as (STForTmark {name, i, tmark, dir, loop as {stmt, t, name = _}}) : STATEMENT) = (
 	let	val expanded_stmt = do_for_loop(t, i, stmt, Value tmark, dir, name);
 	in	STForTmark {name = name, i = i, tmark = tmark, dir = dir,
-			loop= {stmt=expanded_stmt, t = t}}
+			loop= {stmt=expanded_stmt, t = t, name = LBNoName}}
 	end
 ) | do_statement
 	(y as STLabelled {label, statement} : STATEMENT) = (
@@ -8528,17 +8534,15 @@ fun €sco_statement› (y as (STNull _) : STATEMENT) : unit = ( ()
 ) | sco_statement (y as (STCase {s, others, e}) : STATEMENT) = (
 	map (sco_statement o #p) s;
 	sco_statement others
-) | sco_statement (y as (STLoop {t= t, stmt}) : STATEMENT) = (
+) | sco_statement (y as (STLoop {t, stmt, ...}) : STATEMENT) = (
 	sco_statement stmt
-) | sco_statement (y as (STNamedLoop {t, stmt, name}) : STATEMENT) = (
-	sco_statement stmt
-) | sco_statement (y as (STWhile {loop as {t, stmt}, name, g}) : STATEMENT) = (
+) | sco_statement (y as (STWhile {loop as {t, stmt, ...}, name, g}) : STATEMENT) = (
 	sco_statement stmt
 ) | sco_statement
-	(y as (STForStatic {name, i, tmark, range, dir, loop as {stmt, t}}) : STATEMENT) = (
+	(y as (STForStatic {name, i, tmark, range, dir, loop as {stmt, t, ...}}) : STATEMENT) = (
 	sco_statement stmt
 ) | sco_statement
-	(y as (STForTmark {name, i, tmark, dir, loop as {stmt, t}}) : STATEMENT) = (
+	(y as (STForTmark {name, i, tmark, dir, loop as {stmt, t, ...}}) : STATEMENT) = (
 	sco_statement stmt
 ) | sco_statement
 	(y as STLabelled {label, statement} : STATEMENT) = (

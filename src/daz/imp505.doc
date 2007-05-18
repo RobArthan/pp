@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2006/09/18 16:09:35 $ $Revision: 1.145 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2007/02/18 17:03:43 $ $Revision: 1.146 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -26,7 +26,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.145 $%
+\def\SCCSversion{$Revision: 1.146 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -169,6 +169,7 @@ Adjusted checks etc. accordingly.
 \item[Issue 1.144] Stopped {\em vcs} rebinding the name {\em wp}.
 \item[Issue 1.145] {\em check\_1\_b} now reports on return statements with values in procedures and return statements without values in functions.
 \item[Issue 1.146] Implemented new checks on global dependency lists.
+\item[Issue 1.147] Allowed for rationalised abstract syntax for loops.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -850,7 +851,7 @@ fun Ûcase_othersÝ (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 
 \subsection{Undecorated Loop}\label{wp-loop}
 =SML
-fun ÛloopÝ ({a, wp_env={env, ...}, ...} : WP_PARS) ({t, stmt} : STATEMENT LOOP)
+fun ÛloopÝ ({a, wp_env={env, ...}, ...} : WP_PARS) ({t, stmt, ...} : STATEMENT LOOP)
 			: RESULT = (
 let	val (pre1, post1, w) = case stmt of
 		STSpecNoIvars {spec={pre, post, w, ...}, ...} => (
@@ -869,16 +870,10 @@ in
 end
 );
 =TEX
-=SML
-fun Ûnamed_loopÝ (wp_pars : WP_PARS) ({t, stmt, ...} : STATEMENT NAMED_LOOP)
-			: RESULT = (
-	loop wp_pars {t=t, stmt=stmt}
-);
-=TEX
 \subsection{While Loop}\label{wp-while-loop}
 =SML
 fun Ûcn_whileÝ	({a, wp_env={env, ...}, ...} : WP_PARS)
-		({g, loop={t,stmt}, ...} : STATEMENT WHILE) : RESULT = (
+		({g, loop={t, stmt, ...}, ...} : STATEMENT WHILE) : RESULT = (
 let	val {w, pre, post, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
 		|_ => fail "loop" 505022 [];
@@ -904,7 +899,7 @@ end
 \subsection{For Loop (Static Bounds)}\label{wp-for-static}
 =SML
 fun Ûfor_staticÝ ({a, wp_env={env, ...}, ...} : WP_PARS)
-	({i, tmark, range, dir, loop = {t, stmt}, ...} : STATEMENT FOR_STATIC) : RESULT = (
+	({i, tmark, range, dir, loop = {t, stmt, ...}, ...} : STATEMENT FOR_STATIC) : RESULT = (
 let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val {lo, hi} = dest_range range;
 	val {pre, post, w, ...} = case stmt of
@@ -947,7 +942,7 @@ end
 \subsection{For Loop (Type Mark as Range)}\label{wp-for-tmark}
 =SML
 fun Ûfor_tmarkÝ ({a, wp_env={env, ...}, ...} : WP_PARS)
-	({i, tmark, dir, loop = {t, stmt}, ...} : STATEMENT FOR_TMARK) : RESULT = (
+	({i, tmark, dir, loop = {t, stmt, ...}, ...} : STATEMENT FOR_TMARK) : RESULT = (
 let	val {pre, post, w, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
 		|_ => fail "for_tmark" 505022 [];
@@ -1391,7 +1386,7 @@ end
 \subsection{For Loop (Non-Static Bounds)}\label{wp-for-var}
 =SML
 fun Ûfor_non_staticÝ (pars as {wp, a, wp_env as {env, ...}} : WP_PARS)
-			({i, range, loop = {t, stmt}, dir, ...} : STATEMENT FOR_NON_STATIC)
+			({i, range, loop = {t, stmt, ...}, dir, ...} : STATEMENT FOR_NON_STATIC)
 			 : RESULT = (
 let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val {lo, hi} = dest_range range;
@@ -1664,9 +1659,6 @@ in
 	) |	STLoop {stmt, ...} => (
 			check_inner stmt;
 			s
-	) |	STNamedLoop {stmt, ...} => (
-			check_inner stmt;
-			s
 	) |	STWhile {loop as {stmt, ...}, ...} => (	
 			check_inner stmt;
 			s
@@ -1709,7 +1701,6 @@ in	case adjust_statement wp_env st of
 	|	STCase {e, s, others} =>
 			case_others pars {e=adjust e, s=s, others=others}
 	|	STLoop x => loop pars x
-	|	STNamedLoop x => named_loop pars x
 	|	STWhile {g, loop, name} =>
 			cn_while pars {g=adjust g, loop=loop, name=name}
 	|	STForStatic x => for_static pars x
@@ -2047,24 +2038,22 @@ let	fun pass_over_statement (st : STATEMENT) = (
 		)|	STSpecNoIvars {spec as {w,w0,pre,post},label, is_assertion} => (
 				check_1_a env (w, speclab);
 				check_19 env Nil spec
-		)|	STSemicolon (s1,s2) => (
+		)|	STSemicolon (s1, s2) => (
 					(pass_over_statement s1;
 					pass_over_statement s2)
-		)|	STIfThenElse  {g,p,q,elsif} => (
+		)|	STIfThenElse  {p, q, ...} => (
 					(pass_over_statement p;
 					pass_over_statement q)
-		)|	STCase {e,s,others} => (
+		)|	STCase {s, others, ...} => (
 				map (fn st1 => pass_over_statement (#p st1)) s;
 				pass_over_statement others
-		)|	STLoop {t,stmt} => (
+		)|	STLoop {stmt, ...} => (
 				pass_over_statement stmt
-		)|	STNamedLoop {name,t,stmt} => (
-				pass_over_statement stmt
-		)|	STWhile {name,g,loop} => (
+		)|	STWhile {loop, ...} => (
 				pass_over_statement (#stmt loop)
-		)|	STForStatic {name,i,tmark,range,dir,loop} => (
+		)|	STForStatic {loop, ...} => (
 				pass_over_statement (#stmt loop)
-		)|	STForTmark {name,i,tmark,dir,loop} => (
+		)|	STForTmark {loop, ...} => (
 				pass_over_statement (#stmt loop)
 		)|	STLabelled {label, statement} => (
 				pass_over_statement statement

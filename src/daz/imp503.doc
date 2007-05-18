@@ -135,6 +135,7 @@ This removes the need for various special cases and type conversion functions.
 \item[Issue 1.136] Added support for deferred subprograms.
 \item[Issue 1.137] Now have syntax to allow anonymous Ada blocks and loops to be given names in the Compliance Notation.
 \item[Issue 1.138] Made checking of loop names uniform with checking of block names.
+\item[Issue 1.139] Revised syntax for naming anonymous blocks and rationalised data types that represent loop statements.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -469,6 +470,7 @@ datatype €PPARSED› =
 	|	€PPId› of ID
 	|	€PPIdExp› of (ID * EXP)
 	|	€PPIds› of ID list
+	|	€PPLoopOrBlockName› of LOOP_OR_BLOCK_NAME
 	|	€PPKSlot› of K_SLOT
 	|	€PPKSlotCUList› of KSLOT_COMPILATION_UNIT list
 	|	€PPMode› of MODE
@@ -1848,12 +1850,10 @@ fun €red_others_part2› _ _ _ (Parsed p) = p
 
 SPARK manual 5.5:
 =SML
-fun €red_loop_statement› (Parsed(PPIds ids)) (Parsed p) (Parsed(PPExps es))
-    (Parsed(PPStatement st)) (Parsed(PPIds ids')) _ = (
-let	val name = opt_of_list ids;
-	val name' = opt_of_list ids';
-	val _ =
-		if name <> name'
+fun €red_loop_statement› (Parsed (PPLoopOrBlockName bn1)) (Parsed p) (Parsed(PPExps es))
+    (Parsed(PPStatement st)) (Parsed (PPLoopOrBlockName bn2)) _ = (
+let	val _ =
+		if bn1 <> bn2
 		then	parse_error 503001
 			"in a loop statement the loop names must either both be present and be the same or both be absent"
 		else	();
@@ -1864,23 +1864,18 @@ let	val name = opt_of_list ids;
 in
 	case p of
 		PPExp c => (
-	PPStatement(STWhile{name=name, g=c, loop={t=till, stmt=st}})
+	PPStatement(STWhile{name=bn1, g=c, loop={t=till, name = LBNoName, stmt=st}})
 	) |	PPFor(id, tm, dir, opr) => (
 		case opr of
 			Value range => (
-			PPStatement(STForStatic{name=name, tmark=tm, i=id,
-				range=range, dir=dir,loop={t=till, stmt=st}})
+			PPStatement(STForStatic{name=bn1, tmark=tm, i=id,
+				range=range, dir=dir,loop={t=till, name = LBNoName, stmt=st}})
 		) |	Nil => (
-		PPStatement(STForTmark{name=name,i=id, tmark=force_value tm, dir=dir,
-				loop={t=till, stmt=st}})
+		PPStatement(STForTmark{name=bn1,i=id, tmark=force_value tm, dir=dir,
+				loop={t=till, name = LBNoName, stmt=st}})
         		)
 	) |	PPId "__no_scheme" => (
-		case name of
-			Value n => (
-			PPStatement(STNamedLoop{name=n,t=till, stmt=st})
-		) |	Nil => (
-			PPStatement(STLoop{t=till, stmt=st})
-		)
+		PPStatement(STLoop{name=bn1,t=till, stmt=st})
 	) |  _ => stack_error"red_loop_statement_a"
 end)
 |   red_loop_statement _ _ _ _ _ _ = stack_error "red_loop_statement";
@@ -1890,27 +1885,31 @@ fun €red_loop_body› _ (Parsed(pst as PPStatement _)) _ _ = pst
 |   red_loop_body _ _ _ _  = stack_error "red_loop_body";
 =TEX
 =SML
-val €red_name_colon_opt1› = PPIds[];
+val €red_name_colon_opt1› = PPLoopOrBlockName LBNoName;
 
 fun €red_name_colon_opt2› (Token ((_,CNText id), _)) _ = (
-    PPIds [id])
-|   red_name_colon_opt2 _ _ =
+	PPLoopOrBlockName (LBAdaName id)
+) | red_name_colon_opt2 _ _ =
         stack_error "red_name_colon_opt2";
-=TEX
-The use of {\em get\_internal\_name} below is just a nicety that causes the Ada program pretty-printer to get the case of the label right in the comment it outputs.
-=SML
-fun €red_name_colon_opt3› (Token ((_, CNText lb), _)) (Token ((_,CNText id), _)) (Token ((_,CNText rb), _)) _ = (
-    PPIds [lb^id^rb])
-|   red_name_colon_opt3 _ _ _ _ =
+fun €red_name_colon_opt3› _ (Token ((_,CNText id), _)) _ = (
+	PPLoopOrBlockName (LBCNName id)
+) | red_name_colon_opt3 _ _ _ =
         stack_error "red_name_colon_opt3";
+=TEX
+=SML
+val €red_cn_name_opt1› = PPLoopOrBlockName LBNoName;
 
-val €red_cn_name_opt1› = red_accept;
-
-fun €red_cn_name_opt2› (Token ((_, CNText lb), _)) (Token ((_,CNText id), _)) (Token ((_,CNText rb), _)) = (
-    PPIds [lb^id^rb])
-|   red_cn_name_opt2 _ _ _ =
+fun €red_cn_name_opt2› (Token ((_,CNText id), _)) = (
+	PPLoopOrBlockName (LBAdaName id)
+) | red_cn_name_opt2 _ =
         stack_error "red_cn_name_opt2";
 
+fun €red_cn_name_opt3› _ (Token ((_,CNText id), _)) = (
+	PPLoopOrBlockName (LBCNName id)
+) | red_cn_name_opt3 _ _ =
+        stack_error "red_cn_name_opt2";
+=TEX
+=SML
 val €red_name_opt1› = PPIds [];
 
 fun €red_name_opt2› (Token ((_,CNText id), _)) = (
@@ -1962,25 +1961,21 @@ fun €red_auxiliary_expression› _ (Token ((LCZ,CNZ z), _)) _ = (
         stack_error "red_auxiliary_expression";
 =TEX
 =SML
-fun €red_block_statement1› (Parsed (PPIds nameo1)) _ (Parsed (PPDeclarations decls))
-	_ (Parsed(PPStatement s)) _ (Parsed (PPIds nameo2)) _ = (
-	if nameo1 <> nameo2
+fun €red_block_statement1› (Parsed (PPLoopOrBlockName bn1)) _ (Parsed (PPDeclarations decls))
+	_ (Parsed(PPStatement s)) _ (Parsed (PPLoopOrBlockName bn2)) _ = (
+	if bn1 <> bn2
 	then	parse_error 503001
 		"in a block statement the block names must either both be present and be the same or both be absent"
-	else	let	val name = case nameo1 of [n] => Value n | _ => Nil;
-		in	PPStatement(SBlockStatement {name = name, declarative_part = Value decls, statement = s})
-		end
+	else	PPStatement(SBlockStatement {name = bn1, declarative_part = Value decls, statement = s})
 ) | red_block_statement1 _ _ _ _ _ _ _ _= 
 	stack_error "red_block_statement1";
 
-fun €red_block_statement2› (Parsed (PPIds nameo1)) 
-	_ (Parsed(PPStatement s)) _ (Parsed (PPIds nameo2)) _ = (
-	if nameo1 <> nameo2
+fun €red_block_statement2› (Parsed (PPLoopOrBlockName bn1)) 
+	_ (Parsed(PPStatement s)) _ (Parsed (PPLoopOrBlockName bn2)) _ = (
+	if bn1 <> bn2
 	then	parse_error 503001
 		"in a block statement the block names must either both be present and be the same or both be absent"
-	else	let	val name = case nameo1 of [n] => Value n | _ => Nil;
-		in	PPStatement(SBlockStatement {name = name, declarative_part = Nil, statement = s})
-		end
+	else	PPStatement(SBlockStatement {name = bn1, declarative_part = Nil, statement = s})
 ) | red_block_statement2 _ _ _ _ _  _= 
 	stack_error "red_block_statement2";
 
