@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.22 2007/01/03 15:42:07 rda Exp $
+ * $Id: undo.c,v 2.21 2007/01/04 14:59:16 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -869,16 +869,40 @@ static Boolean monitor_typing(
 	return True;
 }
 /*
- * The following is a work-around for a problem with XmSetInsertionPosition
- * which doesn't seem to work properly if called from within a modify/verify
- * callback.
+ * The main modify/verify callback: undo_modify_cb. In addition to
+ * monitoring changes so they can be undone and redone, this is used
+ * to fix up a problem with the Motif text widget:
+ * It is quite easy to delete text that is not visible on the screen
+ * accidentally. If this happens it is good to scroll to the position
+ * where the deletion occurred to give the user a clue. Unfortunately,
+ * with drag-and-drop via shift+btn2, in a single operation (as far
+ * as the user is concerned) you can delete some off-screen text
+ * and simultaneously insert it into the on-screen text. In this
+ * case, the default Motif treatment is the best we can give (which
+ * is to display the newly inserted text). Unfortunately, this operation
+ * is not treated atomically by Motif which treats it as an insertion
+ * followed by a deletion. We use a work proc and some state to address this.
+ * The sequence of calls will be that the modify/verify callback will be
+ * called once or twice for each operation. Each time it is called it
+ * registers a work proc and updates the flags in the following struct
+ * if appropriate. The work proc will not be called until the callbacks for
+ * a single user operation have been called. When the work proc is called
+ * it can take the appropriate action for the combined operation and then
+ * clear the flags. It may then get called again unnecessarily, but that
+ * does not matter (because the second call will see both flags false).
  */
-typedef struct {Widget text_w; XmTextPosition pos;} insertion_info;
-static Boolean undo_modify_work_proc(XtPointer xtp)
+static struct {
+	Boolean inserting, deleting_off_screen;
+	Widget text_w;
+	XmTextPosition pos;} work_proc_info = {False, False, 0, 0};
+static Boolean undo_modify_work_proc(XtPointer unused)
 {
-	insertion_info *ii = xtp;
-	XmTextSetInsertionPosition(ii->text_w, ii->pos);
-	XtFree(xtp);
+	if(work_proc_info.deleting_off_screen && !work_proc_info.inserting) {
+		XmTextSetInsertionPosition(
+				work_proc_info.text_w,
+				work_proc_info.pos);
+	}
+	work_proc_info.deleting_off_screen = work_proc_info.inserting = False;
 	return True; /* don't want to be called again */
 }
 void undo_modify_cb(
@@ -911,12 +935,15 @@ void undo_modify_cb(
 	&&	!XmTextPosToXY(text_w, cbs->startPos, &ignored_x, &ignored_y)
 	&&	!XmTextPosToXY(text_w, cbs->endPos, &ignored_x, &ignored_y)) {
 		/* deleted text that's not currently on display; */
-		/* schedule work proc to move insertion position to tell user. */
-		insertion_info *ii = (insertion_info*)XtMalloc(sizeof *ii);
-		ii->text_w = text_w;
-		ii->pos = cbs->startPos;
-		XtAppAddWorkProc(app, undo_modify_work_proc, ii);
+		work_proc_info.text_w = text_w;
+		work_proc_info.pos = cbs->startPos;
+		work_proc_info.deleting_off_screen = True;
+	} else if (cbs->text->length != 0) {
+		work_proc_info.inserting = True;
 	}
+	/* schedule work proc to set insertion position
+	   to highlight offscreen deletion, if necessary. */
+	XtAppAddWorkProc(app, undo_modify_work_proc, 0);
 }
 
 
