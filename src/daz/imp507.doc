@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.343 $ $RCSfile: imp507.doc,v $ $Date: 2007/05/13 14:55:58 $
+% imp507.doc %Z% $Revision: 1.344 $ $RCSfile: imp507.doc,v $ $Date: 2007/05/18 16:31:05 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.343 $%
+\def\SCCSversion{$Revision: 1.344 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/05/13 14:55:58 $%
+\TPPdate{\FormatDate{$Date: 2007/05/18 16:31:05 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -279,6 +279,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.342] Implemented new checks on global dependency lists.
 \item[Issue 1.343] Elements of a block name are now optional.
 \item[Issue 1.344] Allowed for rationalised abstract syntax for loops.
+\item[Issue 1.345] Enhancement 192 (theory-per-block).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -307,11 +308,12 @@ val €current_level› : unit -> int =
 =TEX
 The following are the agreed tags for use in forming script names based on compilation unit names.
 =SML
+val €block_tag› : string = "'block";
+val €context_tag› : string = "'context";
+val €fun_tag› : string = "'func";
 val €pack_spec_tag› : string = "'spec";
 val €pack_body_tag› : string = "'body";
-val €fun_tag› : string = "'func";
 val €proc_tag› : string = "'proc";
-val €context_tag› : string = "'context";
 =TEX
 The following functions are used to identify names for web clauses, in the naming of VCs and to form script names.
 =SML
@@ -3443,7 +3445,10 @@ fun  €get_parent_name› ((): unit) : string = (
 	(hd o rev o get_parents) (!script_name)
 );
 =TEX
-In the following the call to the {\Product} function $duplicate\_theory$ creates a new theory which is a copy of the current theory (without changing the current theory).
+{\em make\_module} creates a theory that duplicates the current theory, making a snapshot of the Ada scope, as required, for example, to deal with stubs.
+The {\Product} function $duplicate\_theory$ is used to do this: it creates a new theory which is a copy of the current theory (without changing the current theory).
+
+If the theory cannot be created, then the error message identified as the first argument is produced using the theory name as the first message insert and the string given by the second string as the second message insert.
 =SML
 fun €make_module› (err_no : int) (msg_insert : string)
 	(thy : Z_ID) : unit = (
@@ -3477,6 +3482,9 @@ fun €make_module› (err_no : int) (msg_insert : string)
 	end
 );
 =TEX
+{\em make\_subprog\_module} creates a new theory as a child of the current theory, as required, for example, to represent the scope of a subprogram implementation or a block.
+It reopens the current theory, so from caller's point of view the current theory will not change.
+It follows the same convention in case of error as does {\em make\_module}, see above.
 =SML
 fun €make_subprog_module› (err_no : int) (msg_insert : string)
 	(thy : Z_ID) : unit = (
@@ -4455,7 +4463,7 @@ fun €till_pred› (t : Z_TM) : unit = (
 =TEX
 \subsection{The SID function new\_block}
 =SML
-fun €new_block› (bn : LOOP_OR_BLOCK_NAME) : unit = (
+fun €new_scope_block› (bn : LOOP_OR_BLOCK_NAME) : unit = (
 	let	val block1 = block 1;
 		val block_name1 = #block_name(#declab block1);
 		val no = opt_name_of_loop_or_block_name bn;
@@ -4463,7 +4471,20 @@ fun €new_block› (bn : LOOP_OR_BLOCK_NAME) : unit = (
 		val block1' = block_block_name(
 			block_body_flag (block1, true),
 			block_name1');
-	in	blocks := new_scope_common Nil (block1' :: tl(!blocks))
+		val _ = blocks := new_scope_common Nil (block1' :: !blocks);
+		val en = expanded_name block_name1';
+		val blk_thyn = en ^ block_tag;
+		val scope_entry = {theory = blk_thyn, deferred = false};
+		val _ = scope_env :=
+			e_extend en scope_entry (!scope_env)
+			handle Fail _ => (
+				fail "new_scope_block" 507143
+				[fn () => en]
+			);
+		val old_cur_thy = get_current_theory_name();	
+		val err_no = case bn of LBNoName => 507153 | _ => 507152;
+		val _ = make_subprog_module err_no en blk_thyn;
+	in	open_theory blk_thyn
 	end
 );
 =TEX
@@ -4483,7 +4504,6 @@ fun €merge_in_scopes›
 =SML
 fun €update_spec_env_block› (():unit) : unit = (
 	let	val block1 = block 1;
-		val block2 = block 2;
 		val label = #spec_lab block1;
 		val speclab3 = force_value( s_lookup label (!spec_env) )
 			handle Fail _ => fail "update_spec_env_block" 507003
@@ -7943,13 +7963,24 @@ and €do_statement› (y as (STNull _) : STATEMENT) : STATEMENT = (y
 	end
 ) | do_statement (y as (SProcIvars x) : STATEMENT) = (
 	error "do_statement" 507019 []
-) | do_statement (SBlockStatement {declarative_part = Nil, statement = s, name}) = (
-	SBlockStatement{declarative_part = Nil,
-		statement = check_fail (STNull SNImplicit) do_statement s, name = name}
-) | do_statement (SBlockStatement {declarative_part = dp as Value decs, statement = s, name}) = (
-	comment "do_statement" 507089 [];	(* NOT: map do_declaration decs; *)
-	SBlockStatement{declarative_part = dp, 
-		statement = check_fail (STNull SNImplicit) do_statement s, name  = name}
+) | do_statement (SBlockStatement {declarative_part = dp, statement = s, name}) = (
+	let	val old_cur_thy = get_current_theory_name();
+		val _ = new_scope_block name;
+		val res = SBlockStatement{
+			declarative_part = Nil,
+			statement = check_fail (STNull SNImplicit) do_statement s,
+			name = name};
+		val _ =	case dp of
+			Nil => (
+			()
+		) |	Value decs => (
+			comment "do_statement" 507089 []
+		(* NOT: map do_declaration decs; *)
+		);
+		val _ = open_theory old_cur_thy;
+		val _ = end_scope();
+	in	res
+	end
 )
 (*
 =TEX
@@ -8242,7 +8273,7 @@ and €do_proper_body› (y as (PBProcedure
 	: unit = (
 	do_procedure_spec false procedure_spec;
 	add_proc_env name;
-	let	val (old_cur_thy, sp_thy) =	subprogram_implementation {is_proc = true, deferred = deferred};
+	let	val (old_cur_thy, sp_thy) = subprogram_implementation {is_proc = true, deferred = deferred};
 	in	map (check_fail () do_declaration) declarative_part;
 		(if	not deferred
 		then	vcs_body (check_fail (STNull SNImplicit) do_statement statement)
@@ -8398,11 +8429,16 @@ is a block statement and takes the appropriate actions.
 fun €do_refinement_rhs›
 	(SBlockStatement {declarative_part = dp as Value decs, statement = s, name} : STATEMENT)
 	: STATEMENT  = (
-	new_block name;
-	map (check_fail () do_declaration) decs;
-	update_spec_env_block();
-	SBlockStatement{declarative_part = dp, statement =
-		check_fail (STNull SNImplicit) do_statement s, name  = name}
+	let	val _ = new_scope_block name;
+		val _ = map (check_fail () do_declaration) decs;
+		val _ = update_spec_env_block();
+		val st = SBlockStatement{
+			declarative_part = dp,
+		 	statement = check_fail (STNull SNImplicit) do_statement s,
+			name  = name};
+		val _ = end_scope();
+	in	st
+	end
 ) | €do_refinement_rhs› s = check_fail (STNull SNImplicit) do_statement s;
 =TEX
 The following reflects the SID functions for the production $web\_clause$.
