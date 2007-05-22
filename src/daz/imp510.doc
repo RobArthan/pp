@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.155 2007/05/18 16:31:05 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.156 2007/05/21 15:50:43 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Ada Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.155 $%
+\def\SCCSversion{$Revision: 1.156 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/05/18 16:31:05 $%
+\TPPdate{\FormatDate{$Date: 2007/05/21 15:50:43 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -229,7 +229,7 @@ used as identifiers are now escaped with a dollar sign (as required if they are 
 \item[Issue 1.148] Multiple auxiliary variables are now allowed in one Z declaration.
 \item[Issue 1.148] Allowed for deferred subprograms.
 \item[Issue 1.149] {\em case\_of\_ada\_keywords} is now {\em cn\_case\_of\_ada\_keywords}.
-\item[Issues 1.150--1.152] Allowed for anonymous loops and blocks that have been given a name in the Compliance Notation.
+\item[Issues 1.150--1.153] Allowed for anonymous loops and blocks that have been given a name in the Compliance Notation.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -370,10 +370,25 @@ fun €in_new_scope› (check_n : bool) (n : ID) (what : unit -> 'b) : 'b = (
 );
 =TEX
 =SML
+val €unnamed_scope_counter› : int ref = ref 0;
+fun €reset_unnamed_scope_counter› (():unit) : unit = (
+	unnamed_scope_counter := 0
+);
+fun €get_scope_name› (LBAdaName n : LOOP_OR_BLOCK_NAME) : string = n
+|   get_scope_name (LBCNName n) = n
+|   get_scope_name LBNoName = (
+	if	!error_checking
+	then	(unnamed_scope_counter := !unnamed_scope_counter + 1;
+		string_of_int (!unnamed_scope_counter))
+	else	""
+);
+=TEX
+=SML
 fun €with_soundness_checks› (what : unit -> 'a) : 'a = (
 	clashes := [];
 	stack := [];
 	error_checking := true;
+	reset_unnamed_scope_counter();
 	let	fun show_name n = format_list Combinators.I n ".";
 		fun report_clash {name1, name2} = (
 			diag_line
@@ -1720,8 +1735,7 @@ fun €fmt_loop›
 	(fmt_stat : PP_FMT_INFO -> STATEMENT -> unit)
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
 	({name=n, loop = {t=Value t, stmt=s}} : STATEMENT LOOP) = (
-    in_new_scope false 
-	(case n of LBAdaName i => i | _ => "")
+    in_new_scope false (get_scope_name n)
 	(fn () => (
 	fmt_loop_or_block_label fmtinfo n;
 	(    if is_expansion_selected fmtinfo
@@ -1755,12 +1769,13 @@ fun €fmt_while›
 	(fmt_stat : PP_FMT_INFO -> STATEMENT -> unit)
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
 	({name=n, g=g, loop=l} : STATEMENT WHILE) = (
+in_new_scope false (get_scope_name n) (fn () => (
 	fmt_loop_or_block_label fmtinfo n;
 	outf  (kw"WHILE"); (fmt_cond fmtinfo g); outf "\n";
 	fmt_warnings fmtinfo;
 	outf (kw"LOOP"); outf "\n";
 	(fmt_loop_body fmt_stat fmtinfo l);
-	outf (kw2"END""LOOP"); finish_loop_or_block fmtinfo n
+	outf (kw2"END""LOOP"); finish_loop_or_block fmtinfo n))
 );
 =TEX
 =SML
@@ -3107,6 +3122,7 @@ fun €fmt_statement› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (STNull snt : ST
     fail "fmt_statement" 510999 [fn()=>"proc with ivars"]
   | €fmt_statement› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	(SBlockStatement{name, declarative_part, statement}) : unit = (
+in_new_scope false (get_scope_name name) (fn () => (
 	fmt_loop_or_block_label fmtinfo name;
 	(case declarative_part of
 		Nil => ()
@@ -3123,7 +3139,7 @@ fun €fmt_statement› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (STNull snt : ST
 	outf (kw"END");
 	finish_loop_or_block fmtinfo name;
 	non_spark_warning 510117;
-	fmt_warnings fmtinfo
+	fmt_warnings fmtinfo))
 )
 (*
 =TEX
