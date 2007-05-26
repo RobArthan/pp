@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.96 2006/06/13 11:23:03 rda Exp rda $
+ * $Id: mainw.c,v 2.97 2006/08/07 10:33:17 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -71,9 +71,6 @@ static char *confirm_quit = "Confirm Quit";
 static char *confirm_kill = "Confirm Kill";
 
 static char *confirm_restart = "Confirm Restart";
-
-static char *running_quit_message =
-"The application in the journal window is still running.";
 
 static char *file_changed_quit_message =
 "The file \"%s\" you are currently editing appears to have been modified since it was last opened or saved.";
@@ -1620,24 +1617,8 @@ void check_quit_cb (
 		XtPointer	unused_cbs)
 {
 	Boolean changed = file_info.changed;
-	Boolean app_alive = application_alive();
 	char *fname = get_file_name();
- 	char *msg;
-	if(changed || app_alive) {
-		msg = XtMalloc(200);
-		*msg = '\0';
-		if(changed) {
-			msg = XtRealloc(msg, strlen(changed_message) + 1);
-			strcpy(msg, changed_message);
-		}
-		if(app_alive) {
-			msg = XtRealloc(msg, strlen(msg) + strlen(running_quit_message) + 2);
-			if(*msg) {strcat(msg, "\n");}
-			strcat(msg, running_quit_message);
-		}	
-	} else {
-		msg = NULL;
-	}
+ 	char *msg = changed ? changed_message : NULL;
 	if(old_file_checks(
 			script,
 			fname,
