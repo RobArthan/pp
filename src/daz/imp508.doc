@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2006/05/05 11:02:42 $ $Revision: 1.141 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2006/06/12 16:42:15 $ $Revision: 1.142 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.141 $%
+\def\SCCSversion{$Revision: 1.142 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/05/05 11:02:42 $%
+\TPPdate{\FormatDate{$Date: 2006/06/12 16:42:15 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -170,6 +170,7 @@ Removed code that supported use of aliases.
 \item[Issue 1.140] Improved error messages for numeric literals.
 \item[Issue 1.141] Function renaming is now dealt with through the environment.
 \item[Issue 1.142] Further improvements to error messages for numeric literals.
+\item[Issue 1.143] Range checks for real types.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -244,7 +245,7 @@ arguments and in deciding whether a VC needs to be generated
 For various reasons, it has been agreed that attributes that are functions will not be statically evaluated.
 
 =TEX
-First of all we define a conversion which will expand the definition of a constant integer or set of integers providing the definition is a simple equation and providing the constant does not appear in the list provided as an extra argument (this is used to avoid looping in the presence of somewhat mailiciously conceived definitions).
+First of all we define a conversion which will expand the definition of a constant integral or real number or a set of integers providing the definition is a simple equation and providing the constant does not appear in the list provided as an extra argument (this is used to avoid looping in the presence of somewhat mailiciously conceived definitions).
 
 =SML
 fun Ûcn_const_convÝ (consts : TERM list) : CONV = (fn tm =>
@@ -252,7 +253,11 @@ fun Ûcn_const_convÝ (consts : TERM list) : CONV = (fn tm =>
 	then	fail_conv
 	else	COND_C
 		(fn tm => is_const tm andalso
-			let val ty = type_of tm; in ty =: z_int_type orelse ty =: z_int_set_type end)
+			let	val ty = type_of tm;
+			in	ty = z_int_type
+			orelse	ty = z_real_type
+			orelse ty = z_int_set_type
+			end)
 		(fn tm =>
 			let	val thm1 = z_get_spec tm;
 				val thm2 = ±_right_elim thm1 handle Fail _ => thm1;
@@ -273,6 +278,15 @@ val Ûz_hash_thmÝ = asm_rule ¬µi j·ñ#(i .. j) = (j - i) + 1®®;
 
 val Ûz_hash_convÝ : CONV = simple_eq_match_conv z_hash_thm;
 =TEX
+=SML
+val Ûz_¯_minus_minus_thmÝ = pc_rule1 "'z_reals" prove_rule[] ¬µx ·ñ~‰R ~‰R x = x®®;
+
+val Ûz_¯_minus_minus_convÝ = simple_eq_match_conv z_¯_minus_minus_thm;
+
+val Ûz_¯_subtract_minus_thmÝ = pc_rule1 "'z_reals" prove_rule[] ¬µx y·ñx -‰R y = x +‰R ~‰R y®®;
+
+val Ûz_¯_subtract_minus_convÝ = simple_eq_match_conv z_¯_subtract_minus_thm;
+=TEX
 Now a conversional for propagating a conversion into the operands of a unary or binary Z function.
 =SML
 fun ÛMY_Z_RANDS_CÝ (c : CONV) : CONV = (fn tm =>
@@ -282,7 +296,7 @@ fun ÛMY_Z_RANDS_CÝ (c : CONV) : CONV = (fn tm =>
 	
 );
 =TEX
-We put these pieces together to give the following conversion which does the required static evaluation of integer expressions.
+We put these pieces together to give the following conversion which does the required static evaluation of numeric expressions.
 The parameter to the conversion is used to record which constants have had their definitions unwound somewhere in the branch of the expression tree currently being attacked and is used to avoid infinite recursion (e.g., if someone has used HOL to produce something which looks like a Z global variable with a definition like $X = X$ or $X = X + 0$).
 =SML
 fun Ûcn_eval_convÝ (consts : TERM list) : CONV = (fn tm => (
@@ -293,16 +307,22 @@ fun Ûcn_eval_convÝ (consts : TERM list) : CONV = (fn tm => (
 		AND_OR_C (FIRST_C [
 				z_hash_conv,
 				z_subtract_minus_conv,
-				z_minus_minus_conv]
+				z_minus_minus_conv,
+				z_¯_minus_minus_conv,
+				z_¯_subtract_minus_conv]
 			THEN_TRY_C cn_eval_conv consts)
 		AND_OR_C FIRST_C [
 			z_plus_conv,
 			z_times_conv,
-			cn_intmod_conv	,
-			cn_intdiv_conv	,
+			cn_intmod_conv,
+			cn_intdiv_conv,
 			cn_rem_conv,
 			cn_star_star_conv,
-			z_abs_conv
+			z_abs_conv,
+			z_float_conv,
+			z_¯_eval_conv,
+			z_¯_ú_exp_conv,
+			z_¯_lit_norm_conv
 		])	tm
 );
 =TEX
@@ -2614,29 +2634,29 @@ fun Ûadjust_exp1Ý (env : CN_ENV) (exp : EXP) : EXP OPT = (
 The code in this section implements check 14 from section 17.1 of volume I of the specifications.
 This requires evaluation of static expressions which is most conveniently done using proof.
 
-The following function generates the VC for checking that a type or subtype defined by a range constraint is non-empty.
+The following function generates the VC for checking that an integral type or subtype defined by a range constraint is non-empty.
 =SML
-val Ûx_varÝ = ñ(x º ð ú)®;
-val Ûvc_patternÝ = ñ‘x_var® ½ š®;
-fun Ûrange_check_vcÝ (n : Z_ID) : Z_EXP = (
-	subst[(mk_z_gvar(n, z_int_set_type, []), x_var)] vc_pattern
+val Ûint_x_varÝ = ñ(x º ð ú)®;
+val Ûint_vc_patternÝ = ñ‘int_x_var® ½ š®;
+fun Ûint_range_check_vcÝ (n : Z_ID) : Z_EXP = (
+	subst[(mk_z_gvar(n, z_int_set_type, []), int_x_var)] int_vc_pattern
 );
 =TEX
-The following function reports an error if the range bounds can be evaluated and the range proves to be empty;
+The following function reports an error if the range bounds for an integral type can be evaluated and the range proves to be empty;
 if the range can be evaluated and is non-empty then the function returns an empty list of paragraphs;
 if the range cannot be evaluated a paragraph containing a VC is returned.
 
-The somewhat strange way of expressing the decision-making arises from the desire to include the two equations in the message in the error case.
+The somewhat strange way of expressing the decision-making arises from the desire to include the equations in the message in the error case, if they are non-trivial (i.e., if the evaluation has made some progress).
 =SML
-fun Ûrange_check_vcsÝ
+fun Ûint_range_check_vcsÝ
 	(n : Z_ID) (lo : TERM) (hi : TERM) : PARAINFO list = (
 	(let	val lo_eqn = (concl o TRY_C(cn_eval_conv[])) lo;
 		val hi_eqn = (concl o TRY_C(cn_eval_conv[])) hi;
 		val nlo = (dest_z_signed_int o snd o dest_eq) lo_eqn;
 		val nhi = (dest_z_signed_int o snd o dest_eq) hi_eqn;
 		fun show t = (
-			let	val (x, _) = dest_eq t;
-			in	if	is_z_signed_int x
+			let	val (x, y) = dest_eq t;
+			in	if	x = y
 				then	x
 				else	t
 			end
@@ -2648,7 +2668,45 @@ fun Ûrange_check_vcsÝ
 					508060 [show lo_eqn, show hi_eqn])
 	end	handle Fail _ => (fn _ =>
 			(comment "trans_basic_decl"508061 [fn _ => n];
-			[ConjectureInfo(Value n, [], range_check_vc n)])
+			[ConjectureInfo(Value n, [], int_range_check_vc n)])
+	))	()
+);
+=TEX
+The following function generates the VC for checking that a real type or subtype defined by a range constraint is non-empty.
+=SML
+val Ûreal_x_varÝ = ñ(x º ð ¯)®;
+val Ûreal_vc_patternÝ = ñ‘real_x_var® ½ š®;
+fun Ûreal_range_check_vcÝ (n : Z_ID) : Z_EXP = (
+	subst[(mk_z_gvar(n, z_real_set_type, []), real_x_var)] real_vc_pattern
+);
+=TEX
+The following function is the analogue of {\em int\_range\_check\_vcs} for real types (see above).
+=SML
+fun Ûreal_range_check_vcsÝ
+	(n : Z_ID) (lo : TERM) (hi : TERM) : PARAINFO list = (
+	(let	val lo_eqn = (concl o TRY_C(cn_eval_conv[])) lo;
+		val hi_eqn = (concl o TRY_C(cn_eval_conv[])) hi;
+		val nlo = (snd o dest_eq) lo_eqn;
+		val nhi = (snd o dest_eq) hi_eqn;
+		val thm = z_¯_¼_conv(mk_z_¯_¼(nlo, nhi));
+		val ok = (¤_t_elim thm; true)
+			handle Fail _ => false;
+		fun show t = (
+			let	val (x, y) = dest_eq t;
+			in	if	x = y
+				orelse	is_z_float x
+				then	x
+				else	t
+			end
+		);
+	in	if	ok
+		then	(fn _ => [])
+		else	(fn _ =>
+				term_fail  "trans_basic_decl"
+					508060 [show lo_eqn, show hi_eqn])
+	end	handle Fail _ => (fn _ =>
+			(comment "trans_basic_decl" 508061 [fn _ => n];
+			[ConjectureInfo(Value n, [], real_range_check_vc n)])
 	))	()
 );
 =TEX
@@ -3065,7 +3123,7 @@ fun Ûbasic_decl_int_typeÝ (env : CN_ENV, pfx : Z_ID list)
 		val tlo = trans_exp env lo;
 		val thi = trans_exp env hi;
 		val zname = prefix_trans_id pfx name;
-		val vcs = range_check_vcs name tlo thi;
+		val vcs = int_range_check_vcs name tlo thi;
 		val z_e_e = z_eq_eq "type";
 	in	if	not(type_of tlo =: z_int_type)
 		then	term_fail "basic_decl_int_type" 508066 [tlo]
@@ -3089,11 +3147,11 @@ fun Ûbasic_decl_fixed_typeÝ (env : CN_ENV, pfx : Z_ID list) (name : ID)
 		val tdelta = trans_exp env delta;
 		val zname = prefix_trans_id pfx name;
 		val z_e_e = z_eq_eq "type";
-		(* val vcs = range_check_vcs name tlo thi; *)
+		val vcs = real_range_check_vcs name tlo thi;
 	in	[ z_e_e(zname, z_rng(tlo, thi)),
 		  z_e_e(zname ^^ zdelta, tdelta),
 		  z_e_e(zname ^^ zfst, tlo),
-		  z_e_e(zname ^^ zlst, thi) ]
+		  z_e_e(zname ^^ zlst, thi) ] @ vcs
 	end
 ) | basic_decl_fixed_type _ _ _ = fail "basic_decl_fixed_type" 508065 [];
 =TEX
@@ -3107,11 +3165,11 @@ fun Ûbasic_decl_floating_typeÝ (env : CN_ENV, pfx : Z_ID list) (name : ID)
 		val tdigits = trans_exp env digits;
 		val zname = prefix_trans_id pfx name;
 		val z_e_e = z_eq_eq "type";
-		(* val vcs = range_check_vcs name tlo thi; *)
+		val vcs = real_range_check_vcs name tlo thi;
 	in	[ z_e_e(zname, z_rng(tlo, thi)),
 		  z_e_e(zname ^^ zdigits, tdigits),
 		  z_e_e(zname ^^ zfst, tlo),
-		  z_e_e(zname ^^ zlst, thi) ]
+		  z_e_e(zname ^^ zlst, thi) ] @ vcs
 	end
 ) | basic_decl_floating_type (env, pfx) name {exp = digits, range = Nil} = (
 	let	val tdigits = trans_exp env digits;
@@ -3123,7 +3181,6 @@ fun Ûbasic_decl_floating_typeÝ (env : CN_ENV, pfx : Z_ID list) (name : ID)
 			mk_z_gvar(tlst, z_real_type, []));
 		val z_e_e = z_eq_eq "type";
 		val z_a = z_ax "type";
-		(* val vcs = range_check_vcs name tlo thi; *)
 	in	[ z_a(tfst, ¯_tm, []),
 		  z_a(tlst, ¯_tm, []),
 		  z_e_e(zname, trng),
@@ -3209,13 +3266,13 @@ fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV, pfx : Z_ID list)
 	in	case (te_lo, te_hi) of
 			(Value l, Value h) =>
 			if	ztype =: z_int_set_type
-			then	let	val vcs = range_check_vcs name l h;
+			then	let	val vcs = int_range_check_vcs name l h;
 				in	z_e_e(zname, z_rng(l, h)) ::
 					range_con_attrib env
 					(zname, rtmark, {lo=lo,hi=hi}) @ vcs
 				end
 			else if	ztype =: z_real_set_type
-			then	let	(* val vcs = range_check_vcs name l h *);
+			then	let	val vcs = real_range_check_vcs name l h;
 					val unwanted = ["FIRST", "LAST"];
 					val tas = type_attrs unwanted rtmark;
 					val tas_paras = map
@@ -3225,7 +3282,7 @@ fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV, pfx : Z_ID list)
 				in	z_e_e(zname, z_rng(l, h)) ::
 					tas_paras @
 					[ z_e_e(zname ^^ zfst, l),
-					  z_e_e(zname ^^ zlst, h) ]
+					  z_e_e(zname ^^ zlst, h) ] @ vcs
 				end
 			else	basic_decl_subtype_axdes env zname tmark
 		|	_ =>	basic_decl_subtype_axdes env zname tmark
