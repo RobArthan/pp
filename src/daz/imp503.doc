@@ -136,6 +136,7 @@ This removes the need for various special cases and type conversion functions.
 \item[Issue 1.137] Now have syntax to allow anonymous Ada blocks and loops to be given names in the Compliance Notation.
 \item[Issue 1.138] Made checking of loop names uniform with checking of block names.
 \item[Issues 1.139, 1.140] Revised syntax for naming anonymous blocks and rationalised data types that represent loop statements.
+\item[Issue 1.141] Tidied error handling for logical constants and similar.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -193,12 +194,6 @@ fun €stack_error› (insert : string) : 'a = (
     BasicError.error "CN-Parser"  503203 [fn() => insert]
     );
 =TEX
-
-=SML
-fun €weird_error› (insert : string) : 'a = (
-    diag_string(get_error_message 503202 []);
-    BasicError.error "CN-Parser"  503001 [fn() => insert]
-    );
 =TEX
 
 To give error reports which are closely related to the actual input,
@@ -287,18 +282,18 @@ fun €parse_error› (msg : int) (insert : string) : 'a = (
 
 =SML
 =FULLVERSION
-fun €z_tm_of_z_para› (zp : Z_PARA) : Z_TM = 
+fun €z_tm_of_z_para› (msg : string) (zp : Z_PARA) : Z_TM = 
 (   case zp 
     of ZParaTerm (_, z_tm, _) => z_tm
-    |  _ => weird_error "weird error in z_tm_of_z_para"
+    |  _ => parse_error 503001 msg
 );
 =TEX
 
 =SML
-fun €z_tm_of_z_tokens› (tokens : Z_TOKEN list) : Z_TM =
+fun €z_tm_of_z_tokens› (msg : string) (tokens : Z_TOKEN list) : Z_TM =
 =FULLVERSION
 (
-    (z_tm_of_z_para o (z_parser {is_quot = true})) tokens
+    (z_tm_of_z_para msg o (z_parser {is_quot = true})) tokens
 );
 =CUTDOWNVERSION
  dummy_z_tm;
@@ -316,10 +311,11 @@ let	val schtoks =
 		 parse_error 503001
 		"a schema-as-declaration is not allowed in a logical constant statement"
 	);
+	val msg = "badly formed declaration in logical constant statement";
 in
-	case z_tm_of_z_tokens schtoks of
+	case z_tm_of_z_tokens msg schtoks of
 		ZTmHorizSchema(decs,_, _) => flat (map do1 decs)
-        |  _ => parse_error 503001 "badly formed declarations in logical constant statement"
+        |  _ => parse_error 503001 msg
 end);
 =CUTDOWNVERSION
   ("", [dummy_z_tm]);
@@ -330,14 +326,15 @@ end);
 fun €process_aux_z_decl› (ztokens : ZLex.Z_TOKEN list) : (Z_ID list * Z_TM) = 
 =FULLVERSION
 (
-    let val schtoks =
+let	val schtoks =
         ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
-    in
-        case z_tm_of_z_tokens schtoks 
-        of ZTmHorizSchema([ZDDec (tmpls,ty, _)],_, _) =>
-            (map string_of_ident tmpls, ty)
-        |  _ => parse_error 503001 "badly formed auxiliary variable"
-    end);
+	val msg = "badly formed auxiliary variable";
+in
+	case z_tm_of_z_tokens msg schtoks of
+		ZTmHorizSchema([ZDDec (tmpls,ty, _)],_, _) => (
+		map string_of_ident tmpls, ty
+	) |  _ => parse_error 503001 msg
+end);
 =CUTDOWNVERSION
  ("", dummy_z_tm);
 =TEX
@@ -347,15 +344,16 @@ fun €process_frame› ([] : ZLex.Z_TOKEN list) : Z_ID list = []
 |   process_frame ztokens = 
 =FULLVERSION
 (
-    let val tuptoks = ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos];
-        fun get_name (ZTmLVar (id, _, _)) = string_of_ident id
-        |   get_name _ = parse_error 503001 "badly formed frame";
-        val z_tm = z_tm_of_z_tokens tuptoks;
+let	val tuptoks = ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos];
+	val msg = "badly formed frame";
+	fun get_name (ZTmLVar (id, _, _)) = string_of_ident id
+	|   get_name _ = parse_error 503001 msg;
+	val z_tm = z_tm_of_z_tokens msg tuptoks;
     in
         case z_tm 
             of ZTmBracketed z_tm' => [get_name z_tm']
             |  ZTmTuple tml => map get_name tml
-            |  _ => parse_error 503001 "badly formed frame"
+            |  _ => parse_error 503001 msg
     end);
 =CUTDOWNVERSION
   [];
@@ -372,7 +370,7 @@ let	val pi_tm = (
               	      (("ê", Nil), StubUSQ), "", [[tm]]),Nil)
 		|  _ => parse_error 503001 "unexpected Z construct");
 	fun aux parsed = (
-		(z_tm_of_z_para o (ZParserInternals.z_parser_pass_2
+		(z_tm_of_z_para "badly formed Z predicate" o (ZParserInternals.z_parser_pass_2
 			{is_quot = true})) parsed
 	);
 in	
@@ -403,7 +401,7 @@ fun €process_pre_and_post_conditions›
         );
         val (pretm_opt, posttm) = apply_pi zpara;
         fun aux parsed = (
-            (z_tm_of_z_para o (ZParserInternals.z_parser_pass_2
+            (z_tm_of_z_para "badly formed Z predicate" o (ZParserInternals.z_parser_pass_2
             {is_quot = true})) parsed
         );
     in
@@ -1956,7 +1954,7 @@ fun €red_till_opt2› _ (Parsed(PPExp(EAuxiliaryExp z))) = (
 
 =SML
 fun €red_auxiliary_expression› _ (Token ((LCZ,CNZ z), _)) _ = (
-    PPExp(EAuxiliaryExp (z_tm_of_z_tokens z )))
+    PPExp(EAuxiliaryExp (z_tm_of_z_tokens "badly formed Z expression" z )))
 |   red_auxiliary_expression _ _ _ =
         stack_error "red_auxiliary_expression";
 =TEX
@@ -2502,15 +2500,14 @@ fun €check_basic_dec_list› ((bd::more) : SI_BASIC_DECL list) : bool = (
 =SML
 fun €red_using_dec› _ (Parsed(PPBasicDecls bds)) _
 	(Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ zpred), _)) _ = (
-    if check_basic_dec_list bds
-    then
-		PPDeclarations[DUsing{aux=z_tm_of_z_tokens z1,
-				basic_decls=bds,
-				invariant=process_predicate zpred}]
-    else
-	parse_error 503001
-	"private types and deferred constants are not allowed in a USING declaration")
-|   red_using_dec _ _ _ _ _ _ _ =
+	if check_basic_dec_list bds
+	then	PPDeclarations[DUsing{
+			aux=z_tm_of_z_tokens "badly formed Z expression" z1,
+			basic_decls=bds,
+			invariant=process_predicate zpred}]
+	else	parse_error 503001
+		"private types and deferred constants are not allowed in a USING declaration"
+) |   red_using_dec _ _ _ _ _ _ _ =
         stack_error "red_using_dec";
 =TEX
 =SML
