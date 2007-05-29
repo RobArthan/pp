@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.33 2006/01/15 14:11:02 rda Exp rda $
+ * $Id: files.c,v 2.34 2006/06/13 11:23:03 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -99,10 +99,6 @@ static char *panic_file_written =
 
 static char *read_error_message =
 	 "Error reading the file \"%s\"";
-
-static char *open_read_only_message =
-	 "The file \"%s\" is read-only.\n"
-	 "Do you want to open it?";
 
 static char *root_read_only_message =
 	 "You are running as the super-user. "
@@ -857,23 +853,32 @@ Boolean save_string_as(
 	return success;
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * read_only_access_message: tests for read-only access  being
- * very careful if running as super-user. Returns
- * pointer to warning message to use if read-only,
- * NULL otherwise.
+ * is_read_only: tests for read-only files.
+ * If running as root, only files that are owned by root
+ * and have the write permissions set are not read-only, and
+ * opening a read-only file results in a warning dialogue.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-char * read_only_access_message(
+Boolean is_read_only(
 	char *name,
+	char **message,
 	struct stat *status)
 {
 	if((uid_t) 0 != geteuid()) { /* I'm not root */
-		return access(name, W_OK) != 0 ? open_read_only_message : NULL;
+		*message = 0;
+		return access(name, W_OK) != 0;
 	} else { /* I am root; be more careful: */
-		return	status->st_uid != (uid_t) 0
-		?	root_not_owner_message /* file is not owned by root */
-		:	(status->st_mode & S_IWUSR) == 0
-		?	root_read_only_message  /* owner write access bit is not set */
-		:	NULL;
+		if(status->st_uid != (uid_t) 0) {
+			*message = root_not_owner_message;
+				/* file is not owned by root */
+			return True;
+		} else if ((status->st_mode & S_IWUSR) == 0) {
+			*message = root_read_only_message;
+				/* owner write access bit is not set */
+			return True;
+		} else {
+			*message = 0;
+			return False;
+		}
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -946,7 +951,7 @@ Boolean open_file(
 	char *buf;
 	static struct stat status;
 	struct stat new_status;
-	Boolean binary;
+	Boolean binary, read_only;
 	char *read_only_message;
 	FileType file_type;
 	if(!(name && *name)) { /* NULL or empty */
@@ -959,7 +964,7 @@ Boolean open_file(
 	if((buf = get_file_contents(w, name, cmdLine,
 			False, foAction, &new_status, &binary, &file_type))
 				!= NULL) {
-		read_only_message = read_only_access_message(name, &new_status);
+		read_only = is_read_only(name, &read_only_message, &new_status);
 		if(read_only_message && !binary) {
 			if(	(	orig_global_options.read_only
 				&&	global_options.read_only)
@@ -981,7 +986,7 @@ Boolean open_file(
 				return False;
 			}
 		} else if (!orig_global_options.read_only) {
-			set_read_only(False);
+			set_read_only(read_only);
 		} /* else leave the user's setting of the read-only option */
 		XmTextDisableRedisplay(text);
 		XmTextSetString(text, buf);

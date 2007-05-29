@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2006/08/07 10:33:17 $ $Revision: 2.48 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2006/08/07 11:04:11 $ $Revision: 2.49 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -29,7 +29,7 @@
 #include "xpp.h"
 
 #define MSG_LINE_LEN 40
-#define HELP_LINE_LEN 70
+#define HELP_LINE_LEN 60
 #define HELP_SCREEN_HEIGHT 24
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -87,6 +87,7 @@ void help_dialog(Widget w, char *str)
 	Atom WM_DELETE_WINDOW;
 	Dimension h;
 	Arg args[12];
+	int i;
 	if(!dialog) {
 		dialog = XtVaCreatePopupShell("xpp-Help",
 			xmDialogShellWidgetClass, get_top_shell(w),
@@ -100,15 +101,16 @@ void help_dialog(Widget w, char *str)
 			XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
 			XmNsashHeight, 1, /* Make small so user doesn't try to resize */
 			NULL);
-		XtSetArg(args[0], XmNscrollVertical,        True);
-		XtSetArg(args[1], XmNscrollHorizontal,      False);
-		XtSetArg(args[2], XmNeditMode,              XmMULTI_LINE_EDIT);
-		XtSetArg(args[3], XmNeditable,              False);
-		XtSetArg(args[4], XmNcursorPositionVisible, False);
-		XtSetArg(args[5], XmNwordWrap,              True);
-		XtSetArg(args[6], XmNrows,                  HELP_SCREEN_HEIGHT);
-		XtSetArg(args[7], XmNcolumns,               HELP_LINE_LEN);
-		XtSetArg(args[8], XmNtraversalOn,             False);
+		i = 0;
+		XtSetArg(args[i], XmNscrollVertical,        True); ++i;
+		XtSetArg(args[i], XmNscrollHorizontal,      False); ++i;
+		XtSetArg(args[i], XmNeditMode,              XmMULTI_LINE_EDIT); ++i;
+		XtSetArg(args[i], XmNcolumns,          	    HELP_LINE_LEN); ++i;
+		XtSetArg(args[i], XmNrows,             	    HELP_SCREEN_HEIGHT); ++i;
+		XtSetArg(args[i], XmNeditable,              False); ++i;
+		XtSetArg(args[i], XmNcursorPositionVisible, False); ++i;
+		XtSetArg(args[i], XmNwordWrap,              True); ++i;
+		XtSetArg(args[i], XmNtraversalOn,           False); ++i;
 		help_text = XmCreateScrolledText(pane, "help-text", args, 8);
 		XtManageChild(help_text);
 		form = XtVaCreateWidget("form", xmFormWidgetClass, pane,
