@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.32 2005/01/27 17:08:57 rda Exp rda $
+ * $Id: xmisc.c,v 2.33 2005/07/27 09:13:43 rda Exp $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -207,43 +207,50 @@ void copy_font_list (
 	}
 }
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * blink owner callback: this callback expects the callback data to
- * be a text widget. It arranges for the text widget to blink for
- * a while.
+/* **** ** **** **** **** **** **** **** **** **** **** ****
+ * flash_widget: make a widget flash by temporarily exchanging
+ * its foreground and background colours.
+ * The timeout proc and the work proc make the label flash.
+ * The work proc is necessary to make the flashing effect
+ * reliable if called during start up, making sure that the timer doesn't
+ * start to tick before the user interface is up.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void unhighlight(Widget,XtIntervalId*);
-void blink_owner_cb(
-	Widget				w,
-	XtPointer				cbd,
-	XtPointer				cbs)
+static void flash_widget_timeout_proc(
+		XtPointer	xtp,
+		XtIntervalId	*unused2)
 {
-	Widget text_w = cbd;
-	XmTextSetHighlight(text_w,
-		0,
-		XmTextGetLastPosition(text_w),
-		XmHIGHLIGHT_SELECTED);
+	Widget w = xtp;
+	Pixel old_bg, old_fg;
+	XtVaGetValues(w,
+		XmNforeground, &old_fg,
+		XmNbackground, &old_bg,
+		NULL);
+	XtVaSetValues(w,
+		XmNforeground, old_bg,
+		XmNbackground, old_fg,
+		NULL);
+}
+static Boolean flash_widget_work_proc(XtPointer xtp)
+{
+	Widget w = xtp;
+	Pixel old_bg, old_fg;
+	XtVaGetValues(w,
+		XmNforeground, &old_fg,
+		XmNbackground, &old_bg,
+		NULL);
+	XtVaSetValues(w,
+		XmNforeground, old_bg,
+		XmNbackground, old_fg,
+		NULL);
 	XtAppAddTimeOut(app,
 		500,
-		(XtTimerCallbackProc)unhighlight,
-		text_w);
-
+		(XtTimerCallbackProc)flash_widget_timeout_proc,
+		xtp);
+	return True;
 }
-
-static void unhighlight(
-	Widget			text_w,
-	XtIntervalId		*unused)
+Boolean flash_widget(Widget w)
 {
-	XmTextPosition left, right;
-	XmTextSetHighlight(text_w,
-			0,
-			XmTextGetLastPosition(text_w),
-			XmHIGHLIGHT_NORMAL);
-	if(XmTextGetSelectionPosition(text_w, &left, &right) &&
-		left != right) {
-		XmTextSetHighlight(text_w,
-			left, right, XmHIGHLIGHT_SELECTED);
-	}
+	XtAppAddWorkProc(app, flash_widget_work_proc, w);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

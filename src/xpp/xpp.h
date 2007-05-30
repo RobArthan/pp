@@ -314,7 +314,7 @@ typedef enum {
 	extern void fix_pane_height(
 			Widget child_w,
 			Widget scale_w);
-	extern void blink_owner_cb(CALLBACK_ARGS);
+	extern	Boolean flash_widget(Widget w);
 	extern	void number_verify_cb(CALLBACK_ARGS);
 	extern	void text_verify_cb(CALLBACK_ARGS);
 	extern	void text_field_verify_cb(CALLBACK_ARGS);

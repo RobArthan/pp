@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.98 2007/05/26 16:07:29 rda Exp rda $
+ * $Id: mainw.c,v 2.99 2007/05/29 16:48:32 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -523,7 +523,6 @@ static void journal_resize_handler(
 }
 
 
-/* temporarily null-terminate the buffer: */
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set_icon_name_and_title: get the file name out of the script editor's
  * namestring text field; strip away any directory names and use
@@ -564,31 +563,14 @@ static void set_icon_name_and_title(void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * flash_file_name: update and blink the file name displayed in
- * the script editor's namestring text field. Also makes the
- * infolabel blink, which highlights opening a read-only file.
+ * flash_file_name: update and flash the file name displayed in
+ * the script editor's namestring text field.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void flash_file_name_timeout_proc(
-		XtPointer	unused1,
-		XtIntervalId	*unused2)
-{
-	XmTextFieldSetHighlight(namestring,
-		0,
-		XmTextFieldGetLastPosition(namestring),
-		XmHIGHLIGHT_NORMAL);
-}
 static void flash_file_name(char *fname)
 {
 	XmTextFieldSetString(namestring, fname);
 	XmTextFieldShowPosition(namestring, strlen(fname));
-	XmTextFieldSetHighlight(namestring,
-		0,
-		XmTextFieldGetLastPosition(namestring),
-		XmHIGHLIGHT_SELECTED);
-	XtAppAddTimeOut(app,
-		500,
-		(XtTimerCallbackProc)flash_file_name_timeout_proc,
-		NULL);
+	flash_widget(namestring);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -597,37 +579,7 @@ static void flash_file_name(char *fname)
  * the infolabel blink if it contains any informations, e.g.,
  * to highlight opening a read-only file.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void show_file_info_timeout_proc(
-		XtPointer	unused1,
-		XtIntervalId	*unused2)
-{
-	Pixel old_bg, old_fg;
-	XtVaGetValues(infolabel,
-		XmNforeground, &old_fg,
-		XmNbackground, &old_bg,
-		NULL);
-	XtVaSetValues(infolabel,
-		XmNforeground, old_bg,
-		XmNbackground, old_fg,
-		NULL);
-}
-static Boolean show_file_info_work_proc(XtPointer ignored)
-{
-	Pixel old_bg, old_fg;
-	XtVaGetValues(infolabel,
-		XmNforeground, &old_fg,
-		XmNbackground, &old_bg,
-		NULL);
-	XtVaSetValues(infolabel,
-		XmNforeground, old_bg,
-		XmNbackground, old_fg,
-		NULL);
-	XtAppAddTimeOut(app,
-		500,
-		(XtTimerCallbackProc)show_file_info_timeout_proc,
-		NULL);
-	return True;
-}
+
 void show_file_info(void)
 {
 	char info[sizeof "{Macintosh, New, Modified, Read only}"];
@@ -660,7 +612,7 @@ void show_file_info(void)
 			strcat(info, "ead only");
 		}
 		strcat(info, "}");
-		XtAppAddWorkProc(app, show_file_info_work_proc, 0);
+		flash_widget(infolabel);
 	}
 	s = XmStringCreateSimple(info);
 	XtVaSetValues(infolabel,
@@ -686,8 +638,8 @@ static void reinit_file_info(Boolean saving, Boolean new, Boolean empty)
 		clear_undo(undo_ptr);
 	}
 	if(empty) {
-		global_options.read_only = False;
-		global_options.file_type = UNIX;
+		set_read_only(False);
+		set_file_type(UNIX);
 	}
 	show_file_info();
 }
@@ -1026,7 +978,6 @@ static Boolean setup_main_window(
 	XtManageChild(filename);
 	XtManageChild(infolabel);
 	XtManageChild(linenumber);
-	show_file_info();
 	XtManageChild(menubar);
 	XtManageChild(script);
 	if( !global_options.edit_only ) {
@@ -1052,19 +1003,17 @@ static Boolean setup_main_window(
 
 	if(open_file(script, script, file_name, True, &foAction)
 	&& file_name != NULL) {
-		XmTextFieldSetString(namestring, file_name);
-		XmTextFieldShowPosition(namestring, strlen(file_name));
+		flash_file_name(file_name);
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
 		file_info.new = False;
 	} else {
 		switch(foAction) {
 			case EmptyFile:
-				XmTextFieldSetString(namestring, no_file_name);
+				flash_file_name(no_file_name);
 				set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, False);
 				break;
 			case NewFile:
-				XmTextFieldSetString(namestring, file_name);
-				XmTextFieldShowPosition(namestring, strlen(file_name));
+				flash_file_name(file_name);
 				set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
 				file_info.new = True;
 				break;
@@ -1223,6 +1172,7 @@ static void file_menu_op(int op)
 /* No file name: get an empty file */
 				XmTextSetString(script, "");
 				flash_file_name(no_file_name);
+				reinit_file_info(False, False, True);
 			} else if(open_file(script, script, fname, False,(FileOpenAction *) NULL)){
 				set_icon_name_and_title();
 				flash_file_name(fname);
@@ -1243,7 +1193,6 @@ static void file_menu_op(int op)
 			confirm_empty_file)) {
 			pause_undo(undo_ptr);
 			if(open_file(script, script, NULL, False, (FileOpenAction*)NULL)) {
-				XmTextFieldSetString(namestring, no_file_name);
 				if(oldfname != NULL) {
 					setup_reopen_menu(oldfname);
 				}
@@ -1361,7 +1310,7 @@ static void reopen_cb(
 				setup_reopen_menu(oldfname);
 			}
 			set_icon_name_and_title();
-			reinit_file_info(False, False, True);
+			reinit_file_info(False, False, False);
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, True);
 		} else {

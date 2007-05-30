@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.34 2006/06/13 11:23:03 rda Exp rda $
+ * $Id: files.c,v 2.35 2007/05/29 16:48:32 rda Exp $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -985,9 +985,9 @@ Boolean open_file(
 				XtFree(buf);
 				return False;
 			}
-		} else if (!orig_global_options.read_only) {
-			set_read_only(read_only);
-		} /* else leave the user's setting of the read-only option */
+		} else {
+			set_read_only(read_only || orig_global_options.read_only);
+		}
 		XmTextDisableRedisplay(text);
 		XmTextSetString(text, buf);
 		XtFree(buf);
