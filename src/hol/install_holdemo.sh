@@ -1,49 +1,49 @@
 #! /bin/sh
 #
 # File: install_holdemo
-# Derived from: $Header: /home/rda/opp/RCS/install_holdemo.sh,v 1.4 2004/02/02 16:33:12 rda Exp rda $
+# Derived from: $Header: /home/rda/hol/RCS/install_holdemo.sh,v 1.5 2005/09/12 11:54:39 rda Exp rda $
 #
 # Running this script sets up example database in the directory ./db
 #
 # exit immediately on none zero code
 set -e
 # Default directory names, should not need to change these.
-dir=`pwd`
-PPINSTALLDIR=$dir
-doc=$dir/doc
-db=$dir/db
-tmp_build=$dir/tmp_build
-deletebuilddir="y"
-PPDATABASEPATH=$dir/tmp_build:$PPDATABASEPATH
+DIR=`pwd`
+PPINSTALLDIR="$DIR"
+DOC="$DIR"/doc
+DB="$DIR"/db
+TMPBUILD="$DIR"/tmp_build
+DELETEBUILDDIR="y"
+PPDATABASEPATH="$TMPBUILD:$PPDATABASEPATH"
 export PPINSTALLDIR PPDATABASEPATH
 
 # tell the user what we are doing
 echo `date`
 echo "Creating new databases"
-rm -rf $tmp_build
-mkdir $tmp_build
-cd $tmp_build
+rm -rf "$TMPBUILD"
+mkdir "$TMPBUILD"
+cd "$TMPBUILD"
 
-cp $doc/wrk051.doc .
-cp $doc/spc001.doc $doc/spc002.doc .
-cp $doc/usr004.doc $doc/usr013* .
-cp $doc/usr022_slides.doc .
-cp $doc/wrk022.doc $doc/wrk043.doc $doc/wrk044.doc $doc/wrk046.doc .
-cp $doc/usr022S.doc .
+cp "$DOC"/wrk051.doc .
+cp "$DOC"/spc001.doc "$DOC"/spc002.doc .
+cp "$DOC"/usr004.doc "$DOC"/usr013* .
+cp "$DOC"/usr022_slides.doc .
+cp "$DOC"/wrk022.doc "$DOC"/wrk043.doc "$DOC"/wrk044.doc "$DOC"/wrk046.doc .
+cp "$DOC"/usr022S.doc .
 sieve sml <usr022S.doc >/dev/null
-mv hol_course_work.doc $doc
+mv hol_course_work.doc "$DOC"
 sieve sml < wrk051.doc
 make -f wrk051.mkf all_hol
 
-mv example_hol.* $db
+mv example_hol.* "$DB"
 
 # Tidy up neatly, deleting all unnecessary files
-if test "x$deletebuilddir" = "xy"
+if test "$DELETEBUILDDIR" = "y"
 then
 	echo `date`
 	echo "Tidying up"
-	cd $dir
-	rm -rf $tmp_build
+	cd "$DIR"
+	rm -rf "$TMPBUILD"
 fi
 
 echo `date`
