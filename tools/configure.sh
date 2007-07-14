@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.41 2006/12/11 16:12:22 rda Exp rda $
+# $Id: configure.sh,v 1.42 2007/01/28 10:15:07 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -23,8 +23,8 @@
 #
 # PPHOME           - if set must give the absolute path name of
 #                    a directory the user can create or write to
-#                    (default: first of /usr/local/pp, /usr/share/pp,
-#                    /opt/pp, /sw/pp, $HOME/pp that looks like it will work).
+#                    (default: first of /usr/local/pp, /opt/pp, /sw/pp,
+#                    /usr/share/pp, $HOME/pp that looks like it will work).
 #
 # PPMOTIFLINKING   - if set must be one of static or dynamic
 #                    (default: dynamic).
@@ -78,27 +78,30 @@ warn(){
 	echo WARNING: $* 1>&2
 }
 #
-# The following is a substitute for "which" needed on systems like BSD
-# and Solaris where "which" is a grotty C-shell-script.
+# The following is a substitute for "which". It is needed on systems like BSD
+# and Solaris where "which" is a grotty C-shell-script (which, in particular,
+# does not report an error if the program is not found).
 #
-split_path(){
-	IFS=: eval "echo \$PATH"
-}
 find_in_path(){
-	for DIR in `split_path`
-	do	FILE=$DIR/$1
-		if	[ -x $FILE -a -f $FILE ]
-		then	echo $FILE
+(
+	IFS=:
+	for DIR in $PATH
+	do	FILE="$DIR"/"$1"
+		if	[ -x "$FILE" -a -f "$FILE" ]
+		then	echo "$FILE"
 			return 0
 		fi
 	done
 	return 1
+)
 }
 #
-# THe following is used to check for dependencies on executables (ed etc.)
+# The following is used to check for dependencies on executables (poly etc.)
+# The first argument is the program; the second is a message to output as
+# a warning if the program is not in the path.
 #
 check_bin(){
-	find_in_path $1 >/dev/null 2>&1 || warn $2
+	find_in_path "$1" >/dev/null 2>&1 || warn $2
 }
 #
 # Now here we go ...
@@ -111,31 +114,31 @@ export LC_ALL
 # Find a target directory
 #
 if	[ "${PPTARGETDIR:-}" = "" ]
-then	PPTARGETDIR=$PPHOME
+then	PPTARGETDIR="$PPHOME"
 fi
 if	[ "${PPTARGETDIR:-}" = "" ]
-then	for parent in /usr/local /opt /sw /usr/share $HOME
-	do	if	[ -d $parent ]
-		then	if	[ -d $parent/pp -a -w $parent/pp ]
-			then	PPTARGETDIR=$parent/pp
+then	for parent in /usr/local /opt /sw /usr/share "$HOME"
+	do	if	[ -d "$parent" ]
+		then	if	[ -d "$parent"/pp -a -w "$parent"/pp ]
+			then	PPTARGETDIR="$parent"/pp
 				break
-			elif	[ -d $parent -a -w $parent ]
-			then	PPTARGETDIR=$parent/pp
+			elif	[ -d "$parent" -a -w "$parent" ]
+			then	PPTARGETDIR="$parent"/pp
 				break
 			fi
 		fi
 	done
 	if	[ "$PPTARGETDIR" = "" ]
-	then	give_up "cannot create any of the default installation directories"
+	then	give_up 'cannot find a suitable installation directory'
 	fi
 elif	[ ! -d "$PPTARGETDIR" ]
-then	( mkdir $PPTARGETDIR; rmdir $PPTARGETDIR ) || \
-	give_up "cannot create the directory $PPTARGETDIR"
+then	( mkdir "$PPTARGETDIR"; rmdir "$PPTARGETDIR" ) || \
+	give_up "cannot create the directory \"$PPTARGETDIR\""
 elif	[ -d "$PPTARGETDIR" -a ! -w "$PPTARGETDIR" ]
-then	give_up "cannot write to the directory $PPTARGETDIR"
+then	give_up "cannot write to the directory \"$PPTARGETDIR\""
 fi
 if	[ `expr "$PPTARGETDIR" : '\/'` != 1 ]
-then	give_up "the target directory must be an absolute path name (i.e., begin with \"/\")"
+then	give_up 'the target directory must be an absolute path name (i.e., begin with "/")'
 fi
 echo "Using $PPTARGETDIR as the installation target directory"
 #
@@ -160,9 +163,9 @@ fi
 #
 # Look for packages to be installed:
 #
-CWD=`pwd`
+PPBUILDDIR=`pwd`
 if	[ ! -d src ]
-then	give_up "the directory $CWD/src does not exist"
+then	give_up "the directory \"$PPBUILDDIR/src\" does not exist"
 fi
 SOMETODO=n
 for f in $SUPPORTEDTARGETS
@@ -173,16 +176,16 @@ do	if	[ -f src/$f.mkf ]
 	then	eval $f=y
 		SOMETODO=y
 	elif	[ "$USERDEFINEDTARGETS" = y ]
-	then	give_up "the make file $f.mkf is missing from the source directory"
+	then	give_up "the make file \"$f.mkf\" is missing from the source directory"
 	fi
 done
-if	[ $SOMETODO = n ]
-then	give_up "cannot find any packages to build in $CWD/src"
+if	[ "$SOMETODO" = n ]
+then	give_up "cannot find any packages to build in \"$PPBUILDDIR/src\""
 fi
 ACTTARGETS=
 for f in $SUPPORTEDTARGETS
 do	if	eval [  \$$f = y  ]
-	then	ACTTARGETS="$ACTTARGETS $f"
+	then	ACTTARGETS=`echo $ACTTARGETS $f`
 	fi
 done
 #
@@ -191,23 +194,23 @@ done
 if	[ "$dev" = y -o "$hol" = y -o "$zed" = y -o "$daz" = y -o "$qcz" = y ]
 then	if	[ "${PPCOMPILER:-}" != "" ]
 	then	case "$PPCOMPILER" in
-			POLYML) T="Poly/ML"; C="poly";;
-			SMLNJ)  T="Standard ML of New Jersey"; C="sml";;
-			*)	give_up "PPCOMPILER must be one of POLYML or SMLNJ";;
+			POLYML) T='Poly/ML'; C='poly';;
+			SMLNJ)  T='Standard ML of New Jersey'; C='sml';;
+			*)	give_up 'PPCOMPILER must be one of "POLYML" or "SMLNJ"';;
 		esac
 		echo "Using $T as specified"
 		check_bin "$C" "$C not found; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
 	elif	find_in_path poly >/dev/null 2>&1
-	then	echo "Using Poly/ML"
+	then	echo 'Using Poly/ML'
 		PPCOMPILER=POLYML
 	elif	find_in_path sml >/dev/null 2>&1
-	then	echo "Using Standard ML of New Jersey"
+	then	echo 'Using Standard ML of New Jersey'
 		PPCOMPILER=SMLNJ
-	else	give_up "cannot find a Standard ML compiler"
+	else	give_up 'cannot find a Standard ML compiler'
 	fi
 	if	[ "$PPCOMPILER" = SMLNJ ]
 	then	if	! find_in_path .arch-n-opsys >/dev/null 2>&1
-		then	give_up ".arch-n-opsys not found: to build with SML/NJ the installation bin directory must be on your path"
+		then	give_up '".arch-n-opsys" not found: to build with SML/NJ, its installation bin directory must be on your path'
 		fi
 	fi
 	#
@@ -217,8 +220,8 @@ then	if	[ "${PPCOMPILER:-}" != "" ]
 	then	if	[ "${PPPOLYDBASE:-}" = "" ]
 		then	PPPOLYDBASE=/usr/lib/poly/ML_dbase
 		fi
-		if	[ ! -f $PPPOLYDBASE ]
-		then	give_up "The file $PPPOLYDBASE does not exist"
+		if	[ ! -f "$PPPOLYDBASE" ]
+		then	give_up "The file \"$PPPOLYDBASE\" does not exist"
 		fi
 		echo "Using $PPPOLYDBASE for the Poly/ML compiler database"
 	else	PPPOLYDBASE=
@@ -229,17 +232,17 @@ fi
 #
 # C compiler (has to be gcc):
 #
-check_bin "gcc" "gcc not found"
+check_bin 'gcc' 'gcc not found'
 #
 # TeX and LaTeX:
 #
-check_bin "latex" "TeX and LaTeX software not found"
+check_bin 'latex' 'TeX and LaTeX software not found'
 #
 # A representative sample of the text utilities we need
 #
-check_bin "nl" "nl text line-numbering utility not found"
-check_bin "ed" "ed line editor not found"
-check_bin "nroff" "nroff text formatting program not found"
+check_bin 'nl' 'nl text line-numbering utility not found'
+check_bin 'ed' 'ed line editor not found'
+check_bin 'nroff' 'nroff text formatting program not found'
 #
 # Find out how to link Motif and where the Motif includes and libraries are:
 #
@@ -248,7 +251,7 @@ then	if	[ "${PPMOTIFLINKING:-}" != "" ]
 	then	case "$PPMOTIFLINKING" in
 			dynamic) true;;
 			static)  true;;
-			*)	give_up "PPMOTIFLINKING must be one of \"default\" or \"static\"";;
+			*)	give_up 'PPMOTIFLINKING must be one of "dynamic" or "static"';;
 		esac
 		echo "Using $PPMOTIFLINKING linking for Motif as specified"
 	else	PPMOTIFLINKING=dynamic
@@ -260,10 +263,10 @@ then	if	[ "${PPMOTIFLINKING:-}" != "" ]
 	USERCFLAGS=${PPUSERCFLAGS:-}
 	USERCLIBS=${PPUSERCLIBS:-}
 	if	[ "${PPMOTIFHOME:-}" != "" ]
-	then	if	[ ! -d $PPMOTIFHOME ]
-		then	give_up "directory \"$PPMOTIFHOME\" does not seem to exist"
-		elif	[ ! -d $PPMOTIFHOME/include/Xm ]
-		then	give_up "directory \"$PPMOTIFHOME\" does not seem to contain the Motif include files"
+	then	if	[ ! -d "$PPMOTIFHOME" ]
+		then	give_up "directory \""$PPMOTIFHOME"\" does not seem to exist"
+		elif	[ ! -d "$PPMOTIFHOME"/include/Xm ]
+		then	give_up "directory \""$PPMOTIFHOME"\" does not seem to contain the Motif include files"
 		else	echo "Using $PPMOTIFHOME for Motif include files and binaries"
 		fi
 	elif	[ -d /usr/X11R6/include/Xm ]
@@ -276,9 +279,9 @@ then	if	[ "${PPMOTIFLINKING:-}" != "" ]
 	then	PPMOTIFHOME=/sw
 	fi
 	if	[ "${PPMOTIFHOME:-}" != "" ]
-	then	USERCFLAGS="-I$PPMOTIFHOME/include $USERCFLAGS"
-		USERCLIBS="-L$PPMOTIFHOME/lib $USERCLIBS"
-	else	warn "Motif installation not found"
+	then	USERCFLAGS="-I\"$PPMOTIFHOME\"/include $USERCFLAGS"
+		USERCLIBS="-L\"$PPMOTIFHOME\"/lib $USERCLIBS"
+	else	warn 'Motif installation not found'
 	fi
 fi
 #
@@ -295,13 +298,13 @@ then	if	find_in_path dvipdfm >/dev/null 2>&1
 	then	DVI2PDF=dvipdfm
 	elif	find_in_path dvipdf >/dev/null 2>&1
 	then	DVI2PDF=dvipdf
-	else	give_up "dvipdfm or dvipdf must be available if you specify PPDOCFORMAT=PDF"
+	else	give_up 'dvipdfm or dvipdf must be available if you specify PPDOCFORMAT=PDF'
 	fi
-	echo "Generating code to produce PDF versions of the documents"
+	echo 'Generating code to produce PDF versions of the documents'
 elif	[ "$DOPS" = y ]
 then	if	find_in_path dvips >/dev/null 2>&1
-	then	echo "Generating code to produce PostScript versions of the documents"
-	else	give_up "dvips must be available if you specify PPDOCFORMAT=PS"
+	then	echo 'Generating code to produce PostScript versions of the documents'
+	else	give_up 'dvips must be available if you specify PPDOCFORMAT=PS'
 	fi
 fi
 #
@@ -310,7 +313,7 @@ PPCACHESIZE=${PPCACHESIZE:-50}
 if	[ `expr  \( "$PPCACHESIZE" : '.*' \) = \
 		\( "$PPCACHESIZE" : '[0-9]*' \)` = 0 ]
 then
-	give_up "PPCACHESIZE must be a number"
+	give_up 'PPCACHESIZE must be a number'
 fi
 if	[ "$zed" = y -o "$daz" = y ]
 then
@@ -324,45 +327,50 @@ TAB=
 out(){
 	echo "$TAB$*" >>install
 }
-export_it(){
+declare_quoted(){
 	VAR=$1
-	VAL=`eval echo '$'$1`
-	out "$VAR="'"'"$VAL"'"'
-	out "export $VAR"
+	VAL=`eval echo \"'$'"$VAR"\"`
+	out "$VAR=\"$VAL\""
+}
+declare_unquoted(){
+	VAR=$1
+	VAL=`eval echo \"'$'"$VAR"\"`
+	out "$VAR=$VAL"
 }
 if	[ -w . ]
 then	>install
-else	give_up "cannot write the file install in the directory $CWD"
+else	give_up "cannot write to the file \"install\" in the directory \"$PPBUILDDIR\""
 fi
 chmod +x install
-out "#!/bin/sh"
-out "# install: ProofPower installation script"
-out "# This file was automatically generated by the configure script."
-out "# Edit it at your own risk!"
-export_it LC_ALL
-export_it PPCOMPILER
-export_it PPMOTIFLINKING
-export_it PPTARGETDIR
-export_it PPCACHESIZE
-export_it USERCFLAGS
-export_it USERCLIBS
-out 'PPHOME=$PPTARGETDIR'
-out "export PPHOME"
-out "PATH=$CWD/src:"'$PATH'
-out "export PATH"
-out "PPDATABASEPATH=$CWD/src"
-out "export PPDATABASEPATH"
-out "PPETCPATH=$CWD/src"
-out "export PPETCPATH"
-if	[ "$PPCOMPILER" = POLYML ]
-then	export_it PPPOLYDBASE
+out '#!/bin/sh'
+out '# install: ProofPower installation script'
+out '# This file was automatically generated by the configure script.'
+out '# Edit it at your own risk!'
+declare_quoted LC_ALL
+declare_quoted ACTTARGETS
+if	[ "$DOPDF" = y ]
+then	declare_quoted DVI2PDF
 fi
-out 'TEXINPUTS=.:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$TEXINPUTS:'
-out "export TEXINPUTS"
-out 'BIBINPUTS=.:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BIBINPUTS:'
-out "export BIBINPUTS"
-out 'BSTINPUTS=.:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BSTINPUTS:'
-out "export BSTINPUTS"
+declare_quoted PPBUILDDIR
+declare_quoted PPCACHESIZE
+declare_quoted PPCOMPILER
+declare_quoted PPMOTIFLINKING
+declare_quoted PPTARGETDIR
+declare_unquoted USERCFLAGS
+declare_unquoted USERCLIBS
+if	[ "$PPCOMPILER" = POLYML ]
+then	declare_quoted PPPOLYDBASE
+fi
+out 'PPHOME="$PPTARGETDIR"'
+out 'PATH="$PPBUILDDIR/src:$PATH"'
+out 'PPDATABASEPATH="$PPBUILDDIR/src"'
+out 'PPETCPATH="$PPBUILDDIR/src"'
+out 'TEXINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$TEXINPUTS:"'
+out 'BIBINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BIBINPUTS:"'
+out 'BSTINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BSTINPUTS:"'
+out 'export LC_ALL PPCACHESIZE PPCOMPILER PPMOTIFLINKING PPTARGETDIR'
+out 'export PPHOME PATH PPDATABASEPATH PPETCPATH PPPOLYDBASE'
+out 'export TEXINPUTS BIBINPUTS BSTINPUTS'
 out 'give_up(){'
 out '	echo "install: installation failed; see $1 for more details"'
 out '	exit 1'
@@ -370,9 +378,9 @@ out '}'
 out 'date +"OpenProofPower installation begins [%c] ..."'
 out 'if [ "$1" = "" -o "$1" = "-d" ]'
 out 'then'
-TAB="	"
-out "echo \"Moving to build directory $CWD/src\""
-out "cd $CWD/src"
+TAB='	'
+out 'echo "Moving to build directory $PPBUILDDIR/src"'
+out 'cd "$PPBUILDDIR/src"'
 #
 # Clean up the src directory
 #
@@ -380,13 +388,13 @@ out "cd $CWD/src"
 # 
 # Output the make command to build the packages
 #
-out "echo \"Building $ACTTARGETS\""
-out "echo \"See $CWD/build.log for messages\""
-out "if	make -f install.mkf $ACTTARGETS >$CWD/build.log 2>&1"
+out 'echo Building $ACTTARGETS'
+out 'echo See $PPBUILDDIR/build.log for messages'
+out 'if	make -f install.mkf $ACTTARGETS >"$PPBUILDDIR/build.log" 2>&1'
 out 'then	date +"Build complete [%c] ..."'
-out "else	give_up $CWD/build.log"
-out "fi"
-out "cat $CWD/src/version >$PPTARGETDIR/VERSION"
+out 'else	give_up "$PPBUILDDIR/build.log"'
+out 'fi'
+out 'cat "$PPBUILDDIR/src/version" >"$PPTARGETDIR/VERSION"'
 #
 # Now go to the target directory, build the demos (and freeze the
 # databases, en passant, or explicitly for daz and qcz which don't have
@@ -394,54 +402,54 @@ out "cat $CWD/src/version >$PPTARGETDIR/VERSION"
 #
 if	[ "$hol" = y -o "$zed" = y -o "$daz" = y -o "$qcz" = y ]
 then
-	out "echo \"Moving to installation directory $PPTARGETDIR\" ..."
-	out "echo \"See $PPTARGETDIR/<package>.log for messages\""
-	out "cd $PPTARGETDIR"
-	out "PATH=$PPTARGETDIR/bin:"'$PATH'
-	out "PPDATABASEPATH=$PPTARGETDIR/db:$CWD/src"
-	out "PPETCPATH=$PPTARGETDIR/db:$CWD/src"
+	out 'echo "Moving to installation directory $PPTARGETDIR" ...'
+	out 'echo "See $PPTARGETDIR/<package>.log for messages"'
+	out 'cd "$PPTARGETDIR"'
+	out 'PATH="$PPTARGETDIR/bin:$PATH"'
+	out 'PPDATABASEPATH="$PPTARGETDIR/db:$PPBUILDDIR/src"'
+	out 'PPETCPATH="$PPTARGETDIR/db:$PPBUILDDIR/src"'
 	if	[ "$hol" = y ]
-	then	out "echo Installing hol demo database"
-		out './install_holdemo >hol.log 2>&1 || give_up $PPTARGETDIR/hol.log'
+	then	out 'echo Installing hol demo database'
+		out './install_holdemo >hol.log 2>&1 || give_up "$PPTARGETDIR/hol.log"'
 	fi
 	if	[ "$zed" = y ]
-	then	out "echo Installing zed demo database"
-		out './install_zeddemo >zed.log 2>&1 || give_up $PPTARGETDIR/zed.log'
+	then	out 'echo Installing zed demo database'
+		out './install_zeddemo >zed.log 2>&1 || give_up "$PPTARGETDIR/zed.log"'
 	fi
 	if	[ "$daz" = y -a "$PPCOMPILER" = POLYML ]
-	then	out "echo Freezing daz database"
-		out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >daz.log 2>&1 || give_up $PPTARGETDIR/daz.log'
+	then	out 'echo Freezing daz database'
+		out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >daz.log 2>&1 || give_up "$PPTARGETDIR/daz.log"'
 	fi
 	if	[ "$qcz" = y -a "$PPCOMPILER" = POLYML ]
-	then	out "echo Freezing qcz database"
-		out '( pp_make_database -f -p qcz junk$$; rm junk$$.polydb ) >qcz.log 2>&1 || give_up $PPTARGETDIR/qcz.log'
+	then	out 'echo Freezing qcz database'
+		out '( pp_make_database -f -p qcz junk$$; rm junk$$.polydb ) >qcz.log 2>&1 || give_up "$PPTARGETDIR/qcz.log"'
 	fi
 fi
 TAB=
-out "fi"
+out 'fi'
 out 'if [ "$1" = "" -o "$1" = "+d" ]'
 out 'then'
-TAB="	"
+TAB='	'
 if	[ "$DOPDF" = y -o "$DOPS" = y ]
 then
 	if	[ "$DOPDF" = y -o "$DOPS" = y ]
-	then	out "echo \"Moving to documentation directory $PPTARGETDIR/doc\" ..."
-		out "cd $PPTARGETDIR/doc"
+	then	out 'echo "Moving to documentation directory $PPTARGETDIR/doc" ...'
+		out 'cd "$PPTARGETDIR/doc"'
 	fi
 	if	[ "$DOPDF" = y ]
-	then	out "echo \"Converting documents to PDF (see $PPTARGETDIR/$DVI2PDF.log for messages)\""
+	then	out 'echo "Converting documents to PDF (see $PPTARGETDIR/$DVI2PDF.log for messages)"'
 		out 'for f in *.dvi'
-		out "do	$DVI2PDF" '$f'
-		out "done >$PPTARGETDIR/$DVI2PDF.log 2>&1"
+		out 'do	$DVI2PDF $f'
+		out 'done >"$PPTARGETDIR/$DVI2PDF.log" 2>&1'
 	fi
 	if	[ "$DOPS" = y ]
-	then	out "echo \"Converting documents to PostScript (see $PPTARGETDIR/dvips.log for messages)\""
+	then	out 'echo "Converting documents to PostScript (see $PPTARGETDIR/dvips.log for messages)"'
 		out 'for f in *.dvi'
 		out 'do	dvips -o "" $f'
-		out "done >$PPTARGETDIR/dvips.log 2>&1"
+		out 'done >"$PPTARGETDIR/dvips.log" 2>&1'
 	fi
 fi
-out "echo Generating HTML roadmap to the documents: $PPTARGETDIR/doc/index.html"
+out 'echo Generating HTML roadmap to the documents: $PPTARGETDIR/doc/index.html'
 if	[ "$DOPDF" = y ]
 then	HTMLEDIT='-e /@ext@/s/@ext@/pdf/g'
 elif	[ "$DOPS" = y ]
@@ -455,9 +463,9 @@ do
 	else	HTMLEDIT="$HTMLEDIT -e /@$f@/s/@$f@//g"
 	fi
 done
-out "sed $HTMLEDIT  <$CWD/src/index.html.src > $PPTARGETDIR/doc/index.html"
-out "cp $CWD/src/lemma1.gif $CWD/src/newpplogo.gif $PPTARGETDIR/doc"
+out "sed $HTMLEDIT"  '<"$PPBUILDDIR/src/index.html.src" > "$PPTARGETDIR/doc/index.html"'
+out 'cp "$PPBUILDDIR/src/lemma1.gif" "$PPBUILDDIR/src/newpplogo.gif" "$PPTARGETDIR/doc"'
 TAB=
-out "fi"
+out 'fi'
 out 'date +"Installation complete [%c]"'
 echo "If you are happy with these settings, now run ./install to install ProofPower."
