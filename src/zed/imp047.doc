@@ -8,13 +8,13 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp047.doc  %Z% $Date: 2006/01/25 17:19:11 $ $Revision: 1.59 $ $RCSfile: imp047.doc,v $
+% imp047.doc  %Z% $Date: 2006/04/20 09:15:43 $ $Revision: 1.60 $ $RCSfile: imp047.doc,v $
 
 doctex imp047 ; texdvi imp047
 bibtex imp047
 
 =TEX
-% imp047.doc  %Z% $Date: 2006/01/25 17:19:11 $ $Revision: 1.59 $ $RCSfile: imp047.doc,v $
+% imp047.doc  %Z% $Date: 2006/04/20 09:15:43 $ $Revision: 1.60 $ $RCSfile: imp047.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \makeindex
@@ -24,10 +24,10 @@ bibtex imp047
 \TPPtitle{Implementation for Z Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Z Types and Terms}
 \TPPref{DS/FMU/IED/IMP047}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.59 $%
+\def\SCCSversion{$Revision: 1.60 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/01/25 17:19:11 $%
+\TPPdate{\FormatDate{$Date: 2006/04/20 09:15:43 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -108,7 +108,8 @@ The destructor for  -terms now checks the operand more carefully.
 \item[Issue 1.57] Type constructors for given sets are now in Z namespace.
 \item[Issue 1.58] Now support decoration of fancyfix identifiers.
 \item[Issue 1.59] The name of the decoration operator is now based on the stem {\em decor} throughout, rather than {\em decor} in some places and {\em dec} in others.
-\item[Issue 1.60] Added support for floating point literals
+\item[Issue 1.60] Added support for floating point literals.
+\item[Issue 1.61] Now support arbitrary identifiers as schema component names.
 \end{description}
 %\subsection{Changes Forecast}
 \newpage
@@ -181,6 +182,13 @@ which is split into the following:
 	], Value "jk")
 =TEX
 
+The Z parser supports the use of arbitrary names as identifiers, by enclosing them in a dollar quotation:
+=INLINEFT
+$"x_[]"
+=TEX
+\ and so we do not split on commas and square brackets enclosed in such quotations.
+
+ 
 
 Function $dest\_z\_name$ splits up well formed names by interpreting the
 square brackets and commas, it complains about mal-formed names.
@@ -197,13 +205,38 @@ The rules implemented are that the Z constant name comprises a possibly empty
 Each boxed list is a comma-delimited list of arguments enclosed in square brackets.
 The head is delimited by the opening square bracket of the first boxed list or by the end
 of the name if there are no boxed lists.
-Commas and square brackets can only appear in the head, the arguments or the projector if they are escaped by a subscript character.
+Commas and square brackets can only appear in the head, the arguments or the projector if they are escaped by a subscript character or inside an arbitrary identifier.
 A subscript character may not be followed by another subscript character.
 Boxed lists do not nest so an opening square bracket can only appear escaped in a boxed list.
-
 =SML
 local
 	exception €BadName›;
+fun €skip_arbitrary_identifier› (s : string) (start : int) : int = (
+	let	val size_s = size s;
+		fun aux ix = (
+			if	ix = size_s
+			then	raise BadName
+			else	case String.sub(s, ix) of
+				#"\\" => (
+				if	ix + 1 = size_s
+				then	raise BadName
+				else	aux (ix + 2)
+			) |	#"\"" => (
+				ix + 1
+			) |	_ => (
+				aux (ix + 1)
+			)
+		);
+	in	if	size_s - start < 2
+		orelse	substring(s, start, 2) <> "$\""
+		then	start + 1
+		else	aux (start + 2)
+	end
+);
+=IGN
+skip_arbitrary_identifier "abc" 0;
+skip_arbitrary_identifier "$\"abc\"" 0;
+=SML
 fun €get_id› (s : string) : string * string OPT  = (
 (*
 =SMLLITERAL
@@ -225,7 +258,9 @@ fun €get_id› (s : string) : string * string OPT  = (
 					else if	String.sub(s, ix + 1) = #"â"
 					then	raise BadName
 					else	aux (ix + 2)
-				) |	_ => aux (ix + 1)
+				) |	_ => (
+					aux (skip_arbitrary_identifier s ix)
+				)
 		);
 	in	aux 0
 	end
@@ -239,6 +274,8 @@ get_id "abc[xyz, abc][a][c]";
 (get_id "abâ" ; fail "" 0 []) handle Badname => ();
 (get_id "abââ" ; fail "" 0 []) handle Badname => ();
 (get_id "âabc" ; fail "" 0 []) handle Badname => ();
+get_id "_ $\"xyz\[" _[xyz, abc][a][c]";
+get_id "_ $\"xyz\" _ $\"\\\" [[\" [xyz, abc][a][c]";
 
 
 =SML
@@ -272,7 +309,9 @@ fun €get_boxed_lists› (s : string) : string list list * string OPT = (
 					else if	String.sub(s, ix + 1) = #"â"
 					then	raise BadName
 					else	aux1 acc (ix + 2) s
-				) |	_ => aux1 acc (ix + 1) s
+				) |	_ => (
+					aux1 acc (skip_arbitrary_identifier s ix) s
+				)
 		);
 		fun aux2 acc ix s = (
 			if	ix = size s
@@ -308,40 +347,11 @@ get_boxed_lists "[abcâ,d,e][]";
 get_boxed_lists "[]";
 get_boxed_lists "[][]abc";
 get_boxed_lists "[aa][bbâ,x]abc";
-=SML
-fun €get_projector› (s : string) : string OPT  = (
-(*
-=SMLLITERAL
-*)
-	let	fun aux ix = (		
-			if	ix < 1
-			then	Nil
-			else	(case String.sub(s, ix) of
-					#"]"	=>  (
-						case String.sub(s, ix - 1) of
-							#"â" => aux (ix - 2)
-						|	_ => Value(String.extract(s, ix+1, NONE))
-				) |	#"[" => (
-						case String.sub(s, ix - 1) of
-							#"â" => aux (ix - 2)
-						|	_ => raise BadName
-				) |	#","  =>  (
-						case String.sub(s, ix - 1) of
-							#"â" => aux (ix - 2)
-						|	_ => raise BadName
-				) |	_ => aux (ix - 1))
-		);
-	in	case aux (size s - 1) of
-			Value "" => Nil
-		|	other => other
-	end
-);
-=IGN
-get_projector "[aa][bbâ,x]abc";
-get_projector "[aa][bbâ,x]";
-get_projector "[aa][bbâ,x]â]";
-get_projector "[aa][bbâ,x]aaâ,â]";
-
+get_boxed_lists "[$\"]\"][bbâ,x]abc";
+get_boxed_lists "[$\"]\"][a,$\",\",b]abc";
+get_boxed_lists "[$\"]\"][a,$\",\",b]abc";
+get_boxed_lists "[]abc";
+get_boxed_lists "[]$\"[\"";
 =SML
 in
 fun €dest_z_name1› (s : string) : string * string OPT = (
@@ -351,10 +361,6 @@ fun €dest_z_name1› (s : string) : string * string OPT = (
 fun €dest_z_name2› (orig_name : string) (Value s : string OPT) : string list list * string OPT = (
 	get_boxed_lists s handle BadName => fail "dest_z_name2" 47000 [fn _ => orig_name]
 ) | dest_z_name2 _ Nil = ([], Nil);
-
-fun €dest_z_name3› (orig_name : string) (Value s : string OPT) : string OPT = (
-	get_projector s handle BadName => fail "dest_z_name3" 47000 [fn _ => orig_name]
-) | dest_z_name3 _ Nil = Nil;
 
 fun	€dest_z_name› (s:string) :string * string list list * string OPT = (
 	(case get_id s of
@@ -373,6 +379,7 @@ dest_z_name "abc[d,,,,]";
 dest_z_name "abc[d,]";
 dest_z_name "Z'Decl";
 get_id "Z'Decl";
+dest_z_name "xxx[abc]def";
 =TEX
 The following function tests for multiple occurrences of a string in a list
 of same.
@@ -809,14 +816,14 @@ in
 		in
 			case identifier of
 			"Z'S"=> (
-				case (args, dest_z_name3 name rest) of
-				([x], Value s) => BdzOk(ZSelâs(x,s))
+				case (args, dest_z_name2 name rest) of
+				([x], (_, Value s)) => BdzOk(ZSelâs(x,s))
 				| _ => BdzFail{BdzFCode=47180, BdzFCompc=2,
 								BdzFArgc=1}
 				)
 			|"Z'T" => (
-				case (args, dest_z_name3 name rest) of
-				([x], Value s) => BdzOk(ZSelât(x,nat_of_string s))
+				case (args, dest_z_name2 name rest) of
+				([x], (_, Value s)) => BdzOk(ZSelât(x,nat_of_string s))
 				| _ => BdzFail{BdzFCode=47185, BdzFCompc=2,
 								BdzFArgc=1}
 				)
