@@ -48,9 +48,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.24 $%
+\def\Version{1.25%
 }
-\def\Date{\FormatDate{$Date: 2007/03/04 15:45:21 $%
+\def\Date{\FormatDate{2007/05/16 15:23:37%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -100,6 +100,11 @@ made sure that no theorems have free variables.
 \item[Issue 1.23] Division by zero is now defined to give zero.
 \item[Issue 1.24] Fixed wrong error message in {\em float\_conv}.
 \item[Issue 1.25] Commented out change to division by zero pending outcome of discussion with QinetiQ.
+\item[Issue 1.26] Fixed
+=INLINEFT
+¯_term_order
+=TEX
+.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -5673,46 +5678,71 @@ $X_{-1}$ containing numbers of the form
 =TEX
 .
 =SML
-fun Ûdest_litÝ (tm : TERM) : TERM * TERM = (
-	let	val chk = (fn t => (dest_î t; t));
-	in	(chk(dest_î¯ tm), one_tm)
-		handle Fail _ => (chk ** chk) (dest_¯_frac tm)
-	end
+fun Ûdest_litÝ (tm : TERM) : INTEGER * INTEGER OPT = (
+	(dest_î(dest_î¯ tm), Nil)
+	handle Fail _ => (dest_î ** (Value o dest_î)) (dest_¯_frac tm)
 );
 =TEX
 =SML
-fun Ûdest_signed_litÝ (tm : TERM) : TERM * TERM = (
-	let	val (tm3, tm4) = dest_lit tm;
-	in	(mk_î¯ tm3, mk_î¯ tm4)
-	end	handle Fail _ => 
+fun Ûdest_signed_litÝ (tm : TERM) : INTEGER * INTEGER OPT = (
+	dest_lit tm (* ¬î¯ nnn® ¬nnn/ddd® *)
+	handle Fail _ => 
 	let	val tm2 = dest_¯_minus tm;
-		val (tm3, tm4) = dest_signed_lit tm2;
-	in	(mk_¯_minus tm3, tm4)
-	end	handle Fail _ => 
-	let	val tm2 = dest_¯_recip tm;
-		val (tm3, tm4) = dest_signed_lit tm2;
-	in	(mk_¯_recip tm3, mk_¯_recip tm4) 
+		val (nnn, ddd) = dest_lit tm2;
+	in	(@~ nnn, ddd) (* ¬~(î¯ nnn)® ¬~(nnn/ddd)® *)
 	end
 );
-local
-val ÛbottomÝ : TERM = mk_const("", mk_vartype "");
-fun ÛpervertÝ (tm : TERM) : TERM * INTEGER = (
-	let	val (a, b) = dest_¯_times tm;
-	in	let	val (x, y) = dest_signed_lit a;
-		in	(b, three)
-		end	handle Fail _ => (mk_¯_times(dest_¯_minus a, b), two)
-			handle Fail _ => (tm, one)
-	end	handle Fail _ =>
-	let	val (x, y) = dest_signed_lit tm;
-	in	(bottom, ((dest_lit tm; zero) handle Fail _ => one))
-	end	handle Fail _ => (dest_¯_minus tm, one)
-		handle Fail _ => (dest_¯_recip tm, one)
-		handle Fail _ => (tm, zero)
+=TEX
+The following function compares two rational numbers represented as a numerator and an optional denominator.
+This is surprisingly complicated!
+We have to be careful not to return 0 unless the two representations are identical and we have to deal with zero denominators.
+The order chosen is this: if either denominator is zero, the ordering is by numerator, then by denominator.
+If a denominator is omitted it is treated as one, and the representation with the omitted denominator comes first if the two representations compare equal numerically.
+=SML
+fun Ûrat_orderÝ
+	(num1 : INTEGER, Nil : INTEGER OPT) 
+	(num2 : INTEGER, Nil : INTEGER OPT) : int = (
+	integer_order num1 num2
+) | rat_order (rat1 as (num1, Value den1)) (rat2 as (num2, Value den2)) = (
+	if	den1 = zero
+	then	let	val x = integer_order num1 num2;
+			in	if	x = 0
+				then	if	num2 = zero
+					then	0
+					else	~1
+				else	x
+			end
+	else	if	den2 = zero
+		then	~(rat_order rat2 rat1)
+		else	let	val x = integer_order (num1*den2) (num2*den1);
+			in	if	x = 0
+				then	integer_order num1 num2
+				else	x
+			end
+) | rat_order (num1, Nil) (rat2 as (_, Value _)) = (
+	let	val x = rat_order (num1, Value one) rat2;
+	in	if	x = 0
+		then	~1
+		else	x
+	end
+) | rat_order rat1 rat2 = (
+	~(rat_order rat2 rat1)
 );
-in
-val Û¯_term_orderÝ = gen_term_order pervert;
-end;
-
+val ÛbottomÝ : TERM = mk_const("", mk_vartype "");
+fun ÛspecialÝ (tm : TERM) : TERM * (INTEGER * INTEGER OPT) = (
+	let	val (a, b) = dest_¯_times tm;
+	in	let	val ddd_nnn = dest_signed_lit a;
+		in	(b, ddd_nnn)
+		end	handle Fail _ => (mk_¯_times(dest_¯_minus a, b), (two, Nil))
+			handle Fail _ => (tm, (one, Nil))
+	end	handle Fail _ =>
+	let	val xy = dest_signed_lit tm;
+	in	(bottom, xy)
+	end	handle Fail _ => (dest_¯_minus tm, (two, Nil))
+		handle Fail _ => (dest_¯_recip tm, (one, Nil))
+		handle Fail _ => (tm, (zero, Nil))
+);
+val Û¯_term_orderÝ = gen_term_order1 (special, rat_order);
 =TEX
 \section{ANF FOR ¯}
 We need conversions and supporting theorems which do collection of
@@ -5745,7 +5775,7 @@ by $1$,
 ~1
 =TEX
 , or $0$ which must be simplified away.
-Case 10 only arises when cancellation during in the polynomial normalisation has caused a sub-polynomial to become $0$.
+Case 10 only arises when cancellation during the polynomial normalisation has caused a sub-polynomial to become $0$.
 =SML
 val _ = push_merge_pcs ["'¯", "'î", "predicates"];
 val Ûcase1_thmÝ = tac_proof(([], ¬µc d m:¯·c*m + d*m = (c + d)*m®),
@@ -5805,7 +5835,7 @@ val Ûcase2_convÝ : CONV = (fn tm => (
 		THEN_TRY_C case1289_conv) tm
 ));
 val Ûcase3_convÝ : CONV = (fn tm =>
-	if (dest_î o dest_î¯ o fst o dest_signed_lit o fst o dest_¯_plus) tm = zero
+	if (fst o dest_signed_lit o fst o dest_¯_plus) tm = zero
 	then (TRY_C (LEFT_C ¯_frac_norm_conv) THEN_C
 		simple_eq_match_conv case3a_thm) tm
 		handle Fail _ =>
