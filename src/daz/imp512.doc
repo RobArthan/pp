@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp512.doc   %Z% $Date: 2002/12/11 18:01:49 $ $Revision: 1.21 $ $RCSfile: imp512.doc,v $
+% imp512.doc   %Z% $Date: 2006/08/02 12:25:42 $ $Revision: 1.22 $ $RCSfile: imp512.doc,v $
 % use_file "dtd512";PolyML.use "imp512";
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
@@ -22,10 +22,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Compliance Notation Reader/Writer}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP512}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.21 $%
+\def\SCCSversion{$Revision: 1.22 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/11 18:01:49 $%
+\TPPdate{\FormatDate{$Date: 2006/08/02 12:25:42 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -93,6 +93,7 @@ Used the new $SymEndOfInput$ where apropriate.
 \item[Issue 1.20] DAZ-specific updates to banner for open source release
 \item[Issue 1.21] Fixing problems with percent signs.
 \item[Issue 1.22] Fixed treatment of extended characters in strings.
+\item[Issue 1.23] Now recognises Z quoted identifiers.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -278,39 +279,46 @@ fun Ûprotect_spaceÝ (ch : string) : string = (
 =TEX
 \section{COMPLIANCE NOTATION TEXT INPUT}\label{CNTI}
 
-The following function eats compliance notation input, calling the special handlers for strings as required.
+The following function eats compliance notation input, calling the special handlers for strings as required, taking into account the fact that a string immediately following a dollar-sign forms a Z quoted identifier not an Ada string.
 It reads and assembles the quoted text (i.e., the body of the quotation) and the closing text.
 {\ftlinepenalty=9999
 =SMLPLAIN SML
-fun Ûget_cn_anyÝ (R:READER_ENV) (prevA:string list) : string list= (
+fun Ûget_cn_anyÝ
+	(dollar_state : bool)
+	(R:READER_ENV)
+	(prevA:string list) : string list= (
 let
 	open PrettyNames;
 
 	fun	do_keyword _ (_,Value ch,Simple) p =
-			get_cn_any R ((to_ML_string ch) :: p)
+			get_cn_any false R ((to_ML_string ch) :: p)
 	|	do_keyword _ (names,Nil,Simple) p =
-			get_cn_any R ("%" ^ (hd names) ^ "%" :: p)
+			get_cn_any false R ("%" ^ (hd names) ^ "%" :: p)
 	|	do_keyword k (info as (_,_, (Starting(proc, str)))) p =
-			get_cn_any R (proc R k str false p)
+			get_cn_any false R (proc R k str false p)
 	|	do_keyword _ (_,_,Middle str) p =
-			get_cn_any R (str :: p)
+			get_cn_any false R (str :: p)
 	|	do_keyword (k, _) (_,ch_opt,Ending str) p =
 			((*=[(("=*)	"\"))" :: to_ML_string k :: "\"], \"" ::
 			to_ML_string str :: p)
 	|	do_keyword _ (_,_,Ignore) p =
-			get_cn_any R p
+			get_cn_any false R p
 	|	do_keyword (k, is_keyword) (names,_,Invalid) p = (
 			(* local_error "get_cn_any" 5007
 				[fn () => if is_keyword then "%" ^ k ^ "%" else k]; *)
-			get_cn_any R (lex_error_code(5007, p)));
+			get_cn_any false R (lex_error_code(5007, p)));
 
 	fun do_string () = (
-		let	val (read_string, ol_name) = (get_cn_string,
-					"Lex.String")
+		let	val getter =
+			if	dollar_state
+			then	get_ML_string
+			else	get_cn_string;
+			val (read_string, ol_name) =
+				(getter, "Lex.String")
 			val (str, errnos) = read_string R (ol_name :: "\", " :: prevA); (*="=*)
 			val text_so_far = ", Lex.Text\"" (*="=*) :: str;
 		in
-			get_cn_any R (lex_error_codes(errnos, text_so_far))
+			get_cn_any false R (lex_error_codes(errnos, text_so_far))
 		end
 	);
 
@@ -320,25 +328,26 @@ in
 			case ch
 			of "\""	=>	do_string () (*="=*)
 			|  "\^D" =>	prevA
-			|  "Q"	=>	get_cn_any R ("QQQQ" :: prevA)
-			|  "\\"	=>	get_cn_any R ("\\\\" :: prevA)
-			|  _ => 	get_cn_any R (ch :: prevA)
+			|  "Q"	=>	get_cn_any false R ("QQQQ" :: prevA)
+			|  "\\"	=>	get_cn_any false R ("\\\\" :: prevA)
+			|  "$"	=>	get_cn_any true R ("$" :: prevA)
+			|  _ => 	get_cn_any false R (ch :: prevA)
 		)
 	|	SymEndOfInput => prevA
 	|	SymWhite chs =>  (
 			if	contains chs "\n"
-			then	get_cn_any R
+			then	get_cn_any false R
 				("\", Lex.Text\""  :: (implode (rev(map protect_space chs)) :: prevA))
-			else	get_cn_any R
+			else	get_cn_any false R
 				(implode (rev(map protect_space chs)) :: prevA))
 	|	SymKnown(sym, is_keyword, info) => do_keyword (sym, is_keyword) info prevA
-	|	SymDoublePercent => get_cn_any R ("%%" :: prevA)
+	|	SymDoublePercent => get_cn_any false R ("%%" :: prevA)
 	|	SymUnknownKw(sym, is_closed) => (
 (*
 			local_error "get_cn_any" 5003 [fn () => sym, fn () =>
 							implode(rev(" ... " :: (prevA to 20)))];
-			get_cn_any R (lex_error_code(5003, prevA)) *)
-			get_cn_any R (
+			get_cn_any false R (lex_error_code(5003, prevA)) *)
+			get_cn_any false R (
 				if is_closed then "%" :: sym :: "%" :: prevA else sym :: "%" ::  prevA)
 		)
 	|	SymUnknownChar ch => (
@@ -346,7 +355,7 @@ in
 						[fn () => ch,
 						fn () => string_of_int(ord ch),
 						fn () => implode(" ... " :: (rev(prevA to 20)))];
-				get_cn_any R (lex_error_code(5005, prevA))
+				get_cn_any false R (lex_error_code(5005, prevA))
 		)
 end);
 =TEX
@@ -372,7 +381,7 @@ let
 		"(" ::
 		prevA;
 
-	val read_text = get_cn_any R prevB;
+	val read_text = get_cn_any false R prevB;
 in
 		";" :: read_text
 end
