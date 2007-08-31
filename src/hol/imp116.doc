@@ -105,6 +105,7 @@ made sure that no theorems have free variables.
 ¯_term_order
 =TEX
 .
+\item[Issue 1.27] Added quantifier elimination procedure for linear real arithmetic.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -6787,6 +6788,395 @@ map (PC_C1 "¯_lin_arith" prove_rule[]) [
 map (PC_C1 "¯_lin_arith" prove_rule[]) [
 	¬a*a ¾ î¯ 0 ± b*b ¾ î¯ 0 ´ (1/2)*(a+b)*(a+b) ¾ a * b®
 ];
+=TEX
+\subsection{Quantifier Elimination Procedure for Linear Arithmetic}
+=TEX
+=TEX
+We implement the quantifier elimination algorithm of Hodes-Fourier-Motzkin.
+
+In the Fourier-Motzkin step, it is convenient to collect together the upper and lower bounds for the bound variable we are eliminating using the max and min functions for lists of reals.
+Then the variable can be eliminated using a single theorem and the remaining inequality betwwen max and min values can be recast as a list of inequalities.
+Our first step is to prove the lemmas that justify the conversion to and from the form with max an d nmin.
+=SML
+val Û¯_max_less_thmÝ = (* save_thm *) snd ("¯_max_less_thm", (
+set_goal([], ¬
+	(µx y z· y < x ± z < x ¤ Max‰R[y; z] < x)
+±	(µx y z L· y < x ± Max‰R (Cons z L) < x ¤ Max‰R (Cons y (Cons z L)) < x)®);
+a(rewrite_tac[¯_max_def] THEN ±_tac THEN REPEAT µ_tac);
+a(cases_tac¬y < z® THEN asm_rewrite_tac[] THEN PC_T1 "¯_lin_arith" asm_prove_tac[]);
+(* *** Goal "2" *** *)
+a(cases_tac¬y < Max‰R (Cons z L)® THEN asm_rewrite_tac[] THEN PC_T1 "¯_lin_arith" asm_prove_tac[]);
+pop_thm()
+));
+(*
+=TEX
+=SML
+*)
+val Û¯_max_less_thm1Ý = (* save_thm *) snd("¯_max_less_thm1",
+	conv_rule(ONCE_MAP_C eq_sym_conv) ¯_max_less_thm);
+(*
+=TEX
+=SML
+*)
+val Û¯_less_min_thmÝ = (* save_thm *) snd("¯_less_min_thm", (
+set_goal([], ¬
+	(µx y z· x < y ± x < z ¤ x < Min‰R[y; z])
+±	(µx y z L· x < y ± x < Min‰R (Cons z L) ¤ x < Min‰R (Cons y (Cons z L)))®);
+a(rewrite_tac[¯_min_def] THEN ±_tac THEN REPEAT µ_tac);
+a(cases_tac¬y > z® THEN asm_rewrite_tac[] THEN PC_T1 "¯_lin_arith" asm_prove_tac[]);
+(* *** Goal "2" *** *)
+a(cases_tac¬y > Min‰R (Cons z L)® THEN asm_rewrite_tac[] THEN PC_T1 "¯_lin_arith" asm_prove_tac[]);
+pop_thm()
+));
+(*
+=TEX
+=SML
+*)
+val Û¯_less_min_thm1Ý = (* save_thm *) snd("¯_less_min_thm1",
+	conv_rule(ONCE_MAP_C eq_sym_conv) ¯_less_min_thm);
+(*
+=TEX
+Now the theorem that justifies eliminating the bound variable: in action $y$ and $z$ will be the maximum (resp. minimum) of the list of lower (resp. upper) bounds for $x$.
+=SML
+*)
+val Û¯_¶_elim_thmÝ = (* save_thm *) snd ("¯_¶_elim_thm", (
+set_goal([], ¬ µy z:¯· (¶x· y < x ± x < z) ¤ y < z ®);
+a(REPEAT strip_tac THEN1 PC_T1 "¯_lin_arith" asm_prove_tac[]);
+a(¶_tac¬(1/2)*(y + z)® THEN PC_T1 "¯_lin_arith" asm_prove_tac[]);
+pop_thm()
+));
+(*
+=TEX
+=SML
+*)
+(*
+=TEX
+Given a real sum,
+$a + b + c + d$
+, the following conversion finds an operand with a given property, e.g., $c$
+and ripples it up to the top:
+$c + a + b + d$.
+Takes care to fail if nothing to do.
+N.b., if say $c + d$ satisfies the property, then the result will be $(c + d) + a + b$, so it is caller's responsibility to supply a property that rejects $c+ d$ if that is not the behaviour wanted.
+=SML
+*)
+val Û¯_find_in_sum_convÝ : (TERM -> bool) -> CONV =
+let	val comm_thm = pc_rule1 "¯_lin_arith" prove_rule[]
+		 ¬µx y:¯ · x + y = y + x®;
+	val bubble_thm = pc_rule1 "¯_lin_arith" prove_rule[]
+		 ¬µx y z:¯· x + y + z = y + x + z®;
+	val comm_conv = simple_eq_match_conv comm_thm;
+	val bubble_conv = simple_eq_match_conv bubble_thm;
+	fun aux_conv first test tm = (
+		let	val (a, b) = dest_¯_plus tm;
+		in	if	test a
+			then	if	first
+				then	fail_conv tm
+				else	refl_conv tm
+			else if	test b
+			then	comm_conv tm
+			else	(RIGHT_C (aux_conv false test) THEN_C bubble_conv) tm
+		end
+	);
+in	aux_conv true
+end;
+(*
+=TEX
+Given a term of type ¯, the following converts into the form
+$c*y$ or $c*y+z$ where $c$ is a real literal if it does not already have that form.
+It does not fail if there is nothing to do.
+=SML
+*)
+val Ûmk_¯_times_convÝ : CONV =
+let	val rw = simple_eq_match_conv o
+		pc_rule1 "¯_lin_arith" prove_rule [];
+	fun non_prod t = (
+		not (is_¯_times t)andalso
+		(not (is_¯_times(fst(dest_¯_plus t))))
+		handle Fail _ => true
+	);
+	val convs = map rw [
+		¬µx y:¯· ~x + y = ~(î¯ 1) * x + y®,
+		¬µx y:¯· x + y = (î¯ 1) * x + y®,
+		¬µx:¯· ~x = ~(î¯ 1) * x®,
+		¬µx:¯· x = î¯ 1 * x®];
+in	 COND_C non_prod (FIRST_C convs) id_conv
+end;
+(*
+=TEX
+If we have an equation rather than a bound for the variable we use it as a definition making use o f the following lemma to multiply up by the reciprocal of the coefficient.
+=SML
+*)
+val Û¯_mk_defn_thmÝ : THM = (
+set_goal([],¬
+	µx·(x = î¯ 0 ¤ F) ´
+	µy z·y = z ¤ x ›-›1 * y = x ›-›1 * z®);
+a(REPEAT strip_tac THEN1 asm_rewrite_tac[]);
+a(LEMMA_T ¬x * x ›-›1 * y = x * x ›-›1 * z® ante_tac THEN1
+		asm_rewrite_tac[]);
+a(rewrite_tac[¯_times_assoc_thm1] THEN
+		ALL_FC_T asm_rewrite_tac[¯_recip_clauses]);
+pop_thm()
+);
+(*
+=TEX
+The following conversion is given an equation involving the variable, $x$, say, that we are trying to eliminate, and, returns a theorem of the form saying the equation is equivalent to one of the form $x = t$.
+=SML
+*)
+val Û¯_mk_defn_convÝ : TERM -> CONV =
+let	val rw = simple_eq_match_conv o
+		pc_rule1 "¯_lin_arith" prove_rule [];
+	val to_rhs_conv = FIRST_C [
+		rw ¬µx y z:¯· x + y = z ¤ x = ~y + z®,
+		id_conv];
+	val ¯_0 = ¬î¯ 0®;
+in	fn x => fn tm =>
+	let	val test = (not o is_¯_plus) fun_and is_free_in x;
+		val thm1 = (TRY_C (LEFT_C (¯_find_in_sum_conv test))
+			THEN_C LEFT_C mk_¯_times_conv
+			THEN_C to_rhs_conv) tm;
+		val (lhs, rhs) = dest_eq(snd(dest_eq(concl thm1)));
+		val (c, v) = dest_¯_times lhs;
+		val thm2 = µ_elim c ¯_mk_defn_thm;
+		val eq = fst(dest_eq(fst(dest_´(concl thm2))));
+		val thm3 = ¯_eq_conv eq;
+		val thm4 = ´_mp_rule thm2 thm3;
+		val thm5 = list_µ_elim[lhs, rhs] thm4;
+		val thm6 = conv_rule (RIGHT_C (RANDS_C (TRY_C ¯_anf_conv))) thm5;
+		val thm7 = eq_trans_rule thm1 thm6;
+	in	if	v = x
+		then	thm7
+		else	fail_conv tm
+	end
+end;
+(*
+=TEX
+The following two theorems justify scaling an inequality.
+=SML
+*)
+val Û¯_mk_bound_thm1Ý : THM = (
+set_goal([], ¬µx·(î¯ 0 < x ¤ T) ´
+	µy z·y < z ¤ x ›-›1 * y < x ›-›1 * z®);
+a(REPEAT µ_tac THEN strip_tac);
+a(lemma_tac¬³x = î¯ 0® THEN1 PC_T1 "¯_lin_arith" asm_prove_tac[]);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(bc_thm_tac ¯_times_mono_thm THEN REPEAT strip_tac);
+a(bc_thm_tac ¯_0_less_0_less_recip_thm THEN REPEAT strip_tac);
+(* *** Goal "2" *** *)
+a(LEMMA_T ¬x * x ›-›1 * y < x * x ›-›1 * z® ante_tac THEN1
+	(bc_thm_tac ¯_times_mono_thm THEN REPEAT strip_tac));
+a(rewrite_tac[¯_times_assoc_thm1] THEN
+		ALL_FC_T asm_rewrite_tac[¯_recip_clauses]);
+pop_thm()
+);
+(*
+=TEX
+=SML
+*)
+val Û¯_mk_bound_thm2Ý : THM = (
+set_goal([], ¬µx·(î¯ 0 < ~x ¤ T) ´
+	µy z·y < z ¤ x ›-›1 * z < x ›-›1 * y®);
+a(REPEAT µ_tac THEN strip_tac);
+a(lemma_tac¬³x = î¯ 0® THEN1 PC_T1 "¯_lin_arith" asm_prove_tac[]);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(ALL_FC_T1 fc_¤_canon once_rewrite_tac[¯_times_mono_¤_thm]);
+a(rewrite_tac[¯_times_assoc_thm1]
+	THEN rewrite_tac[¯_times_minus_thm]);
+a((ALL_FC_T rewrite_tac[¯_recip_clauses] THEN
+		PC_T1 "¯_lin_arith" asm_prove_tac[]));
+(* *** Goal "2" *** *)
+a(LEMMA_T ¬~x * x ›-›1 * z < ~x * x ›-›1 * y® ante_tac THEN1
+	(bc_thm_tac ¯_times_mono_thm THEN REPEAT strip_tac));
+a(rewrite_tac[¯_times_assoc_thm1]
+	THEN rewrite_tac[¯_times_minus_thm]);
+a(ALL_FC_T asm_rewrite_tac[¯_recip_clauses]);
+a(PC_T1 "¯_lin_arith" prove_tac[]);
+pop_thm()
+);
+(*
+=TEX
+The following conversion is given an inequality and scales and rearranges it to give an equivalent inequality with the variable specified on its own on one side.
+=SML
+*)
+val Û¯_mk_bound_convÝ : TERM -> CONV =
+let	val rw = simple_eq_match_conv o
+			pc_rule1 "¯_lin_arith" prove_rule [];
+	val to_rhs_conv = FIRST_C [
+		rw ¬µx y z:¯· x + y < z ¤ x < ~y + z®,
+		id_conv];
+	val ¯_0 = ¬î¯ 0®;
+in	fn x => fn tm =>
+	let	val test = (not o is_¯_plus) fun_and is_free_in x;
+		val thm1 = (TRY_C (LEFT_C (¯_find_in_sum_conv test))
+			THEN_C LEFT_C mk_¯_times_conv
+			THEN_C to_rhs_conv) tm;
+		val (lhs, rhs) = dest_¯_less(snd(dest_eq(concl thm1)));
+		val (c, v) = dest_¯_times lhs;
+		val (¯_mk_bound_thm, conv) =
+			if	is_¯_minus c
+			then	(¯_mk_bound_thm2, ¯_anf_conv)
+			else (¯_mk_bound_thm1, id_conv);
+		val thm2 = µ_elim c ¯_mk_bound_thm;
+		val ineq = fst(dest_eq(fst(dest_´(concl thm2))));
+		val thm3 = (RIGHT_C conv THEN_C ¯_less_conv) ineq;
+		val thm4 = ´_mp_rule thm2 thm3;
+		val thm5 = list_µ_elim[lhs, rhs] thm4;
+		val thm6 = conv_rule (RIGHT_C (RANDS_C (TRY_C ¯_anf_conv))) thm5;
+		val thm7 = eq_trans_rule thm1 thm6;
+	in	if	v = x
+		then	thm7
+		else	fail_conv tm
+	end
+end;
+(*
+=TEX
+=SML
+*)
+(*
+=TEX
+The following conversion does the quantifier elimination in the  case where the list of constraints contains an equation.
+=SML
+*)
+val Û¯_one_point_qep_convÝ : CONV = (fn tm =>
+	let	val (x, _) = dest_simple_¶ tm;
+	in	QUANT_C (
+		(find_in_±_conv is_eq AND_OR_C LEFT_C (¯_mk_defn_conv x))
+		ORELSE_C ¯_mk_defn_conv x)
+		THEN_C simple_one_point_conv
+	end	tm
+);
+(*
+=TEX
+=SML
+*)
+val Ûmax_intro_thm1Ý : THM = ±_left_elim ¯_max_less_thm;
+val Ûmax_intro_thm2Ý : THM = ±_right_elim ¯_max_less_thm;
+val Ûmin_intro_thm1Ý : THM = ±_left_elim ¯_less_min_thm;
+val Ûmin_intro_thm2Ý : THM = ±_right_elim ¯_less_min_thm;
+val Ûmax_elim_thm1Ý : THM = ±_left_elim ¯_max_less_thm1;
+val Ûmax_elim_thm2Ý : THM = ±_right_elim ¯_max_less_thm1;
+val Ûmin_elim_thm1Ý : THM = ±_left_elim ¯_less_min_thm1;
+val Ûmin_elim_thm2Ý : THM = ±_right_elim ¯_less_min_thm1;
+val Û¶_elim_thm1Ý = prove_rule[¯_unbounded_below_thm]¬ µy:¯· (¶x· x < y) ¤ T®;
+val Û¶_elim_thm2Ý = prove_rule[¯_unbounded_above_thm]¬ µy:¯· (¶x· y < x) ¤ T®;
+(*
+=TEX
+Now the conversion that does the Fourier-Motzkin step in the case where there are no equations constraining the bound variable, i.e., it is constrained by a set of upper and/or lower bounds.
+
+The logic of the local function {\em max\_min\_intro\_conv} proved a bit tricky to get right.
+The problem is that you to deal with all combinations of 0, 1 or many lower bounds and 0, 1 or many upper bounds.
+=SML
+*)
+val Û¯_fourier_motzkin_convÝ : CONV = (fn tm =>
+let	val (x, _) = dest_simple_¶ tm;
+	fun is_lwb t = (
+		snd(dest_¯_less t) = x handle Fail _ => false
+	);
+	fun gen_intro_conv thm1 thm2 : CONV = (fn tm =>
+		let	val (_, b) = dest_± tm;
+		in	if	is_± b
+			then	(RIGHT_C (gen_intro_conv thm1 thm2)
+				THEN_C simple_eq_match_conv thm2) tm
+			else	simple_eq_match_conv thm1 tm
+		end	handle	Fail _ => id_conv tm
+	);
+	val max_intro_conv : CONV =
+		gen_intro_conv
+		max_intro_thm1
+		max_intro_thm2;
+	val min_intro_conv : CONV =
+		gen_intro_conv
+		min_intro_thm1
+		min_intro_thm2;
+	val max_min_intro_conv : CONV = (fn tm =>
+		let	val (ls, rs) = dest_± tm;
+			val l1 = fst(dest_± ls) handle Fail _ => ls;
+			val r1 = fst(dest_± rs) handle Fail _ => rs;
+		in	if	is_lwb r1
+			then	max_intro_conv
+			else if	not(is_lwb l1)
+			then	min_intro_conv
+			else	LEFT_C max_intro_conv
+				THEN_C RIGHT_C min_intro_conv
+		end	tm
+	);
+	val ¶_elim_conv = FIRST_C (map simple_eq_match_conv [
+		¯_¶_elim_thm, 
+		¶_elim_thm1,
+		¶_elim_thm2]);
+	val rec max_min_elim_conv : CONV = (fn tm =>
+		(FIRST_C (¯_less_conv::
+			map simple_eq_match_conv [
+			max_elim_thm1, max_elim_thm2,
+			min_elim_thm1, min_elim_thm2]) THEN_TRY_C
+			PROP_ATOM_C max_min_elim_conv) tm
+	);
+in	(QUANT_C (
+		PROP_ATOM_C (¯_mk_bound_conv x) AND_OR_C
+		split_±_conv is_lwb THEN_TRY_C
+		max_min_intro_conv) THEN_C
+	¶_elim_conv THEN_TRY_C
+	max_min_elim_conv THEN_TRY_C
+	prop_simp_conv) tm
+end);
+(*
+=TEX
+The following function puts literals in the first-order language of the reals in a normal form involving only $=$ and $<$ with the left-hand operands in arithmetic normal form with no constant term and the right-hand operands constant.
+=SML
+*)
+val Û¯_normalise_lit_convÝ : CONV = CHANGED_C(
+	FIRST_THEN_C 
+	(map ((simple_eq_match_conv o
+		pc_rule1 "¯_lin_arith" prove_rule[]) ** (fn x=>x)) [
+	(¬µx y:¯· x ¼ y ¤ x < y ² x = y®, RANDS_C),
+	(¬µx y:¯· x ¾ y ¤ y < x ² x = y®, RANDS_C),
+	(¬µx y:¯· x > y ¤ y < x®, ID_C),
+	(¬µx y:¯· ³x ¼ y ¤ y < x®, ID_C),
+	(¬µx y:¯· ³x ¾ y ¤ x < y®, ID_C),
+	(¬µx y:¯· ³x > y ¤ x < y ² x = y®, RANDS_C),
+	(¬µx y:¯· ³x < y ¤ y < x ² x = y®, RANDS_C),
+	(¬µx y:¯· ³x = y ¤ y < x ² x < y®, RANDS_C)] @
+	[(¯_eq_cancel_conv, ID_C), (¯_less_cancel_conv, ID_C)] @
+	map ((simple_eq_match_conv o
+		pc_rule1 "¯_lin_arith" prove_rule[]) ** (fn x=>x)) [
+	(¬µx y:¯· ~x = ~y ¤ x = y®, ID_C),
+	(¬µx y:¯· ~x < ~y ¤ y < x®, ID_C)])
+);
+(*
+=TEX
+The following eliminates one innermost quantifier.
+=SML
+*)
+
+val Û¯_lin_qep_step_convÝ = (FIRST_THEN_C [
+	(¶‰1_conv, (fn c => QUANT_C(PROP_ATOM_C (QUANTS_C c)) THEN_C c)),
+	(¶_uncurry_conv, QUANTS_C),
+	(µ_uncurry_conv, QUANTS_C),
+	(simple_µ_³_¶_³_conv, RAND_C),
+	(MAP_C pair_eq_conv, ID_C),
+	(QUANT_C (PROP_LIT_C ¯_normalise_lit_conv), ID_C),
+	(QUANT_C (dnf_conv AND_OR_C prop_simp_conv), ID_C),
+	(simple_¶_²_conv, PROP_ATOM_C),
+	(simple_¶_±_conv, PROP_ATOM_C),
+	(simple_¶_const_elim_conv, PROP_ATOM_C),
+	(¯_one_point_qep_conv, ID_C),
+	(¯_fourier_motzkin_conv, ID_C),
+	(PROP_LIT_C ¯_normalise_lit_conv, ID_C)]);
+(*
+=TEX
+Finally, the following is the general quantifier elimination procedure.
+It iterates the above conversion on innermost quantifiers until there are none left.
+It then cleans up the result, evaluating any constraints it can and applying the propositional simplifer to the result.
+=SML
+*)
+val Û¯_lin_qep_convÝ =
+	QUANT_MAP_C ¯_lin_qep_step_conv THEN_TRY_C
+	(PROP_LIT_C ¯_normalise_lit_conv AND_OR_C
+	 PROP_ATOM_C (¯_less_conv ORELSE_C ¯_eq_conv) AND_OR_C
+	 cnf_conv AND_OR_C
+	 prop_simp_conv);
 =TEX
 \section{EMBEDDING OF THE INTEGERS}
 =SML
