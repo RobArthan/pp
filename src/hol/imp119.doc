@@ -48,9 +48,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.25 $%
+\def\Version{$Revision: 1.1 $%
 }
-\def\Date{\FormatDate{$Date: 2007/05/16 15:23:37 $%
+\def\Date{\FormatDate{$Date: 2007/08/31 16:43:08 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -82,7 +82,8 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %%%%% CHANGES HISTORY:
 \subsection{Changes History}
 \begin{description}
-\item[Issues 1.1] First draft.
+\item[Issue 1.1] First draft.
+\item[Issue 1.2] First complete version after module testing.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -137,7 +138,14 @@ fun Ûdest_quantÝ (tm : TERM) : TERM * TERM * TERM = (
 	end	handle Fail _ => term_fail "dest_quant" 119001 [tm]
 );
 fun Ûmk_quantÝ ((ifier, var_s, mtrx) : TERM * TERM * TERM) : TERM = (
-	mk_app(ifier, mk_Ì(var_s, mtrx))
+	let	val atm = mk_Ì(var_s, mtrx)
+			handle Fail _ => term_fail "mk_quant" 119003 [var_s];
+	in	if	type_of mtrx = BOOL
+		then	mk_app(ifier, atm)
+			handle ex as (Fail _) =>
+			reraise ex "mk_quant"
+		else	term_fail "mk_quant" 119004 [mtrx]
+	end
 );
 (*
 =TEX
@@ -147,7 +155,7 @@ Conversional to apply a conversion to the matrix of a quantifier:
 fun ÛQUANT_CÝ (conv : CONV) : CONV = (fn tm =>
 	if	is_quant tm
 	then	RAND_C(Ì_C conv) tm
-	else	fail_conv tm
+	else	term_fail "QUANT_C" 119001 [tm]
 );
 (*
 =TEX
@@ -208,7 +216,7 @@ Conversional to map a conversion over the innermost quantifier in a term.
 *)
 fun ÛINNERMOST_QUANT_CÝ (conv : CONV) : CONV = (fn tm =>
 	let	val recur_conv = INNERMOST_QUANT_C conv;
-		val checked_conv = COND_C is_quant conv fail_conv;
+		val checked_conv = COND_C is_quant conv (fn _ => fail "INNERMOST_QUANT_C" 119011 []);
 	in	PROP_ATOM_C (QUANT_C recur_conv ORELSE_C checked_conv)
 	end	tm
 );
@@ -229,6 +237,12 @@ The identity conversional.
 val ÛID_CÝ : CONV -> CONV = fn conv => conv;
 (*
 =TEX
+The identity conversional.
+=SML
+*)
+val ÛFAIL_CÝ : CONV -> CONV = fn _ => fail_conv;
+(*
+=TEX
 Conversional to carry out a sequence of transformation given by conversions.
 The conversions are tried one after the other, and the process only fails if none of the conversions is applicable.
 Associated with each conversion is a conversional which can be used to diver the process into subterms of the result of a transformation.
@@ -238,10 +252,10 @@ For example, one might transform a unique existential quantification into an exi
 fun ÛFIRST_THEN_CÝ
 	(pairs : (CONV * (CONV -> CONV)) list)
 	: CONV = (
-	let	fun aux changed [] = (
+	let	fun aux changed [] = (fn tm =>
 			if	changed
-			then	id_conv
-			else	fail_conv
+			then	id_conv tm
+			else	term_fail "FIRST_THEN_C" 119010 [tm]
 		) | aux changed ((conv, x_c)::more) = (fn tm =>
 			(conv THEN_C x_c (aux true more)) tm
 			handle Fail _ => aux changed more tm
@@ -254,15 +268,6 @@ fun ÛFIRST_THEN_CÝ
 =SML
 *)
 (*
-=IGN
-val conv1 = FIRST_THEN_C [
-	(¶‰1_conv, (fn c => QUANT_C(PROP_ATOM_C (QUANTS_C c)) THEN_C c)),
-	(¶_uncurry_conv, QUANTS_C),
-	(µ_uncurry_conv, QUANTS_C),
-	(¤_t_conv, ID_C)];
-conv1 ¬¶‰1(x, y)·x = y®;
-QUANTS_C ¤_t_conv ¬¶y·x = y®;
-
 =TEX
 Conversion to change universal quantifier into negated existential.
 =SML
@@ -271,31 +276,11 @@ val Ûsimple_µ_³_¶_³_convÝ : CONV =
 let	val conv1 : CONV = simple_eq_match_conv (taut_rule ¬µp·p ¤ ³(³ p)®);
 in	fn tm =>
 	(dest_simple_µ tm; (conv1 THEN_C RAND_C ³_µ_conv) tm)
+	handle Fail _ =>
+	term_fail "simple_µ_³_¶_³_conv" 119005 [tm]
 end;
 (*
 =IGN
-fun SHOW_C (conv : CONV) : CONV = (fn tm =>
-	(diag_line("SHOW_C: " ^ string_of_term tm); conv tm)
-);
-=TEX
-Propositional negation normal form conversion:
-=SML
-*)
-val Ûnnf_convÝ : CONV =
-	PC_C1 "predicates" pure_rewrite_conv
-	(map taut_rule  [
-		¬µp1 p2· ³(p1 ± p2) ¤ ³p1 ² ³p2®,
-		¬µp1 p2· ³(p1 ² p2) ¤ ³p1 ± ³p2®,
-		¬µp1 p2· ³(p1 ´ p2) ¤ p1 ± ³p2®,
-		¬µp1 p2· ³(p1 ¤ p2) ¤ p1 ± ³p2 ² ³p1 ± p2®,
-		¬µp1 p2· (p1 ¤ p2) ¤ p1 ± p2 ² ³p1 ± ³p2®,
-		¬µp· ³(³ p) ¤ p®,
-		¬³T ¤ F®,
-		¬³F ¤ T®
-	]);
-(*
-=IGN
-nnf_conv ¬a ± ³(b ¤ c) ² d ¤ ³(c ± d)®;
 =TEX
 Given a nested conjunction,
 =INLINEFT
@@ -326,14 +311,17 @@ let	val comm_thm = taut_rule ¬µp1 p2· p1 ± p2 ¤ p2 ± p1®;
 			else	(RIGHT_C (aux_conv false test) THEN_C bubble_conv) tm
 		end
 	);
-in	aux_conv true
+in	fn test => fn tm =>
+	aux_conv true test tm
+	handle Fail _ =>
+	term_fail "find_in_±_conv" 119008 [tm]
 end;
 (*
 =SML
 *)
 (*
 =IGN
-nnf_conv ¬a ± ³(b ¤ c) ² d ¤ ³(c ± d)®;
+find_in_±_conv is_eq ¬a ± ³(b ¤ c) ² d ¤ ³(c ± d)®;
 =TEX
 Given a nested conjunction
 =INLINEFT
@@ -357,8 +345,8 @@ let	val shift_thm = taut_rule ¬µp1 p2 p3· p1 ± (p2 ± p3) ¤ (p2 ± p1) ± p3®;
 	val ts = strip_± tm;
 in	if	all ts test
 	then	fail_conv
-	else find_in_±_conv test AND_OR_C REPEAT_C1 step_conv
-end tm
+	else	find_in_±_conv test AND_OR_C REPEAT_C1 step_conv
+end tm	handle	Fail _ => term_fail "split_±_conv" 119002 [tm]
 );
 (*
 =IGN
@@ -378,7 +366,10 @@ Elimination of existential quantifier when the matrix is a boolean constant:
 val Ûsimple_¶_const_elim_convÝ : CONV =
 let	val thm = pc_rule1 "predicates" prove_rule[]
 		¬µp· (¶x· p) ¤ p®;
-in	simple_eq_match_conv thm
+in	fn tm =>
+	simple_eq_match_conv thm tm
+	handle Fail _ =>
+	term_fail "simple_¶_const_elim_conv" 119006 [tm]
 end;
 (*
 =TEX
@@ -426,9 +417,10 @@ in	fn tm =>
 		in	thm4
 	
 		end else	fail_conv tm
-	end	handle Fail _ => (
+	end	handle Fail _ =>
 		FIRST_C (map simple_eq_match_conv [thm1c, thm1d, thm1e]) tm
-	) 
+		handle Fail _ =>
+		term_fail "simple_one_point_conv" 119009 [tm]
 end;
 (*
 =TEX
@@ -443,24 +435,36 @@ val Û²_simp_convÝ = FIRST_C(map (simple_eq_match_conv o taut_rule)[
 	¬µp·F ² p ¤ p®,
 	¬µp·p ² F ¤ p®,
 	¬µp·T ² p ¤ T®,
-	¬µp·p ² T ¤ T®]);
+	¬µp·p ² T ¤ T®,
+	¬µp·p ² p ¤ p®,
+	¬µp·p ² ³p ¤ T®,
+	¬µp·³p ² p ¤ T®]);
 val Û±_simp_convÝ = FIRST_C(map (simple_eq_match_conv o taut_rule)[
 	¬µp·p ± F ¤ F®,
 	¬µp·F ± p ¤ F®,
 	¬µp·T ± p ¤ p®,
-	¬µp·p ± T ¤ p®]);
+	¬µp·p ± T ¤ p®,
+	¬µp·p ± p ¤ p®,
+	¬µp·p ± ³p ¤ F®,
+	¬µp·³p ± p ¤ F®]);
 val Û´_simp_convÝ = FIRST_C(map (simple_eq_match_conv o taut_rule)[
 	¬µp·p ´ T ¤ T®,
 	¬µp·T ´ p ¤ p®,
 	¬µp·F ´ p ¤ T®,
-	¬µp·p ´ F ¤ ³p®]);
+	¬µp·p ´ F ¤ ³p®,
+	¬µp·p ´ p ¤ T®,
+	¬µp·p ´ ³p ¤ ³p®,
+	¬µp·³p ´ p ¤ p®]);
 val Û¤_simp_convÝ = FIRST_C(map (simple_eq_match_conv o taut_rule)[
 	¬µp·(p ¤ T) ¤ p®,
 	¬µp·(T ¤ p) ¤ p®,
 	¬µp·(F ¤ p) ¤ ³p®,
-	¬µp·(p ¤ F) ¤ ³p®]);
+	¬µp·(p ¤ F) ¤ ³p®,
+	¬µp·(p ¤ p) ¤ T®,
+	¬µp·(p ¤ ³p) ¤ F®,
+	¬µp·(³p ¤ p) ¤ F®]);
 val rec Ûprop_simp_convÝ  : CONV = (fn tm =>
-	(case dest_term tm of
+	((case dest_term tm of
 		D± _ =>
 			LEFT_C prop_simp_conv AND_OR_C
 			RIGHT_C prop_simp_conv AND_OR_C
@@ -478,7 +482,63 @@ val rec Ûprop_simp_convÝ  : CONV = (fn tm =>
 			¤_simp_conv
 	|	D³ _ => RAND_C prop_simp_conv AND_OR_C
 			³_simp_conv
-		|	_ => fail_conv) tm 
+	|	_ => fail_conv)
+	THEN_TRY_C ³_simp_conv ) tm
+	handle Fail _ => term_fail "prop_simp_conv" 119012 [tm]
+);
+(*
+=TEX
+Propositional negation normal form conversion.
+
+This needs two preliminaries, first of all a table of conversion-conversional pairs:
+=SML
+*)
+val Ûnnf_conv_tableÝ : (CONV * (CONV -> CONV)) list = 
+	(map ((simple_eq_match_conv o taut_rule) ** Combinators.I) [
+		(¬µp1 p2· ³(p1 ± p2) ¤ ³p1 ² ³p2®,
+			RANDS_C),
+		(¬µp1 p2· ³(p1 ² p2) ¤ ³p1 ± ³p2®,
+			RANDS_C),
+		(¬µp1 p2· ³(p1 ´ p2) ¤ p1 ± ³p2®,
+			RANDS_C),
+		(¬µp1 p2· ³(p1 ¤ p2) ¤ p1 ± ³p2 ² ³p1 ± p2®,
+			RANDS_C o RANDS_C),
+		(¬µp1 p2· (p1 ¤ p2) ¤ p1 ± p2 ² ³p1 ± ³p2®,
+			RANDS_C o RANDS_C),
+		(¬µp· ³(³ p) ¤ p®,
+			ID_C)
+]);
+(*
+=TEX
+The second preliminary for negation normal form is a conversional to map a conversion through the propositional connectives other than negation.
+=SML
+*)
+fun ÛNNF_MAP_CÝ (conv : CONV) : CONV = (fn tm =>
+	let	val recur_conv = NNF_MAP_C conv;
+	in	case dest_term tm of
+			D± _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D² _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D´ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D¤ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	_ => conv
+	end	tm 
+);
+(*
+=TEX
+The negation normal form conversion itself.
+Propositional simplification is attempted before and after the negation normalisation process, giving a more compact result in many cases.
+=SML
+*)
+val rec Ûnnf_convÝ : CONV = (fn tm =>
+	let	fun aux [] t = term_fail "nnf_conv" 119007 [t]
+		|   aux ((conv, C):: more) t = (
+			(conv THEN_TRY_C (C (TRY_C nnf_conv))) t
+			handle Fail _ => aux more t
+		);
+	in	(prop_simp_conv AND_OR_C
+			NNF_MAP_C (aux nnf_conv_table)
+				THEN_TRY_C prop_simp_conv) tm
+	end	handle Fail _ => term_fail "nnf_conv" 119007 [tm]
 );
 (*
 =TEX
