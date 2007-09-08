@@ -106,6 +106,15 @@ made sure that no theorems have free variables.
 =TEX
 .
 \item[Issue 1.27] Added quantifier elimination procedure for linear real arithmetic.
+\item[Issue 1.28] Reimplemented
+=INLINEFT
+Ø_term_order
+=TEX
+\ san added
+=INLINEFT
+graded_Ø_term_order
+=TEX
+\ using the new term order combinators.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -5729,21 +5738,146 @@ fun €rat_order›
 ) | rat_order rat1 rat2 = (
 	~(rat_order rat2 rat1)
 );
-val €bottom› : TERM = mk_const("", mk_vartype "");
-fun €special› (tm : TERM) : TERM * (INTEGER * INTEGER OPT) = (
-	let	val (a, b) = dest_Ø_times tm;
-	in	let	val ddd_nnn = dest_signed_lit a;
-		in	(b, ddd_nnn)
-		end	handle Fail _ => (mk_Ø_times(dest_Ø_minus a, b), (two, Nil))
-			handle Fail _ => (tm, (one, Nil))
-	end	handle Fail _ =>
-	let	val xy = dest_signed_lit tm;
-	in	(bottom, xy)
-	end	handle Fail _ => (dest_Ø_minus tm, (two, Nil))
-		handle Fail _ => (dest_Ø_recip tm, (one, Nil))
-		handle Fail _ => (tm, (zero, Nil))
+=TEX
+=SML
+val €strip_Ø_times› = strip_bin_op "*âR";
+=TEX
+We need to line $x$ up just before
+=INLINEFT
+~x
+=TEX
+\ and
+=INLINEFT
+xõ-õ1
+=TEX
+.
+The following function encodes the sequence of negations and reciprocals as a binary number:
+=SML
+fun €dest_signed_or_recip› (tm : TERM)
+	: TERM * INTEGER = (
+	let	fun aux acc t = (
+			let	val t1 = dest_Ø_minus t;
+			in	aux (two*acc) t1
+			end	handle Fail _ =>
+			let	val t1 = dest_Ø_recip t;
+			in	aux (two*acc + one) t1
+			end	handle Fail _ => (t, acc)
+		);
+	in	aux one tm
+	end
 );
-val €Ø_term_order› = gen_term_order1 (special, rat_order);
+=TEX
+=SML
+type €MONOMIAL› = (TERM * INTEGER OPT) list;
+=TEX
+=SML
+fun €dest_monomial_and_signs› (tm : TERM) : MONOMIAL * INTEGER list = (
+	let	fun dest1 t = (
+			let	val (x, e) = dest_Ø_Ó_exp t;
+			in	(dest_signed_or_recip x, Value (dest_Ó e))
+			end	handle Fail _ => (dest_signed_or_recip t, Nil)
+		);
+		val tses = map dest1 (strip_Ø_times tm);
+		val (tss, es) = split tses;
+		val (ts, ss) = split tss;
+	in	(combine ts es, ss)
+	end
+);
+=TEX
+=SML
+fun €dest_coeff_monomial› (tm : TERM)
+	: MONOMIAL * ((INTEGER * INTEGER OPT) OPT * INTEGER list) = (
+	let	val (c, t) = dest_Ø_times tm;
+		val (m, ss) = dest_monomial_and_signs t;
+	in	(m, (Value (dest_signed_lit c), ss))
+	end	handle Fail _  =>
+		let	val (m, ss) = dest_monomial_and_signs tm;
+		in	(m, (Nil, ss))
+		end
+);
+=TEX
+=SML
+fun €dest_lit_or_signed_coeff_monomial› (tm : TERM)
+	: MONOMIAL * ((INTEGER * INTEGER OPT) OPT * INTEGER list) = (
+	([], (Value (dest_signed_lit tm), []))
+	handle Fail _ => (dest_coeff_monomial tm)
+);
+=TEX
+=SML
+fun €order_inducer› (tm : TERM)
+	: (MONOMIAL * ((INTEGER * INTEGER OPT) OPT * INTEGER list)) * INTEGER = (
+	let	val (tm1, ss) = dest_signed_or_recip tm;
+	in	(dest_lit_or_signed_coeff_monomial tm1, ss)
+	end
+);
+=TEX
+=SML
+fun €degree› (m : MONOMIAL) : INTEGER = (
+	let	fun folder((_, Nil), d) = d + one
+		|   folder((_, Value e), d) = d + e;
+	in	fold folder m zero
+	end
+);
+=TEX
+The following gives an ordering appropriate for exponents, sliding an omitted exponent in between 0 and 1:
+=SML
+val €exponent_order› : INTEGER OPT ORDER = 
+	induced_order(
+		fn	Nil => one
+		|	Value x => if x = zero then x else x + one,
+		integer_order);
+=TEX
+The following gives the lexicographic ordering of monomials over the reals.
+Here ``lexicographic'' is used in the sense appropriate to a sparse representation of monomials, so that $xy$ precedes $xz$ (whereas in a dense representation, $xz$ = x^1y^0z^1$ precedes $xy = x^1y^1z^1$).
+=SML
+fun €Ø_term_order_comb›
+	(r : TERM -> TERM -> int)
+	: TERM -> TERM -> int = (
+	let	val monomial_order =
+			list_order(pair_order r exponent_order);
+		val coeff_order =
+			pair_order
+			(opt_order1 rat_order)
+			(list_order integer_order);
+		val coeff_monomial_order =
+			pair_order monomial_order coeff_order;
+		val inducing_order =
+			pair_order coeff_monomial_order integer_order;
+	in
+	induced_order
+	(order_inducer, inducing_order)
+	end
+);
+=TEX
+The graded version:
+=SML
+fun €graded_Ø_term_order_comb›
+	(r : TERM -> TERM -> int)
+	: TERM -> TERM -> int = (
+	let	val m_order : MONOMIAL ORDER =
+			list_order(pair_order r exponent_order);
+		val coeff_order =
+			pair_order
+			(opt_order1 rat_order)
+			(list_order integer_order);
+		val d_order =
+			induced_order(degree, integer_order);
+		val monomial_order =
+			d_order THEN_O m_order;
+		val coeff_monomial_order =
+			pair_order monomial_order coeff_order;
+		val inducing_order =
+			pair_order coeff_monomial_order integer_order;
+	in
+	induced_order
+	(order_inducer, inducing_order)
+	end
+);
+=TEX
+=SML
+val €Ø_term_order› = make_term_order [Ø_term_order_comb];
+val €graded_Ø_term_order› = make_term_order [graded_Ø_term_order_comb];
+=IGN
 =TEX
 \section{ANF FOR Ø}
 We need conversions and supporting theorems which do collection of
@@ -7277,8 +7411,6 @@ open Ø;
 \printindex
 
 \end{document}
-
-
 
 
 
