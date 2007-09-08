@@ -113,6 +113,7 @@ of time and space. Added set inclusion test for lists.
 \item[Issue 2.46] Floating point literals with no mantisssa or exponent are now supported.
 \item[Issue 2.47] Added {\em pair\_order}, {\em list\_order}, {\em opt\_order} and {\em integer\_order}; now opens {\em Sort} structure.
 \item[Issue 2.48] Added {\em opt\_order1}.
+\item[Issue 2.49] Added new structure {\em Order}.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1627,95 +1628,39 @@ end(* of Timing structure *);
 open Timing;
 =TEX
 =TEX
-\section{SORTING UTILITIES}
-It is convenient here and elsewhere to have a reasonably
-efficient sort function.
-In this section we define a structure $Sort$ which
-supplies such a function and some associated
-utilities.
-The structure has the following signature:
+\section{ORDERINGS}
 =SML
-structure €Sort› : Sort = struct
+structure €Order› : Order = struct
 =TEX
-The sorting of items of type $'a$ is parameterised by an
-ordering function of type $'a -> 'a -> int$.
-The integer, say $n$ returned by an application
-of this function, say $f\ a1\ a2$, is interpreted as
-follows: 
-\begin{description}
-\item[$n < 0$] $a2$ is to come after $a1$ (i.e. the arguments are in order)
-\item[$n > 0$] $a2$ is to come before $a1$ (i.e. the arguments are out of order)
-\item[$n = 0$] $a2$ is to be taken as equal to $a1$
-\end{description}
-Note that the sorting function returns a list with
-no duplicate entries with respect to the equality
-relation determined by the ordering function.
 
 By way of an example, to sort integers in ascending order,
 you would use $curry (op -)$.
-
-\subsection{$lexicographic$}
-This function returns the lexicographic ordering
-function induced from an ordering
-of items of type $'a$ on items of type $'a\,list$.
+\subsection{The Type of Orderings}
 =SML
-fun €lexicographic› (order : 'a -> 'a -> int) : ('a list) -> ('a list) -> int = (
-	let	fun aux [] [] = 0
-		| aux [] _ = ~1
-		| aux _ [] = 1
-		| aux (x :: xs) (y :: ys) = (
-			case order x y of
-				0 => aux xs ys
-			|	NonZero => NonZero
-		);
-	in	aux
-	end
+type 'a €ORDER› = 'a -> 'a -> int;
+=TEX
+Note that the type can be used to represent orderings whose field is not the carrier set of the type, using failure to represent non-membership of the field.
+\subsection{Some Useful Specific Orderings}
+=TEX
+Ordering on the ML integers:
+=SML
+val €int_order› : int ORDER = curry (op -);
+=TEX
+Trivial ordering (everyhing equivalent).
+=SML
+val €no_order› : 'a ORDER = fn _ => fn _ => 0;
+=TEX
+Simple ordering of strings:
+=SML
+val €ascii_order› : string ORDER = (fn s1 => fn s2 =>
+	case String.compare (s1, s2) of
+		LESS => ~1
+	|	GREATER => 1
+	|	_ => 0
 );
 =TEX
-We also have a utility giving the lexicographic
-order induced on a product type by orderings on the
-component types: 
-=SML 
-fun €pair_order› (o1 : 'a -> 'a -> int) (o2 : 'b -> 'b -> int)
-	: ('a*'b) -> ('a*'b) -> int = (fn (a1, b1) => fn (a2, b2) =>
-	case o1 a1 a2 of
-		0 => o2 b1 b2
-	|	not_zero => not_zero
-);
-=TEX
-Synonym for $lexicographic$.
-=SML
-val €list_order› : ('a -> 'a -> int) -> ('a list -> 'a list -> int) 
-	= lexicographic;
-=TEX
-Ordering on OPT types:
-=SML
-fun €opt_order› (o1 : 'a -> 'a -> int) = (fn x => fn y =>
-	case (x, y) of
-		(Value x, Value y) => o1 x y
-	|	(Value _, Nil) => ~1
-	|	(Nil, Value _) => 1
-	|	(Nil, Nil) => 0
-);
-=TEX
-Ordering on OPT types:
-=SML
-fun €opt_order1› (o1 : 'a -> 'a -> int) = (fn x => fn y =>
-	case (x, y) of
-		(Value x, Value y) => o1 x y
-	|	(Value _, Nil) => 1
-	|	(Nil, Value _) => ~1
-	|	(Nil, Nil) => 0
-);
-=TEX
-\subsection{$string\_order$}
-This function gives a more civilised ordering on
+A more civilised ordering on
 strings than the one given by the ASCII codes.
-It first does a lexicographic (q.v) case-insensitive ordering, 
-with alphabetics before the rest, but otherwise in ASCII order.
-If two strings are otherwise equal then a case-sensitive
-comparison is made, with the string having the first unmatched capitalisation being ordered as first.
-The integer result is appropriate for use in $sort$ (q.v.).
 
 The original implementation exploded the strings and used {\it lexicographic}; the coding now
 uses indexing and a table and is a lot faster.
@@ -1763,10 +1708,118 @@ in
 	);
 end;
 =TEX
+\subsection{Functions on Orderings}
+The following function returns the lexicographic ordering
+function induced from an ordering
+of items of type $'a$ on items of type $'a\,list$.
+=SML
+fun €list_order› (order : 'a ORDER) : 'a list ORDER = (
+	let	fun aux [] [] = 0
+		| aux [] _ = ~1
+		| aux _ [] = 1
+		| aux (x :: xs) (y :: ys) = (
+			case order x y of
+				0 => aux xs ys
+			|	NonZero => NonZero
+		);
+	in	aux
+	end
+);
+=TEX
+Synonym for $list\_order$ (historical):
+=SML
+val €lexicographic› : 'a ORDER -> 'a list ORDER = list_order;
+=TEX
+=SML
+fun €inv_list_order› (r : 'a ORDER) : 'a list ORDER = (fn xs => fn ys =>
+	let	fun aux1 acc1 acc2 (x::xs) (y::ys) = (
+			let	val i = r x y;
+			in	if	i = 0
+				then	aux1 acc1 acc2 xs ys
+				else	aux1 acc1 i xs ys
+			end
+		) | aux1 acc1 acc2 _ _ = (
+			if	acc2 = 0
+			then	acc1
+			else	acc2
+		);
+		val lxs = length xs;
+		val lys = length ys;
+	in	if	lxs < lys
+		then	aux1 (~1) 0 xs (ys from (lys - lxs))
+		else	aux1 1 0 (xs from (lxs - lys)) ys
+	end
+);
+=TEX
+Lexicographic
+order induced on a binary product type by orderings on the
+component types: 
+=SML 
+fun €pair_order› (o1 : 'a ORDER) (o2 : 'b ORDER)
+	: ('a * 'b) ORDER = (fn (a1, b1) => fn (a2, b2) =>
+	case o1 a1 a2 of
+		0 => o2 b1 b2
+	|	not_zero => not_zero
+);
+=TEX
+Ordering on OPT types with $Nil$ top.
+=SML
+fun €opt_order› (o1 : 'a ORDER) : 'a OPT ORDER = (fn x => fn y =>
+	case (x, y) of
+		(Value x, Value y) => o1 x y
+	|	(Value _, Nil) => ~1
+	|	(Nil, Value _) => 1
+	|	(Nil, Nil) => 0
+);
+=TEX
+Ordering on OPT types with $Nil$ bottom.
+=SML
+fun €opt_order1› (o1 : 'a ORDER) : 'a OPT ORDER = (fn x => fn y =>
+	case (x, y) of
+		(Value x, Value y) => o1 x y
+	|	(Value _, Nil) => 1
+	|	(Nil, Value _) => ~1
+	|	(Nil, Nil) => 0
+);
+=TEX
+=SML
+fun €rev_order› (r : 'a ORDER) : 'a ORDER = (fn x => fn y =>
+	~(r x y)	
+);
+=TEX
+=SML
+infix 4 THEN_O;
+fun (r1 : 'a ORDER) €THEN_O› (r2 : 'a ORDER) = (fn x => fn y =>
+	let	val i1 = r1 x y;
+	in	if	i1 <> 0
+		then	i1
+		else	r2 x y
+	end	
+);
+=TEX
+=SML
+fun €induced_order› (f : 'a -> 'b, r : 'b ORDER) : 'a ORDER = (fn x => fn y =>
+	r (f x) (f y)	
+);
+=TEX
+That ends the structure:
+=SML
+end (* of Structure Order *);
+open Order;
+=TEX
+\section{SORTING UTILITIES}
+It is convenient here and elsewhere to have a reasonably
+efficient sort function.
+In this section we define a structure $Sort$ which
+supplies such a function .
+=SML
+structure €Sort› : Sort = struct
+open Order;
+=TEX
 \subsection{$sort$}
 The sorting algorithm is a binary merge sort.
 =SML
-fun €sort›  (order : 'a -> 'a -> int)  (xs : 'a list) : 'a list = (
+fun €sort›  (order : 'a ORDER) (xs : 'a list) : 'a list = (
 	let	fun deal lr [] = lr
 		|   deal (l, r) (x::y::more) = deal (x::l, y::r) more
 		|   deal (l, r) [x] = (x::l, r);
