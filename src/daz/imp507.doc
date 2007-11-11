@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.346 $ $RCSfile: imp507.doc,v $ $Date: 2007/05/21 15:50:43 $
+% imp507.doc %Z% $Revision: 1.347 $ $RCSfile: imp507.doc,v $ $Date: 2007/05/26 16:01:24 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.346 $%
+\def\SCCSversion{$Revision: 1.347 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/05/21 15:50:43 $%
+\TPPdate{\FormatDate{$Date: 2007/05/26 16:01:24 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -282,6 +282,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.345] Enhancement 192 (theory-per-block).
 \item[Issue 1.346] Further rationalisation of abstract syntax for loops.
 \item[Issue 1.347] Fixing bug in {\em update\_spec\_env\_block}.
+\item[Issue 1.348] Added support for deletion of deferred subprograms.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -4475,7 +4476,7 @@ fun Ûnew_scope_blockÝ (bn : LOOP_OR_BLOCK_NAME) : unit = (
 		val _ = blocks := new_scope_common Nil (block0 :: !blocks);
 		val en = expanded_name block_name0;
 		val blk_thyn = en ^ block_tag;
-		val scope_entry = {theory = blk_thyn, deferred = false};
+		val scope_entry = {theory = blk_thyn, deferred = DSNotDeferred, body_labels = Nil};
 		val _ = scope_env :=
 			e_extend en scope_entry (!scope_env)
 			handle Fail _ => (
@@ -6277,12 +6278,21 @@ fun Ûadd_proc_envÝ (name : ID) : unit = (
 =TEX
 \subsection{The SID function subprogram\_implementation}
 =SML
-fun Ûsubprogram_implementationÝ {is_proc : bool, deferred : bool} : string  * string = (
+fun Ûsubprogram_implementationÝ {is_proc : bool, deferred : bool}
+	:  {old_cur_thy : string,
+	    subprog_thy : string,
+	    full_name : Z_ID} = (
 	let	val old_cur_thy = get_current_theory_name();
 		val block1 = block 1;
 		val en = expanded_name (#block_name (#declab block1));
 		val sp_thyn = en ^ (if is_proc then proc_tag else fun_tag);
-		val scope_entry = {theory = sp_thyn, deferred = deferred};
+		val scope_entry = {
+			theory = sp_thyn,
+			deferred =
+			if	deferred
+			then	DSPendingIntroduction
+			else	DSNotDeferred,
+			body_labels = Nil};
 	in	(scope_env :=
 		e_extend en scope_entry (!scope_env)
 		handle Fail _ => (
@@ -6298,7 +6308,9 @@ fun Ûsubprogram_implementationÝ {is_proc : bool, deferred : bool} : string  * st
 			end
 		else	());
 		blocks := (block_body_flag (block1, true) :: tl(!blocks));
-		(old_cur_thy, sp_thyn)
+		{old_cur_thy = old_cur_thy,
+		 subprog_thy = sp_thyn,
+		 full_name = en}
 	end
 );
 =TEX
@@ -6320,46 +6332,87 @@ fun Ûvcs_body_procÝ (st : STATEMENT) : SPEC = (
 \subsection{The SID function deferred\_body}
 =TEX
 =SML
-fun Ûcheck_deferred_declsÝ (_:ID) ([] : DECLARATION list) : unit = ()
-|  check_deferred_decls n (DDeclarationKSlot _ :: more) = (
-	check_deferred_decls n more
-) | check_deferred_decls n (_::_) = (
+fun Ûcheck_deferred_declsÝ (acc : LABEL list)
+	(_:ID) ([] : DECLARATION list) : LABEL list = acc
+|  check_deferred_decls acc n (DDeclarationKSlot ({label, ...}, _) :: more) = (
+	check_deferred_decls (label :: acc) n more
+) | check_deferred_decls _ n (_::_) = (
 	fail "deferred_body" 507147 [fn () => n]
 );
 =TEX
 =SML
-fun Ûdeferred_body_stmtÝ (n:ID) (spec : SPEC) (stmt : STATEMENT) : STATEMENT = (
+fun Ûdeferred_body_stmtÝ (n:ID) (spec : SPEC) (stmt : STATEMENT) : STATEMENT * LABEL = (
 	case stmt of
 		STKSlot {label, ...} => (
-			STSpecNoIvars {spec = spec, label = label, is_assertion = false}
+			(STSpecNoIvars {spec = spec, label = label, is_assertion = false}, label)
 	) |	_ => (
 		fail "deferred_body" 507149 [fn () => n]
 	)
 );
 =TEX
-The following assumes caller has checked that the deferred flag is indeed true.
+=SML
+fun Ûdeferred_body_labelsÝ
+	(do_statement : STATEMENT -> STATEMENT)
+	(full_name : Z_ID) (n : ID)
+	(dl : DECLARATION list) (spec : SPEC) (stmt : STATEMENT)
+	: unit = (
+	let	val dlabs = check_deferred_decls [] n dl;
+		val (stmt', slab) = deferred_body_stmt n spec stmt;
+		val _ = do_statement stmt';
+		fun get_declab dlab = (
+			case s_lookup dlab (!dec_env) of
+				Value dl => (dlab, dl)
+			|	Nil => fail "deferred_body" 507157 [fn () => dlab]
+		);
+		fun get_speclab slab = (
+			case s_lookup slab (!spec_env) of
+				Value sl => (slab, sl)
+			|	Nil => fail "deferred_body" 507157 [fn () => slab]
+		);
+		val des_se = (map get_declab dlabs, get_speclab slab);
+	in	(case e_lookup full_name (!scope_env) of
+			Value {theory, deferred, ...} => (
+			scope_env :=
+			e_enter full_name
+			{theory = theory, deferred = deferred,
+				body_labels = Value des_se}
+			(!scope_env)
+		) |	Nil => fail "deferred_body" 507154 [])
+	end
+);
+=TEX
+=SML
+
+=TEX
+The following assumes caller has checked that the deferred flag is indeed true
+and that caller has already entered the declaration k-slots
+into the dec env.
+{\em do\_statement} is passed in as a parameter so that
+the above functions can get the spec env right.
 =SML
 fun Ûdeferred_bodyÝ 
-	(PBProcedure {procedure_spec = {name = n, spec, ...},
-		declarative_part,
+	(do_statement : STATEMENT -> STATEMENT)
+	(full_name : Z_ID,
+	 PBProcedure {procedure_spec = {name = n, spec, ...},
+		declarative_part = dl,
 		statement, ...} : PROPER_BODY)
-	: STATEMENT = (
+	: unit = (
 	case spec of
 		Nil => fail "deferred_body" 507148 [fn () => n]
 	|	Value spc => (
-		check_deferred_decls n declarative_part;
-		deferred_body_stmt n spc statement
+		deferred_body_labels
+		do_statement full_name n dl spc statement
 	)
-) | deferred_body (PBFunction{function_spec = {designator = n, spec, ...},
-		declarative_part,
+) | deferred_body do_statement (full_name, PBFunction{function_spec = {designator = n, spec, ...},
+		declarative_part = dl,
 		statement, ...}) = (
 	case spec of
 		Nil => fail "deferred_body" 507148 [fn () => n]
 	|	Value spc => (
-		check_deferred_decls n declarative_part;
-		deferred_body_stmt n spc statement
+		deferred_body_labels
+		do_statement full_name n dl spc statement
 	)
-) | deferred_body (PBPackage {statement, ...}) = (
+) | deferred_body _ (_, PBPackage {statement, ...}) = (
 	error "deferred_body" 507150 []
 );
 =TEX
@@ -6575,7 +6628,7 @@ fun Ûnew_scope_pack_bodyÝ (ident : ID) : unit = (
 		val _ = 	(if old_subunit_flag then () else new_parent_aux false (#zmod package1));
 		val dict = init_pack_body_dict(ident, package1);
 		val block = block_dict(block_flags(empty_block, flags), dict);
-		val scope_entry = {theory = ident ^ pack_body_tag, deferred = false};
+		val scope_entry = {theory = ident ^ pack_body_tag, deferred = DSNotDeferred, body_labels = Nil};
 	in	(scope_env :=
 		e_extend ident scope_entry (!scope_env)
 		handle Fail _ => (
@@ -7207,15 +7260,20 @@ fun Ûrenames_objectÝ (obj_ren : OBJECT_RENAMING)
 =SML
 fun Ûcheck_pack_completeÝ 
 	({decl = {comp_unit = CUPackageDeclaration pack_decl, ...},  zmod,...}: PACKAGE) : unit = (
-	let	val repl_env = 
+	let	val re = 
 			if	zmod = !script_name
 			then	!repl_env
 			else	#repl_env (get_saved_z_generator_state zmod)
 				handle Fail _ => fail "check_pack_complete" 507072
 				[fn _ => #name pack_decl, fn _ => zmod];
+		fun get_repl label = (
+			case s_lookup label re of
+				Nil => Nil
+			|	Value {repl, ...} => Value repl
+		);
 		fun check_decls acc [] = rev acc
 		|     check_decls acc (DDeclarationKSlot ({label, ...}, _) ::more) = (
-			case s_lookup label repl_env of
+			case get_repl label of
 				Nil => check_decls (label::acc) more
 			|	(Value (UnReplaced _)) => check_decls (label::acc) more
 			|	(Value (ReplaceVPart {visible, ...})) => check_decls acc (visible@more)
@@ -7713,17 +7771,13 @@ The error reporting here could usefully be made more sophisticated.
 (By checking that $repl$ and the replacement environment entry are of the same sort.)
 =SML
 fun Ûupdate_replacement_envÝ ((label, repl) : LABEL * REPLACEMENT) : unit = (
-	let	val msg_no =
+	let	val sn =
 			case s_lookup label (!repl_env) of
-				Value(UnReplaced (_, name)) => 0
-			|	Value _ => 507004
-			|	Nil => 507003;
-		val side_effect =
-				if	msg_no <> 0
-				then	warn "update_replacement_env" msg_no
-					[fn () => label]
-				else	();
-	in	repl_env := s_enter label repl (!repl_env)
+				Value{scope_name = sn, repl = UnReplaced _} => sn
+			|	Value _ => fail "update_replacement_env" 507004 [fn () => label]
+			|	Nil => fail "update_replacement_env" 507003 [fn () => label];
+		val sr = {scope_name = sn, repl = repl}
+	in	repl_env := s_enter label sr (!repl_env)
 	end
 );
 =TEX
@@ -7734,41 +7788,17 @@ fun Ûupdate_spark_progÝ (comp : KSLOT_COMPILATION_UNIT list) : unit = (
 =TEX
 =SML
 fun Ûnew_k_slotÝ (label : LABEL, sort : REPL_SORT) : unit = (
-	(repl_env := s_extend label (UnReplaced (sort, get_current_theory_name())) (!repl_env))
-			handle Fail _ => fail "new_k_slot" 507005 [fn () => label]
+	let	val {declab = {block_name, ...}, ...} = block 1;
+		val sr = {scope_name = block_name,
+			repl = UnReplaced (sort, get_current_theory_name())};
+	in	(repl_env := s_extend label sr (!repl_env))
+		handle Fail _ =>
+		fail "new_k_slot" 507005 [fn () => label]
+	end
 );
 =TEX
 \section{INVOKING THE SID FUNCTIONS}
 =TEX
-=SML
-fun Ûopen_scopeÝ (n: string) : unit = (
-	let	val zn = trans_id (CaseIndependence.to_upper n);
-	in	case e_lookup zn (!scope_env) of
-			Value {theory, deferred} => (
-			if	not deferred
-			then	open_theory theory
-				handle Fail _ =>
-				fail "open_scope" 507145
-				[fn()=>theory, fn()=>n]
-			else	let	val cxt_thyn = zn ^ context_tag;
-				val scope_entry = {theory = theory, deferred = false};
-			in	(open_theory cxt_thyn
-				handle Fail _ =>
-				fail "open_scope" 507145
-				[fn()=>cxt_thyn, fn()=>n]);	
-				(new_theory theory
-					handle Fail _ => (
-					fail "open_scope" 507139
-					[fn()=>theory, fn()=>zn]
-				));
-				set_cn_created ();
-				scope_env :=
-				e_enter zn scope_entry (!scope_env)
-			end
-		) |	Nil =>	fail "open_scope" 507146
-				[fn()=>n]
-	end
-);
 =TEX
 =SML
 fun Ûcheck_label_theoryÝ (lab : string) : unit = (
@@ -7777,7 +7807,7 @@ fun Ûcheck_label_theoryÝ (lab : string) : unit = (
 		|   subprog_name acc ("'"::_) = subprog_name acc []
 		|   subprog_name acc (c::more) = subprog_name (c::acc) more;
 	in	case s_lookup lab (!repl_env) of
-		Value(UnReplaced(_, thy)) => (
+		Value{repl = UnReplaced(_, thy), ...} => (
 			if	get_current_theory_name() = thy
 			then	()
 			else	fail "check_label_theory" 507144
@@ -8277,33 +8307,33 @@ and Ûdo_proper_bodyÝ (y as (PBProcedure
 	: unit = (
 	do_procedure_spec false procedure_spec;
 	add_proc_env name;
-	let	val (old_cur_thy, sp_thy) = subprogram_implementation {is_proc = true, deferred = deferred};
+	let	val {old_cur_thy, subprog_thy, full_name} = subprogram_implementation {is_proc = true, deferred = deferred};
 	in	map (check_fail () do_declaration) declarative_part;
 		(if	not deferred
 		then	vcs_body (check_fail (STNull SNImplicit) do_statement statement)
-		else	(do_statement (deferred_body y); ()));
+		else	(deferred_body do_statement (full_name, y)));
 		update_envs_proc procedure_spec;
 		end_scope();
 		open_theory old_cur_thy;
-		(if deferred then delete_theory sp_thy else ())
+		(if deferred then delete_theory subprog_thy else ())
 	end
 ) | do_proper_body (y as (PBFunction 
 	{function_spec as {designator,...}, declarative_part, statement, deferred, ...}) : PROPER_BODY) = (
 	let	val (formal, globals, inffun) =
 			do_function_spec false function_spec;
-		val (old_cur_thy, sp_thy) = subprogram_implementation {is_proc = false, deferred = deferred};
+		val {old_cur_thy, subprog_thy, full_name} = subprogram_implementation {is_proc = false, deferred = deferred};
 	in
 		map (check_fail () do_declaration) declarative_part;
 		(if	not deferred
 		then	vcs_body (check_fail (STNull SNImplicit) do_statement statement)
-		else	(do_statement (deferred_body y); ()));
+		else	(deferred_body do_statement (full_name, y)));
 		end_scope();
 		let	val pfx_info = current_prefix_info 1;
 		in	add_fun_env pfx_info formal Nil globals inffun;
 			update_envs_fun pfx_info formal Nil globals inffun
 		end;
 		open_theory old_cur_thy;
-		(if deferred then delete_theory sp_thy else ())
+		(if deferred then delete_theory subprog_thy else ())
 	end
 ) | do_proper_body (y as (PBPackage 
 	{name, decls, statement, annotation, ...}) : PROPER_BODY) = (
@@ -8457,7 +8487,7 @@ end
 ) | do_web_clause (y as (WCReplacedByCompilation x) : WEB_CLAUSE) = (
 let	val {label=label, comp=comp} = x;
 in	case (s_lookup label (!repl_env), comp) of
-		(Value (UnReplaced _), _) => (
+		(Value {repl = UnReplaced _, ...}, _) => (
 		let	val current_theory = get_current_theory_name ();
 		in	check_label_theory label;
 			update_replacement_env(label, ReplaceComp x);
@@ -8467,7 +8497,7 @@ in	case (s_lookup label (!repl_env), comp) of
 	) |	(Nil, [KCUUnit {comp_unit = CUProperBody (pb as PBPackage {name, ...}),
 			context=[], references=[], ...}]) => (
 			case s_lookup (trans_id name) (!repl_env) of
-				Value (UnReplaced _) => (
+				Value {repl = UnReplaced _, ...} => (
 					update_replacement_env
 						(name, ReplaceComp{label = name, comp=comp});
 					do_compilation_unit []
@@ -8702,12 +8732,12 @@ fun Ûsco_web_clauseÝ (y as (WCCompilation x) : WEB_CLAUSE) : unit = (
 ) | sco_web_clause (y as (WCReplacedByCompilation x) : WEB_CLAUSE) = (
 let	val {label=label, comp=comp} = x;
 in	case (s_lookup label (!repl_env), comp) of
-		(Value (UnReplaced _), _) => (
+		(Value {repl = UnReplaced _, ...}, _) => (
 			update_replacement_env(label, ReplaceComp x)
 	) |	(Nil, [KCUUnit {comp_unit = CUProperBody (pb as PBPackage {name, ...}),
 			context=[], references=[], ...}]) => (
 			case s_lookup (trans_id name) (!repl_env) of
-				Value (UnReplaced _) => (
+				Value {repl = UnReplaced _, ...} => (
 					update_replacement_env
 						(name, ReplaceComp{label = name, comp=comp});
 					sco_compilation_unit
@@ -8751,11 +8781,177 @@ end
 );
 =TEX
 \section{INTERFACE}
+=TEX
+=SML
+fun Ûopen_scopeÝ (n: string) : unit = (
+	let	val zn = trans_id (CaseIndependence.to_upper n);
+	in	case e_lookup zn (!scope_env) of
+			Value {theory, deferred, body_labels} => (
+			if	deferred <> DSPendingIntroduction
+			then	open_theory theory
+				handle Fail _ =>
+				fail "open_scope" 507145
+				[fn()=>theory, fn()=>n]
+			else	let	val cxt_thyn = zn ^ context_tag;
+				val scope_entry = {theory = theory, deferred = DSIntroduced, body_labels = body_labels};
+			in	(open_theory cxt_thyn
+				handle Fail _ =>
+				fail "open_scope" 507145
+				[fn()=>cxt_thyn, fn()=>n]);	
+				(new_theory theory
+					handle Fail _ => (
+					fail "open_scope" 507139
+					[fn()=>theory, fn()=>zn]
+				));
+				set_cn_created ();
+				scope_env :=
+				e_enter zn scope_entry (!scope_env)
+			end
+		) |	Nil =>	fail "open_scope" 507146
+				[fn()=>n]
+	end
+);
+=TEX
+=SML
+fun Ûsplit_scope_nameÝ (n : string) : ID OPT list = (
+	let	val sz = size n;
+		fun aux acc i = (
+			if	i >= sz
+			then	rev acc
+			else case substring(n, i, 1) of
+				"o" => aux (""::acc) (i+1)
+			|	"'" => rev acc
+			|	ch => aux ((hd acc ^ ch):: tl acc) (i+1)
+		);
+	in	map (fn "" => Nil | s => Value s) (aux [""] 0)
+	end
+);
+=TEX
+=SML
+fun Ûis_outer_scopeÝ (s1 : ID OPT list) (s2 : ID OPT list) : bool = (
+	s1 = s2 to (length s1 - 1)
+);
+=TEX
+=SML
+fun Ûdelete_scope_from_pack_envÝ (s : ID OPT list) : unit = (
+	let	fun to_be_deleted (_, {zmod, ...} : PACKAGE) = (
+			is_outer_scope s (split_scope_name zmod)
+		);
+	in	pack_env := !pack_env drop to_be_deleted
+	end
+);
+=TEX
+=SML
+fun Ûdelete_scope_from_subunit_envÝ (s : ID OPT list) : unit = (
+	let	fun to_be_deleted (_, {zmod, ...} : SUBUNIT) = (
+			is_outer_scope s (split_scope_name zmod)
+		);
+	in	subunit_env := !subunit_env drop to_be_deleted
+	end
+);
+=TEX
+=SML
+fun Ûdelete_scope_from_dec_envÝ
+	(restore : DECLAB S_DICT, s : ID OPT list) : unit = (
+	let	fun to_be_deleted (lab, {block_name, ...} : DECLAB) = (
+			any restore (fn (l, _) => l = lab) orelse
+			is_outer_scope s block_name
+		);
+	in	dec_env :=
+		s_merge restore (!dec_env drop to_be_deleted) 
+	end
+);
+=TEX
+=SML
+fun Ûdelete_scope_from_spec_envÝ
+	((l, sl) : LABEL * SPECLAB, s : ID OPT list)
+	: unit = (
+	let	fun to_be_deleted (lab, {block_name, ...} : SPECLAB) = (
+			is_outer_scope s block_name
+		);
+	in	spec_env :=
+		s_enter l sl (!spec_env drop to_be_deleted)
+	end
+);
+=TEX
+=SML
+fun Ûdelete_scope_from_repl_envÝ
+	(dlabs : LABEL list, slab : LABEL)
+	(s : ID OPT list) : unit = (
+	let	fun to_be_deleted (l, {scope_name, ...} : SCOPED_REPLACEMENT) = (
+			l = slab orelse l mem dlabs orelse
+			is_outer_scope s scope_name
+		);
+		val restore = (slab, RSSpecStatement) ::
+			map (fn dlab => (dlab, RSDeclaration)) dlabs;
+	in	repl_env := !repl_env drop to_be_deleted;
+		app new_k_slot restore
+	end
+);
+=TEX
+=SML
+fun Ûdelete_scope_theoriesÝ (zn : Z_ID)
+		(s : ID OPT list) : unit = (
+	let	val thys = get_script_theories (!script_name)
+			less (zn ^ context_tag);
+		fun aux thy = (
+			if	is_outer_scope s (split_scope_name thy)
+			then	force_delete_theory thy
+				handle Fail _ => ()
+			else	()
+		);
+	in	app aux thys
+	end
+);
+=TEX
+In the following note that the theory management is important to ensure that
+the replacement environment entries are restored properly (the associated theory
+has to be the theory for the deleted subprogram, which we then delete).
+=SML
+fun Ûdelete_deferred_subprogramÝ (n: string) : unit = (
+	let	val zn = trans_id (CaseIndependence.to_upper n);
+		val s = split_scope_name zn;
+		fun do_it (theory, bl as (des, se)) = (
+		let	val parent = hd(get_parents theory)
+			handle Fail _ => !script_name;
+			val dls = map fst des;
+			val sl = fst se;
+		in	open_theory theory;
+			delete_scope_from_pack_env s;
+			delete_scope_from_subunit_env s;
+			delete_scope_from_dec_env (des, s);
+			delete_scope_from_spec_env (se, s);
+			delete_scope_from_repl_env (dls, sl) s;
+			scope_env := e_enter zn
+				{theory = theory, deferred = DSPendingIntroduction,
+					body_labels = Value bl} (!scope_env);
+			delete_scope_theories zn s;
+			open_theory parent
+		end	handle ex as (Fail _) => comment "delete_deferred_subprogram" 507158 [fn () => n, fn _ => string_of_exn ex]);
+	in	case e_lookup zn (!scope_env) of
+			Value{theory, deferred = DSIntroduced, body_labels = Value bl} => (
+			do_it (theory, bl)
+		) |	Value{theory, deferred = DSIntroduced, body_labels = Nil} => (
+			fail "delete_deferred_subprogram"
+			507154 []
+		) |	Value{theory, deferred = DSNotDeferred, body_labels = _} => (
+			fail "delete_deferred_subprogram"
+			507155 [fn () => n]
+		) |	Value{theory, deferred = DSPendingIntroduction, body_labels = _} => (
+			fail "delete_deferred_subprogram"
+			507156 [fn () => n]
+		) |	Nil => (
+			fail "delete_deferred_subprogram"
+			507146 [fn () => n]
+		)
+	end
+);
+=TEX
 The following function is called from \cite{ISS/HAT/DAZ/IMP504} to classify a label.
 =SML
 fun Ûclassify_labelÝ (lab : string) : REPL_SORT OPT = (
 	case s_lookup lab (!repl_env) of
-		Value(UnReplaced(rs, _)) => Value rs
+		Value{repl = UnReplaced(rs, _), ...} => Value rs
 	|	_ => (
 			case (s_lookup (trans_id lab) (!pack_env)) of
 				Value _ => Value RSCompilation
@@ -8765,7 +8961,9 @@ fun Ûclassify_labelÝ (lab : string) : REPL_SORT OPT = (
 =TEX
 =SML
 fun Ûget_replacementÝ (lab : string) : REPLACEMENT OPT = (
-	s_lookup lab (!repl_env)
+	case s_lookup lab (!repl_env) of
+		Value {repl = r, ...} => Value r
+	|	Nil => Nil
 );
 =TEX
 =SML
@@ -8975,7 +9173,7 @@ fun Ûcomp_unit_of_scriptÝ (script : string) : COMPILATION_UNIT  OPT= (
 	let	val {repl_env, spark_prog, ...} = get_saved_z_generator_state script;
 		fun aux1 (KCUKSlot {label, ...}) = (
 			case s_lookup label repl_env of
-				Value(ReplaceComp {comp = comp::_, ...}) => aux1 comp
+				Value{repl = ReplaceComp {comp = comp::_, ...}, ...} => aux1 comp
 			|	_ => Nil
 		) | aux1 (KCUUnit {comp_unit, ...}) = (
 			Value  comp_unit
