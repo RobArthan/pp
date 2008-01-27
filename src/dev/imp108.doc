@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  %Z% $Date: 2005/06/22 15:00:15 $ $Revision: 1.24 $ $RCSfile: imp108.doc,v $
+%  %Z% $Date: 2005/06/29 16:01:11 $ $Revision: 1.25 $ $RCSfile: imp108.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Portability Infrastructure Implementation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP108}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.24 $%
+\def\SCCSversion{$Revision: 1.25 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/06/22 15:00:15 $%
+\TPPdate{\FormatDate{$Date: 2005/06/29 16:01:11 $%
 }}
 %\TPPstatus{Draft}
 \TPPstatus{Draft}
@@ -87,6 +87,7 @@ suppress structure names in types.
 are defined in the standard and are redefined in {\Product}.
 \item[Issue 1.23] Now sets PolyML.Compiler.printInAlphabeticalOrder false.
 \item[Issue 1.24,1.25] Updates for SML/NJ 110.54.
+\item[Issue 1.26] Poly/ML 5.1 port.
 \end{description}
 \subsection{Changes Forecast}
 As determined by experience during the porting process.
@@ -141,9 +142,6 @@ structure ÛExtendedIOÝ : ExtendedIO = struct
 	open BasicIO;
 	val Ûflush_outÝ : outstream -> unit = TextIO.flushOut;
 	val Ûopen_appendÝ : string -> outstream = TextIO.openAppend;
-=POLYML
-	val Ûinput_lineÝ : instream -> string = TextIO.inputLine;
-=NJML
 	fun input_line (strm : instream) : string = (
 		case TextIO.inputLine strm of
 			SOME s => s
@@ -425,7 +423,7 @@ structure ÛPPStringÝ : PPString = struct
 =NJML
 	val  ord : string ->  int = fn s =>  (ord s handle Subscript =>  raise Ord);
 =SML
-	fun string_of_exn (ex : exn) : string = (
+	fun Ûstring_of_exnÝ (ex : exn) : string = (
 		let	val nm = exnName ex;
 			val msg = exnMessage ex;
 		in	"(Exception: " ^
@@ -457,34 +455,81 @@ end (* of structure PPVector *);
 =SML
 structure ÛPPBuildÝ : PPBuild = struct
 	open PPString;
-	val pp'save_name : string ref = ref "hol";
-	val pp'use_function : (string -> unit) ref = ref use;
+	val Ûpp'save_nameÝ : string ref = ref "hol";
+	val Ûpp'use_functionÝ : (string -> unit) ref = ref use;
 	fun Ûpp'set_useÝ (new : string -> unit) : string -> unit = (
 		let	val old = !pp'use_function;
 		in	pp'use_function := new;
 			old
 		end
 	);
-	fun Ûpp'saveÝ () : bool =
-=NJML
-	(not(SMLofNJ.exportML (!pp'save_name)));
 =POLYML
-	(PolyML.commit ());
+	val Ûpp'continuationÝ : (unit -> unit) ref = ref (fn () => ());
 =SML
+	fun Ûpp'saveÝ (continuation : unit -> unit) : unit = (
+=NJML
+		if	SMLofNJ.exportML (!pp'save_name)
+		then	continuation()	(* new session *)
+		else	() (* this session *)
+=POLYML
+		let	open PolyML.SaveState;
+			val h = length(showHierarchy());
+			val level = if h <= 0 then 0 else h - 1;
+		in	pp'continuation := continuation;
+			saveChild (!pp'save_name ^ ".polydb", level)
+		end
+=SML
+	);
 	val Ûloaded_filesÝ : string list ref = ref ["dtd108.sml", "imp108.sml"];
 	fun Ûpp'useÝ (file_name : string) : unit = (
 		! pp'use_function file_name;
 		loaded_files := !loaded_files @ [file_name]
 	);
-	fun Ûpp'loadÝ (file_name : string) : bool = (
-		pp'use file_name handle ex => (
-			output(std_out, "*** " ^ string_of_exn ex ^ " ***\n");
-			PPCompiler.exit 1
-		);
-		pp'save ()
-	);
+
 	fun Ûpp'loaded_file_namesÝ () : string list = (
 		!loaded_files
+	);
+=POLYML
+	fun Ûpp'mainÝ (() : unit) : unit = (
+		let	open PolyML.SaveState;
+			fun compress file_name = (
+				loadState file_name;
+				PolyML.shareCommonData PolyML.rootFunction;
+				pp'save (!pp'continuation)
+			);
+			fun process_args () = (
+				case CommandLine.arguments () of 
+					[] => (()
+				) |	[file_name] => (
+					loadState file_name
+				) |	["-c", file_name] => (
+					compress file_name
+				) |	_ => raise Fail "usage: pp-poly [[-d] file]"
+			) handle
+				Fail msg => (
+					print "pp-poly: ";
+					print msg; print "\n";
+					OS.Process.exit OS.Process.failure
+			) |	OS.SysErr (msg, _) => (
+					print "pp-poly: ";
+					print msg; print "\n";
+					OS.Process.exit OS.Process.failure
+			) |	ex => (
+					print "pp-poly: unexpected exception: ";
+					print (string_of_exn ex); print "\n";
+					OS.Process.exit OS.Process.failure	
+			);
+			fun call_continuation () = (
+				!pp'continuation()
+			) handle ex => (
+				print "pp-poly: warning: exception raised during initialisation: ";
+				print "\n";
+				print (string_of_exn ex); print "\n"
+			);
+		in	process_args ();
+			call_continuation();
+			PolyML.rootFunction ()
+		end
 	);
 end (* of structure PPBuild *);
 =TEX
@@ -566,6 +611,13 @@ local
 in
 	val _ = map execute_string cmds;
 end;
+=TEX
+\section{EXPORTING MAIN FUNCTION}
+This section is for the Poly/ML model where this module provides
+the entry point for an executable used to launch {\Product} sessions.
+=POLYML
+val _ = PolyML.shareCommonData PPBuild.pp'main;
+val _ = PolyML.export ("pp-ml", PPBuild.pp'main);
 =TEX
 \twocolumn[\section{INDEX}]
 \small
