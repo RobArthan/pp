@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  %Z% $Date: 2008/01/27 16:46:20 $ $Revision: 1.27 $ $RCSfile: imp108.doc,v $
+%  %Z% $Date: 2008/01/27 16:59:17 $ $Revision: 1.28 $ $RCSfile: imp108.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Portability Infrastructure Implementation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP108}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.27 $%
+\def\SCCSversion{$Revision: 1.28 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/01/27 16:46:20 $%
+\TPPdate{\FormatDate{$Date: 2008/01/27 16:59:17 $%
 }}
 %\TPPstatus{Draft}
 \TPPstatus{Draft}
@@ -87,7 +87,7 @@ suppress structure names in types.
 are defined in the standard and are redefined in {\Product}.
 \item[Issue 1.23] Now sets PolyML.Compiler.printInAlphabeticalOrder false.
 \item[Issue 1.24,1.25] Updates for SML/NJ 110.54.
-\item[Issues 1.26--1.28] Poly/ML 5.1 port.
+\item[Issues 1.26--1.29] Poly/ML 5.1 port.
 \end{description}
 \subsection{Changes Forecast}
 As determined by experience during the porting process.
@@ -463,20 +463,34 @@ structure €PPBuild› : PPBuild = struct
 			old
 		end
 	);
-=POLYML
-	val €pp'continuation› : (unit -> unit) ref = ref (fn () => ());
 =SML
-	fun €pp'save› (continuation : unit -> unit) : unit = (
+	fun €pp'save› (() : unit) : unit = (
 =NJML
-		if	SMLofNJ.exportML (!pp'save_name)
-		then	continuation()	(* new session *)
-		else	() (* this session *)
+		SMLofNJ.exportML (!pp'save_name);
+		()
 =POLYML
 		let	open PolyML.SaveState;
 			val h = length(showHierarchy());
 			val level = if h <= 0 then 0 else h - 1;
-		in	pp'continuation := continuation;
-			saveChild (!pp'save_name ^ ".polydb", level)
+		in	saveChild (!pp'save_name ^ ".polydb", level)
+		end
+=SML
+	);
+=POLYML
+	val €pp'next_session› : (unit -> unit) ref = ref (fn () => ());
+=SML
+	fun €pp'save_then› {this_session : unit -> unit, next_session : unit -> unit} : unit = (
+=NJML
+		if	SMLofNJ.exportML (!pp'save_name)
+		then	next_session()
+		else	this_session() (* this session *)
+=POLYML
+		let	open PolyML.SaveState;
+			val h = length(showHierarchy());
+			val level = if h <= 0 then 0 else h - 1;
+		in	pp'next_session := next_session;
+			saveChild (!pp'save_name ^ ".polydb", level);
+			this_session()
 		end
 =SML
 	);
@@ -491,7 +505,7 @@ structure €PPBuild› : PPBuild = struct
 			output(std_out, "*** " ^ string_of_exn ex ^ " ***\n");
 			PPCompiler.exit 1
 		);
-		pp'save (!pp'continuation)
+		pp'save ()
 	);
 
 	fun €pp'loaded_file_names› () : string list = (
@@ -503,7 +517,7 @@ structure €PPBuild› : PPBuild = struct
 			fun compress file_name = (
 				loadState file_name;
 				PolyML.shareCommonData PolyML.rootFunction;
-				pp'save (!pp'continuation)
+				pp'save ()
 			);
 			fun process_args () = (
 				case CommandLine.arguments () of 
@@ -528,7 +542,7 @@ structure €PPBuild› : PPBuild = struct
 					OS.Process.exit OS.Process.failure	
 			);
 			fun call_continuation () = (
-				!pp'continuation()
+				!pp'next_session()
 			) handle ex => (
 				print "pp-ml: warning: exception raised during initialisation: ";
 				print "\n";
