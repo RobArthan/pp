@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  %Z% $Date: 2008/02/03 13:28:16 $ $Revision: 1.29 $ $RCSfile: imp108.doc,v $
+%  %Z% $Date: 2008/02/03 13:33:11 $ $Revision: 1.30 $ $RCSfile: imp108.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Portability Infrastructure Implementation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP108}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.29 $%
+\def\SCCSversion{$Revision: 1.30 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/02/03 13:28:16 $%
+\TPPdate{\FormatDate{$Date: 2008/02/03 13:33:11 $%
 }}
 %\TPPstatus{Draft}
 \TPPstatus{Draft}
@@ -454,106 +454,121 @@ end (* of structure PPVector *);
 \subsection{Build Interfaces}
 =SML
 structure €PPBuild› : PPBuild = struct
-	open PPString;
-	val €pp'save_name› : string ref = ref "hol";
-	val €pp'use_function› : (string -> unit) ref = ref use;
-	fun €pp'set_use› (new : string -> unit) : string -> unit = (
-		let	val old = !pp'use_function;
-		in	pp'use_function := new;
-			old
-		end
-	);
+open PPString;
+val €pp'save_name› : string ref = ref "hol";
+val €pp'use_function› : (string -> unit) ref = ref use;
+fun €pp'set_use› (new : string -> unit) : string -> unit = (
+	let	val old = !pp'use_function;
+	in	pp'use_function := new;
+		old
+	end
+);
 =SML
-	fun €pp'save› (() : unit) : unit = (
+fun €pp'save› (() : unit) : unit = (
 =NJML
-		SMLofNJ.exportML (!pp'save_name);
-		()
+	SMLofNJ.exportML (!pp'save_name);
+	()
 =POLYML
-		let	open PolyML.SaveState;
-			val h = length(showHierarchy());
-			val level = if h <= 0 then 0 else h - 1;
-		in	saveChild (!pp'save_name ^ ".polydb", level)
-		end
+	let	open PolyML.SaveState;
+		val h = length(showHierarchy());
+		val level = if h <= 0 then 0 else h - 1;
+	in	saveChild (!pp'save_name ^ ".polydb", level)
+	end
 =SML
-	);
+);
 =POLYML
-	val €pp'next_session› : (unit -> unit) ref = ref (fn () => ());
+val €pp'next_session› : (unit -> unit) ref = ref (fn () => ());
 =SML
-	fun €pp'save_then› {this_session : unit -> unit, next_session : unit -> unit} : unit = (
+fun €pp'save_then› {this_session : unit -> unit, next_session : unit -> unit} : unit = (
 =NJML
-		if	SMLofNJ.exportML (!pp'save_name)
-		then	next_session()
-		else	this_session() (* this session *)
+	if	SMLofNJ.exportML (!pp'save_name)
+	then	next_session()
+	else	this_session() (* this session *)
 =POLYML
-		let	open PolyML.SaveState;
-			val h = length(showHierarchy());
-			val level = if h <= 0 then 0 else h - 1;
-		in	pp'next_session := next_session;
-			saveChild (!pp'save_name ^ ".polydb", level);
-			this_session()
-		end
+	let	open PolyML.SaveState;
+		val h = length(showHierarchy());
+		val level = if h <= 0 then 0 else h - 1;
+	in	pp'next_session := next_session;
+		saveChild (!pp'save_name ^ ".polydb", level);
+		this_session()
+	end
 =SML
-	);
-	val €loaded_files› : string list ref = ref ["dtd108.sml", "imp108.sml"];
-	fun €pp'use› (file_name : string) : unit = (
-		! pp'use_function file_name;
-		loaded_files := !loaded_files @ [file_name]
-	);
+);
+val €loaded_files› : string list ref = ref ["dtd108.sml", "imp108.sml"];
+fun €pp'use› (file_name : string) : unit = (
+	! pp'use_function file_name;
+	loaded_files := !loaded_files @ [file_name]
+);
 
-	fun €pp'load› (file_name : string) : unit = (
-		pp'use file_name handle ex => (
-			output(std_out, "*** " ^ string_of_exn ex ^ " ***\n");
-			PPCompiler.exit 1
+fun €pp'load› (file_name : string) : unit = (
+	pp'use file_name handle ex => (
+		output(std_out, "*** " ^ string_of_exn ex ^ " ***\n");
+		PPCompiler.exit 1
+	);
+	pp'save ()
+);
+
+fun €pp'loaded_file_names› () : string list = (
+	!loaded_files
+);
+=POLYML
+fun €diagnose_exn› (caller : string, exn : exn) = (
+	print (caller ^ ": ");
+	case exn of
+		General.Fail msg => (
+			print msg; print "\n";
+			OS.Process.exit OS.Process.failure
+	) |	OS.SysErr (msg, _) => (
+			print msg; print "\n";
+			OS.Process.exit OS.Process.failure
+	) |	ex => (
+			print "unexpected exception: ";
+			print (string_of_exn ex); print "\n";
+			OS.Process.exit OS.Process.failure	
+	)
+);
+=TEX
+=POLYML
+fun €pp'main› (() : unit) : unit = (
+	let	open PolyML.SaveState;
+		fun compress file_name = (
+			loadState file_name;
+			PolyML.shareCommonData PolyML.rootFunction;
+			pp'save ();
+			OS.Process.exit OS.Process.success
 		);
-		pp'save ()
-	);
-
-	fun €pp'loaded_file_names› () : string list = (
-		!loaded_files
-	);
+		fun process_args () = (
+			case CommandLine.arguments () of 
+				[] => (()
+			) |	[file_name] => (
+				loadState file_name
+			) |	["-c", file_name] => (
+				compress file_name
+			) |	_ => raise General.Fail "usage: pp-ml [[-d] file]"
+		)	handle exn => diagnose_exn("pp-ml", exn);
+		fun run_session () = (
+			!pp'next_session()
+		) handle ex => (
+			print "pp-ml: warning: exception raised starting ProofPower session: ";
+			print "\n";
+			print (string_of_exn ex); print "\n"
+		);
+	in	process_args ();
+		run_session();
+		PolyML.rootFunction ()
+	end
+);
+=TEX
 =POLYML
-	fun €pp'main› (() : unit) : unit = (
-		let	open PolyML.SaveState;
-			fun compress file_name = (
-				loadState file_name;
-				PolyML.shareCommonData PolyML.rootFunction;
-				pp'save ();
-				OS.Process.exit OS.Process.success
-			);
-			fun process_args () = (
-				case CommandLine.arguments () of 
-					[] => (()
-				) |	[file_name] => (
-					loadState file_name
-				) |	["-c", file_name] => (
-					compress file_name
-				) |	_ => raise General.Fail "usage: pp-ml [[-d] file]"
-			) handle
-				General.Fail msg => (
-					print "pp-ml: ";
-					print msg; print "\n";
-					OS.Process.exit OS.Process.failure
-			) |	OS.SysErr (msg, _) => (
-					print "pp-ml: ";
-					print msg; print "\n";
-					OS.Process.exit OS.Process.failure
-			) |	ex => (
-					print "pp-ml: unexpected exception: ";
-					print (string_of_exn ex); print "\n";
-					OS.Process.exit OS.Process.failure	
-			);
-			fun call_continuation () = (
-				!pp'next_session()
-			) handle ex => (
-				print "pp-ml: warning: exception raised during initialisation: ";
-				print "\n";
-				print (string_of_exn ex); print "\n"
-			);
-		in	process_args ();
-			call_continuation();
-			PolyML.rootFunction ()
-		end
-	);
+fun €pp'make_database› (child : string) : unit = (
+	let	open PolyML.SaveState;
+		val _ = pp'save_name := child;
+		val h = showHierarchy();
+		val _ = saveChild(child ^ ".polydb", length h);
+	in	OS.Process.exit OS.Process.success
+	end	handle exn => diagnose_exn("pp'make_database", exn)
+);
+=SML
 end (* of structure PPBuild *);
 =TEX
 \subsection{Standard ML '97 Basis Library}
