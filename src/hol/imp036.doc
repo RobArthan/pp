@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2008/02/03 15:55:44 $ $Revision: 1.57 $ $RCSfile: imp036.doc,v $
+% %Z% $Date: 2008/02/07 15:02:57 $ $Revision: 1.58 $ $RCSfile: imp036.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{HOL PDS System Initialisation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP036}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.57 $%
+\def\SCCSversion{$Revision: 1.58 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/02/03 15:55:44 $%
+\TPPdate{\FormatDate{$Date: 2008/02/07 15:02:57 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{ML Literate Script}
@@ -148,7 +148,11 @@ Made {\it load\_files} print file names containing `Q' properly.
 \item[Issue 1.50] Initialisation scripts are now run after all the initialisation functions.
 \ite[Issue 1.51] Rationalised initial cache theory set-up.
 \item[Issues 1.43,1.44] Initial current theory and initialisation scripts in {\tt pp} are now passed in environment variables with more conventional name (and the theory is opened using {\em use\_string} so that `Q's in the name are handled sensibly).
-\item[Issues 1.45--1.47] Revised interface for initialisation scripts.
+\item[Issues 1.45--1.50] Revised interface for initialisation scripts.
+\item[Issues 1.51, 1.52] Improved treatment of cache theories.
+\item[Issues 1.53, 1.54] Standardised environment variable names.
+\item[Issues 1.55, 1.56] Comma separated lists of file names are no longer supported.
+\item[Issues 1.57--1.59] Poly/ML 5.1 port.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -439,34 +443,44 @@ then PPCompiler.exit ret
 else raise complaint);
 =TEX
 =SML
-fun €save_then_this› (this_session : unit -> unit) : unit -> unit = (fn () =>
-let	val dummy = if valid_thm bool_cases_axiom
-		then ()
-		else error "save" 36017 [];
-	val _ = app (fn f => f()) (Initialisation.get_save_funs()); 
-	val _ = clear_compactification_cache();
-	val _ = Initialisation.pp'set_database_info();
-	fun next_session () = (
-		Initialisation.init ();
-		reset_use_terminal ();
-		use_terminal ()
-	);
-in	PPBuild.pp'save_then {
-		this_session = this_session,
-		next_session = next_session}
-end);
+fun €save_then_this› (caller : string)
+	(this_session : unit -> unit) : unit -> unit = (fn () =>
+if	!PPBuild.pp'save_name <> ""
+then	let	val dummy = if valid_thm bool_cases_axiom
+			then ()
+			else error "save" 36017 [];
+		val _ = app (fn f => f()) (Initialisation.get_save_funs()); 
+		val _ = clear_compactification_cache();
+		val _ = Initialisation.pp'set_database_info();
+		fun next_session () = (
+			Initialisation.init ();
+			reset_use_terminal ();
+			use_terminal ()
+		);
+	in	PPBuild.pp'save_then {
+			this_session = this_session,
+			next_session = next_session}
+	end
+else	fail caller 36010 []
+);
 =TEX
 =SML
-val €save› : unit -> unit = save_then_this (fn () => ());
+val €save› : unit -> unit = save_then_this "save" (fn () => ());
+=TEX
+=SML
+fun €save_as› (name : string) : unit = (
+	PPBuild.pp'save_name := name;
+	save()
+);
 =TEX
 =SML
 fun €save_and_exit› (ret : int) : unit = (
-	save_then_this (fn () => PPCompiler.exit ret) ()
+	save_then_this "save_and_exit" (fn () => PPCompiler.exit ret) ()
 );
 =TEX
 =SML
 fun €save_and_quit› (() : unit) : unit = (
-	save_and_exit 0
+	save_then_this "save_and_quit" (fn () => PPCompiler.exit 0) ()
 );
 =TEX
 =SML
@@ -660,6 +674,16 @@ local
 	);
 in
 	val _ = Initialisation.new_init_fun init_gc_messages;
+end;
+=TEX
+\subsection{Setting the Database Name}
+=SML
+local
+	fun €set_db_name› () : unit = (
+		PPBuild.pp'save_name := get_shell_var "PPDATABASENAME"
+	);
+in
+	val _ = Initialisation.new_init_fun set_db_name;
 end;
 =TEX
 =SML
