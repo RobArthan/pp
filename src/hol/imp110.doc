@@ -8,19 +8,19 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp005.doc %Z% $Date: 2008/02/03 15:55:44 $ $Revision: 2.48 $ $RCSfile: imp110.doc,v $
+% imp005.doc %Z% $Date: 2008/02/07 15:02:57 $ $Revision: 2.49 $ $RCSfile: imp110.doc,v $
 
 =TEX
-% imp005.doc %Z% $Date: 2008/02/03 15:55:44 $ $Revision: 2.48 $ $RCSfile: imp110.doc,v $
+% imp005.doc %Z% $Date: 2008/02/07 15:02:57 $ $Revision: 2.49 $ $RCSfile: imp110.doc,v $
 \documentstyle[11pt,TQ,hol1]{article}
 
 \TPPtitle{File and Terminal Reader Writer}
 \TPPref{DS/FMU/IED/IMP005}
-\def\SCCSissue{$Revision: 2.48 $%
+\def\SCCSissue{$Revision: 2.49 $%
 }
 \TPPissue{\SCCSissue}
 
-\TPPdate{\FormatDate{$Date: 2008/02/03 15:55:44 $%
+\TPPdate{\FormatDate{$Date: 2008/02/07 15:02:57 $%
 }}
 \TPPproject{FST PROJECT}
 
@@ -219,7 +219,7 @@ $Lex.Text$ items are now produced for each line of input in $get\_HOL\_any$.
 \item[Issue 2.45] Added Û.
 \item[Issue 2.46] Added Ö.
 \item[Issue 2.47] Added function to give the value of the {\em use\_extended\_chars} flag.
-\item[Issues 2.48, 2.49] Poly/ML 5.1 port.
+\item[Issues 2.48--2.50] Poly/ML 5.1 port.
 \item[
 \end{description}
 
@@ -2697,7 +2697,7 @@ fun €get_ML› (R:READER_ENV) = (
 =SMLPLAIN SML
 in (* local for get_ML_outermost *)
 
-fun get_ML_outermost (R:READER_ENV) : unit -> string = (
+fun €get_ML_outermost› (R:READER_ENV) : unit -> string = (
 	let
 		fun get_ML_and_log () = (
 			let	val what_got = get_ML R;
@@ -3429,7 +3429,7 @@ These prompts may be redefined by the user.  Prompts must be normal ASCII
 printing characters except `{\tt Q}' and `{\tt \%}'.
 
 =SMLPLAIN SML
-local (* for use_terminal and ask_at_terminal *)
+local (* for use_terminal, ask_at_terminal and reset_use_terminal *)
 
 val ord_sp	= ord " ";
 val ord_Q	= ord "Q";
@@ -3517,12 +3517,8 @@ the terminal type ahead buffer into the look ahead buffer.
 local
 	fun read_next_character () = (
 		issue_prompt();
-		let
-			val last = 	case input(std_in, 1)
-					of "" => ""
-					|  ch => ch
-		in
-			console_last := last;
+		let	val last = input(std_in, 1);
+		in	console_last := last;
 =POLYML
 			if last <> "\n"
 			then	(cur_prompt := !prompt2; last)
@@ -3623,51 +3619,65 @@ declared local to the PolyML system).  This means that there needs to be
 a check for abandoning in the ``others'' clause of the match for
 exceptions below.
 
+In the following the function $recoverable$ examines any exception while processing the input stream, makes a report to the use and decides whether processing should continue.
+These exceptions (may, depending on the compiler) occur as a result of keyboard interrupt.
+Thus ``processing'' here must cover looking ahead at the first character to check whether the input stream is empty.
+For many years the code below ``worked'' without handling exceptions at that point, but it does not work with Poly/ML 5.1.
 {\ftlinepenalty=9999
 =SMLPLAIN SML
-in (* local for use_terminal and ask_at_terminal *)
+in (* local for use_terminal, ask_at_terminal and reset_use_terminal *)
 
 fun €use_terminal› () : unit = (
 let
-	fun €use_term_loop› () : unit = (
-		if
-		      (
-if look_ahead_char() <> "" then
-			((PPCompiler.compile1 (
-				"<use_terminal>",
-				get_ML_outermost reader,
-				writer,
-				handler);
-				true)
-			  handle TooManyReadEmpties => (raw_diag_string(get_error_message 5523 nil);
-				PPCompiler.exit 0; false)
-			  | Fail x => (raw_diag_string(get_error_message 5522
-					["Fail", get_message x]);
-				true)
-			  | Error x => (raw_diag_string(get_error_message 5522
-					["Error", get_message x]);
-				true)
-			  | AbandonReaderWriter => (
-				raw_diag_string(get_error_message 5525 nil);
+	fun €recoverable› (ex : exn) : bool = (
+		case ex of
+			TooManyReadEmpties => (
+			raw_diag_string(get_error_message 5523 nil);
+			PPCompiler.exit 0;
+			false
+		) |	Fail x => (
+			raw_diag_string(get_error_message 5522
+				["Fail", get_message x]);
+			true
+		) |	Error x => (
+			raw_diag_string(get_error_message 5522
+				["Error", get_message x]);
+			true
+		) |	AbandonReaderWriter => (
+			raw_diag_string(get_error_message 5525 []);
+			false
+		) |	Read_too_often ch => (
+			raw_diag_string(get_error_message 5524 [ch]);
+			true
+		) |	ex => (
+			if !abandoning
+			then (
+				raw_diag_string(get_error_message 5525 []);
 				false)
-			  | Read_too_often ch => (
-				raw_diag_string(get_error_message 5524 [ch]);
+			else (
+				raw_diag_string(get_error_message 5526
+			[my_string_of_exn ex]);
 				true)
-			  | ex =>
-				if !abandoning
-				then (	raw_diag_string(get_error_message 5525 nil);
-					false)
-				else (raw_diag_string(get_error_message 5526
-					[my_string_of_exn ex]);
-					true))
-else (raw_diag_string(get_error_message 5523 nil);
-			PPCompiler.exit 0; false)
-		) (* end of if expression *)
-		then	(
+		)
+	);
+
+	fun €use_term_loop› () : unit = (
+		if	(if look_ahead_char() <> ""
+			then (	PPCompiler.compile1 (
+					"<use_terminal>",
+					get_ML_outermost reader,
+					writer,
+					handler);
+				true	)
+			else (	raw_diag_string(get_error_message 5523 []);
+				PPCompiler.exit 0;
+				false	))
+			handle ex => recoverable ex
+		then	( (* go round again for some more ... *)
 			cur_prompt := !prompt1;
 			use_term_loop ())
-		else	() (* i.e. return to prompt that called use_terminal *)
-	)
+		else	() (* i.e. return to caller of use_terminal *)
+	);
 in
 	if !use_terminal_is_active
 	then
@@ -3747,7 +3757,7 @@ fun €reset_use_terminal› () : unit = (
 	abandoning := false
 );
 
-end (* of local for use_terminal and ask_at_terminal *);
+end (* of local for use_terminal, ask_at_terminal and reset_use_terminal *);
 =TEX
 
 %********************************************************************
