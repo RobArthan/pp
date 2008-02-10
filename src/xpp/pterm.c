@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.51 2005/07/11 16:35:09 rda Exp rda $
+ * $Id: pterm.c,v 2.52 2005/07/14 11:53:51 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -37,7 +37,7 @@ Data transfer from application to xpp: get_from_application
 Data transfer from xpp to application: send_to_application, send_nl
 
 Control of the application: application_alive (test),
-interrupt_and_abandon, interrupt_application, restart_application.
+interrupt_application, restart_application.
 
 To localise Starting a new xpp session: new_editor, new_command_session
 fork and exec a  new xpp session.
@@ -1069,85 +1069,6 @@ void interrupt_application (void)
 #endif
 		kill((pid_t)(-child_pid), SIGINT);
 	}
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Interrupt the application (as with Cntrl-C) and then poll
- * for the interrupt prompt and send the reply set up for
- * abandoning command execution. 
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean wait_for_prompt(void);
-void interrupt_and_abandon (void)
-{
-	interrupt_application();
-	if(	application_alive()
-	&&	*(global_options.abandon_reply)
-	&&	wait_for_prompt()) {
-		send_to_application(
-			global_options.abandon_reply,
-			strlen(global_options.abandon_reply));
-	}
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Get output from the application looking for the interrupt prompt.
- * Ask the user what to do if no prompt is found within about 10 seconds.
- * If the user wants to carry on waiting,it asks the user what to do about
- * every 30 seconds after the first try.
- * Returns True if the prompt is found; False if the user says to
- * give up trying.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean wait_for_prompt(void)
-{
-	int ct, prompt_len, tries, delay;
-	Boolean got_prompt, result;
-	XmTextPosition last;
-	char buf[XFER_SIZE + 1]; /* allow for null-termination in scroll_out */
-	char * prompt_buf;
-
-	prompt_len = strlen(global_options.interrupt_prompt);
-
-	if(prompt_len == 0) {
-		return True;
-	}
-	if( !(prompt_buf = XtMalloc(prompt_len+1)) ) {
-		return False;
-	}
-	got_prompt = result = False;
-	tries = 0;
-	delay = 10;
-	while(True) {
-		if((ct = read(control_fd, buf, XFER_SIZE)) > 0) {
-			scroll_out(buf, ct, False);
-			last = XmTextGetLastPosition(journal);
-			got_prompt =
-					last > prompt_len
-				&&	XmTextGetSubstring(journal,
-						last - prompt_len,
-						prompt_len,
-						prompt_len+1,
-						prompt_buf) == XmCOPY_SUCCEEDED
-				&&	!strcmp(prompt_buf,
-						 global_options.interrupt_prompt);
-		}
-		if(got_prompt) {
-			result = True;
-			break;
-		}
-		if(++tries >= delay) {
-			if(!yes_no_dialog(root, carry_on_waiting_message, NULL)) {
-				result = False;
-				break;
-			}
-			XFlush(XtDisplay(root));
-			tries = 0;
-			delay = 30;
-		} else {
-			sleep(1);
-		}
-	}
-	XtFree(prompt_buf);
-	return result;	
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

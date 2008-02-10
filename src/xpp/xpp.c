@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.35 2004/06/29 16:20:01 rda Exp rda $
+ * $Id: xpp.c,v 2.36 2004/08/21 10:26:06 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -23,10 +23,6 @@
 #define XtCTextTranslations	"TextTranslations"
 #define XtNtemplates		"templates"
 #define XtCTemplates		"Templates"
-#define XtNinterruptPrompt		"interruptPrompt"
-#define XtCInterruptPrompt		"InterruptPrompt"
-#define XtNabandonReply		"abandonReply"
-#define XtCAbandonReply		"AbandonReply"
 #define XtNaddNewlineMode		"addNewlineMode"
 #define XtCAddNewlineMode		"AddNewlineMode"
 #define XtNcommandLineList		"commandLineList"
@@ -131,8 +127,6 @@ typedef struct {
 	XtTranslations text_translations;
 	char *templates;
 	char *palette;
-	char *interrupt_prompt;
-	char *abandon_reply;
 	char *command_line_list;
 	int  add_new_line_mode;
 	char *default_command;
@@ -177,24 +171,6 @@ static XtResource resources[] = {
 		"\206\231\227\012\346\356\360\257\203\372\012\271\377\235\334\367"
 		"\210\374\234\260\303\351\012\254\224\221\361\256\012\333\335\211"
 		"\233\347\350\352\012\277\326\354\363\365\366\370\134\156\012"
-	},
-	{
-		XtNinterruptPrompt,
-		XtCInterruptPrompt,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, interrupt_prompt),
-		XtRString,
-		""
-	},
-	{
-		XtNabandonReply,
-		XtCAbandonReply,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, abandon_reply),
-		XtRString,
-		""
 	},
 	{
 		XtNcommandLineList,
@@ -654,10 +630,6 @@ int main(int argc, char **argv)
 	} else {
 		global_options.command_line = cmd_line;	
 	}
-
-	global_options.interrupt_prompt = xpp_resources.interrupt_prompt;
-
-	global_options.abandon_reply = xpp_resources.abandon_reply;
 
 	global_options.add_new_line_mode = 
 		xpp_resources.add_new_line_mode > EXECUTE_IGNORE_NEW_LINES

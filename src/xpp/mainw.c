@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.99 2007/05/29 16:48:32 rda Exp $
+ * $Id: mainw.c,v 2.100 2007/05/30 08:08:05 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -179,7 +179,6 @@ static void journal_resize_handler (EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
 static void file_menu_op(int op);
 
-static void abandon_action(ACTION_PROC_ARGS);
 static void execute_action(ACTION_PROC_ARGS);
 static void command_line_action(ACTION_PROC_ARGS);
 static void goto_line_action(ACTION_PROC_ARGS);
@@ -305,11 +304,10 @@ static MenuItem tools_menu_items[] = {
 #define CMD_MENU_RETURN     3
 #define CMD_MENU_SEMICOLON  4
 /* Item 5 is a separator */
-#define CMD_MENU_ABANDON    6
-#define CMD_MENU_INTERRUPT  7
-/* Item 8 is a separator */
-#define CMD_MENU_KILL       9
-#define CMD_MENU_RESTART    10
+#define CMD_MENU_INTERRUPT  6
+/* Item 7 is a separator */
+#define CMD_MENU_KILL       8
+#define CMD_MENU_RESTART    9
 
 static MenuItem cmd_menu_items[] = {
     { "Command Line ...", &xmPushButtonGadgetClass, 'C', NULL, NULL,
@@ -322,8 +320,6 @@ static MenuItem cmd_menu_items[] = {
     { "Semicolon", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_SEMICOLON, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
-    { "Abandon", &xmPushButtonGadgetClass, 'A', NULL, NULL,
-        cmd_menu_cb, (XtPointer)CMD_MENU_ABANDON, (MenuItem *)NULL, False },
     { "Interrupt", &xmPushButtonGadgetClass, 'I', NULL, NULL, 
         cmd_menu_cb, (XtPointer)CMD_MENU_INTERRUPT, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
@@ -371,7 +367,6 @@ static MenuItem ln_popup_menu_items[] = {
 };
 
 static XtActionsRec actions[] = {
-	{ "abandon", abandon_action },
 	{ "command-history-up", command_history_up },
 	{ "command-history-down", command_history_down},
 	{ "command-line", command_line_action},
@@ -891,11 +886,6 @@ static Boolean setup_main_window(
 	if( !global_options.edit_only ) {
 		cmdmenu = setup_menu(
 			menubar, XmMENU_PULLDOWN, "Command", 'C', False, cmd_menu_items);
-		if(!global_options.interrupt_prompt ||
-		   !*global_options.interrupt_prompt) {
-			/* no interrupt prompt; disable abandon menu item */
-			set_menu_item_sensitivity(cmdmenu, CMD_MENU_ABANDON, False);
-		}
 	}
 /*
  * Users have complained that the "Execute Selection" item in the command menu
@@ -1417,9 +1407,6 @@ static void cmd_menu_cb(
 	case CMD_MENU_SEMICOLON:
 		send_to_application(";\n", 2);
 		break;
-	case CMD_MENU_ABANDON:
-		interrupt_and_abandon();
-		break;
 	case CMD_MENU_INTERRUPT:
 		interrupt_application();
 		break;
@@ -1677,22 +1664,7 @@ static Bool execute_command(void)
 		return False;
 	}
 }
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * abandon action function; call interrupt_and_abandon if the interrupt prompt
- * has been set up, otherwise just do nothing.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void abandon_action(
-    Widget 		unused_widget,
-    XEvent*	unused_event,
-    String*		unused_params,
-    Cardinal*	unused_num_params)
-{
-	if(	global_options.interrupt_prompt
-	&&	*global_options.interrupt_prompt) {
-		interrupt_and_abandon();
-	}
-}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * command-line action function; pop-up goto-line tool.
  * **** **** **** **** **** **** **** **** **** **** **** **** */

@@ -61,9 +61,7 @@ typedef struct {
 	NAT			journal_max;
 /* command menu options: */
 	char			add_new_line_mode;
-	String			command_line;
-	String			interrupt_prompt;
-	String			abandon_reply;}
+	String			command_line;}
 		GlobalOptions;	
 /*
  * The following are the values of execute_new_line_mode:
@@ -250,7 +248,6 @@ typedef enum {
 	extern void get_pty(void);
 	extern Boolean application_alive(void);
 	extern void handle_sigs(void);
-	extern void interrupt_and_abandon(void);
 	extern void interrupt_application(void);
 	extern void kill_application(void);
 	extern void restart_application(void);
