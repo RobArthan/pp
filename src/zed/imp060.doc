@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp060.doc   %Z% $Date: 2007/05/28 11:30:05 $ $Revision: 1.36 $ $RCSfile: imp060.doc,v $
+% imp060.doc   %Z% $Date: 2007/08/03 16:44:15 $ $Revision: 1.37 $ $RCSfile: imp060.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Lexical Analyser}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP060}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.36 $%
+\def\SCCSversion{$Revision: 1.37 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/05/28 11:30:05 $%
+\TPPdate{\FormatDate{$Date: 2007/08/03 16:44:15 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -110,6 +110,7 @@ symbols known to the reader/writer.
 \item[Issue 1.35] An exponent can now be indicated with ``e'' or ``E''.
 \item[Issue 1.36] Bag brackets are now punctuation.
 \item[Issue 1.37] Improved support for dollar-quoted identifiers.
+\item[Issue 1.38] Alphanumeric identifiers may now begin and end with underscores.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -704,44 +705,29 @@ To recognise identifiers we first need auxiliaries to recognise the
 atomic pieces of identifiers (viz. alphanumeric sequences and
 symbolic sequences)
 
-The following function recognises a sequence of one or more underscores followed
-by an alphanumeric character.
-=SML
-fun €rec_undersc_alnum› (st : LEX_STATE) : LEX_STATE = (
-let	val (st1, flag1) = (rec_undersc st, true)
-		handle Unrecognised => (st, false);
-	fun more_underscs st_n = (
-		more_underscs (rec_undersc st_n)
-		handle Unrecognised => st_n
-	);
-	val st2 = more_underscs st1;
-	val (st3, flag3) = (rec_alnum st2, true)
-		handle Unrecognised => (st, false);
-in
-	if flag1 andalso flag3 then st3
-	else raise Unrecognised
-end);
 =TEX
-The following recognises an sequence of alphanumeric
-characters containing a underscores.
+The following recognises an alphanumeric identifier.
+Note that a single underscore does not comprise an alphanumeric identifier.
 =SML
-fun €rec_atoms› (st : LEX_STATE) : LEX_STATE = (
-let	val (st1, flag1) = (rec_alnum st, true)
-		handle Unrecognised =>
-		((rec_undersc_alnum st, true)
-			handle Unrecognised => (st, false));
-	fun aux st = (
-	let	val (st1, flag1) = (rec_alnum st, true)
-		handle Unrecognised =>
-		((rec_undersc_alnum st, true)
-			handle Unrecognised => (st, false));
-	in
-		if flag1 then aux st1
-		else st1
-	end);
-in
-	if flag1 then aux st1
-		else raise Unrecognised
+fun €rec_alphanumerics› (st : LEX_STATE) : LEX_STATE = (
+let	fun aux1 st = (
+		let	val st1 = rec_alnum st
+				handle Unrecognised => rec_undersc st;
+		in	aux1 st1
+		end	handle Unrecognised => st
+	);
+	fun aux2 st = (
+		aux1(rec_alpha st
+			handle Unrecognised => rec_undersc st)
+	);
+in	case aux2 st of
+		(_, Unknown) => raise Unrecognised
+	|	st2 as (chs, Known s) => (
+			if	s = ""
+			orelse	s = "_"
+			then	raise Unrecognised
+			else	st2
+	)
 end);
 =TEX
 =SML
@@ -761,7 +747,8 @@ let	fun aux2 st =
 		else if next is_macro st
 		then rec_keyword st
 		else if next is_alpha st
-		then rec_atoms st
+		orelse next is_undersc st
+		then rec_alphanumerics st
 		else if next is_digit st
 		then aux2 (collect st)
 		else case st of
@@ -797,19 +784,6 @@ in
 	else st1
 end);
 =TEX
-The following recognises an alpha-numeric identifier.
-=SML
-fun €rec_alphanumeric_id› (st : LEX_STATE) : LEX_STATE = (
-let	val (st1, flag1) = (rec_alpha st, true)
-			handle Unrecognised => (st, false);
-	val (st2, flag2) = (rec_atoms st1, true)
-			handle Unrecognised => (st1, false);
-	val st3 = rec_subscripteseq st2;
-in
-	if flag1 then st3
-	else raise Unrecognised
-end);
-=TEX
 =SML
 fun €rec_greek_id› (st : LEX_STATE) : LEX_STATE = (
 let	val (st1, flag1) = (rec_greek st, true)
@@ -841,6 +815,13 @@ let	val (st1, flag1) = (rec_punctuation st, true)
 in
 	if flag1 andalso flag2 then st3
 	else raise Unrecognised
+end);
+=TEX
+=SML
+fun €rec_alphanumeric_id› (st : LEX_STATE) : LEX_STATE = (
+let	val st1 = rec_alphanumerics st;
+	val st2 = rec_subscripteseq st1;
+in	st2
 end);
 =TEX
 The following recognises a valid Z identifier.
