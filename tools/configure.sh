@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.42 2007/01/28 10:15:07 rda Exp rda $
+# $Id: configure.sh,v 1.43 2007/07/14 15:16:12 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -38,8 +38,9 @@
 #                    everything in the src directory.
 #                   (default: whichever of pptex hol zed daz qcz xpp are there).
 #
-# PPPOLYDBASE      - name of file containing the initial Poly/ML database
-#                   (default: /usr/lib/poly/ML_dbase)
+# PPPOLYHOME       - name of directory containing the bin and lib directories
+#                    where Poly/ML (5.1 or later) may be found.
+#                    (default: /usr/local)
 #
 # PPCACHESIZE      - when ProofPower-Z is built, the HOL types
 #                    needed for Z schema types with up to
@@ -61,8 +62,8 @@
 # install the development kit (possibly separately from the other packages).
 # The default is not to install it.
 #
-# PPPOLYDBASE is not relevant if PPCOMPILER is SMLNJ. The default is
-# appropriate for Poly/ML installed on Linux from the RPM.
+# PPPOLYHOME is not relevant if PPCOMPILER is SMLNJ. The default of
+# /usr/local matches the default of the Poly/ML make file.
 #
 # This is done by creating a shell script, install, which captures the decisions.
 # Makes some sanity checks on the source directory (but not many).
@@ -217,14 +218,17 @@ then	if	[ "${PPCOMPILER:-}" != "" ]
 	# Find Poly/ML database if appropriate:
 	#
 	if	[ "$PPCOMPILER" = POLYML ]
-	then	if	[ "${PPPOLYDBASE:-}" = "" ]
-		then	PPPOLYDBASE=/usr/lib/poly/ML_dbase
+	then	if	[ "${PPPOLYHOME:-}" = "" ]
+		then	PPPOLYHOME=/usr/local
 		fi
-		if	[ ! -f "$PPPOLYDBASE" ]
-		then	give_up "The file \"$PPPOLYDBASE\" does not exist"
+		if	[ ! -f "$PPPOLYHOME"/bin/poly ]
+		then	give_up "The file \"$PPPOLYHOME/bin/poly\" does not exist"
 		fi
-		echo "Using $PPPOLYDBASE for the Poly/ML compiler database"
-	else	PPPOLYDBASE=
+		if	[ ! -f "$PPPOLYHOME"/lib/libpolymain.a ]
+		then	give_up "The file \"$PPPOLYHOME/lib/libpolymain.a\" does not exist"
+		fi
+		echo "Using Poly/ML from $PPPOLYHOME"
+	else	PPPOLYHOME=
 	fi
 fi
 #
@@ -359,17 +363,17 @@ declare_quoted PPTARGETDIR
 declare_unquoted USERCFLAGS
 declare_unquoted USERCLIBS
 if	[ "$PPCOMPILER" = POLYML ]
-then	declare_quoted PPPOLYDBASE
+then	declare_quoted PPPOLYHOME
 fi
 out 'PPHOME="$PPTARGETDIR"'
-out 'PATH="$PPBUILDDIR/src:$PATH"'
+out 'PATH="$PPBUILDDIR/src:$PPPOLYHOME/bin:$PATH"'
 out 'PPDATABASEPATH="$PPBUILDDIR/src"'
 out 'PPETCPATH="$PPBUILDDIR/src"'
 out 'TEXINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$TEXINPUTS:"'
 out 'BIBINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BIBINPUTS:"'
 out 'BSTINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BSTINPUTS:"'
 out 'export LC_ALL PPCACHESIZE PPCOMPILER PPMOTIFLINKING PPTARGETDIR'
-out 'export PPHOME PATH PPDATABASEPATH PPETCPATH PPPOLYDBASE'
+out 'export PPHOME PATH PPDATABASEPATH PPETCPATH PPPOLYHOME'
 out 'export TEXINPUTS BIBINPUTS BSTINPUTS'
 out 'give_up(){'
 out '	echo "install: installation failed; see $1 for more details"'
