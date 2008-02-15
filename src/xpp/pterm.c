@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.52 2005/07/14 11:53:51 rda Exp rda $
+ * $Id: pterm.c,v 2.53 2008/02/10 16:33:32 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -25,38 +25,33 @@ code has evolved over the years to work with new platforms and new
 versions of old platforms. Some notes are in order to help with any
 future changes.
 
-The purpose of pterm.c is to implement a full duplex communication
-channel between xpp and the application it is running. The services and
-the functions that implement them are:
+The purpose of pterm.c is to implement a full duplex communication channel
+between xpp and the application it is running. The services and the functions
+that implement them are:
 
-Initialisation: get_pty - this sets up a full duplex communication
-channel between xpp and the application.
+Initialisation: get_pty - this sets up a full duplex communication channel
+between xpp and the application.
 
 Data transfer from application to xpp: get_from_application
 
 Data transfer from xpp to application: send_to_application, send_nl
 
-Control of the application: application_alive (test),
-interrupt_application, restart_application.
+Control of the application: application_alive (test), interrupt_application,
+restart_application.
 
-To localise Starting a new xpp session: new_editor, new_command_session
-fork and exec a  new xpp session.
+The initialisation step (also used to re-initialise in restart_application) has
+several OS-dependent aspects. Data transfer from and to the application as
+coded here is not OS-dependent, but it care has had to be taken to ensure that
+it doesn't deadlock and to ensure that it doesn't swamp interaction with the
+user. The control functions are less problematic but they do interact with data
+transfer.  Both data transfer and the control functions have to be careful
+about the possibility of signals.
 
-The initialisation step (also used to re-initialise in
-restart_application) has several OS-dependent aspects. Data transfer
-from and to the application as coded here is not OS-dependent, but it
-care has had to be taken to ensure that it doesn't deadlock and to
-ensure that it doesn't swamp interaction with the user. The control
-functions are less problematic but they do interact with data transfer.
-Both data transfer and the control functions have to be careful about
-the possibility of signals.
+To localise the potential system dependencies, this file also provides the
+following services which are required in both edit-only and command sessions:
 
-To localise the potential system dependencies, this file also provides
-the following services which are required in both edit-only and command
-sessions:
-
-Starting a new xpp session: new_editor, new_command_session - fork and
-exec a  new xpp session.
+Starting a new xpp session: new_editor, new_command_session - fork and exec a
+new xpp session.
 
 Handling signals: handle_sigs - set up signal handlers to help preserve
 the user's work.
@@ -64,26 +59,25 @@ the user's work.
 INITIALISATION
 
 The communication channel between xpp and the application is via  UN*X
-pseudo-terminal devices. A pseudo-terminal comprises a pair of entries
-in /dev which are linked by the operating system so that reads and
-writes by one process accessing one /dev entry appear as writes and
-reads to another process accessing the other one. The initialisation
-involves the following stages:
+pseudo-terminal devices. A pseudo-terminal comprises a pair of entries in /dev
+which are linked by the operating system so that reads and writes by one
+process accessing one /dev entry appear as writes and reads to another process
+accessing the other one. The initialisation involves the following stages:
 
-1) Open the two pseudo-terminal devices giving two file descriptors,
-control and slave.
+1) Open the two pseudo-terminal devices giving two file descriptors, control
+and slave.
 
 2) Fork
 
 3a) Parent (xpp) closes the slave file descriptor, sets itself up to do
-non-blocking I/O on the control file descriptor and arranges to listen
-for input from it. Subsequent data transfers to the application are
-writes to the control file descriptor.
+non-blocking I/O on the control file descriptor and arranges to listen for
+input from it. Subsequent data transfers to the application are writes to the
+control file descriptor.
 
 3b) Child (the application-to-be) sets the signal handling back to the
-defaults, then closes the control file descriptor, then duplicates the
-slave file descriptor to become the standard input, output and error
-channels and finally execs the application.
+defaults, then closes the control file descriptor, then duplicates the slave
+file descriptor to become the standard input, output and error channels and
+finally execs the application.
 
 There are several complications. The main one is that to to avoid the
 application starting to do output before xpp is listening, they need to
@@ -108,41 +102,39 @@ your opens of the control device and the slave.
 
 Also on some systems, the pseudo-terminal configuration has to be done
 in the child rather than the parent if xpp is started in the background
-This is probably historic now.
+This is probably historical now.
 
 There is also variation on how the configuration is done i.e., with
 POSIX interfaces or with ioctl.
 
-On MacOS X (and possibly FreeBSD generally) you have to put the
-pseudo-terminal into exclusive to make restarting the application
-reliable. If this is not done, the OS appears to attempt to recycle the
-old control (master) pseudo-device before the old slave is ready to be
-reopened.
+On MacOS X (and possibly FreeBSD generally) you have to put the pseudo-terminal
+into exclusive to make restarting the application reliable. If this is not
+done, the OS appears to attempt to recycle the old control (master)
+pseudo-device before the old slave is ready to be reopened.
 
 
 
 DATA TRANSFER FROM APPLICATION
 
 Data transfer from the application is handled using an input callback
-procedure, get_from_application. However, the obvious approach of just
-having the input callback procedure always alert does not work - if the
-application is generating a lot of data fast, it will swamp the Xt
-input queue and the user interface will freeze (apart from updating the
-display of the data). The solution chosen is to read the have the input
-callback read a small block of data, and if it fills the block to
-unregister itself and register a work procedure to check for further
-data. This lets Xt give due priority to user interactions.  A function
-listening_state is used to keep a close track on whether an input
+procedure, get_from_application. However, the obvious approach of just having
+the input callback procedure always alert does not work - if the application is
+generating a lot of data fast, it will swamp the Xt input queue and the user
+interface will freeze (apart from updating the display of the data). The
+solution chosen is to have the input callback read a small block of data, and
+if it fills the block to unregister itself and register a work procedure to
+check for further data. This lets Xt give due priority to user interactions.  A
+function listening_state is used to keep a close track on whether an input
 callback procedure is currently registered or not and to deal with some
-abnormal situations (e.g., when the application has died unexpectedly,
-but there's still some data from it left to process).
+abnormal situations (e.g., when the application has died unexpectedly, but
+there's still some data from it left to process).
 
 DATA TRANSFER TO APPLICATION
 
 The code that transfers data to the application is actually quite
 simple. The main complication is that, while it is generally only asked
 to transfer just a small amount of data, say 10-10,000 bytes, it is
-sometimes required to deal with very large amounts, say 100,000 bytes
+sometimes required to deal very large amounts, say 1,000,000 bytes
 or more. When a large data transfer is requested, if we tried to send
 the data all at once, the write might block. So we have to be prepared
 to try writing ever smaller amounts of data until we can get something
@@ -161,8 +153,8 @@ processed and dequeued until the application would block; if the queue
 is still too full to deal with a new arrival, then the queue contents
 are all shifted along in an attempt to make room before trying to
 realloc; and, finally, if the work procedure succeeds in draining the
-queue, it reallocs it back to its initial size The performance
-characteristics of this algorithm seem to be very good in practice..
+queue, it reallocs it back to its initial size. The performance
+characteristics of this algorithm seem to be very good in practice.
 
 STARTING NEW XPP SESSIONS
 
@@ -351,7 +343,12 @@ static pid_t child_pid;
 
 static XtInputId app_ip_req;
 
-/* For the following see "Data transfer to application" below */
+/* For the use of following see "Data transfer to application" below.
+ * The contents of the queue is the substring queue[q_head ... q_tail]
+ * (inclusive) so q_tail == q_head - 1 for an empty queue. queue is
+ * malloced and realloced as necessary and always contains a spare byte
+ * so that the string can be null-terminated if needed.
+ */
 static char *queue = 0;
 static int q_size, q_head, q_tail;
 
@@ -532,7 +529,7 @@ void get_pty(void)
 		msg("system error", "no pseudo-terminal devices available");
 		perror("xpp");
 		exit(1);
-	};
+	}
 	if(	grantpt(control_fd) < 0
 	||	unlockpt(control_fd) < 0
 	||	(slavename = ptsname(control_fd)) == NULL
@@ -540,7 +537,7 @@ void get_pty(void)
 		msg("system error", "cannot access pseudo-terminal slave device");
 		perror("xpp");
 		exit(2);
-	};
+	}
 #else 
 #ifdef USE_OPENPTY
 	if( openpty(&control_fd, &slave_fd, NULL, NULL, NULL) < 0 ) {
@@ -610,13 +607,13 @@ void get_pty(void)
 			msg("system error", "fcntl on application would not permit non-blocking i/o");
 			perror("xpp");
 			exit(7);
-		};
+		}
 
 		if(ioctl(control_fd, FIONBIO, &one) < 0) {
 			msg("system error", "ioctl on control fd failed");
 			perror("xpp");
 			exit(8);
-		};
+		}
 
 		listening_state(LISTEN);
 
@@ -797,7 +794,7 @@ static Boolean listening_state(int req)
 			if(listening) {
 				XtRemoveInput(app_ip_req);
 				listening = False;
-			};
+			}
 			break;
 		case QUERY:
 			break;
@@ -809,7 +806,7 @@ static Boolean listening_state(int req)
 				XtAppAddWorkProc(app,
 						get_from_app_work_proc,
 						(XtPointer) STOP_LISTENING);
-			};
+			}
 			break;
 	}
 	sigprocmask(SIG_SETMASK, &before, 0);
@@ -857,7 +854,7 @@ static Boolean get_from_app_work_proc(XtPointer continue_flag)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Data transfer to application:
  * To cope with executing long command line sequences, this
- * is done using a (currently fixed size) queue.
+ * is done using a queue.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -877,13 +874,13 @@ static Boolean dequeue(void)
 /* nothing to do if the queue is empty */
 	if(queue == 0 || q_tail < q_head) {
 		return False;
-	};
+	}
 
 /* no way of emptying the queue if there's no application running: */
 
 	if(!application_alive()) {
 		return False;
-	};
+	}
 
 /* something to do; find the next command line. */
 
@@ -911,14 +908,14 @@ static Boolean dequeue(void)
 				ok_dialog(root, send_error_message);
 			}
 		}
-	};
+	}
 
 /* display what was sent, if anything: */
 
 	if(sent_something)  {
 		scroll_out(queue + q_head, bytes_written, True);
 		q_head = (q_head + bytes_written);
-	};
+	}
 
 	return sent_something;
 }
@@ -1046,7 +1043,7 @@ NAT siz;
 
 	if(!application_alive()) {
 		return;
-	};
+	}
 
 /* Send it off: */
 
