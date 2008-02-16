@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.53 2008/02/10 16:33:32 rda Exp rda $
+ * $Id: pterm.c,v 2.54 2008/02/15 17:38:35 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -347,7 +347,9 @@ static XtInputId app_ip_req;
  * The contents of the queue is the substring queue[q_head ... q_tail]
  * (inclusive) so q_tail == q_head - 1 for an empty queue. queue is
  * malloced and realloced as necessary and always contains a spare byte
- * so that the string can be null-terminated if needed.
+ * so that the string can be null-terminated if needed. q_size is the
+ * total size malloced, of which q_tail - q_head + 1 bytes is occupied
+ * (not including the spare byte).
  */
 static char *queue = 0;
 static int q_size, q_head, q_tail;
