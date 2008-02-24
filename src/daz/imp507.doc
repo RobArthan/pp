@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.347 $ $RCSfile: imp507.doc,v $ $Date: 2007/05/26 16:01:24 $
+% imp507.doc %Z% $Revision: 1.348 $ $RCSfile: imp507.doc,v $ $Date: 2007/11/11 16:08:45 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.347 $%
+\def\SCCSversion{$Revision: 1.348 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/05/26 16:01:24 $%
+\TPPdate{\FormatDate{$Date: 2007/11/11 16:08:45 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -283,6 +283,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.346] Further rationalisation of abstract syntax for loops.
 \item[Issue 1.347] Fixing bug in {\em update\_spec\_env\_block}.
 \item[Issue 1.348] Added support for deletion of deferred subprograms.
+\item[Issue 1.349] Fixed bugs in {\em update\_envs\_pack\_spec} and {\em new\_scope\_pack\_body}.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -657,14 +658,25 @@ fun Ûtype_of_tmarkÝ (dict : ENV_DICT) (tmark : TMARK) : TYPE * Z_ID = (
 =SML
 fun Ûin_scope_dictÝ
 	({
-		dict = dict,
+		dict = _,
 		dec_labels = dec_labels} : IN_SCOPE, 
 	new_dict : ENV_DICT) : IN_SCOPE = (
 	{	dict = new_dict,
 		dec_labels = dec_labels}
 );
 =TEX
-The following adds variables into a environment dictionary taking type information from some other (or maybe the same) dictionary.
+
+=SML
+fun Ûin_scope_new_dict_entriesÝ
+	({
+		dict = dict,
+		dec_labels = dec_labels} : IN_SCOPE, 
+	new_entries : ENV_INFO S_DICT) : IN_SCOPE = (
+	{	dict = add_to_env_dict dict new_entries,
+		dec_labels = dec_labels}
+);
+=TEX
+The following adds variables into an environment dictionary taking type information from some other (or maybe the same) dictionary.
 In fact, the two dictionaries are the same except when we are updating package with-dictionaries.
 =SML
 fun Ûdict_vc_vars1Ý
@@ -6564,8 +6576,64 @@ fun Ûnew_scope_withÝ (ident : ID) : unit = (
 =TEX
 \subsection{The SID function update\_envs\_pack\_spec}
 
-In {\it update\_envs\_pack\_spec}, if we are processing a nested package we enter everything from the packages with-dictionary into the top block of the running environment. 
+In {\it update\_envs\_pack\_spec}, if we are processing a nested package we enter everything from the packages with-dictionary into the top block of the running environment and also propagate this information into the subunit, dec and spec environments.
+
+=SML
+fun Ûupdate_subunit_env_pack_specÝ
+	(fed : ENV_INFO S_DICT) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_subunit
+			(id1_id2_s as
+				(id1_id2,
+				s as {in_scope as {dec_labels, ...}, ...})
+					: string * SUBUNIT) = (
+			if	dec_lab1 mem dec_labels
+			then	(id1_id2,
+				subunit_in_scope (s, in_scope_new_dict_entries(in_scope, fed)))
+			else	id1_id2_s
+		);
+	in	subunit_env := map do1_subunit (!subunit_env)
+	end
+);
 =TEX
+=SML
+fun Ûupdate_dec_env_pack_specÝ
+	(fed : ENV_INFO S_DICT) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_dec_label
+			(dec_label_d as
+				(dec_label,
+				d as {in_scope as {dec_labels, ...}, ...})
+					: string * DECLAB) = (
+			if	dec_lab1 mem dec_labels
+			then	(dec_label,
+				declab_in_scope (d, in_scope_new_dict_entries(in_scope, fed)))
+			else	dec_label_d
+		);
+	in	dec_env := map do1_dec_label (!dec_env)
+	end
+);
+=TEX
+=SML
+fun Ûupdate_spec_env_pack_specÝ
+	(fed : ENV_INFO S_DICT) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_spec_label
+			(spec_label_s as
+				(spec_label,
+				s as {spec as {w, ...},
+					in_scope as {dec_labels, ...}, ...})
+					: string * SPECLAB) = (
+			if	dec_lab1 mem dec_labels
+			then	(spec_label,
+				speclab_in_scope (s, in_scope_new_dict_entries(in_scope, fed)))
+			else	spec_label_s
+		);
+	in	spec_env := map do1_spec_label (!spec_env)
+	end
+);
+=TEX
+Now the SID function bringing the above three together and adding the new information to the current environment.
 =SML
 fun Ûupdate_envs_pack_specÝ (ident : ID) : unit = (
 if	test_flag #body_flag 1
@@ -6573,9 +6641,16 @@ then	case s_lookup ident (!pack_env) of
 		Nil => fail "update_envs_pack_spec" 507060 [fn _ => ident]
 	|Value {with_dict, ...} => (
 		let	val block = block 1
-			handle Fail _ => error "aux_var" 507006 [];
-			val block = block_dict (block, with_dict);
-		in	blocks := block :: tl(!blocks)
+			handle Fail _ => error "update_envs_pack_spec" 507006 [];
+			val in_scope = #in_scope(#declab block);
+			val fed = flatten_env_dict with_dict;
+			val block = block_in_scope (block, in_scope_new_dict_entries(in_scope, fed));
+		in	blocks := block :: tl(!blocks);
+			if	test_flag #declabel_flag 1
+			then	(update_subunit_env_pack_spec fed;
+				 update_dec_env_pack_spec fed;
+				 update_spec_env_pack_spec fed)
+			else	()
 		end
 	)
 else	()
@@ -6625,12 +6700,18 @@ fun Ûnew_scope_pack_bodyÝ (ident : ID) : unit = (
 			body_flag = true
 		};
 		val old_subunit_flag = test_flag #subunit_flag 1;
-		val _ = 	(if old_subunit_flag then () else new_parent_aux false (#zmod package1));
+		val pack_ident = 
+		if	old_subunit_flag
+		then	prefix_trans_id
+			(ada_block_name(#block_name(#declab(block 1))))
+			ident
+		else	(new_parent_aux false (#zmod package1);
+			ident);
 		val dict = init_pack_body_dict(ident, package1);
 		val block = block_dict(block_flags(empty_block, flags), dict);
-		val scope_entry = {theory = ident ^ pack_body_tag, deferred = DSNotDeferred, body_labels = Nil};
+		val scope_entry = {theory = pack_ident ^ pack_body_tag, deferred = DSNotDeferred, body_labels = Nil};
 	in	(scope_env :=
-		e_extend ident scope_entry (!scope_env)
+		e_extend pack_ident scope_entry (!scope_env)
 		handle Fail _ => (
 			fail "new_scope_pack_body" 507143
 			[fn () => ident]));
