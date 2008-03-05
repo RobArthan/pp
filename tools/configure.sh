@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.43 2007/07/14 15:16:12 rda Exp rda $
+# $Id: configure.sh,v 1.44 2008/02/12 17:45:51 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -190,32 +190,28 @@ do	if	eval [  \$$f = y  ]
 	fi
 done
 #
-# Find an ML Compiler
+# Find an ML Compiler, if we need one
 #
 if	[ "$dev" = y -o "$hol" = y -o "$zed" = y -o "$daz" = y -o "$qcz" = y ]
-then	if	[ "${PPCOMPILER:-}" != "" ]
+then
+	#
+	# Determine PPCOMPILER 
+	#
+	if	[ "${PPCOMPILER:-}" != "" ]
 	then	case "$PPCOMPILER" in
 			POLYML) T='Poly/ML'; C='poly';;
 			SMLNJ)  T='Standard ML of New Jersey'; C='sml';;
 			*)	give_up 'PPCOMPILER must be one of "POLYML" or "SMLNJ"';;
 		esac
-		echo "Using $T as specified"
-		check_bin "$C" "$C not found; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
+		check_bin "$C" "$C not found on search path; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
 	elif	find_in_path poly >/dev/null 2>&1
-	then	echo 'Using Poly/ML'
-		PPCOMPILER=POLYML
+	then	PPCOMPILER=POLYML
 	elif	find_in_path sml >/dev/null 2>&1
-	then	echo 'Using Standard ML of New Jersey'
-		PPCOMPILER=SMLNJ
+	then	PPCOMPILER=SMLNJ
 	else	give_up 'cannot find a Standard ML compiler'
 	fi
-	if	[ "$PPCOMPILER" = SMLNJ ]
-	then	if	! find_in_path .arch-n-opsys >/dev/null 2>&1
-		then	give_up '".arch-n-opsys" not found: to build with SML/NJ, its installation bin directory must be on your path'
-		fi
-	fi
 	#
-	# Find Poly/ML database if appropriate:
+	# Do compiler-specific checks and settings and report to user
 	#
 	if	[ "$PPCOMPILER" = POLYML ]
 	then	if	[ "${PPPOLYHOME:-}" = "" ]
@@ -228,7 +224,12 @@ then	if	[ "${PPCOMPILER:-}" != "" ]
 		then	give_up "The file \"$PPPOLYHOME/lib/libpolymain.a\" does not exist"
 		fi
 		echo "Using Poly/ML from $PPPOLYHOME"
-	else	PPPOLYHOME=
+	elif	[ "$PPCOMPILER" = SMLNJ ]
+	then	if	! find_in_path .arch-n-opsys >/dev/null 2>&1
+		then	give_up '".arch-n-opsys" not found: to build with SML/NJ, its installation bin directory must be on your path'
+		fi
+		echo 'Using Standard ML of New Jersey'
+
 	fi
 fi
 #
