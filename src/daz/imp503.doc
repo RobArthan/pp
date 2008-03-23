@@ -137,6 +137,7 @@ This removes the need for various special cases and type conversion functions.
 \item[Issue 1.138] Made checking of loop names uniform with checking of block names.
 \item[Issues 1.139, 1.140] Revised syntax for naming anonymous blocks and rationalised data types that represent loop statements.
 \item[Issue 1.141] Tidied error handling for logical constants and similar.
+\itemp[Issue 1.142] Child packages.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -455,7 +456,7 @@ datatype €PPARSED› =
 	|	€PPContextItem› of CONTEXT_ITEM
 	|	€PPContextClause› of 
 			CONTEXT_ITEM list *
-			ID list *
+			EXPANDED_NAME list *
 			ANNOTATION
 	|	€PPContextCompilationUnit› of CONTEXT_COMPILATION_UNIT
 	|	€PPDeclarations› of DECLARATION list
@@ -468,6 +469,7 @@ datatype €PPARSED› =
 	|	€PPId› of ID
 	|	€PPIdExp› of (ID * EXP)
 	|	€PPIds› of ID list
+	|	€PPExpandedNames› of EXPANDED_NAME list
 	|	€PPLoopOrBlockName› of LOOP_OR_BLOCK_NAME
 	|	€PPKSlot› of K_SLOT
 	|	€PPKSlotCUList› of KSLOT_COMPILATION_UNIT list
@@ -493,17 +495,29 @@ datatype €PPARSED› =
 	|	€PPVarDecls› of SI_VAR_DECL list
 	|	€PPWebClause› of WEB_CLAUSE;
 =TEX
-In the following, the list will have at most 2 elements (it is always the concatenation of the names
-found at the beginning and end of a proper body, a package declaration or similar.
+In the following, the list will have at most 2 elements (it is always the concatenation of the simple names
+found at the beginning and end of a subprogram body or a block.
 =SML
-fun €different_ids› ([id1, id2] : ID list) : bool = (
+fun €different_simple_names› ([id1, id2] : ID list) : bool = (
     (id1 <> id2)
-) | different_ids _ = false;
+) | different_simple_names _ = false;
+=TEX
+In the following, the arguments are the expanded names
+found at the beginning and end of a package declaration or a package body.
+=SML
+fun €different_expanded_names› (id1 : ID list, (id2 as _::_) : ID list) : bool = (
+    (id1 <> id2)
+) | different_expanded_names _ = false;
 =TEX
 In the following, the list will have at most 1 element (it always represents an optional construct)
 =SML
 fun €opt_of_list› ([x] : 'a list) : 'a OPT = Value x
 | opt_of_list _ = Nil;
+=TEX
+In the following, the grammar will have specified an optional non-empty list:
+=SML
+fun €opt_non_empty_list_of_list› ([] : 'a list) : 'a list OPT = Nil
+| opt_non_empty_list_of_list x = Value x;
 =TEX
 =SML
 fun €mk_expanded_name› (e : EXP) : ID list = (
@@ -920,11 +934,15 @@ fun €red_variable_declaration2› (Parsed(PPIds ids)) _ (Parsed(PPSubtypeIndicatio
     PPBasicDecls[SIVarDeclInit({vars=ids, t=mk_sub_ind si}, mk_exp_of_exp init)])
 |   red_variable_declaration2 _ _ _ _ _ _ =
         stack_error "red_variable_declaration2";
-
+=TEX
+=SML
 fun €red_identifier_list1› (Token ((_,CNText id), _)) = (
     PPIds [id])
 |   red_identifier_list1 _ =
         stack_error "red_identifier_list1";
+=TEX
+In the following we deliberately do not insist that the separator be a comma so that we can reuse this for reducing expanded names.
+=SML
 
 fun €red_identifier_list2› (Token ((_,CNText id), _)) _ (Parsed(PPIds ids)) = (
     PPIds (id::ids))
@@ -2228,16 +2246,16 @@ SPARK manual 6.3:
 fun €red_subprogram_body1›
 	(Parsed (PPProcedureSpecification ps)) _
     (Parsed (PPSubprogram (d, s, ido))) = (
-let val {name=id',...} = ps;
-    val side =if    different_ids (id' :: ido)
-            then    parse_error 503001 "PROCEDURE identifiers do not match"
-            else    ();
-in
-    PPProperBody (PBProcedure {deferred = false,
-	procedure_spec = ps,declarative_part = d,
-	statement = s, end_name = opt_of_list ido})
-end)
-|   red_subprogram_body1 _ _ _ =
+let	val {name=id',...} = ps;
+	val side =
+	if    different_simple_names (id' :: ido)
+	then    parse_error 503001 "PROCEDURE identifiers do not match"
+	else    ();
+in	PPProperBody (PBProcedure {deferred = false,
+		procedure_spec = ps,declarative_part = d,
+		statement = s, end_name = opt_of_list ido})
+end
+) | red_subprogram_body1 _ _ _ =
         stack_error "red_subprogram_body1";
 =TEX
 =SML
@@ -2245,7 +2263,7 @@ fun €red_subprogram_body2› _
 	(Parsed (PPProcedureSpecification ps)) _
     (Parsed (PPSubprogram (d, s, ido))) = (
 let val {name=id',...} = ps;
-    val side =if    different_ids (id' :: ido)
+    val side =if    different_simple_names (id' :: ido)
             then    parse_error 503001 "PROCEDURE identifiers do not match"
             else    ();
 in
@@ -2261,7 +2279,7 @@ fun €red_subprogram_body3›
 		(Parsed (PPFunctionSpecification fs)) _
     (Parsed (PPSubprogram (d, s, ido))) = (
 let val {designator=id',...} = fs;
-    val side =if    different_ids (id' :: ido)
+    val side =if    different_simple_names (id' :: ido)
             then    parse_error 503001 "FUNCTION designators do not match"
             else    ();
 in
@@ -2276,7 +2294,7 @@ fun €red_subprogram_body4› _
 		(Parsed (PPFunctionSpecification fs)) _
     (Parsed (PPSubprogram (d, s, ido))) = (
 let val {designator=id',...} = fs;
-    val side =if    different_ids (id' :: ido)
+    val side =if    different_simple_names (id' :: ido)
             then    parse_error 503001 "FUNCTION designators do not match"
             else    ();
 in
@@ -2363,32 +2381,35 @@ fun €red_package_declaration› (Parsed (PPPackageSpecification p)) _ = (
 |   red_package_declaration _ _ =
         stack_error "red_package_declaration";
 
-fun €red_package_specification1› _ (Token ((_,CNText id), _))
+fun €red_package_specification1› _ (Parsed (PPIds en))
 	(Parsed (PPAnnotation ann)) _
-    (Parsed(PPDeclarations v)) _ (Parsed(PPIds ido)) = (
-let val side =if    different_ids (id::ido)
-            then    parse_error 503001 "PACKAGE names do not match"
-            else    ();
+    (Parsed(PPDeclarations v)) _ (Parsed(PPIds enol)) = (
+let	val side =
+		if    different_expanded_names (en, enol)
+		then    parse_error 503001 "PACKAGE names do not match"
+		else    ();
+	val eno = opt_non_empty_list_of_list enol;
 in	PPPackageSpecification
-	{name=id,visible_decs = v,private_decs = Nil,
-		annotation = ann, end_name = opt_of_list ido}
-end)
-|   red_package_specification1 _ _ _ _ _ _ _ =
+	{name=en,visible_decs = v,private_decs = Nil,
+		annotation = ann, end_name = eno}
+end
+) | red_package_specification1 _ _ _ _ _ _ _ =
         stack_error "red_package_specification1";
 
-fun €red_package_specification2› _ (Token ((_,CNText id), _))
+fun €red_package_specification2› _ (Parsed (PPIds en))
 	(Parsed (PPAnnotation ann))  _
     (Parsed(PPDeclarations v)) _  (Parsed(PPDeclarations p)) _
-    (Parsed(PPIds ido)) = (
-let val side =if    different_ids (id::ido)
-            then    parse_error 503001 "PACKAGE names do not match"
-            else    ();
-in
-    	PPPackageSpecification
-	{name = id, visible_decs = v, private_decs = Value p,
-		annotation = ann, end_name = opt_of_list ido}
-end)
-|   red_package_specification2 _ _ _ _ _ _ _ _ _ =
+    (Parsed(PPIds enol)) = (
+let	val side =
+		if    different_expanded_names (en, enol)
+           	then    parse_error 503001 "PACKAGE names do not match"
+		else    ();
+	val eno = opt_non_empty_list_of_list enol;
+in	PPPackageSpecification
+		{name = en, visible_decs = v, private_decs = Value p,
+			annotation = ann, end_name = eno}
+end
+) | red_package_specification2 _ _ _ _ _ _ _ _ _ =
         stack_error "red_package_specification2";
 
 val €red_visible_part1› = PPDeclarations [];
@@ -2399,6 +2420,12 @@ fun €red_visible_part2› (Parsed (PPDeclarations d1))
 |   red_visible_part2 _ _ =
         stack_error "red_visible_part2";
 
+=TEX
+=SML
+val €red_expanded_name_opt1› = PPIds [];
+val €red_expanded_name_opt2› = red_accept;
+val €red_expanded_name1› = red_identifier_list1;
+val €red_expanded_name2› = red_identifier_list2;
 =TEX
 
 SPARK manual 7.1:
@@ -2422,36 +2449,24 @@ end)
 
 val €red_visdec5› = red_accept;
 
-val €red_private_part1› = PPDeclarations [];
+val €red_private_part› = red_accept;
 
-fun €red_private_part2› (Parsed (PPDeclarations d1))
-    (Parsed (PPDeclarations d2)) = (
-    PPDeclarations (d1@d2))
-|   red_private_part2 _ _ =
-        stack_error "red_private_part2";
-
-fun €red_pdec1› (Parsed (PPKSlot k)) = (
-    PPDeclarations [DDeclarationKSlot (k, DKPrivate)])
-|   red_pdec1 _ =
-        stack_error "red_pdec1";
-
-val €red_pdec2› = red_accept;
-
-val €red_pdec3› = red_accept;
 =TEX
 
 =SML
-fun €red_package_body› _ _ (Token ((_,CNText id), _)) 
+fun €red_package_body› _ _ (Parsed (PPIds en)) 
 	(Parsed (PPAnnotation ann)) _
-    (Parsed(PPSubprogram (d,s, _))) _ (Parsed(PPIds ido)) _ = (
-let val side =if    different_ids (id::ido)
-            then    parse_error 503001 "PACKAGE names do not match"
-            else    ();
-in
-   	PPProperBody
-	(PBPackage{name=id,decls=d,statement=s,annotation=ann, end_name = opt_of_list ido})
-end)
-|   red_package_body _ _ _ _ _ _ _ _ _ =
+    (Parsed(PPSubprogram (d,s, _))) _ (Parsed(PPIds enol)) _ = (
+let	val side =
+		if    different_expanded_names (en, enol)
+		then    parse_error 503001 "PACKAGE names do not match"
+		else    ();
+	val eno = opt_non_empty_list_of_list enol;
+in	PPProperBody(PBPackage
+		{name=en,decls=d,statement=s,
+			annotation=ann, end_name = eno})
+end
+) | red_package_body _ _ _ _ _ _ _ _ _ =
         stack_error "red_package_body";
 
 fun €red_package_implementation1› (Parsed (PPDeclarations d)) = (
@@ -2566,7 +2581,7 @@ fun €red_deferred_constant_declaration› (Parsed(PPIds ids)) _ _
 =SML
 val €red_use_clause1› = red_accept;
 val €red_use_clause2› = red_accept;
-fun €red_use_package_clause› _ (Parsed (PPIds ids)) _ = PPUseClause (UCUse ids)
+fun €red_use_package_clause› _ (Parsed (PPExpandedNames ens)) _ = PPUseClause (UCUse ens)
 |   red_use_package_clause _ _ _ =
 	stack_error "red_use_package_clause";
 fun €red_use_type_clause› _ _ (Parsed (PPExps ns)) _ = PPUseClause (UCUseType(map mk_type_mark ns))
@@ -2586,10 +2601,10 @@ fun €red_renaming_declaration1›
 	stack_error "red_renaming_declaration1";
 	
 fun €red_renaming_declaration2›
-	_ (Token ((_,CNText id), _)) _ 
-	_ (Parsed (PPExp n)) _ = (
+	_ (Parsed (PPIds new_en)) _ 
+	_ (Parsed (PPIds old_en)) _ = (
 	PPDeclarations[DRenamingDeclaration(RDPackage
-	{new_name = id, old_name = mk_type_mark n})]
+	{new_name = new_en, old_name = old_en})]
 ) | red_renaming_declaration2 _ _ _ _ _ _ =
 	stack_error "red_renaming_declaration2";
 	
@@ -2730,7 +2745,7 @@ fun €red_context_clause2› (Parsed(PPContextItem ci))
 		PPContextClause (ci :: (map CIPragma ps) @ cis, refls, ann)
 |   red_context_clause2 _ _ _ = stack_error "red_context_clause2";
 
-fun €red_context_clause3› (Parsed(PPIds refs))
+fun €red_context_clause3› (Parsed(PPExpandedNames refs))
 		(Parsed (PPContextClause (idps, refs1, ann))) =
 		PPContextClause (idps, refs @ refs1, ann)
 |   red_context_clause3 _ _ = stack_error "red_context_clause3";
@@ -2744,8 +2759,8 @@ fun €red_context_clause5› (Parsed (PPAnnotation ann)) = PPContextClause ([], [],
 |   red_context_clause5 _ = stack_error "red_context_clause5";;
 =TEX
 =SML
-fun €red_with_or_use_clause1› (Parsed (PPIds ids)) = (
-	PPContextItem (CIWith ids)
+fun €red_with_or_use_clause1› (Parsed (PPExpandedNames ens)) = (
+	PPContextItem (CIWith ens)
 ) | red_with_or_use_clause1 _ = stack_error "red_with_or_use_clause1";
 fun €red_with_or_use_clause2› (Parsed (PPUseClause uc)) = (
 	PPContextItem (CIUse uc)
@@ -2790,14 +2805,22 @@ fun €red_argument_association2› (Parsed(PPExp e)) = (
 
 =TEX
 =SML
-fun €red_with_clause› _ (Parsed (PPIds ids)) _ = (PPIds ids)
+fun €red_with_clause› _ (Parsed pens) _ = pens
 |   red_with_clause _ _ _ = stack_error "red_with_clause";
 =TEX
 =SML
-fun €red_references_clause› _ (Parsed (PPIds ids)) _ = (PPIds ids)
-|   red_references_clause _ _ _ = stack_error "red_references_clause";
+val €red_references_clause› = red_with_clause;
 =TEX
+=SML
+fun €red_expanded_name_list1› (Parsed (PPIds en)) = (
+	PPExpandedNames [en]
+) | red_expanded_name_list1 _ = stack_error "red_expanded_name_list1";
 
+fun €red_expanded_name_list2› (Parsed (PPIds en)) _ (Parsed(PPExpandedNames ens)) = (
+	PPExpandedNames (en::ens)
+) | red_expanded_name_list2 _ _ _ = stack_error "red_expanded_name_list2";
+
+=TEX
 SPARK manual 10.2:
 =SML
 fun €red_body_stub1› (Parsed (PPProcedureSpecification ps)) _ _ _ = (
@@ -2809,10 +2832,10 @@ fun €red_body_stub2› (Parsed (PPFunctionSpecification fs)) _ _ _ = (
 |   red_body_stub2 _ _ _ _ =
         stack_error "red_body_stub2";
 
-fun €red_body_stub3› _ _ (Token ((_,CNText id), _))
+fun €red_body_stub3› _ _ (Parsed (PPIds en))
 	(Parsed (PPAnnotation ann)) _ _ _ = (
 	case ann of
-	[] =>	PPDeclarations [DPackageStub id]
+	[] =>	PPDeclarations [DPackageStub en]
 	| _ => parse_error 503001"annotations are not allowed in a package stub"
 ) | red_body_stub3 _ _ _ _ _ _ _ =
         stack_error "red_body_stub3";

@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.156 2007/05/21 15:50:43 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.157 2007/05/22 15:18:43 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Ada Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.156 $%
+\def\SCCSversion{$Revision: 1.157 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/05/21 15:50:43 $%
+\TPPdate{\FormatDate{$Date: 2007/05/22 15:18:43 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -230,6 +230,7 @@ used as identifiers are now escaped with a dollar sign (as required if they are 
 \item[Issue 1.148] Allowed for deferred subprograms.
 \item[Issue 1.149] {\em case\_of\_ada\_keywords} is now {\em cn\_case\_of\_ada\_keywords}.
 \item[Issues 1.150--1.153] Allowed for anonymous loops and blocks that have been given a name in the Compliance Notation.
+\item[Issue 1.154] Child packages.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -2584,14 +2585,32 @@ fun €fmt_object_renaming› (fmtinfo as {outf,...} : PP_FMT_INFO)
 );
 =TEX
 =SML
+fun €string_of_expanded_name› ([] : EXPANDED_NAME) = ""
+|   string_of_expanded_name [sn] = sn
+|   string_of_expanded_name (sn::more) = sn ^ "." ^ string_of_expanded_name more;
+=TEX
+=SML
+fun €fmt_expanded_name_opt›  (fmtinfo : PP_FMT_INFO) (Value n : EXPANDED_NAME OPT) : unit  = (
+	fmt_id_plus fmtinfo (string_of_expanded_name n) ""
+) | fmt_expanded_name_opt _ _ = ();
+=TEX
+=SML
+fun €fmt_expanded_name_list› (fmtinfo : PP_FMT_INFO)([] : EXPANDED_NAME list) = ()
+  | fmt_expanded_name_list (fmtinfo : PP_FMT_INFO)([x]) = (fmt_id fmtinfo (string_of_expanded_name x))
+  | fmt_expanded_name_list (fmtinfo : PP_FMT_INFO)(x::xs) = (
+	(fmt_id_comma fmtinfo (string_of_expanded_name x));
+	(fmt_expanded_name_list fmtinfo xs)
+);
+=TEX
+=SML
 fun €fmt_package_renaming› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({new_name, old_name} : PACKAGE_RENAMING) = (
-	in_new_scope false new_name (fn () => (
+	in_new_scope false (trans_expanded_name new_name) (fn () => (
 	non_spark_warning 510121;
 	outf (kw"PACKAGE");
-	fmt_id fmtinfo new_name;
+	fmt_id fmtinfo (string_of_expanded_name new_name);
 	outf (kw"RENAMES");
-	fmt_id fmtinfo old_name; 
+	fmt_id fmtinfo (string_of_expanded_name old_name); 
 	outf ";"; outf "\n"
 	))
 );
@@ -2733,10 +2752,13 @@ Use clauses.
 
 =SML
 fun €fmt_use_clause› (fmtinfo as {outf, ...} : PP_FMT_INFO) (UCUse ids : USE_CLAUSE) = (
+let	val zns = map trans_expanded_name ids;
+in
 	non_spark_warning 510114;
-	map (map check_use_clause_name) (map package_ids ids);
-	outf (kw"USE"); fmt_id_list fmtinfo ids; outf ";"; outf "\n";
+	map (map check_use_clause_name) (map package_ids zns);
+	outf (kw"USE"); fmt_expanded_name_list fmtinfo ids; outf ";"; outf "\n";
 	fmt_warnings fmtinfo
+end
 ) | fmt_use_clause (fmtinfo as {outf, ...}) (UCUseType ids : USE_CLAUSE) = (
 	outf (kw2"USE""TYPE"); fmt_id_list fmtinfo ids; outf ";"; outf "\n"
 );
@@ -2883,9 +2905,9 @@ fun €fmt_function_stub› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
 );
 =TEX
 =SML
-fun €fmt_package_stub› (fmtinfo as {outf,...} : PP_FMT_INFO) (n : ID) = (
+fun €fmt_package_stub› (fmtinfo as {outf,...} : PP_FMT_INFO) (n : EXPANDED_NAME) = (
 	outf (kw2"PACKAGE""BODY");
-	(fmt_id fmtinfo n); outf (kw2"IS""SEPARATE"^";");
+	(fmt_id fmtinfo (string_of_expanded_name n)); outf (kw2"IS""SEPARATE"^";");
 	outf "\n"
 );
 fun €fmt_auxiliary› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (av : AUX_VAR) =
@@ -2915,14 +2937,14 @@ fun €fmt_package_declaration›
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
 	({name=n, end_name = en, visible_decs=v, private_decs=p, annotation=ann} :
     DECLARATION PACKAGE_DECLARATION) = (
-    in_new_scope true n (fn () => (
-	outf (kw"PACKAGE"); fmt_id fmtinfo n; outf "\n";
+    in_new_scope true (trans_expanded_name n) (fn () => (
+	outf (kw"PACKAGE"); fmt_id fmtinfo (string_of_expanded_name n); outf "\n";
 	fmt_annotation fmtinfo ann;
 	outf (kw"IS"); outf "\n";
 	(inc_tabs();
 		fmt_decls fmtinfo v;
 	dec_tabs())));
-    in_new_scope false n (fn () => (
+    in_new_scope false (trans_expanded_name n) (fn () => (
     	(case p
 	of Nil => ()
 	| Value pds => (
@@ -2934,7 +2956,7 @@ fun €fmt_package_declaration›
 		dec_tabs()
 	));
         (case en of Nil => non_spark_warning 510123 | _ => ());
-        outf (kw"END"); (fmt_id_opt fmtinfo en); outf ";"; outf "\n"
+        outf (kw"END"); (fmt_expanded_name_opt fmtinfo en); outf ";"; outf "\n"
     ))
    );
 =TEX
@@ -2992,8 +3014,8 @@ fun €fmt_package_body›
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
 	({name=n, decls=d, statement=s, annotation=ann, end_name = en}
 		: PACKAGE_BODY) = (
-    in_new_scope true n (fn () => (
-    outf (kw2"PACKAGE""BODY"); fmt_id fmtinfo n; outf "\n";
+    in_new_scope true (trans_expanded_name n) (fn () => (
+    outf (kw2"PACKAGE""BODY"); fmt_id fmtinfo (string_of_expanded_name n); outf "\n";
     fmt_annotation fmtinfo ann;
     (outf (kw"IS"); outf "\n");
     inc_tabs(); fmt_decls  fmtinfo d; dec_tabs();
@@ -3003,7 +3025,7 @@ fun €fmt_package_body›
 	inc_tabs();fmt_stat fmtinfo s; dec_tabs())
     );
     (case en of Nil => non_spark_warning 510125 | _ => ());
-    outf (kw"END"); (fmt_id_opt fmtinfo en); outf ";"; outf "\n")
+    outf (kw"END"); (fmt_expanded_name_opt fmtinfo en); outf ";"; outf "\n")
 ));
 
 fun €fmt_proper_body›
@@ -3226,7 +3248,7 @@ Compilation units.
 =SML
 fun €fmt_context_item› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	(CIWith x : CONTEXT_ITEM) = (
-	outf (kw"WITH"); fmt_id_list fmtinfo x; outf ";"; outf "\n"
+	outf (kw"WITH"); fmt_expanded_name_list fmtinfo x; outf ";"; outf "\n"
 ) | fmt_context_item fmtinfo (CIUse uc) = (
 	fmt_use_clause fmtinfo uc
 ) | fmt_context_item fmtinfo (CIPragma p) = (

@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp514.doc   %Z% $Date: 2006/04/07 10:00:14 $ $Revision: 1.23 $ $RCSfile: imp514.doc,v $
+% imp514.doc   %Z% $Date: 2007/05/26 16:01:24 $ $Revision: 1.24 $ $RCSfile: imp514.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Compliance Notation (Volume II) Types}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP514}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.23 $%
+\def\SCCSversion{$Revision: 1.24 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/04/07 10:00:14 $%
+\TPPdate{\FormatDate{$Date: 2007/05/26 16:01:24 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -84,6 +84,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \item[Issue 1.21] Aliasing in pre- and post-conditions is now only supported for Ada variables (not constants etc.).
 \item[Issue 1.22] Added variant of {\em env\_of\_env\_dict}.
 \item[Issue 1.23] Fixed {\em set\_cn\_scope}.
+\item[Issue 1.24] Child packages.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -142,7 +143,8 @@ val Ûinitial_infosÝ : ENV_INFO E_DICT = list_e_enter initial_e_dict (
 			in	(n,
 					{tipe = Value (type_of t),
 					canon_name = n,
-					info = EIEnvOtherType})
+					info = EIEnvOtherType,
+					private = false})
 			end
 		)
 	in	map do_1_tm tms_to_do
@@ -153,7 +155,7 @@ val Ûinitial_infosÝ : ENV_INFO E_DICT = list_e_enter initial_e_dict (
 =SML
 *)
 val Ûinitial_env_dictÝ : ENV_DICT = EnvDict {
-	infos =initial_infos,
+	infos = initial_infos,
 	ti_cxt = initial_e_dict,
 	local_vars = {
 		vc_vars = [],
@@ -173,22 +175,22 @@ fun Ûadd_to_env_dictÝ
 	let	val infos' = list_e_enter infos new;
 		open ZTypesAndTermsSupport;
 		fun mk_ti_cxt acc [] = acc
-		|    mk_ti_cxt acc ((n, {tipe, info as EIEnvVar _, canon_name}):: more) = (
+		|    mk_ti_cxt acc ((n, {tipe, info as EIEnvVar _, canon_name, ...}):: more) = (
 			if	n = canon_name
 			then	let	val ty = force_value tipe;
 					val entries = [(n, ty), (n ^ "‰0", ty)];
 				in	mk_ti_cxt (list_e_enter acc entries) more
 				end	handle Fail _ => fail "add_to_env_dict" 514001 [fn _ => n]
 			else	mk_ti_cxt acc more
-		) |  mk_ti_cxt acc ((n, {tipe, info as EIEnvAuxVar _, canon_name}):: more) = (
+		) |  mk_ti_cxt acc ((n, {tipe, info as EIEnvAuxVar _, ...}):: more) = (
 			let	val ty = force_value tipe;
 				val entries = [(n, ty), (n ^ "‰0", ty)];
 			in	mk_ti_cxt (list_e_enter acc entries) more
 			end	handle Fail _ => fail "add_to_env_dict" 514001 [fn _ => n]
-		) |  mk_ti_cxt acc ((n, {tipe, info as EIEnvLogCon _, canon_name}):: more) = (
+		) |  mk_ti_cxt acc ((n, {tipe, info as EIEnvLogCon _, ...}):: more) = (
 			mk_ti_cxt (e_enter n (force_value tipe) acc) more
 			handle Fail _ => fail "add_to_env_dict" 514001 [fn _ => n]
-		) |  mk_ti_cxt acc ((n, {tipe, info, canon_name}):: more) = (
+		) |  mk_ti_cxt acc (_ :: more) = (
 			mk_ti_cxt acc more
 		);
 		fun grow_scope _ Nil = Nil
@@ -327,7 +329,7 @@ fun Ûenv_of_env_dict_auxÝ (use_gct : bool)
 	 : CN_ENV = (
 let	fun aux (Value g) zn = (
 		case e_lookup zn infos of
-			res as (Value {canon_name, info as EIEnvVar {tmark, ...}, tipe}) => (
+			res as (Value {canon_name, info as EIEnvVar {tmark, ...}, tipe, private}) => (
 				case e_lookup canon_name g of
 					Value _ => res
 				|	Nil =>  Value {
@@ -336,8 +338,9 @@ let	fun aux (Value g) zn = (
 							tmark = tmark,
 							kind = VKOutOfScope
 						},
-						tipe = tipe}
-		) |	res as (Value {canon_name, info as EIEnvAuxVar {decl, ...}, tipe}) => (
+						tipe = tipe,
+						private = private}
+		) |	res as (Value {canon_name, info as EIEnvAuxVar {decl, ...}, tipe, private}) => (
 				case e_lookup canon_name g of
 					Value _ => res
 				|	Nil =>  Value {
@@ -346,19 +349,21 @@ let	fun aux (Value g) zn = (
 							decl = decl,
 							in_scope = false
 						},
-						tipe = tipe}
+						tipe = tipe,
+						private = private}
 		) |	other => other
 	) | aux Nil zn = e_lookup zn infos;
 	open ZTypesAndTermsSupport;
 in	fn zn =>
 	case aux cn_scope zn of
 		res as (Value {tipe = Value _, ...}) => res
-	|	res as (Value {tipe = Nil, canon_name, info}) => (
+	|	res as (Value {tipe = Nil, canon_name, info, private = private}) => (
 		let	val hol_name =  bind_gvar_name canon_name;
 		in	Value{
 				tipe = get_const_type hol_name,
 				canon_name = canon_name,
-				info = info}
+				info = info,
+				private = private}
 		end		
 	) |	Nil => (
 		if	use_gct
@@ -367,7 +372,8 @@ in	fn zn =>
 					Value ty => Value {
 							tipe = Value ty,
 							canon_name = zn,
-							info = EIEnvOther}
+							info = EIEnvOther,
+							private = false}
 				|	Nil => Nil
 			end
 		else	Nil
