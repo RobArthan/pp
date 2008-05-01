@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.159 2008/03/24 14:33:48 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.160 2008/03/24 15:32:26 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Ada Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.159 $%
+\def\SCCSversion{$Revision: 1.160 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/03/24 14:33:48 $%
+\TPPdate{\FormatDate{$Date: 2008/03/24 15:32:26 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -230,7 +230,7 @@ used as identifiers are now escaped with a dollar sign (as required if they are 
 \item[Issue 1.148] Allowed for deferred subprograms.
 \item[Issue 1.149] {\em case\_of\_ada\_keywords} is now {\em cn\_case\_of\_ada\_keywords}.
 \item[Issues 1.150--1.153] Allowed for anonymous loops and blocks that have been given a name in the Compliance Notation.
-\item[Issues 1.154-1.156] Child packages.
+\item[Issues 1.154-1.157] Child packages.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -809,9 +809,15 @@ fun Ûfmt_id_plusÝ  (fmtinfo as {outf,...}: PP_FMT_INFO) (n : ID) (s : string): u
 fun Ûfmt_id_commaÝ  (fmtinfo : PP_FMT_INFO) (n : ID) : unit  = (
 	fmt_id_plus fmtinfo n ","
 );
+
+fun Ûfmt_id_dotÝ  (fmtinfo : PP_FMT_INFO) (n : ID) : unit  = (
+	fmt_id_plus fmtinfo n "."
+);
+
 fun Ûfmt_idÝ  (fmtinfo : PP_FMT_INFO) (n : ID) : unit  = (
 	fmt_id_plus fmtinfo n ""
 );
+
 fun Ûfmt_id_optÝ  (fmtinfo : PP_FMT_INFO) (Value n : ID OPT) : unit  = (
 	fmt_id_plus fmtinfo n ""
 ) | fmt_id_opt _ _ = ();
@@ -2585,21 +2591,38 @@ fun Ûfmt_object_renamingÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 );
 =TEX
 =SML
-fun Ûstring_of_expanded_nameÝ ([] : EXPANDED_NAME) = ""
-|   string_of_expanded_name [sn] = CaseIndependence.get_external_name sn
-|   string_of_expanded_name (sn::more) = CaseIndependence.get_external_name sn ^ "." ^ string_of_expanded_name more;
+fun Ûfmt_expanded_name_plusÝ
+		(fmtinfo: PP_FMT_INFO)
+		([] : EXPANDED_NAME)
+		(sfx : string) : unit = (
+	 ()
+) | fmt_expanded_name_plus fmtinfo [n] sfx = (
+	fmt_id_plus fmtinfo n sfx
+) | fmt_expanded_name_plus fmtinfo (n::more) sfx = ( 
+	fmt_id_dot fmtinfo n;
+	fmt_expanded_name_plus fmtinfo more sfx
+);
+=TEX
+=SML
+fun Ûfmt_expanded_nameÝ
+		(fmtinfo: PP_FMT_INFO)
+		(en : EXPANDED_NAME) = (
+	fmt_expanded_name_plus fmtinfo en ""
+);
 =TEX
 =SML
 fun Ûfmt_expanded_name_optÝ  (fmtinfo : PP_FMT_INFO) (Value n : EXPANDED_NAME OPT) : unit  = (
-	fmt_id_plus fmtinfo (string_of_expanded_name n) ""
+	fmt_expanded_name fmtinfo n
 ) | fmt_expanded_name_opt _ _ = ();
 =TEX
 =SML
-fun Ûfmt_expanded_name_listÝ (fmtinfo : PP_FMT_INFO)([] : EXPANDED_NAME list) = ()
-  | fmt_expanded_name_list (fmtinfo : PP_FMT_INFO)([x]) = (fmt_id fmtinfo (string_of_expanded_name x))
-  | fmt_expanded_name_list (fmtinfo : PP_FMT_INFO)(x::xs) = (
-	(fmt_id_comma fmtinfo (string_of_expanded_name x));
-	(fmt_expanded_name_list fmtinfo xs)
+fun Ûfmt_expanded_name_listÝ (fmtinfo : PP_FMT_INFO)([] : EXPANDED_NAME list) = (
+	 ()
+) | fmt_expanded_name_list (fmtinfo : PP_FMT_INFO)([en]) = (
+	fmt_expanded_name fmtinfo en
+) | fmt_expanded_name_list (fmtinfo : PP_FMT_INFO)(en::more) = (
+	fmt_expanded_name_plus fmtinfo en ",";
+	fmt_expanded_name_list fmtinfo more
 );
 =TEX
 =SML
@@ -2608,9 +2631,9 @@ fun Ûfmt_package_renamingÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	in_new_scope false (trans_expanded_name new_name) (fn () => (
 	non_spark_warning 510121;
 	outf (kw"PACKAGE");
-	fmt_id fmtinfo (string_of_expanded_name new_name);
+	fmt_expanded_name fmtinfo new_name;
 	outf (kw"RENAMES");
-	fmt_id fmtinfo (string_of_expanded_name old_name); 
+	fmt_expanded_name fmtinfo old_name; 
 	outf ";"; outf "\n"
 	))
 );
@@ -2907,7 +2930,7 @@ fun Ûfmt_function_stubÝ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
 =SML
 fun Ûfmt_package_stubÝ (fmtinfo as {outf,...} : PP_FMT_INFO) (n : EXPANDED_NAME) = (
 	outf (kw2"PACKAGE""BODY");
-	(fmt_id fmtinfo (string_of_expanded_name n)); outf (kw2"IS""SEPARATE"^";");
+	fmt_expanded_name fmtinfo n; outf (kw2"IS""SEPARATE"^";");
 	outf "\n"
 );
 fun Ûfmt_auxiliaryÝ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (av : AUX_VAR) =
@@ -2931,14 +2954,16 @@ fun Ûfmt_usingÝ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (u : SI_USING_DEC) =
 	outf (kw"$BY"); (fmt_z_tm fmtinfo (#invariant u));
 	outf " ;"; outf "\n"
     ));
-
+=TEX
+=SML
 fun Ûfmt_package_declarationÝ
 	(fmt_decls : PP_FMT_INFO -> DECLARATION list -> unit)
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
 	({name=n, end_name = en, visible_decs=v, private_decs=p, annotation=ann} :
     DECLARATION PACKAGE_DECLARATION) = (
     in_new_scope true (trans_expanded_name n) (fn () => (
-	outf (kw"PACKAGE"); fmt_id fmtinfo (string_of_expanded_name n); outf "\n";
+	outf (kw"PACKAGE");
+	fmt_expanded_name fmtinfo n; outf "\n";
 	fmt_annotation fmtinfo ann;
 	outf (kw"IS"); outf "\n";
 	(inc_tabs();
@@ -3015,7 +3040,8 @@ fun Ûfmt_package_bodyÝ
 	({name=n, decls=d, statement=s, annotation=ann, end_name = en}
 		: PACKAGE_BODY) = (
     in_new_scope true (trans_expanded_name n) (fn () => (
-    outf (kw2"PACKAGE""BODY"); fmt_id fmtinfo (string_of_expanded_name n); outf "\n";
+    outf (kw2"PACKAGE""BODY");
+    fmt_expanded_name fmtinfo n; outf "\n";
     fmt_annotation fmtinfo ann;
     (outf (kw"IS"); outf "\n");
     inc_tabs(); fmt_decls  fmtinfo d; dec_tabs();
@@ -3027,7 +3053,8 @@ fun Ûfmt_package_bodyÝ
     (case en of Nil => non_spark_warning 510125 | _ => ());
     outf (kw"END"); (fmt_expanded_name_opt fmtinfo en); outf ";"; outf "\n")
 ));
-
+=TEX
+=SML
 fun Ûfmt_proper_bodyÝ
 	(fmt_stat : PP_FMT_INFO -> STATEMENT -> unit)
 	(fmt_decls : PP_FMT_INFO -> DECLARATION list -> unit)
@@ -3379,6 +3406,14 @@ reset_tabs();
 let  val max_line_len = get_int_control("cn_automatic_line_splitting");
     val curr_line_length : int ref = ref 0;
     val skipspace : bool ref = ref false;
+    fun starts_with (s : string) (chs : string list) = (
+		s <> ""
+	andalso	substring(s, 0, 1) mem chs
+    );
+    fun ends_with (s : string) (chs : string list) = (
+		s <> ""
+	andalso	substring(s, size s - 1, 1) mem chs
+    );
     fun out_fun (s : string) : unit = (
 	if (s = "\n")
 	then (
@@ -3408,24 +3443,23 @@ let  val max_line_len = get_int_control("cn_automatic_line_splitting");
 					out_fun(s);
 				    ()
 				) else (
-					if (s = ";" orelse s = "," orelse s = ")" 
-						orelse s = "." orelse s = "'" orelse s = ".."
-						orelse !skipspace)
-					then ()
-					else (prt(" ");
-						curr_line_length := (!curr_line_length) + 1; ());
+					if	!skipspace
+					orelse	starts_with s
+						[";", ",", ")", ".", "'"]
+					then	()
+					else	(
+						prt(" ");
+						curr_line_length := (!curr_line_length) + 1;
+						());
 					prt(s);
-					if (s = "'" orelse s = "(" orelse s = "." orelse s = "..")
-					then skipspace := true
-					else skipspace := false;
+					skipspace := ends_with s ["'", "(", "."];
 					curr_line_length := (!curr_line_length) + len_s;
 					()
 				)
 			)
 		end
 	));
-in
-   (out_fun)
+in	out_fun
 end);
 =TEX
 =SML
