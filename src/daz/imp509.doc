@@ -1,4 +1,4 @@
-=IGN
+"cn=IGN
 ********************************************************************************
 imp509.doc: this file is part of the PPDaz system
 
@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp509.doc   %Z% $Date: 2007/08/04 13:55:21 $ $Revision: 1.20 $ $RCSfile: imp509.doc,v $
+% imp509.doc   %Z% $Date: 2008/02/10 15:59:51 $ $Revision: 1.21 $ $RCSfile: imp509.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Toolkit Extensions}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP509}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.20 $%
+\def\SCCSversion{$Revision: 1.21 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/08/04 13:55:21 $%
+\TPPdate{\FormatDate{$Date: 2008/02/10 15:59:51 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -96,6 +96,7 @@ Updates for real numbers.
 \item[Issue 1.19] Ada real literals are now translated into Z floating point literals.
 \item[Issue 1.20] {\em z\_dots\_conv} has been renamed as {\em zz_dot\_dot\_conv}.
 \item[Issue 1.64] Allowed for change to lexical rules for underscores in Z.
+\item[Issue 1.65] Modular types.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1243,6 +1244,208 @@ val rec Ûcn_star_star_convÝ = (fn tm =>
 	end	handle Fail _ => term_fail "cn_star_star_conv" 509014 [tm]
 );
 =TEX
+Now for the binary bitwise operations.
+First group the defining properties nicely:
+=SML
+val Ûcn_mod_xor_def1Ý :: Ûcn_mod_xor_def0Ý ::
+	Ûcn_mod_or_def1Ý :: Ûcn_mod_or_def0Ý ::
+	Ûcn_mod_and_def1Ý :: Ûcn_mod_and_def0Ý :: _ =
+		rev(strip_±_rule (z_get_specñ(_ mod_and _)®));
+val Ûcn_mod_and_defÝ = ±_intro cn_mod_and_def0 cn_mod_and_def1;
+val Ûcn_mod_or_defÝ = ±_intro cn_mod_or_def0 cn_mod_or_def1;
+val Ûcn_mod_xor_defÝ = ±_intro cn_mod_xor_def0 cn_mod_xor_def1;
+=TEX
+Now prove theorems giving the defining properties in
+a form that is convenient for the computational conversions.
+=SML
+val [and_thm0, and_thm1,
+	or_thm0, or_thm1,
+	xor_thm0, xor_thm1] = (
+set_goal([], ¬
+	¬µi· ñ0 ¼ i ´ i mod_and 0 = 0®® ±
+	¬µi j· ñ0 ¼ i ´ 0 < j ´
+		i mod_and j = 2 * (i div 2 mod_and j div 2) + i mod 2 * (j mod 2)®® ±
+	¬µi· ñ0 ¼ i ´ i mod_or 0 = i®® ±
+	¬µi j· ñ0 ¼ i ´ 0 < j ´
+		i mod_or j = 2 * (i div 2 mod_or j div 2) + max {i mod 2, j mod 2}®® ±
+	¬µi· ñ0 ¼ i ´ i mod_xor 0 = i®® ±
+	¬µi j· ñ0 ¼ i ´ 0 < j ´
+		i mod_xor j = 2 * (i div 2 mod_xor j div 2) + (i + j) mod 2®®
+®);
+a(REPEAT strip_tac THEN
+	ALL_FC_T rewrite_tac[
+		cn_mod_and_def, cn_mod_or_def,
+		cn_mod_xor_def]);
+strip_±_rule (pop_thm())
+);
+=TEX
+Now the conversions:
+=SML
+val rec Ûcn_mod_and_convÝ : CONV = (fn tm =>
+	let	val args = dest_z_tuple (snd (dest_z_app tm));
+		val (arg1, arg2) = (hd args, hd(tl args));
+	in	if	dest_z_signed_int arg2 = zero
+		then let
+			val thm1 = simple_µ_elim arg1 and_thm0;
+			val thm2 = conv_rule (LEFT_C z_¼_conv) thm1;
+			val thm3 = ´_mp_rule thm2 t_thm;
+		in	thm3
+		end else let
+			val thm1 = list_simple_µ_elim args and_thm1;
+			val thm2 = conv_rule (LEFT_C z_¼_conv) thm1;
+			val thm3 = ´_mp_rule thm2 t_thm;
+			val thm4 = conv_rule (LEFT_C z_less_conv) thm3;
+			val thm5 = ´_mp_rule thm4 t_thm;
+		in	((fn tm => thm5) 
+			THEN_C	Z_RIGHT_C (Z_RANDS_C z_mod_conv THEN_C z_times_conv)
+			THEN_C	Z_LEFT_C(
+					Z_RIGHT_C(Z_RANDS_C z_div_conv)
+				THEN_C	Z_RIGHT_C cn_mod_and_conv
+				THEN_C	z_times_conv)
+			THEN_C	z_plus_conv)
+			tm
+		end
+	end	handle Fail _ => term_fail "cn_mod_and_conv" 509021 [tm]
+);
+=TEX
+We need to evaluate the $max$ expression in the definition of $mod\_or$.
+=SML
+val Ûz_max_singleton_thmÝ = (
+set_goal([] , ñµi : ú· max {i} = i®);
+a(rewrite_tac[z_max_def] THEN REPEAT strip_tac);
+a(z_app_eq_tac THEN REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(all_var_elim_asm_tac1);
+(* *** Goal "2" *** *)
+a(z_¶_tacñ(S ¦ {i}, m ¦ i)® THEN PC_T1 "z_library_ext" prove_tac[]);
+pop_thm()
+);
+=TEX
+=SML
+val Ûz_max_pair_lemmaÝ = (
+set_goal([] , ñµi, j : ú| i ¼ j· max {i, j} = j®);
+a(rewrite_tac[z_max_def] THEN REPEAT strip_tac);
+a(z_app_eq_tac THEN REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(REPEAT all_var_elim_asm_tac1);
+a(z_spec_nth_asm_tac 1 ñj® THEN PC_T1 "z_lin_arith" asm_prove_tac[]);
+(* *** Goal "2" *** *)
+a(z_¶_tacñ(S ¦ {i, j}, m ¦ j)® THEN PC_T1 "z_library_ext" prove_tac[]);
+pop_thm ()
+);
+=TEX
+=SML
+val Ûz_max_pair_thmÝ = (
+set_goal([] , ñµi, j : ú· max {i, j} = if i ¼ j then j else i®);
+a(REPEAT strip_tac);
+a(lemma_tacñi ¼ j ² j ¼ i® THEN1 PC_T1 "z_lin_arith" prove_tac[]);
+(* *** Goal "1" *** *)
+a(ALL_FC_T asm_rewrite_tac [z_max_pair_lemma]);
+(* *** Goal "2" *** *)
+a(LEMMA_T ñ{i, j} = {j, i}® rewrite_thm_tac THEN1
+	(PC_T1 "z_sets_ext" prove_tac[]));
+a(ALL_FC_T asm_rewrite_tac[z_max_pair_lemma]);
+a(cases_tac ñi = j® THEN1 asm_rewrite_tac[]);
+a(LEMMA_T ñ³i ¼ j® rewrite_thm_tac THEN1
+	(PC_T1 "z_lin_arith" asm_prove_tac[]));
+pop_thm()
+);
+=TEX
+=SML
+val Ûz_max_pair_convÝ = (
+	let	val max_thm = (conv_rule z_µ_elim_conv1 o
+			pure_rewrite_rule[z_get_specñú®])
+				z_max_pair_thm;
+		val if_thms = (map all_µ_intro o
+			strip_±_rule o
+			all_µ_elim o
+			conv_rule z_µ_elim_conv1)
+				z_if_thm;
+		val ÛIF_COND_CÝ = fn conv =>
+			RAND_C (RATOR_C (RATOR_C (RAND_C conv)));
+	in	simple_eq_match_conv max_thm
+		THEN_C	IF_COND_C z_¼_conv
+		THEN_C	FIRST_C (map simple_eq_match_conv if_thms)
+	end
+);
+=TEX
+=SML
+val rec Ûcn_mod_or_convÝ : CONV = (fn tm =>
+	let	val args = dest_z_tuple (snd (dest_z_app tm));
+		val (arg1, arg2) = (hd args, hd(tl args));
+		val ÛZ_MAX_PAIR_CÝ : CONV -> CONV =
+		(fn conv =>
+			Z_RAND_C(RAND_C(LEFT_C conv
+				THEN_C (RIGHT_C (LEFT_C conv))))
+);
+	in	if	dest_z_signed_int arg2 = zero
+		then let
+			val thm1 = simple_µ_elim arg1 or_thm0;
+			val thm2 = conv_rule (LEFT_C z_¼_conv) thm1;
+			val thm3 = ´_mp_rule thm2 t_thm;
+		in	thm3
+		end else let
+			val thm1 = list_simple_µ_elim args or_thm1;
+			val thm2 = conv_rule (LEFT_C z_¼_conv) thm1;
+			val thm3 = ´_mp_rule thm2 t_thm;
+			val thm4 = conv_rule (LEFT_C z_less_conv) thm3;
+			val thm5 = ´_mp_rule thm4 t_thm;
+		in	((fn tm => thm5) 
+			THEN_C	Z_RIGHT_C (Z_MAX_PAIR_C z_mod_conv THEN_C z_max_pair_conv)
+			THEN_C	Z_LEFT_C(
+					Z_RIGHT_C(Z_RANDS_C z_div_conv)
+				THEN_C	Z_RIGHT_C cn_mod_or_conv
+				THEN_C	z_times_conv)
+			THEN_C	z_plus_conv)
+			tm
+		end
+	end	handle Fail _ => term_fail "cn_mod_or_conv" 509022 [tm]
+);
+=TEX
+=SML
+val rec Ûcn_mod_xor_convÝ : CONV = (fn tm =>
+	let	val args = dest_z_tuple (snd (dest_z_app tm));
+		val (arg1, arg2) = (hd args, hd(tl args));
+	in	if	dest_z_signed_int arg2 = zero
+		then let
+			val thm1 = simple_µ_elim arg1 xor_thm0;
+			val thm2 = conv_rule (LEFT_C z_¼_conv) thm1;
+			val thm3 = ´_mp_rule thm2 t_thm;
+		in	thm3
+		end else let
+			val thm1 = list_simple_µ_elim args xor_thm1;
+			val thm2 = conv_rule (LEFT_C z_¼_conv) thm1;
+			val thm3 = ´_mp_rule thm2 t_thm;
+			val thm4 = conv_rule (LEFT_C z_less_conv) thm3;
+			val thm5 = ´_mp_rule thm4 t_thm;
+		in	((fn tm => thm5) 
+			THEN_C	Z_RIGHT_C (Z_LEFT_C z_plus_conv THEN_C z_mod_conv)
+			THEN_C	Z_LEFT_C(
+					Z_RIGHT_C(Z_RANDS_C z_div_conv)
+				THEN_C	Z_RIGHT_C cn_mod_xor_conv
+				THEN_C	z_times_conv)
+			THEN_C	z_plus_conv)
+			tm
+		end
+	end	handle Fail _ => term_fail "cn_mod_xor_conv" 509023 [tm]
+);
+=TEX
+Now $mod\_not$
+=SML
+val Ûcn_mod_not_defÝ = z_get_specñ(mod_not _)®;
+val Ûcn_mod_not_thmÝ =
+	conv_rule z_µ_elim_conv1(
+	±_right_elim(rewrite_rule[z_get_specñú®] cn_mod_not_def));
+val Ûz_minus_minus_convÝ = simple_eq_match_conv
+	(prove_rule[]¬µx : ú ·ñ~(~x) = x®®);
+val Ûcn_mod_not_convÝ : CONV = (fn tm =>
+		(simple_eq_match_conv cn_mod_not_thm
+	THEN_C Z_RIGHT_C (Z_RAND_C z_plus_conv)
+	THEN_TRY_C Z_RIGHT_C z_minus_minus_conv
+	THEN_C	z_plus_conv) tm
+		handle Fail _ => term_fail "cn_mod_not_conv" 509024 [tm]
+);
+=TEX
 \subsection{Proof Contexts}
 =SML
 val Ûcn_cxt1Ý = (flat o map (cthm_eqn_cxt (current_ad_rw_canon()))) [
@@ -1262,7 +1465,11 @@ val Ûcn_cxt2Ý = [
 	(ñi intdiv j®, cn_intdiv_conv),
 	(ñi rem j®, cn_rem_conv),
 	(ñi intmod j®, cn_intmod_conv),
-	(ñi ** j®, cn_star_star_conv)
+	(ñi ** j®, cn_star_star_conv),
+	(ñi mod_and j®, cn_mod_and_conv),
+	(ñi mod_or j®, cn_mod_or_conv),
+	(ñi mod_xor j®, cn_mod_xor_conv),
+	(ñmod_not j®, cn_mod_not_conv)
 ];
 val Ûcn_cxtÝ = cn_cxt1 @ cn_cxt2;
 val Ûcn_cxt3Ý = (flat o map (cthm_eqn_cxt (current_ad_rw_canon()))) [

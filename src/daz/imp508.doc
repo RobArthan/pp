@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2008/02/18 12:30:05 $ $Revision: 1.145 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2008/03/23 16:33:12 $ $Revision: 1.146 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.145 $%
+\def\SCCSversion{$Revision: 1.146 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/02/18 12:30:05 $%
+\TPPdate{\FormatDate{$Date: 2008/03/23 16:33:12 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -173,6 +173,7 @@ Removed code that supported use of aliases.
 \item[Issue 1.143] Range checks for real types.
 \item[Issue 1.144, 1.145] Tidying error messages for empty integer and real types.
 \item[Issue 1.146] Child packages.
+\item[Issue 1.147] Modular types.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -351,6 +352,7 @@ val		€z_string_lit› =		Ò(string_lit _)Æ;
 val		€z_real_unary_minus› =	Ò(~âR _)Æ;
 val		€z_real_abs› =		Ò(absâR _)Æ;
 val		€z_array_not› =		Ò(array_not _)Æ;
+val		€z_mod_not› =		Ò(mod_not _)Æ;
 =TEX
 \subsection{Z Binary Expressions}
 =SML
@@ -384,6 +386,9 @@ val		€z_array_less_eq› =	Ò(_ array_less_eq _)Æ;
 val		€z_array_array_cat› =	Ò(_ &â0 _)Æ;
 val		€z_array_elem_cat› =	Ò(_ &â1 _)Æ;
 val		€z_elem_array_cat› =	Ò(_ &â2 _)Æ;
+val		€z_mod_and› =		Ò(_ mod_and _)Æ;
+val		€z_mod_or› =		Ò(_ mod_or _)Æ;
+val		€z_mod_xor› =		Ò(_ mod_xor _)Æ;
 val		€z_real_add› =		Ò(_ +âR _)Æ;
 val		€z_real_minus› =		Ò(_ -âR _)Æ;
 val		€z_real_times› =		Ò(_ *âR _)Æ;
@@ -393,6 +398,21 @@ val		€z_bool_real_less› =	Ò(_ real_less _)Æ;
 val		€z_bool_real_less_eq› =	Ò(_ real_less_eq _)Æ;
 val		€z_bool_real_greater› =	Ò(_ real_greater _)Æ;
 val		€z_bool_real_greater_eq› =	Ò(_ real_greater_eq _)Æ;
+=TEX
+\subsection{Attribute Names}
+=SML
+val		€zbase› = "BASE";
+val		€zfst› = "FIRST";
+val		€zlst› = "LAST";
+val		€zsuc› = "SUCC";
+val		€zpred› = "PRED";
+val		€zpos› = "POS";
+val		€zval› = "VAL";
+val		€zlength› = "LENGTH";
+val		€zrange› = "RANGE";
+val		€zdigits› = "DIGITS";
+val		€zdelta› = "DELTA";
+val		€zmodulus› = "MODULUS";
 =TEX
 
 \subsection{Z Expressions}
@@ -985,6 +1005,20 @@ fun €z_eq_eq› (construct : string) (id : Z_ID, exp : Z_EXP) : PARAINFO = (
 );
 =TEX
 =SML
+fun €z_simple_free_type› (construct : string)
+	(id : Z_ID, con : Z_ID, exp : Z_EXP) : PARAINFO = (
+	case frees exp of
+		[] => FreeTypeInfo [(id, [(con, Value exp)])]
+	|	vs =>
+		let	fun s () = case vs of [_] => "" | _ => "s";
+		in	fail "z_simple_free_type" 508106
+			[fn () => construct,
+			 fn () => format_list string_of_term vs ", ",
+			 s]
+		end
+);
+=TEX
+=SML
 fun €z_given› (id : Z_ID) : PARAINFO = (
 	GivenSetInfo ([id], Nil)
 );
@@ -1426,6 +1460,47 @@ fun €exp_string_lit› (n : STRING_LIT) : Z_EXP = (
 	z_unary_exp(z_string_lit, z_string n)
 );
 =TEX
+\subsection{Support for Modular Types}
+=TEX
+The following function
+checks that the Val attribute exists and has Z type appropriate
+for a modular type.
+=SML
+fun €is_modular_type› (tmark : TMARK) : bool = (
+	let	val hol_tyn = bind_gvar_name tmark;
+	in	case get_const_type (hol_tyn ^^ zval) of
+			Nil => false
+		|	Value ty => (
+			dest_z_tuple_type (dest_z_power_type ty) =
+			[z_int_type, mk_ctype(hol_tyn, [])]
+		) handle Fail _ => false
+	end
+);
+=TEX
+The following function returns functions that convert
+a modular type to and from an integer together with the expression
+giving the modulus attribute.
+=SML
+fun €modular_type_convs› (ty : TYPE)
+	: {	to_int : Z_EXP -> Z_EXP,
+		from_int : Z_EXP -> Z_EXP,
+		modulus : Z_EXP} OPT = (
+	let	val tyn = fst(dest_ctype ty);
+		val to_int_n = tyn ^^ zpos;
+		val from_int_n = tyn ^ "_of_int";
+		val modulus_n = tyn ^^ zmodulus;
+	in	case (get_const_type to_int_n,
+			get_const_type from_int_n,
+				get_const_type modulus_n) of
+			(Value to_int_ty, Value from_int_ty, Value modulus_ty) => (
+				Value {
+				to_int = curry mk_z_app (mk_const(to_int_n, to_int_ty)),
+				from_int = curry mk_z_app (mk_const(from_int_n, from_int_ty)),
+				modulus = mk_const(modulus_n, modulus_ty)}
+		) | 	_ => Nil
+	end	handle Fail _ => Nil
+);
+=TEX
 \subsection{Unary Operators}
 The empty list for unary addition means that no operator is required.
 =SML
@@ -1435,6 +1510,31 @@ fun €unary_ops› (uop : UNARY_OP) : Z_EXP list = (
 	|UOSparkNot => [z_bool_not, z_array_not]
 	|UOSparkAbs => [z_abs, z_real_abs]
 	|USSparkUnaryAdd => []
+);
+=TEX
+=SML
+=TEX
+Once we are dealing with an operand of modular type, there is no further overload resolution.
+=SML
+fun €trans_unary_op_modular› (uop : UNARY_OP, zright : Z_EXP) : Z_EXP = (
+	case modular_type_convs (type_of zright) of
+		Value {to_int, from_int, modulus} => (
+		let	fun apply c = (
+				from_int(mk_z_app(c, to_int zright))
+			);
+			fun mod_not () = (
+				from_int(
+				mk_z_app(z_mod_not, mk_z_tuple[
+					to_int zright,
+					modulus]))
+			);
+		in	case uop of
+			UOSparkUnaryMinus => apply z_unary_minus
+		|	UOSparkNot => mod_not ()
+		|	UOSparkAbs => apply z_abs
+		|	USSparkUnaryAdd => zright
+		end
+	) | 	Nil => term_fail "trans_unary_op" 508079 [zright]
 );
 =TEX
 The following implements overload resolution for unary operators.
@@ -1456,9 +1556,11 @@ fun €trans_unary_op› (uop : UNARY_OP, zright : Z_EXP) : Z_EXP = (
 			handle Fail _ => try_it more
 		);
 	in	try_it ops
+		handle Fail _ => trans_unary_op_modular (uop, zright)
 	end
 );
 =TEX
+
 \subsection{Binary Operators}
 =SML
 fun €bin_ops› (bop : BIN_OP) : Z_EXP list = (
@@ -1486,6 +1588,87 @@ fun €bin_ops› (bop : BIN_OP) : Z_EXP list = (
 	|BOSparkConcat => [z_array_array_cat, z_array_elem_cat, z_elem_array_cat]
 );
 =TEX
+For modular types, we also need to know which of the operands and the result need converting.
+=SML
+fun €bin_ops_modular› (bop : BIN_OP) :
+	(Z_EXP * {left : bool, right : bool, result : bool}) OPT = (
+let	fun yyy x = Value (x, {left = true, right = true, result = true});
+	fun yyn x = Value (x, {left = true, right = true, result = false});
+	fun yny x = Value (x, {left = true, right = false, result = true});
+	fun nnn x = Value (x, {left = false, right = false, result = false});
+in
+	case bop of
+		BOSparkAnd => yyy z_mod_and
+	|BOSparkAndThen => Nil
+	|BOSparkOr => yyy z_mod_or
+	|BOSparkOrElse => Nil
+	|BOSparkXor => yyy z_mod_xor
+	|BOSparkEq => nnn z_bool_eq
+	|BOSparkNotEq => nnn z_bool_noteq
+	|BOSparkLess => yyn z_bool_less
+	|BOSparkLessEq => yyn z_bool_less_eq
+	|BOSparkGreater => yyn z_bool_greater
+	|BOSparkGreaterEq => yyn z_bool_greater_eq
+	|BOSparkAdd => yyy z_add
+	|BOSparkMinus => yyy z_minus
+	|BOSparkTimes => yyy z_times
+	|BOSparkDiv => yyy z_intdiv
+	|BOSparkMod => yyy z_mod
+	|BOSparkRem => yyy z_rem
+	|BOSparkExpon => yny z_expon
+	|BOSparkMem => nnn z_bool_mem
+	|BOSparkNotMem => nnn z_bool_notmem
+	|BOSparkConcat => Nil
+end);
+=TEX
+=SML
+fun €modular_pos_attr› (ty : TYPE)
+	: Z_EXP OPT = (
+	let	val tyn = fst(dest_ctype ty);
+		val to_int_n = tyn ^^ zpos;
+	in	case get_const_type to_int_n of
+			Value to_int_ty => (
+				Value (mk_const(to_int_n, to_int_ty))
+		) | 	_ => Nil
+	end	handle Fail _ => Nil
+);
+=TEX
+=SML
+fun €trans_bin_op_array_modular› (bop : BIN_OP, zleft : Z_EXP, zright : Z_EXP) : Z_EXP = (
+	let	val el_ty = hd(tl(dest_z_tuple_type(
+			dest_z_power_type(type_of zleft))));
+		val c = case bop of
+			BOSparkLess => z_array_less
+		|	BOSparkLessEq => z_array_less_eq
+		|	BOSparkGreater => z_array_greater
+		|	BOSparkGreaterEq => z_array_greater_eq
+		|	_ => term_fail "trans_bin_op" 508089 [zleft, zright];
+		val pos_attr = force_value (modular_pos_attr el_ty);
+		val zleft' = z_rel_comp(zleft, pos_attr);
+		val zright' = z_rel_comp(zright, pos_attr);
+	in	z_bin_exp(c, zleft', zright')
+	end
+);
+=TEX
+=SML
+fun €trans_bin_op_modular› (bop : BIN_OP, zleft : Z_EXP, zright : Z_EXP) : Z_EXP = (
+	case modular_type_convs (type_of zleft) of
+		Value {to_int, from_int, ...} => (
+		let	fun cnv f b t = if b then f t else t;
+			fun apply (c, {left, right, result}) = (
+				cnv from_int result
+				(mk_z_app(c, mk_z_tuple [
+					cnv to_int left zleft,
+					cnv from_int right zright
+				]))
+			);
+		in	case bin_ops_modular bop of
+				Value clrr => apply clrr
+			|	Nil => term_fail "trans_bin_op" 508089 [zleft, zright]
+		end
+	) |	Nil => trans_bin_op_array_modular (bop, zleft, zright)
+);
+=TEX
 The following implements overload resolution for binary operators.
 
 As for unary operators, the expression returned is the actual translation of
@@ -1510,6 +1693,7 @@ fun €trans_bin_op› (bop : BIN_OP, zleft : Z_EXP, zright : Z_EXP) : Z_EXP = (
 			handle Fail _ => try_it more
 		);
 	in	try_it ops
+		handle Fail _ => trans_bin_op_modular(bop, zleft, zright)
 	end
 );
 =TEX
@@ -1547,6 +1731,7 @@ val €ada_attribute_types› : (ID * TERM OPT) list = [
 	("MACHINE_RADIX", Value ˙_tm ),
 	("MACHINE_ROUNDS", Value ˙_tm ),
 	("MANTISSA", Value ˙_tm ),
+	("MODULUS", Nil ),
 	("POS", Nil ),
 	("PRED", Nil ),
 	("RANGE", Nil ),
@@ -1626,7 +1811,8 @@ fun €slide_to_component_tmark› (ze : Z_EXP, comp_tmark : Z_EXP) : Z_EXP = (
 );
 =TEX
 =SML
-fun €add_qualifier› (env : CN_ENV) (e : EXP, t : ID) : EXP = (
+fun €add_qualifier_or_convert›
+	(env : CN_ENV) (e : EXP, t : ID) : EXP = (
 	case e of
 	EArrayAggPos{comps, tmark=Nil} => (
 		case env t of
@@ -1651,7 +1837,9 @@ fun €add_qualifier› (env : CN_ENV) (e : EXP, t : ID) : EXP = (
 	)| ERecAggNamed {named_assocs = n, tmark=Nil} => (
 		EArrayAggNamed{named_assocs = n, tmark = Value t}
 	)| e => (
-		e
+		if	is_modular_type t
+		then	ETypeConversion {tmark = t, exp = e}
+		else	e
 	)
 );
 =TEX
@@ -1665,7 +1853,7 @@ fun €trans_component›
 		case dest_z_term comp_tmark_ze of
 			ZGVar(tmark, _, _) => tmark
 		|	_ => fail "trans_component" 508028 [];
-		val ze = te env (add_qualifier env (e, comp_tmark_id));
+		val ze = te env (add_qualifier_or_convert env (e, comp_tmark_id));
 	in	slide_to_component_tmark (ze, comp_tmark_ze)
 	end
 );
@@ -1712,19 +1900,6 @@ fun €canonical_id› (env : CN_ENV) (n : ID) : Z_ID = (
 		Value {canon_name = n', ...} =>  n'
 	|	_ => n
 );
-=TEX
-=SML
-val		€zbase› = trans_id "BASE";
-val		€zfst› = trans_id "FIRST";
-val		€zlst› = trans_id "LAST";
-val		€zsuc› = trans_id "SUCC";
-val		€zpred› = trans_id "PRED";
-val		€zpos› = trans_id "POS";
-val		€zval› = trans_id "VAL";
-val		€zlength› = trans_id "LENGTH";
-val		€zrange› = trans_id "RANGE";
-val		€zdigits› = trans_id "DIGITS";
-val		€zdelta› = trans_id "DELTA";
 =TEX
 =SML
 fun €dimen› (zid : Z_ID, n : int) : Z_ID  = (
@@ -2107,15 +2282,37 @@ and €exp_type_conv› (env : CN_ENV) ({tmark, exp} : EXP TYPE_CONVERSION)
 			handle Fail _ =>
 			fail "exp_type_conv" 508051 [fn () => tmark]);
 		val te = trans_exp env exp;
-	in	if	ztype =: z_int_set_type andalso type_of te =: z_int_type
-		then	te
-		else if	ztype =: z_real_set_type andalso type_of te =: z_real_type
-		then	te
-		else if	ztype =: z_int_set_type andalso type_of te =: z_real_type
-		then	z_real_to_integer te
-		else if	ztype =: z_real_set_type andalso type_of te =: z_int_type
-		then	z_integer_to_real te
-		else	fail "exp_type_conv" 508053 []
+		val to_type = dest_z_power_type ztype
+			handle Fail _ =>
+			fail "exp_type_conv" 508053 []
+		val from_type = type_of te;
+	in	if	to_type = z_int_type
+		then	if	from_type = z_int_type
+			then	te
+			else if	from_type = z_real_type
+			then	z_real_to_integer te
+			else 	case modular_type_convs from_type of
+				Value {to_int, ...} => to_int te
+			|	Nil => fail "exp_type_conv" 508053 []
+		else if	to_type = z_real_type
+		then	if	from_type = z_real_type
+			then	te
+			else if	from_type = z_int_type
+			then	z_integer_to_real te
+			else 	case modular_type_convs from_type of
+				Value {to_int, ...} => z_integer_to_real(to_int te)
+			|	Nil => fail "exp_type_conv" 508053 []
+		else if	from_type = z_int_type
+		then	case  modular_type_convs to_type of
+				Value {from_int, ...} =>
+				from_int te
+			|	_ => fail "exp_type_conv" 508053 []
+		else	case (modular_type_convs from_type, modular_type_convs to_type) of
+				(Value _, Value _) =>
+				if	from_type = to_type
+				then	te
+				else	fail "exp_type_conv" 508053 []
+			|	_ => fail "exp_type_conv" 508053 []
 	end
 )
 =TEX
@@ -2644,10 +2841,10 @@ This requires evaluation of static expressions which is most conveniently done u
 
 The following function generates the VC for checking that an integral type or subtype defined by a range constraint is non-empty.
 =SML
-val €int_x_var› = Ò(x ∫  ˙)Æ;
-val €int_vc_pattern› = Òëint_x_varÆ Ω öÆ;
+val €int_set_x_var› = Òx ∫  ˙Æ;
+val €int_vc_pattern› = Òëint_set_x_varÆ Ω öÆ;
 fun €int_range_check_vc› (n : Z_ID) : Z_EXP = (
-	subst[(mk_z_gvar(n, z_int_set_type, []), int_x_var)] int_vc_pattern
+	subst[(mk_z_gvar(n, z_int_set_type, []), int_set_x_var)] int_vc_pattern
 );
 =TEX
 The following function reports an error if the range bounds for an integral type can be evaluated and the range proves to be empty;
@@ -2657,7 +2854,7 @@ if the range cannot be evaluated a paragraph containing a VC is returned.
 The somewhat strange way of expressing the decision-making arises from the desire to include the equations in the message in the error case, if they are non-trivial (i.e., if the evaluation has made some progress).
 =SML
 fun €int_range_check_vcs›
-	(n : Z_ID) (lo : TERM) (hi : TERM) : PARAINFO list = (
+	(n : ID) (lo : TERM) (hi : TERM) : PARAINFO list = (
 	(let	val lo_eqn = (concl o TRY_C(cn_eval_conv[])) lo;
 		val hi_eqn = (concl o TRY_C(cn_eval_conv[])) hi;
 		val nlo = (dest_z_signed_int o snd o dest_eq) lo_eqn;
@@ -2676,22 +2873,59 @@ fun €int_range_check_vcs›
 					508060 [show lo_eqn, show hi_eqn])
 	end	handle Fail _ => (fn _ =>
 			(comment "trans_basic_decl"508061 [fn _ => n];
-			[ConjectureInfo(Value n, [], int_range_check_vc n)])
+			[ConjectureInfo(Value n, [], int_range_check_vc (trans_id n))])
+	))	()
+);
+=TEX
+The following function generates the VC for checking that
+the modulus of a modular type is positive.
+=SML
+val €int_x_var› = Òx ∫ ˙Æ;
+val €modulus_vc_pattern› = Òëint_x_varÆ > 0Æ;
+fun €modulus_check_vc› (m : TERM) : Z_EXP = (
+	subst[(m, int_x_var)] modulus_vc_pattern
+);
+=TEX
+=TEX
+The following function reports an error if the modulus for a modular type is positive;
+if the modular cannot be evaluated a paragraph containing a VC is returned.
+
+In the error case, as with the range checks above, if the evaluation has made some progress we show the result.
+=SML
+fun €modulus_check_vcs›
+	(n : ID) (m : TERM) : PARAINFO list = (
+	(let	val m_eqn = (concl o TRY_C(cn_eval_conv[])) m;
+		val ml_m = (dest_z_signed_int o snd o dest_eq) m_eqn;
+		fun show t () = (
+			let	val (x, y) = dest_eq t;
+			in	if	x = y
+				then	string_of_term x
+				else	string_of_term x ^ " (= " ^ string_of_term y ^ ")"
+			end
+		);
+	in	if	zero @< ml_m
+		then	(fn _ => [])
+		else	(fn _ =>
+				fail  "trans_basic_decl"
+					508072 [show m_eqn])
+	end	handle Fail _ => (fn _ =>
+			(comment "trans_basic_decl"508073 [fn _ => n];
+			[ConjectureInfo(Value n, [], modulus_check_vc m)])
 	))	()
 );
 =TEX
 The following function generates the VC for checking that a real type or subtype defined by a range constraint is non-empty.
 =SML
-val €real_x_var› = Ò(x ∫  Ø)Æ;
-val €real_vc_pattern› = Òëreal_x_varÆ Ω öÆ;
+val €real_set_x_var› = Ò(x ∫  Ø)Æ;
+val €real_vc_pattern› = Òëreal_set_x_varÆ Ω öÆ;
 fun €real_range_check_vc› (n : Z_ID) : Z_EXP = (
-	subst[(mk_z_gvar(n, z_real_set_type, []), real_x_var)] real_vc_pattern
+	subst[(mk_z_gvar(n, z_real_set_type, []), real_set_x_var)] real_vc_pattern
 );
 =TEX
 The following function is the analogue of {\em int\_range\_check\_vcs} for real types (see above).
 =SML
 fun €real_range_check_vcs›
-	(n : Z_ID) (lo : TERM) (hi : TERM) : PARAINFO list = (
+	(n : ID) (lo : TERM) (hi : TERM) : PARAINFO list = (
 	(let	val lo_eqn = (concl o TRY_C(cn_eval_conv[])) lo;
 		val hi_eqn = (concl o TRY_C(cn_eval_conv[])) hi;
 		val nlo = (snd o dest_eq) lo_eqn;
@@ -2718,7 +2952,7 @@ fun €real_range_check_vcs›
 					508060 [show lo_eqn, show hi_eqn])
 	end	handle Fail _ => (fn _ =>
 			(comment "trans_basic_decl" 508061 [fn _ => n];
-			[ConjectureInfo(Value n, [], real_range_check_vc n)])
+			[ConjectureInfo(Value n, [], real_range_check_vc (trans_id n))])
 	))	()
 );
 =TEX
@@ -2732,7 +2966,14 @@ fun €basic_decl_const›
 		(env : CN_ENV, pfx : Z_ID list)
 		({consts=consts, tm=tmo, expr=expr} : EXP CONST_DECL)
 		: PARAINFO list= (
-	let	val ae = adjust_exp1 env expr;
+	let	val expr1 =
+			case tmo of
+				Value tm =>
+				if	is_modular_type tm
+				then	ETypeConversion{tmark = tm, exp = expr}
+				else	expr
+			|	Nil => expr;
+		val ae = adjust_exp1 env expr1;
 		val te = case ae of Value e => trans_exp1 env e | _ => Nil;
 	in	case (te, tmo) of
 			(Value te, Value tm) => (
@@ -3143,14 +3384,103 @@ fun €basic_decl_int_type› (env : CN_ENV, pfx : Z_ID list)
 		val tlo = trans_exp env lo;
 		val thi = trans_exp env hi;
 		val zname = prefix_trans_id pfx name;
-		val vcs = int_range_check_vcs name tlo thi;
+		fun mk_vcs () = int_range_check_vcs name tlo thi;
 		val z_e_e = z_eq_eq "type";
 	in	if	not(type_of tlo =: z_int_type)
 		then	term_fail "basic_decl_int_type" 508066 [tlo]
 		else if	not(type_of thi =: z_int_type)
 		then	term_fail "basic_decl_int_type" 508066 [thi]
 		else	((z_e_e(zname, z_rng(tlo, thi)) ::
-			  int_type_attrib env (zname, RRange{lo=lo,hi=hi})) @ vcs)
+			  int_type_attrib env (zname, RRange{lo=lo,hi=hi})) @ mk_vcs ())
+	end
+);
+=TEX
+\subsection{Translating Modular Types}
+A modular type declarations introduce a new Z type defined with a free type definition.
+To simplify the construction of terms involving the free type
+we set up some polymorphic template expressions.
+These are instantiated mapping the type variable $'a$ to the new type and mapping free variables by prefixing the names with the type name.
+=SML
+val €alpha_type›  = mk_vartype "'a";
+fun €alphaize› (tm : TERM) : TERM = (
+	inst []
+	(combine [alpha_type]
+		(map mk_vartype (term_tyvars tm)))
+	tm
+);
+val €gen_mt_range› : Z_EXP = Ò 0 .. vMODULUS - 1 Æ;
+val €gen_mt_of_int_dec› : Z_PRED = alphaize Ò ˙ ≠ ¨$""Æ Æ;
+val €gen_mt_of_int_pred› : Z_PRED = alphaize
+	Ò µi : ˙∑ _of_int i = vVAL (i mod vMODULUS) Æ;
+val €gen_mt_first_def› : Z_EXP = alphaize Ò vVAL 0 Æ;
+val €gen_mt_last_def› : Z_EXP = alphaize Ò vVAL (vMODULUS - 1) Æ;
+val €gen_mt_pos_def› : Z_EXP = alphaize Ò (vVAL ∫ ˙ ≠ X) Á~Í Æ;
+val €gen_mt_succ_def› : Z_EXP = alphaize
+	Ò (vPOS ∫ X ≠ ˙) ª succ ª (_of_int ∫ ˙ ≠ X) Æ;
+val €gen_mt_pred_def› : Z_EXP = alphaize Ò (vSUCC ∫ X ≠ X) Á~Í Æ;
+=TEX
+The following function does the instantation:
+=SML
+fun €inst_mt_term›
+	(name : Z_ID)
+	(subst_as_lvar : string list)
+	(tm : TERM) : TERM = (
+	let	val tvs = term_tyvars tm;
+		val ty = mk_ctype(bind_gvar_name name, []);
+		val tm1 =
+		case tvs of
+			[] => tm
+		|	_ => inst [] [(ty, alpha_type)] tm;
+ 		fun var_subs v = (
+			let	val (n, ty, _) = dest_z_lvar v;
+				val mk = if n mem subst_as_lvar
+					then mk_z_lvar
+					else mk_z_gvar;
+			in	(mk(name ^ n, ty, []), v)
+			end
+		);
+		val subs = map var_subs (frees tm1);
+	in	subst subs tm1
+	end
+);
+=TEX
+=SML
+fun €basic_decl_modular_type› (env : CN_ENV, pfx : Z_ID list)
+	(name : ID) ({modulus} : EXP MODULUS)
+	: PARAINFO list = (
+	let	val m = trans_exp env (adjust_exp env modulus);
+		val _ =
+			if	not(type_of m = z_int_type)
+			then	term_fail "basic_decl_modular_type" 508074 [m]
+			else	();
+		val zname = prefix_trans_id pfx name;
+		val z_e_e = z_eq_eq "type";
+		val z_f_t = z_simple_free_type "type";
+		val z_a = z_ax "type";
+		val i_m_t = inst_mt_term zname;
+		val mod_attr = zname ^^ zmodulus;
+		val val_attr = zname ^^ zval;
+		val of_int = zname ^ "_of_int";
+		val first_attr = zname ^^ zfst;
+		val last_attr = zname ^^ zlst;
+		val pos_attr = zname ^^ zpos;
+		val succ_attr = zname ^^ zsuc;
+		val pred_attr = zname ^^ zpred;
+		val para1 = z_e_e(mod_attr, m);
+		val range = i_m_t [] gen_mt_range;
+		val para2 = z_f_t (zname, val_attr, range);
+		val para3 = z_a (of_int,
+			i_m_t [] gen_mt_of_int_dec,
+			[i_m_t ["of_int"] gen_mt_of_int_pred]);
+		val paras4_to_8 = map z_e_e [
+			(first_attr, i_m_t [] gen_mt_first_def),
+			(last_attr, i_m_t [] gen_mt_last_def),
+			(pos_attr, i_m_t [] gen_mt_pos_def),
+			(succ_attr, i_m_t [] gen_mt_succ_def),
+			(pred_attr, i_m_t [] gen_mt_pred_def)];
+
+		val vcs = modulus_check_vcs name m;
+	in	para1::para2::para3::(paras4_to_8 @ vcs)
 	end
 );
 =TEX
@@ -3167,11 +3497,11 @@ fun €basic_decl_fixed_type› (env : CN_ENV, pfx : Z_ID list) (name : ID)
 		val tdelta = trans_exp env delta;
 		val zname = prefix_trans_id pfx name;
 		val z_e_e = z_eq_eq "type";
-		val vcs = real_range_check_vcs name tlo thi;
+		fun mk_vcs () = real_range_check_vcs name tlo thi;
 	in	[ z_e_e(zname, z_rng(tlo, thi)),
 		  z_e_e(zname ^^ zdelta, tdelta),
 		  z_e_e(zname ^^ zfst, tlo),
-		  z_e_e(zname ^^ zlst, thi) ] @ vcs
+		  z_e_e(zname ^^ zlst, thi) ] @ mk_vcs ()
 	end
 ) | basic_decl_fixed_type _ _ _ = fail "basic_decl_fixed_type" 508065 [];
 =TEX
@@ -3185,11 +3515,11 @@ fun €basic_decl_floating_type› (env : CN_ENV, pfx : Z_ID list) (name : ID)
 		val tdigits = trans_exp env digits;
 		val zname = prefix_trans_id pfx name;
 		val z_e_e = z_eq_eq "type";
-		val vcs = real_range_check_vcs name tlo thi;
+		fun mk_vcs () = real_range_check_vcs name tlo thi;
 	in	[ z_e_e(zname, z_rng(tlo, thi)),
 		  z_e_e(zname ^^ zdigits, tdigits),
 		  z_e_e(zname ^^ zfst, tlo),
-		  z_e_e(zname ^^ zlst, thi) ] @ vcs
+		  z_e_e(zname ^^ zlst, thi) ] @ mk_vcs ()
 	end
 ) | basic_decl_floating_type (env, pfx) name {exp = digits, range = Nil} = (
 	let	val tdigits = trans_exp env digits;
@@ -3211,12 +3541,12 @@ fun €basic_decl_floating_type› (env : CN_ENV, pfx : Z_ID list) (name : ID)
 
 \subsection{Translating Subtypes}
 =SML
-fun €range_con_attrib› (env : CN_ENV) (zidâ1 : Z_ID, zidâ2 : Z_ID, {lo,hi}
-		: EXP RANGELOHI) : PARAINFO list = (
-let	val z_e_e = z_eq_eq "type";
+fun €range_con_attrib› (env : CN_ENV)
+	(zidâ1 : Z_ID, zidâ2 : Z_ID, {lo : Z_EXP, hi : Z_EXP}) : PARAINFO list = (
+let	val z_e_e = z_eq_eq "subtype";
 in
-	[z_e_e (zidâ1 ^^ zfst, trans_exp env lo),
-	z_e_e (zidâ1 ^^ zlst, trans_exp env hi),
+	[z_e_e (zidâ1 ^^ zfst, lo),
+	z_e_e (zidâ1 ^^ zlst, hi),
 	z_e_e (zidâ1 ^^ zsuc, zid env (zidâ2 ^^ zsuc)),
 	z_e_e (zidâ1 ^^ zpred, zid env (zidâ2 ^^ zpred)),
 	z_e_e (zidâ1 ^^ zpos, zid env (zidâ2 ^^ zpos)),
@@ -3224,7 +3554,41 @@ in
 end
 );
 =TEX
-The following function does the processing which is commont to cases of
+=SML
+local
+val €l_var› : Z_EXP = Ò L ∫ ˙ Æ;
+val €h_var› : Z_EXP = Ò H ∫ ˙ Æ;
+val €gen_mt_subtype_def› : Z_EXP = alphaize Ò vVAL ® L .. H © Æ;
+val €gen_mt_subtype_first_def› : Z_EXP = alphaize Ò vVAL (L ∫ ˙) Æ;
+val €gen_mt_subtype_last_def› : Z_EXP = alphaize Ò vVAL (H ∫ ˙) Æ;
+in
+fun €modular_subtype_def›
+	(zidâ2 : Z_ID, {lo : Z_EXP, hi : Z_EXP}) : Z_EXP = (
+	inst_mt_term (trans_id zidâ2) []
+	(subst [(lo, l_var), (hi, h_var)] gen_mt_subtype_def)
+);
+fun €range_con_attrib_modular›
+	(env : CN_ENV)
+	(zidâ1 : Z_ID, zidâ2 : Z_ID,
+		{lo : Z_EXP, hi : Z_EXP}) : PARAINFO list = (
+let	val z_e_e = z_eq_eq "subtype";
+	val first_def = inst_mt_term zidâ2 []
+		(subst[(lo, l_var)] gen_mt_subtype_first_def);
+	val last_def = inst_mt_term zidâ2 []
+		(subst[(hi, h_var)] gen_mt_subtype_last_def);
+in
+	[z_e_e (zidâ1 ^^ zfst, first_def),
+	z_e_e (zidâ1 ^^ zlst, last_def),
+	z_e_e (zidâ1 ^^ zmodulus, zid env (zidâ2 ^^ zmodulus)),
+	z_e_e (zidâ1 ^^ zpos, zid env (zidâ2 ^^ zpos)),
+	z_e_e (zidâ1 ^^ zsuc, zid env (zidâ2 ^^ zsuc)),
+	z_e_e (zidâ1 ^^ zpred, zid env (zidâ2 ^^ zpred)),
+	z_e_e (zidâ1 ^^ zval, zid env (zidâ2 ^^ zval))]
+end
+);
+end;
+=TEX
+The following function does the processing which is common to cases of
 a subtype which gives rise to an axiomatic description rather than an abbreviation definition.
 =SML
 fun €basic_decl_subtype_axdes› (env : CN_ENV) (zvar : Z_ID) (tmark : TMARK)
@@ -3242,7 +3606,7 @@ Here and in the Z generator we need to know the names of the recognised attribut
 val €ada_attributes_list› : ID list = map fst ada_attribute_types;
 =TEX
 =SML
-fun €type_attrs› (unwanted : ID list) (t : ID) = (
+fun €type_attrs› (unwanted : ID list) (t : ID) : ID list = (
 let	val tthy = get_const_theory (bind_gvar_name t);
 	val tthyconsts = get_consts tthy;
 	val tthyconsts_names = map (fst o dest_const) tthyconsts;
@@ -3255,7 +3619,6 @@ handle (Fail _) => [] (* presumably from get_const_theory *)
 );
 =IGN
 type_attrs []"NATURAL";
-=TEX
 =TEX
 In the following, the two `then' parts in the first case alternative implements
 =INLINEFT
@@ -3272,11 +3635,13 @@ Basic_Decl_Range_Con_2
 =TEX
 .
 =SML
+
 fun €basic_decl_subtype_range_con› (env : CN_ENV, pfx : Z_ID list)
 	(name : ID) (tmark : TMARK) (range : EXP RANGE) : PARAINFO list = (
 	let	val {lo, hi} = dest_range (adjust_range env range);
-		val zname = prefix_trans_id pfx name;
+		val zsubty = prefix_trans_id pfx name;
 		val rtmark = real_name env tmark;
+		val zsuperty = trans_id rtmark;
 		val ztype = type_of(zid env rtmark
 			handle Fail _ =>
 			fail "trans_basic_decl" 508051 [fn () => tmark]);
@@ -3287,9 +3652,9 @@ fun €basic_decl_subtype_range_con› (env : CN_ENV, pfx : Z_ID list)
 			(Value l, Value h) =>
 			if	ztype =: z_int_set_type
 			then	let	val vcs = int_range_check_vcs name l h;
-				in	z_e_e(zname, z_rng(l, h)) ::
+				in	z_e_e(zsubty, z_rng(l, h)) ::
 					range_con_attrib env
-					(zname, rtmark, {lo=lo,hi=hi}) @ vcs
+					(zsubty, zsuperty, {lo=l,hi=h}) @ vcs
 				end
 			else if	ztype =: z_real_set_type
 			then	let	val vcs = real_range_check_vcs name l h;
@@ -3297,15 +3662,21 @@ fun €basic_decl_subtype_range_con› (env : CN_ENV, pfx : Z_ID list)
 					val tas = type_attrs unwanted rtmark;
 					val tas_paras = map
 						(fn attr =>
-						z_e_e(zname ^^ attr,
+						z_e_e(zsubty ^^ attr,
 						 zid env (rtmark ^^ attr))) tas;
-				in	z_e_e(zname, z_rng(l, h)) ::
+				in	z_e_e(zsubty, z_rng(l, h)) ::
 					tas_paras @
-					[ z_e_e(zname ^^ zfst, l),
-					  z_e_e(zname ^^ zlst, h) ] @ vcs
+					[ z_e_e(zsubty ^^ zfst, l),
+					  z_e_e(zsubty ^^ zlst, h) ] @ vcs
 				end
-			else	basic_decl_subtype_axdes env zname tmark
-		|	_ =>	basic_decl_subtype_axdes env zname tmark
+			else if 	is_modular_type rtmark
+			then	let	val vcs = int_range_check_vcs name l h;
+				in	z_e_e(zsubty, modular_subtype_def(zsuperty, {lo = l, hi = h})) ::
+					range_con_attrib_modular env
+					(zsubty, zsuperty, {lo=l,hi=h}) @ vcs
+				end
+			else	basic_decl_subtype_axdes env zsubty tmark
+		|	_ =>	basic_decl_subtype_axdes env zsubty tmark
 	end
 );
 =TEX
@@ -3387,6 +3758,8 @@ fun €trans_basic_decl›
 	basic_decl_enum env_pfx name td
 ) | trans_basic_decl env_pfx (BDTypeDecl {name,type_def=TDIntTypeDef range,...}) = (
 	basic_decl_int_type env_pfx name range
+) | trans_basic_decl env_pfx (BDTypeDecl {name,type_def=TDModularTypeDef modulus,...}) = (
+	basic_decl_modular_type env_pfx name modulus
 ) | trans_basic_decl env_pfx (BDTypeDecl {name,type_def=TDConArrayDef td,...}) = (
 	basic_decl_con_array env_pfx name td
 ) | trans_basic_decl env_pfx (BDTypeDecl {name,type_def=TDUnconArrayDef td,...}) = (
@@ -4002,6 +4375,8 @@ fun €adjust_basic_decl›  (env_pfx : CN_ENV * Z_ID list)
 			[BDTypeDecl {name = name, type_def = TDEnumTypeDef x}]
 	|	SITypeDecl {name, type_def = SIIntTypeDef x} =>
 			[BDTypeDecl {name = name, type_def = TDIntTypeDef x}]
+	|	SITypeDecl {name, type_def = SIModularTypeDef x} =>
+			[BDTypeDecl {name = name, type_def = TDModularTypeDef x}]
 	|	SITypeDecl {name, type_def = SIFixedTypeDef x} =>
 			[BDTypeDecl {name = name, type_def = TDFixedTypeDef x}]
 	|	SITypeDecl {name, type_def = SIFloatingTypeDef x} =>
