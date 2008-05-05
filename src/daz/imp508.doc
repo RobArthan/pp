@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2008/03/23 16:33:12 $ $Revision: 1.146 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2008/05/05 11:28:14 $ $Revision: 1.147 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.146 $%
+\def\SCCSversion{$Revision: 1.147 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/03/23 16:33:12 $%
+\TPPdate{\FormatDate{$Date: 2008/05/05 11:28:14 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -173,7 +173,7 @@ Removed code that supported use of aliases.
 \item[Issue 1.143] Range checks for real types.
 \item[Issue 1.144, 1.145] Tidying error messages for empty integer and real types.
 \item[Issue 1.146] Child packages.
-\item[Issue 1.147] Modular types.
+\item[Issues 1.147, 1.148] Modular types.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1637,7 +1637,7 @@ fun €modular_pos_attr› (ty : TYPE)
 fun €trans_bin_op_array_modular› (bop : BIN_OP, zleft : Z_EXP, zright : Z_EXP) : Z_EXP = (
 	let	val el_ty = hd(tl(dest_z_tuple_type(
 			dest_z_power_type(type_of zleft))));
-		val c = case bop of
+		val rator = case bop of
 			BOSparkLess => z_array_less
 		|	BOSparkLessEq => z_array_less_eq
 		|	BOSparkGreater => z_array_greater
@@ -1646,20 +1646,25 @@ fun €trans_bin_op_array_modular› (bop : BIN_OP, zleft : Z_EXP, zright : Z_EXP) :
 		val pos_attr = force_value (modular_pos_attr el_ty);
 		val zleft' = z_rel_comp(zleft, pos_attr);
 		val zright' = z_rel_comp(zright, pos_attr);
-	in	z_bin_exp(c, zleft', zright')
+	in	z_bin_exp(zleft', rator, zright')
 	end
 );
 =TEX
 =SML
 fun €trans_bin_op_modular› (bop : BIN_OP, zleft : Z_EXP, zright : Z_EXP) : Z_EXP = (
-	case modular_type_convs (type_of zleft) of
+	case Value (force_value(modular_type_convs(type_of zleft)))
+		handle Fail _ => modular_type_convs(type_of zright) of
 		Value {to_int, from_int, ...} => (
-		let	fun cnv f b t = if b then f t else t;
+		let	fun cnv f b t = (
+				if	b
+				then	f t handle Fail _ => t
+				else	t
+			);
 			fun apply (c, {left, right, result}) = (
 				cnv from_int result
 				(mk_z_app(c, mk_z_tuple [
 					cnv to_int left zleft,
-					cnv from_int right zright
+					cnv to_int right zright
 				]))
 			);
 		in	case bin_ops_modular bop of
@@ -2771,6 +2776,16 @@ and €adjust_qualified_expression›
 	)
 )
 =TEX
+The parser does not generate type conversions, but some of
+the program transformations for modular types do, so
+an adjuster for these is now needed.
+=SML
+and €adjust_type_conversion›
+				(env : CN_ENV)
+				({tmark=t, exp=e} : EXP TYPE_CONVERSION) = (
+	ETypeConversion {tmark = t, exp = adjust_exp env e}
+)
+=TEX
 In the following, both named and positional record aggregates and function calls
 need no adjustment since these constructs can only be produced by adjust\_exp.
 If they occur in the input then it adjust\_exp will already have been called
@@ -2812,8 +2827,8 @@ and €adjust_exp› (env : CN_ENV) (exp as (EId id : EXP)) = (
 	exp
 ) | adjust_exp env (exp as (EQualifiedExp x)) = (
 	adjust_qualified_expression env x
-) | adjust_exp env (exp as (ETypeConversion _)) = (
-	exp
+) | adjust_exp env (exp as (ETypeConversion x)) = (
+	adjust_type_conversion env x
 ) | adjust_exp env (exp as (EBracketed x)) = (
 	adjust_exp env x
 ) | adjust_exp env (exp as (EStringLiteral _)) = (
