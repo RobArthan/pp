@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.35 2007/05/29 16:48:32 rda Exp $
+ * $Id: files.c,v 2.36 2007/05/30 08:08:05 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -712,7 +712,6 @@ file_status check_file_status(char *name)
 	if(current_file_status != NULL) {
 		if(stat(name, &new_status) == 0) { /* file still exists */
 			if(	new_status.st_mtime != current_file_status->st_mtime
-			||	new_status.st_ctime != current_file_status->st_ctime
 			||	new_status.st_size != current_file_status->st_size) {
 				return FS_CHANGED;
 			}
