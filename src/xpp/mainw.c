@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.100 2007/05/30 08:08:05 rda Exp rda $
+ * $Id: mainw.c,v 2.101 2008/02/10 16:33:32 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -50,6 +50,9 @@ static struct {
 
 static char *changed_message =
 "The text has been modified.";
+
+static char *new_message =
+"The new file has not been saved.";
 
 static char *want_to_continue =
 "Do you want to continue?";
@@ -1472,6 +1475,14 @@ void show_modified(Boolean force)
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Tell user the file has not been modified
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void show_unmodified(void)
+{
+	file_info.changed = False;
+	show_file_info();
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor line number
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean line_number_req_pending = False;
@@ -1597,8 +1608,9 @@ void check_quit_cb (
 		XtPointer	unused_cbs)
 {
 	Boolean changed = file_info.changed;
+	Boolean new = file_info.new;
 	char *fname = get_file_name();
- 	char *msg = changed ? changed_message : NULL;
+ 	char *msg = changed ? changed_message : new ? new_message : NULL;
 	if(old_file_checks(
 			script,
 			fname,

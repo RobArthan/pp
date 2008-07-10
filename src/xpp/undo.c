@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.21 2007/01/04 14:59:16 rda Exp rda $
+ * $Id: undo.c,v 2.22 2007/05/19 15:42:43 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -342,13 +342,27 @@ static void setIn_business(UndoBuffer *ub, Boolean value)
 	}
 	ub->active->in_business = value;
 }
-
 static Boolean changes_saved(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return False;
 	}
 	return ub->active->changes_saved;
+}
+static Boolean in_sync(UndoBuffer *ub)
+{
+	UndoNode *ptr;
+	if(ub->active != (UndoNode *) NULL) {
+		return ub->active->changes_saved;
+	}
+	ptr = ub->root;
+	while(ptr != (UndoNode *) NULL) {
+		if(ptr->changes_saved) {
+			return False;
+		}
+		ptr = ptr->next;
+	}
+	return True;
 }
 static void setChanges_saved(UndoBuffer *ub, Boolean value)
 {
@@ -363,7 +377,7 @@ static void setChanges_saved(UndoBuffer *ub, Boolean value)
 			while(ptr != (UndoNode *) NULL) {
 				ptr->changes_saved = False;
 				ptr = ptr->next;
-			};
+			}
 		}
 		return;
 	}
@@ -1005,6 +1019,9 @@ void undo(XtPointer undo_ptr)
     		backtrack(ub);
 		setUndoRedo(ub);
 	}
+	if(in_sync(ub)) {
+		show_unmodified();
+	}
 }
 
 
@@ -1020,5 +1037,8 @@ void redo(XtPointer undo_ptr)
 		setUndoRedo(ub);
 	} else {
 		backtrack(ub);
+	}
+	if(in_sync(ub)) {
+		show_unmodified();
 	}
 }
