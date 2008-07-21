@@ -210,8 +210,12 @@ typedef enum {
 		char	*question,
 		char	*title);
 	extern int yes_no_cancel_dialog(
-		Widget	w,
-		char	*question);
+		Widget w,
+		char *question,
+		char *yes_label,
+		char *no_label,
+		char *cancel_label,
+		int direction);
 	extern void ok_dialog(
 		Widget	w,
 		char	*msg);

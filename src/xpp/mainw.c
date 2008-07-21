@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.101 2008/02/10 16:33:32 rda Exp rda $
+ * $Id: mainw.c,v 2.102 2008/07/10 12:54:48 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -48,11 +48,11 @@ static struct {
 /* Messages for various purposes */
 
 
-static char *changed_message =
-"The text has been modified.";
+static char *changed_message_file_name =
+"The text has been modified. Do you want to save to \"%s\"?";
 
-static char *new_message =
-"The new file has not been saved.";
+static char *changed_message_no_file_name =
+"The text has been modified. Do you want to save your work?";
 
 static char *want_to_continue =
 "Do you want to continue?";
@@ -180,7 +180,7 @@ static void setup_reopen_menu(char *filename);
 static void defer_resize (EVENT_HANDLER_ARGS);
 static void journal_resize_handler (EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
-static void file_menu_op(int op);
+static void file_menu_op(int op, Boolean *success);
 
 static void execute_action(ACTION_PROC_ARGS);
 static void command_line_action(ACTION_PROC_ARGS);
@@ -476,8 +476,8 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * get_file_name: extract the file name from the file name text field.
- * Return null if no file name (following the convention that it is the
- * string given in no
+ * Return null if no file name (following the convention that the
+ * string given in no_file_name means no file name).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static char *get_file_name(void)
 {
@@ -654,7 +654,6 @@ static Boolean setup_main_window(
 	NAT i;
 	XmString s1;
 	Atom WM_DELETE_WINDOW;
-	void check_quit_cb(CALLBACK_ARGS);
 	Widget *wp;
 	FileOpenAction foAction = NoAction;
 
@@ -1030,21 +1029,25 @@ static Boolean setup_main_window(
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void file_menu_op(int op)
+static void file_menu_op(int op, Boolean *success)
 {
 	static Widget dialog = NULL;
 	char *fname, *oldfname;
 	char *buf;
-	void check_quit_cb(CALLBACK_ARGS);
+	static Boolean check_save(void);
 	Boolean first_go;
-
+	if(success) {
+		*success = True;
+	}
 	switch(op) {
 	case FILE_MENU_SAVE:
 		fname = get_file_name();
 		if(!fname) {
 /* No file name: just do nothing */
-					if(fname) {XtFree(fname);}
-					break; /* user cancelled! */
+				if(fname) {
+					XtFree(fname);
+				}
+				break;
 		} else {
 			if(save_file(script, root, fname)) {
 				flash_file_name(fname);
@@ -1052,6 +1055,8 @@ static void file_menu_op(int op)
 				reinit_file_info(True, False, False);
 				set_menu_item_sensitivity(filemenu,
 					FILE_MENU_REVERT, True);
+			} else {
+				*success = False;
 			}
 		}
 		if(fname != NULL) {XtFree(fname);};
@@ -1067,6 +1072,9 @@ static void file_menu_op(int op)
 			for(first_go = True; ; first_go = False) {
 				fname = file_dialog(frame, &dialog, "Save", "Save File As", first_go);
 				if(!fname) {
+					if(success) {
+						*success = False;
+					}
 					break; /* user cancelled! */
 				} else if(save_file_as(script, dialog, fname)) {
 					if(oldfname != NULL) {
@@ -1094,6 +1102,9 @@ static void file_menu_op(int op)
 			for(first_go = True; ; first_go = False) {
 				fname = file_dialog(frame, &dialog, "Save Selection", "Save Selection As", first_go);
 				if(!fname) {
+					if(success) {
+						*success = False;
+					}
 					break; /* user cancelled! */
 				} else {
 					if(save_string_as(dialog, buf, fname)) {
@@ -1108,17 +1119,26 @@ static void file_menu_op(int op)
 		break;
 	case FILE_MENU_OPEN:
 		oldfname = get_file_name();
+		if(!check_save()) {
+			if(success) {
+				*success = False;
+			}
+			break;
+		}
 		if(old_file_checks(
 			script,
 			oldfname,
-			file_info.changed ? changed_message : NULL,
+			NULL,
 			want_to_continue,
 			confirm_open)) {
 			pause_undo(undo_ptr);
 			for(first_go = True; ; first_go = False) {
 				fname = file_dialog(frame, &dialog, "Open", "Open File", first_go);
 				if(!fname) {
-						break; /* user cancelled! */
+					if(success) {
+						*success = False;
+					}
+					break; /* user cancelled! */
 				} else {
 					if(open_file(script, dialog, fname, False, (FileOpenAction *) NULL)) {
 						if(oldfname && strcmp(fname, oldfname)) {
@@ -1142,6 +1162,9 @@ static void file_menu_op(int op)
 		for(first_go = True; ; first_go = False) {
 			fname = file_dialog(frame, &dialog, "Include", "Include File", first_go);
 			if(!fname) {
+				if(success) {
+					*success = False;
+				}
 				break; /* user cancelled! */
 			} else {
 				if(include_file(script, dialog, fname)) {
@@ -1153,11 +1176,17 @@ static void file_menu_op(int op)
 		XtPopdown(XtParent(dialog));
 		break;
 	case FILE_MENU_REVERT:
+		if(!check_save()) {
+			if(success) {
+				*success = False;
+			}
+			break;
+		}
 		fname = get_file_name();
 		if(old_file_checks(
 			script,
 			fname,
-			file_info.changed ? changed_message : NULL,
+			NULL,
 			want_to_continue,
 			confirm_revert)) {
 			pause_undo(undo_ptr);
@@ -1171,17 +1200,26 @@ static void file_menu_op(int op)
 				flash_file_name(fname);
 				reinit_file_info(False, file_info.new, False);
 			} else  {/* Can't open it; */
+				if(success) {
+					*success = False;
+				}
 				unpause_undo(undo_ptr);
 			}
 		};
 		if(fname) {XtFree(fname);}
 		break;
 	case FILE_MENU_EMPTY_FILE:
+		if(!check_save()) {
+			if(success) {
+				*success = False;
+			}
+			break;
+		}
 		oldfname = get_file_name();
 		if(old_file_checks(
 			script,
 			oldfname,
-			file_info.changed ? changed_message : NULL,
+			NULL,
 			want_to_continue,
 			confirm_empty_file)) {
 			pause_undo(undo_ptr);
@@ -1195,6 +1233,9 @@ static void file_menu_op(int op)
 				set_menu_item_sensitivity(filemenu,
 					FILE_MENU_SAVE, False);
 			} else { /* Can't do it (very odd!) */
+				if(success) {
+					*success = False;
+				}
 				unpause_undo(undo_ptr);
 			}
 		}
@@ -1213,7 +1254,7 @@ static void file_menu_cb(
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	file_menu_op( (int) cbd );
+	file_menu_op( (int) cbd, 0 );
 }
 
 /*
@@ -1285,15 +1326,19 @@ static void reopen_cb(
 		XtPointer 	cbd,
 		XtPointer	cbs)
 {
+	static Boolean check_save(void);
 	char *oldfname, *fname;
 	NAT i = (NAT) cbd;
 	oldfname = get_file_name();
 	fname = reopen_menu_items[i].label;
 	strcpy(fname,reopen_menu_items[i].label);
+	if(!check_save()) {
+		return;
+	}
 	if(old_file_checks(
 		script,
 		oldfname,
-		file_info.changed ? changed_message : NULL,
+		NULL,
 		want_to_continue,
 		confirm_reopen)) {
 		pause_undo(undo_ptr);
@@ -1600,6 +1645,50 @@ static void defer_resize(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * See if the user wants to save the text and if so do so.
+ * Return true if this succeeded and user didn't cancel.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Boolean check_save (void)
+{
+	Boolean changed = file_info.changed, success = True;
+	char *fname = get_file_name();
+	if(changed) {
+		char *question, *yes_label, *no_label, *cancel_label;
+		int operation;
+		if(fname != NULL && *fname) {
+			question = XtMalloc(strlen(changed_message_file_name) +
+					strlen(fname) + 1);
+			sprintf(question, changed_message_file_name, fname);
+			yes_label =    "  Save    ";
+			operation = FILE_MENU_SAVE;
+		} else {
+			question = XtMalloc(strlen(changed_message_no_file_name) + 1);
+			sprintf(question, changed_message_no_file_name);
+			yes_label = "  Save As ";
+			operation = FILE_MENU_SAVE_AS;
+		}
+		no_label =     "Don't Save";
+		cancel_label = "  Cancel  ";
+		switch(yes_no_cancel_dialog(root,
+					question,
+					yes_label,
+					no_label,
+					cancel_label,
+					XmTRAVERSE_LEFT)) {
+			case 1: /* yes */
+				file_menu_op(operation, &success);
+				break;
+			case 0: /* no */
+				break;
+			case -1: /* cancel */
+				success = False;
+				break;
+		}
+		XtFree(question);
+	}
+	return success;
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * See if the user really wants to quit, and if so do so:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void check_quit_cb (
@@ -1607,14 +1696,14 @@ void check_quit_cb (
 		XtPointer	unused_cbd,
 		XtPointer	unused_cbs)
 {
-	Boolean changed = file_info.changed;
-	Boolean new = file_info.new;
 	char *fname = get_file_name();
- 	char *msg = changed ? changed_message : new ? new_message : NULL;
+	if(!check_save()) {
+		return;
+	}
 	if(old_file_checks(
 			script,
 			fname,
-			msg,
+			NULL,
 			want_to_quit,
 			confirm_quit)) {
 		kill_application();
@@ -1622,7 +1711,7 @@ void check_quit_cb (
 		list_widget_hierarchy();
 #endif
 		exit(0);
-	};
+	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Executing text from the selection in a text window.
@@ -1658,7 +1747,11 @@ static Bool execute_command(void)
 		} else if (global_options.add_new_line_mode
 					== EXECUTE_PROMPT_NEW_LINES) {
 			switch(yes_no_cancel_dialog(root,
-					add_new_line_message)) {
+					add_new_line_message,
+					"   Yes  ",
+					"   No   ",
+					" Cancel ",
+					XmTRAVERSE_HOME)) {
 				case 1: /* yes */
 					send_to_application(cmd, len);
 					send_to_application("\n", 1);
@@ -1749,7 +1842,7 @@ static void quit_action(
     String*	unused_params,
     Cardinal*	unused_num_params)
 {
-	file_menu_op(FILE_MENU_QUIT);
+	file_menu_op(FILE_MENU_QUIT, 0);
 }
 			
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1762,7 +1855,7 @@ static void script_open_action(
     String*	unused_params,
     Cardinal*	unused_num_params)
 {
-	file_menu_op(FILE_MENU_OPEN);
+	file_menu_op(FILE_MENU_OPEN, 0);
 }
 			
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1788,7 +1881,7 @@ static void script_save_action(
     String*	unused_params,
     Cardinal*	unused_num_params)
 {
-	file_menu_op(FILE_MENU_SAVE);
+	file_menu_op(FILE_MENU_SAVE, 0);
 }
 			
 			

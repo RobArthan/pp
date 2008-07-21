@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2006/08/07 11:04:11 $ $Revision: 2.49 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2007/05/29 16:48:32 $ $Revision: 2.50 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -282,9 +282,18 @@ Boolean quit_new_dialog(Widget w, char *question)
  * yes_no_cancel_dialog: ask a question with a mandatory yes/no/cancel answer
  * By abuse of the Motif intentions, this uses the help button for cancel.
  * Return is 1 for yes; 0 for no; and -1 for cancel.
+ * The question message and the labels for the buttons are given as
+ * arguments as also is a direction (XmTRAVERSE_CURRENT, XmTRAVERSE_LEFT
+ * or XmTRAVERSE_RIGHT) passed as an argument to XmProcessTraversal
+ * after traversing to the yes button.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void yes_no_cb(CALLBACK_ARGS), cancel_cb(CALLBACK_ARGS);
-int yes_no_cancel_dialog(Widget w, char *question)
+int yes_no_cancel_dialog(Widget w,
+		char *question,
+		char *yes_label,
+		char *no_label,
+		char *cancel_label,
+		int direction)
 {
 	static Widget dialog;
 	XmString text, yes, no, cancel, confirm;
@@ -297,15 +306,9 @@ int yes_no_cancel_dialog(Widget w, char *question)
 #ifdef EDITRES
 		add_edit_res_handler(dialog);
 #endif
-		yes = XmStringCreateSimple(   "   Yes   ");
-		no = XmStringCreateSimple(    "   No   ");
-		cancel = XmStringCreateSimple(" Cancel ");
 		confirm = XmStringCreateSimple("Confirm-or-Cancel");
 		XtVaSetValues(dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
-			XmNokLabelString,	yes,
-			XmNcancelLabelString,	no,
-			XmNhelpLabelString,	cancel,
 			XmNdialogTitle, 	confirm,
 			XmNdialogType,		XmDIALOG_QUESTION,
 			NULL);
@@ -319,18 +322,29 @@ int yes_no_cancel_dialog(Widget w, char *question)
 			WM_DELETE_WINDOW,
 			cancel_cb,
 			&reply);
-		XmStringFree(yes);
-		XmStringFree(no);
-		XmStringFree(cancel);
 		XmStringFree(confirm);
 	}
+
 	text = format_msg(question, MSG_LINE_LEN);
-	XtVaSetValues(dialog, XmNmessageString, text, NULL);
+	yes = XmStringCreateSimple(yes_label);
+	no = XmStringCreateSimple(no_label);
+	cancel = XmStringCreateSimple(cancel_label);
+	XtVaSetValues(dialog,
+		XmNmessageString,	text,
+		XmNokLabelString,	yes,
+		XmNcancelLabelString,	no,
+		XmNhelpLabelString,	cancel,
+		NULL);
 	XmStringFree(text);
+	XmStringFree(yes);
+	XmStringFree(no);
+	XmStringFree(cancel);
+
 	XtManageChild(dialog);
 	XtVaSetValues(XtParent(dialog), XmNtransientFor, get_top_shell(w), NULL);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
+	XmProcessTraversal(dialog, direction);
 	beep();
 	poll(&reply);
 	XtPopdown(XtParent(dialog));
