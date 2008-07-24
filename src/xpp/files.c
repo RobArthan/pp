@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.36 2007/05/30 08:08:05 rda Exp rda $
+ * $Id: files.c,v 2.37 2008/07/10 09:13:39 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -190,7 +190,6 @@ static void file_error_dialog(
 	ok_dialog(w, msg);
 	XtFree(msg);
 }
-
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * file_quit_new_dialog: quit/new confirmation for the file operations
@@ -554,6 +553,7 @@ static char *get_file_contents(
 	}
 	return buf;
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * backup_file: copy a file XXX into XXX.old
  * The first parameter is the name of a widget to own any error
@@ -726,7 +726,6 @@ file_status check_file_status(char *name)
 	return FS_OK;
 }
 
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * save_file: store contents of a text widget into a named file
  * which will presumably already exist and may be overwritten
@@ -851,6 +850,7 @@ Boolean save_string_as(
 	success = store_file_contents(w, name, (data ? data : ""));
 	return success;
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * is_read_only: tests for read-only files.
  * If running as root, only files that are owned by root
@@ -880,15 +880,14 @@ Boolean is_read_only(
 		}
 	}
 }
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * old_file_checks: check for anomalous conditions
- * with the current file prior to opening a new one.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * old_file_checks: check for anomalous conditions with the
+ * current file prior to saving or reopening it or opening a new one
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 Boolean old_file_checks(
 		Widget	text,
 		char	*oldname,
-		char	*extra_message,
 		char	*continue_message,
 		char	*title)
 {
@@ -899,23 +898,11 @@ Boolean old_file_checks(
 		case FS_CREATED: msg_text = old_file_created_message; break;
 		case FS_OK: msg_text = NULL; break;
 	}
-	if(msg_text != NULL || extra_message != NULL) {
+	if(msg_text != NULL) {
 		Boolean reply;
-		char *msg = XtMalloc(200);
-		*msg = '\0';
-		if(extra_message != NULL) {
-			msg = XtRealloc(msg, strlen(extra_message) + 1);
-			strcat(msg, extra_message);
-		}
-		if(msg_text != NULL) {
-			char *m = XtMalloc(strlen(msg_text) + strlen(oldname) + 1);
-			sprintf(m, msg_text, oldname);
-			msg = XtRealloc(msg, strlen(msg) + strlen(m) + 2);
-			strcat(msg, "\n");
-			strcat(msg, m);
-			XtFree(m);
-		}
-		msg = XtRealloc(msg, strlen(msg) + strlen(continue_message) + 2);
+		char *msg = XtMalloc(strlen(msg_text) + strlen(oldname) +
+				strlen(continue_message) + 2);
+		sprintf(msg, msg_text, oldname);
 		strcat(msg, "\n");
 		strcat(msg, continue_message);
 		reply = yes_no_dialog(text, msg, title);
@@ -925,6 +912,7 @@ Boolean old_file_checks(
 		return True;
 	}
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * open_file: open a file and load it into a text widget given the
  * widget and the file name 
@@ -1033,7 +1021,6 @@ Boolean include_file(
 		return False;
 	}
 }
-
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * panic_save: attempt to save the contents of a text widget, e.g.,

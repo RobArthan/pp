@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.102 2008/07/10 12:54:48 rda Exp rda $
+ * $Id: mainw.c,v 2.103 2008/07/21 17:15:31 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -181,7 +181,7 @@ static void defer_resize (EVENT_HANDLER_ARGS);
 static void journal_resize_handler (EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
 static void file_menu_op(int op, Boolean *success);
-
+static Boolean check_save(void);
 static void execute_action(ACTION_PROC_ARGS);
 static void command_line_action(ACTION_PROC_ARGS);
 static void goto_line_action(ACTION_PROC_ARGS);
@@ -287,6 +287,7 @@ static MenuItem edit_menu_items[] = {
         popup_line_no_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
+
 /*
  * In the following, the templates tool item is desensitized if the tool
  * initialisation fails.
@@ -474,6 +475,7 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 	check_text_window_limit(journal,  global_options.journal_max);
 
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * get_file_name: extract the file name from the file name text field.
  * Return null if no file name (following the convention that the
@@ -519,7 +521,6 @@ static void journal_resize_handler(
 		XmTextShowPosition(journal, XmTextGetLastPosition(journal));
 	}
 }
-
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set_icon_name_and_title: get the file name out of the script editor's
@@ -1029,12 +1030,16 @@ static Boolean setup_main_window(
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+
+/*
+ * file_menu_op: the main processing for the file menu separated out
+ * so that it can be reused from other dialogues.
+ */
 static void file_menu_op(int op, Boolean *success)
 {
 	static Widget dialog = NULL;
 	char *fname, *oldfname;
 	char *buf;
-	static Boolean check_save(void);
 	Boolean first_go;
 	if(success) {
 		*success = True;
@@ -1055,7 +1060,7 @@ static void file_menu_op(int op, Boolean *success)
 				reinit_file_info(True, False, False);
 				set_menu_item_sensitivity(filemenu,
 					FILE_MENU_REVERT, True);
-			} else {
+			} else if (success) {
 				*success = False;
 			}
 		}
@@ -1066,7 +1071,6 @@ static void file_menu_op(int op, Boolean *success)
 		if(old_file_checks(
 			script,
 			oldfname,
-			NULL,
 			want_to_continue,
 			confirm_save_as)) {
 			for(first_go = True; ; first_go = False) {
@@ -1128,7 +1132,6 @@ static void file_menu_op(int op, Boolean *success)
 		if(old_file_checks(
 			script,
 			oldfname,
-			NULL,
 			want_to_continue,
 			confirm_open)) {
 			pause_undo(undo_ptr);
@@ -1186,7 +1189,6 @@ static void file_menu_op(int op, Boolean *success)
 		if(old_file_checks(
 			script,
 			fname,
-			NULL,
 			want_to_continue,
 			confirm_revert)) {
 			pause_undo(undo_ptr);
@@ -1219,7 +1221,6 @@ static void file_menu_op(int op, Boolean *success)
 		if(old_file_checks(
 			script,
 			oldfname,
-			NULL,
 			want_to_continue,
 			confirm_empty_file)) {
 			pause_undo(undo_ptr);
@@ -1249,6 +1250,9 @@ static void file_menu_op(int op, Boolean *success)
 	};
 }
 
+/*
+ * file_menu_cb: the actual callback
+ */
 static void file_menu_cb(
 		Widget		w,
 		XtPointer	cbd,
@@ -1321,12 +1325,15 @@ static void setup_reopen_menu(char *filename)
 	set_menu_item_sensitivity(filemenu, FILE_MENU_REOPEN, True);
 }
 
+/*
+ * reopen_cb: callback for the items in the reopen menu that cascades
+ * from the reopen item in the file menu
+ */
 static void reopen_cb(
 		Widget		w,
 		XtPointer 	cbd,
 		XtPointer	cbs)
 {
-	static Boolean check_save(void);
 	char *oldfname, *fname;
 	NAT i = (NAT) cbd;
 	oldfname = get_file_name();
@@ -1338,7 +1345,6 @@ static void reopen_cb(
 	if(old_file_checks(
 		script,
 		oldfname,
-		NULL,
 		want_to_continue,
 		confirm_reopen)) {
 		pause_undo(undo_ptr);
@@ -1358,50 +1364,10 @@ static void reopen_cb(
 	if(oldfname) {XtFree(oldfname);}
 }
 
-static void popup_search_tool_cb(
-		Widget		w,
-		XtPointer	cbd,
-		XtPointer	cbs)
-{
-		add_search_tool(script);
-}
-
-static void popup_line_no_tool_cb(
-		Widget		w,
-		XtPointer	cbd,
-		XtPointer	cbs)
-{
-		add_line_no_tool(script);
-}
-
-static void popup_palette_cb(
-		Widget		w,
-		XtPointer	cbd,
-		XtPointer	cbs)
-{
-	popup_palette(script);
-}
-static void popup_templates_tool_cb(
-		Widget		w,
-		XtPointer	cbd,
-		XtPointer	cbs)
-{
-	add_templates_tool(script);
-}
-static void popup_command_line_tool_cb(
-		Widget		w,
-		XtPointer	cbd,
-		XtPointer	cbs)
-{
-	add_command_line_tool(script);
-}
-static void popup_options_tool_cb(
-		Widget		w,
-		XtPointer	cbd,
-		XtPointer	cbs)
-{
-	add_options_tool();
-}
+/*
+ * new_editor_session_cb: callback for the new editor session item
+ * in the file menu
+ */
 static void new_editor_session_cb(
 		Widget		w,
 		XtPointer	cbd,
@@ -1409,6 +1375,11 @@ static void new_editor_session_cb(
 {
 	new_editor_session();
 }
+
+/*
+ * new_command_session_cb: callback for the new command session item
+ * in the file menu
+ */
 static void new_command_session_cb(
 		Widget		w,
 		XtPointer	cbd,
@@ -1417,6 +1388,34 @@ static void new_command_session_cb(
 	new_command_session();
 }
 
+/*
+ * popup_search_tool_cb: callback for the search and replace item
+ * in the edit menu
+ */
+
+static void popup_search_tool_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+		add_search_tool(script);
+}
+
+/*
+ * popup_line_no_tool_cb: callback for the goto line item
+ * in the edit menu
+ */
+static void popup_line_no_tool_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+		add_line_no_tool(script);
+}
+
+/*
+ * script_undo_cb: callback for the undo item in the edit menu
+ */
 static void script_undo_cb(
 		Widget		w,
 		XtPointer	cbd,
@@ -1425,6 +1424,9 @@ static void script_undo_cb(
 	undo(undo_ptr);
 }
 
+/*
+ * script_redo_cb: callback for the redo item in the edit menu
+ */
 static void script_redo_cb(
 		Widget		w,
 		XtPointer	cbd,
@@ -1433,6 +1435,54 @@ static void script_redo_cb(
 	redo(undo_ptr);
 }
 
+/*
+ * popup_palette_cb: callback for the palette item in the tools menu
+ */
+static void popup_palette_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	popup_palette(script);
+}
+
+/*
+ * popup_templates_tool_cb: callback for the templates item in the tools menu
+ */
+static void popup_templates_tool_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	add_templates_tool(script);
+}
+
+/*
+ * popup_options_tool_cb: callback for the options item in the tools menu
+ */
+static void popup_options_tool_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	add_options_tool();
+}
+
+/*
+ * popup_command_line_tool_cb: callback for the command line item
+ * in the command menu
+ */
+static void popup_command_line_tool_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	add_command_line_tool(script);
+}
+
+/*
+ * cmd_menu_cb: callback for the command menu
+ */
 static void cmd_menu_cb(
 		Widget		w,
 		XtPointer	cbd,
@@ -1474,6 +1524,9 @@ static void cmd_menu_cb(
 	}
 }
 
+/*
+ * help_menu_cb: callback for the help menu
+ */
 static void help_menu_cb(
 		Widget		w,
 		XtPointer	cbd,
@@ -1509,6 +1562,7 @@ static void help_menu_cb(
 		break;
 	}
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tell user the file has been modified
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1519,6 +1573,7 @@ void show_modified(Boolean force)
 		show_file_info();
 	}
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tell user the file has not been modified
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1527,6 +1582,7 @@ void show_unmodified(void)
 	file_info.changed = False;
 	show_file_info();
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor line number
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1558,6 +1614,10 @@ static void line_number_timeout_proc(
 	}
 }
 
+/*
+ * line_number_cb: callback for motion verify in the text window to 
+ * request the line number to be recalcualted.
+ */
 static void line_number_cb(
 		Widget		w,
 		XtPointer	cbd,
@@ -1570,6 +1630,9 @@ static void line_number_cb(
 	}
 }
 
+/*
+ * ln_popup_cb: callback for the popup menu in the line number label
+ */
 static void ln_popup_cb (
 		Widget		w,
 		XtPointer	cbd,
@@ -1583,6 +1646,9 @@ static void ln_popup_cb (
 	}
 }
 
+/*
+ * callback for typing in the journal window:
+ */
 static void journal_modify_cb (
 		Widget		w,
 		XtPointer	cbd,
@@ -1644,6 +1710,7 @@ static void defer_resize(
 	} /* else, let Motif in */
 }
 
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * See if the user wants to save the text and if so do so.
  * Return true if this succeeded and user didn't cancel.
@@ -1659,16 +1726,18 @@ static Boolean check_save (void)
 			question = XtMalloc(strlen(changed_message_file_name) +
 					strlen(fname) + 1);
 			sprintf(question, changed_message_file_name, fname);
-			yes_label =    "  Save    ";
+			yes_label =    "    Save    ";
+			no_label =     " Don't Save ";
+			cancel_label = "   Cancel   ";
 			operation = FILE_MENU_SAVE;
 		} else {
 			question = XtMalloc(strlen(changed_message_no_file_name) + 1);
 			sprintf(question, changed_message_no_file_name);
-			yes_label = "  Save As ";
+			yes_label =    " Save As ... ";
+			no_label =     " Don't Save  ";
+			cancel_label = "   Cancel    ";
 			operation = FILE_MENU_SAVE_AS;
 		}
-		no_label =     "Don't Save";
-		cancel_label = "  Cancel  ";
 		switch(yes_no_cancel_dialog(root,
 					question,
 					yes_label,
@@ -1677,6 +1746,7 @@ static Boolean check_save (void)
 					XmTRAVERSE_LEFT)) {
 			case 1: /* yes */
 				file_menu_op(operation, &success);
+				idle(100);
 				break;
 			case 0: /* no */
 				break;
@@ -1688,6 +1758,7 @@ static Boolean check_save (void)
 	}
 	return success;
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * See if the user really wants to quit, and if so do so:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1703,7 +1774,6 @@ void check_quit_cb (
 	if(old_file_checks(
 			script,
 			fname,
-			NULL,
 			want_to_quit,
 			confirm_quit)) {
 		kill_application();
@@ -1713,6 +1783,7 @@ void check_quit_cb (
 		exit(0);
 	}
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Executing text from the selection in a text window.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1805,7 +1876,7 @@ static void execute_action(
 		}
 	}
 }
-			
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * goto-line action function; pop-up goto-line tool.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1818,7 +1889,7 @@ static void goto_line_action(
 {
 	add_line_no_tool(script);
 }
-			
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * interrupt action function; call interrupt_application
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1831,7 +1902,7 @@ static void interrupt_action(
 {
 	interrupt_application();
 }
-			
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * quit action function; emulate file-menu quit
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1844,7 +1915,7 @@ static void quit_action(
 {
 	file_menu_op(FILE_MENU_QUIT, 0);
 }
-			
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * script-open action function; emulate file-menu open
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1857,7 +1928,7 @@ static void script_open_action(
 {
 	file_menu_op(FILE_MENU_OPEN, 0);
 }
-			
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * script-redo action function; cause a script window undo
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1870,7 +1941,7 @@ static void script_redo_action(
 {
 	redo(undo_ptr);
 }
-		
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * script-save action function; emulate file-menu save
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1883,7 +1954,7 @@ static void script_save_action(
 {
 	file_menu_op(FILE_MENU_SAVE, 0);
 }
-			
+
 			
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * script-undo action function; cause a script window undo
@@ -1897,7 +1968,7 @@ static void script_undo_action(
 {
 	undo(undo_ptr);
 }
-			
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search action function; pop-up search tool.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1910,7 +1981,7 @@ static void search_action(
 {
 	add_search_tool(script);
 }
-		
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * main entry point:
  * **** **** **** **** **** **** **** **** **** **** **** **** */

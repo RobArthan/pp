@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.33 2005/07/27 09:13:43 rda Exp $
+ * $Id: xmisc.c,v 2.34 2007/05/30 08:08:05 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -251,6 +251,28 @@ static Boolean flash_widget_work_proc(XtPointer xtp)
 Boolean flash_widget(Widget w)
 {
 	XtAppAddWorkProc(app, flash_widget_work_proc, w);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * idle: stop processing user input for a specified period, e.g.,
+ * to give a delay between popping up two dialogue boxes.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void idle_timeout_proc(XtPointer p, XtIntervalId *unused)
+{
+	Boolean *flag = p;
+	*flag = True;
+}
+void idle(unsigned long interval){
+	XEvent xev;
+	Boolean idling = False;
+	XtAppAddTimeOut(app, interval, idle_timeout_proc, &idling);
+	while(!idling) {
+		XtAppNextEvent(app, &xev);
+		if(	xev.type != KeyPress && xev.type != KeyRelease &&
+			xev.type != ButtonPress && xev.type != ButtonRelease ) {
+			XtDispatchEvent(&xev);
+		}
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

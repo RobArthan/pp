@@ -131,7 +131,6 @@ typedef enum {
 	extern Boolean old_file_checks(
 		Widget	text,
 		char	*oldname,
-		char	*extra_message,
 		char	*continue_message,
 		char	*title);
 	extern Boolean open_file(
@@ -187,7 +186,7 @@ typedef enum {
 	extern void show_file_info(void);
 	extern char *not_running_message;
 /* Module: menus */
-	extern	Widget setup_menu(
+	extern Widget setup_menu(
 		Widget		parent,
 		int		type,
 		char		*menu_title,
@@ -316,33 +315,34 @@ typedef enum {
 	extern void fix_pane_height(
 			Widget child_w,
 			Widget scale_w);
-	extern	Boolean flash_widget(Widget w);
-	extern	void number_verify_cb(CALLBACK_ARGS);
-	extern	void text_verify_cb(CALLBACK_ARGS);
-	extern	void text_field_verify_cb(CALLBACK_ARGS);
-	extern	void common_dialog_setup(
+	extern Boolean flash_widget(Widget w);
+	extern void idle(unsigned long interval);
+	extern void number_verify_cb(CALLBACK_ARGS);
+	extern void text_verify_cb(CALLBACK_ARGS);
+	extern void text_field_verify_cb(CALLBACK_ARGS);
+	extern void common_dialog_setup(
 			Widget shell,
 			void cancel_cb(CALLBACK_ARGS),
 			XtPointer cancel_cbd);
-	extern	void popdown_cb(CALLBACK_ARGS);
-	extern	void help_cb(CALLBACK_ARGS);
-	extern	void set_input_focus(Widget w);
-	extern	void attach_edit_popup(Widget text_w, MenuItem *menu_items);
-	extern	void attach_rw_edit_popup(Widget text_w);
-	extern	void attach_ro_edit_popup(Widget text_w);
-	void	edit_cut_cb(CALLBACK_ARGS);
-	void	edit_copy_cb(CALLBACK_ARGS);
-	void	edit_paste_cb(CALLBACK_ARGS);
-	extern	void register_selection_source(
+	extern void popdown_cb(CALLBACK_ARGS);
+	extern void help_cb(CALLBACK_ARGS);
+	extern void set_input_focus(Widget w);
+	extern void attach_edit_popup(Widget text_w, MenuItem *menu_items);
+	extern void attach_rw_edit_popup(Widget text_w);
+	extern void attach_ro_edit_popup(Widget text_w);
+	extern void edit_cut_cb(CALLBACK_ARGS);
+	extern void edit_copy_cb(CALLBACK_ARGS);
+	extern void edit_paste_cb(CALLBACK_ARGS);
+	extern void register_selection_source(
 		Widget w);
-	void	attach_popup_menu(Widget work_w, Widget menu_w);
-	extern	char *get_selection(Widget w, char *err_msg);
+	extern void attach_popup_menu(Widget work_w, Widget menu_w);
+	extern char *get_selection(Widget w, char *err_msg);
 #ifdef EDITRES
-	extern	void add_edit_res_handler(Widget shell);
+	extern void add_edit_res_handler(Widget shell);
 #endif
 #ifdef LISTWIDGETS
-	extern	void register_shell(Widget w);
-	extern	void list_widget_hierarchy(void);
+	extern void register_shell(Widget w);
+	extern void list_widget_hierarchy(void);
 #endif
 /* Module: xpp */
 /* **** **** **** **** **** **** **** **** **** **** **** ****
