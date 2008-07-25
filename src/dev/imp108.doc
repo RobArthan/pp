@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  %Z% $Date: 2005/06/29 16:01:11 $ $Revision: 1.25 $ $RCSfile: imp108.doc,v $
+%  %Z% $Date: 2008/07/25 14:20:09 $ $Revision: 1.38 $ $RCSfile: imp108.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Portability Infrastructure Implementation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP108}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.25 $%
+\def\SCCSversion{$Revision: 1.38 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/06/29 16:01:11 $%
+\TPPdate{\FormatDate{$Date: 2008/07/25 14:20:09 $%
 }}
 %\TPPstatus{Draft}
 \TPPstatus{Draft}
@@ -87,7 +87,12 @@ suppress structure names in types.
 are defined in the standard and are redefined in {\Product}.
 \item[Issue 1.23] Now sets PolyML.Compiler.printInAlphabeticalOrder false.
 \item[Issue 1.24,1.25] Updates for SML/NJ 110.54.
-\item[Issue 1.39] Special for 2.7.9a6 (based on last working version for Poly/ML 4.1.3).
+\item[Issues 1.26--1.35] Poly/ML 5.1 port.
+\item[Issue 1.36] Made {\tt -c} option write to the right file name.
+\item[Issues 1.37, 1.38] Poly/ML 5.2 port.
+\item[Issue 1.39] Special based on issue 1.25 to fix problem with xpp and
+Poly/ML 4.1.3.
+\item[Issue 1.40] Back to Poly/ML 5.2 development strand.
 \end{description}
 \subsection{Changes Forecast}
 As determined by experience during the porting process.
@@ -142,9 +147,6 @@ structure €ExtendedIO› : ExtendedIO = struct
 	open BasicIO;
 	val €flush_out› : outstream -> unit = TextIO.flushOut;
 	val €open_append› : string -> outstream = TextIO.openAppend;
-=POLYML
-	val €input_line› : instream -> string = TextIO.inputLine;
-=NJML
 	fun input_line (strm : instream) : string = (
 		case TextIO.inputLine strm of
 			SOME s => s
@@ -288,7 +290,7 @@ end
 =TEX
 The next function underpins the two interface functions.
 It's parameterisation is like that of $mk\_text\_reader$:
-the name parameter is ignored if a stream is supplied.
+the name parameter is ignored open PolyML.Compiler;if a stream is supplied.
 =NJML
 fun €compile_either› (
 	f : TEXT_SOURCE,
@@ -336,16 +338,41 @@ This is all very much easier for Poly/ML (which can't make any use of the
 name or input stream supplied as the first component of the argument,
 and doesn't need the handler, since Poly/ML prints exception values for us):
 =POLYML
-fun compile1 (_ : string, f : TEXT_SOURCE, g : TEXT_FILTER, _ : HANDLER)
+fun  char_stream_of_text_source (f : TEXT_SOURCE) : unit -> char option =(
+	let	val chars : char list ref = ref [];
+	in	fn () => case !chars of
+			ch :: more => (
+				chars := more;
+				SOME ch
+		) |	[] => (
+				case String.explode (f()) of
+					[] => NONE
+				|	ch :: more => (
+					chars := more;
+					SOME ch
+				)
+		)
+	end
+);
+fun compile1 (n : string, f : TEXT_SOURCE, g : TEXT_FILTER, _ : HANDLER)
 				: unit = (
-	let	fun say s = (TextIO.output(std_out, g s); TextIO.flushOut std_out);
-	in	PolyML.compiler (f, say) ()
+	let	val read = char_stream_of_text_source f;
+		fun say s = (TextIO.output(std_out, g s); TextIO.flushOut std_out);
+		val pars = [
+			 PolyML.Compiler.CPFileName n,
+			 PolyML.Compiler.CPOutStream say,
+			 PolyML.Compiler.CPPrintStream say];
+	in	PolyML.compiler (read, pars) ()
 	end
 );
 fun compile2 (_ : instream, f : TEXT_SOURCE, g : TEXT_FILTER, _ : HANDLER)
 				: unit = (
-	let	fun say s = (TextIO.output(std_out, g s); TextIO.flushOut std_out);
-	in	PolyML.compiler (f, say) ()
+	let	val read = char_stream_of_text_source f;
+		fun say s = (TextIO.output(std_out, g s); TextIO.flushOut std_out);
+		val pars = [
+			PolyML.Compiler.CPOutStream say,
+			PolyML.Compiler.CPPrintStream say];
+	in	PolyML.compiler (read, pars) ()
 	end
 );
 =TEX
@@ -426,13 +453,12 @@ structure €PPString› : PPString = struct
 =NJML
 	val  ord : string ->  int = fn s =>  (ord s handle Subscript =>  raise Ord);
 =SML
-	fun string_of_exn (ex : exn) : string = (
+	fun €string_of_exn› (ex : exn) : string = (
 		let	val nm = exnName ex;
 			val msg = exnMessage ex;
-		in	"(Exception: " ^
-			(if	msg = ""
+		in	if	msg = "" orelse msg = nm
 			then	nm
-			else	nm ^ ": " ^ msg) ^ ")"
+			else	nm ^ ": " ^ msg
 		end
 	);
 end (* of structure PPString *);
@@ -457,36 +483,130 @@ end (* of structure PPVector *);
 \subsection{Build Interfaces}
 =SML
 structure €PPBuild› : PPBuild = struct
-	open PPString;
-	val pp'save_name : string ref = ref "hol";
-	val pp'use_function : (string -> unit) ref = ref use;
-	fun €pp'set_use› (new : string -> unit) : string -> unit = (
-		let	val old = !pp'use_function;
-		in	pp'use_function := new;
-			old
-		end
-	);
-	fun €pp'save› () : bool =
-=NJML
-	(not(SMLofNJ.exportML (!pp'save_name)));
-=POLYML
-	(PolyML.commit ());
+open PPString;
+val €pp'save_name› : string ref = ref "hol";
+val €pp'use_function› : (string -> unit) ref = ref use;
+fun €pp'set_use› (new : string -> unit) : string -> unit = (
+	let	val old = !pp'use_function;
+	in	pp'use_function := new;
+		old
+	end
+);
 =SML
-	val €loaded_files› : string list ref = ref ["dtd108.sml", "imp108.sml"];
-	fun €pp'use› (file_name : string) : unit = (
-		! pp'use_function file_name;
-		loaded_files := !loaded_files @ [file_name]
+fun €pp'save› (() : unit) : unit = (
+	TextIO.output(TextIO.stdOut,
+		"Saving database \"" ^ !pp'save_name ^ "\"\n");
+=NJML
+	SMLofNJ.exportML (!pp'save_name);
+	()
+=POLYML
+	let	open PolyML.SaveState;
+		val h = length(showHierarchy());
+		val level = if h <= 0 then 0 else h - 1;
+	in	saveChild (!pp'save_name ^ ".polydb", level)
+	end
+=SML
+);
+=POLYML
+val €pp'next_session› : (unit -> unit) ref = ref (fn () => ());
+=SML
+fun €pp'save_then› {this_session : unit -> unit, next_session : unit -> unit} : unit = (
+=NJML
+	if	SMLofNJ.exportML (!pp'save_name)
+	then	next_session()
+	else	this_session() (* this session *)
+=POLYML
+	let	open PolyML.SaveState;
+		val h = length(showHierarchy());
+		val level = if h <= 0 then 0 else h - 1;
+	in	pp'next_session := next_session;
+		saveChild (!pp'save_name ^ ".polydb", level);
+		this_session()
+	end
+=SML
+);
+val €loaded_files› : string list ref = ref ["dtd108.sml", "imp108.sml"];
+fun €pp'use› (file_name : string) : unit = (
+	! pp'use_function file_name;
+	loaded_files := !loaded_files @ [file_name]
+);
+
+fun €pp'load› (file_name : string) : unit = (
+	pp'use file_name handle ex => (
+		output(std_out, "*** " ^ string_of_exn ex ^ " ***\n");
+		PPCompiler.exit 1
 	);
-	fun €pp'load› (file_name : string) : bool = (
-		pp'use file_name handle ex => (
-			output(std_out, "*** " ^ string_of_exn ex ^ " ***\n");
-			PPCompiler.exit 1
+	pp'save ()
+);
+
+fun €pp'loaded_file_names› () : string list = (
+	!loaded_files
+);
+=POLYML
+fun €diagnose_exn› (caller : string, exn : exn) = (
+	print (caller ^ ": ");
+	case exn of
+		General.Fail msg => (
+			print msg; print "\n";
+			OS.Process.exit OS.Process.failure
+	) |	OS.SysErr (msg, _) => (
+			print msg; print "\n";
+			OS.Process.exit OS.Process.failure
+	) |	ex => (
+			print "unexpected exception: ";
+			print (string_of_exn ex); print "\n";
+			OS.Process.exit OS.Process.failure	
+	)
+);
+=TEX
+=POLYML
+fun €pp'main› (() : unit) : unit = (
+	let	val _ =
+		let	fun h _ = Thread.Thread.broadcastInterrupt ();
+		in	Signal.signal(Posix.Signal.int, Signal.SIG_HANDLE h)
+		end;
+		open PolyML.SaveState;
+		fun load file_name = (
+			loadState file_name
 		);
-		pp'save ()
-	);
-	fun €pp'loaded_file_names› () : string list = (
-		!loaded_files
-	);
+		fun compact file_name = (
+			loadState file_name;
+			PolyML.shareCommonData PolyML.rootFunction;
+			saveChild (file_name, length(showHierarchy()) - 1);
+			OS.Process.exit OS.Process.success
+		);
+		fun process_args () = (
+			case CommandLine.arguments () of 
+				[] => (()
+			) |	[file_name] => (
+				load file_name
+			) |	["-c", file_name] => (
+				compact file_name
+			) |	_ => raise General.Fail "usage: pp-ml [[-c] file]"
+		)	handle exn => diagnose_exn("pp-ml", exn);
+		fun run_session () = (
+			!pp'next_session()
+		) handle ex => (
+			print "pp-ml: warning: exception raised starting ProofPower session: ";
+			print "\n";
+			print (string_of_exn ex); print "\n"
+		);
+	in	process_args ();
+		run_session();
+		PolyML.rootFunction ()
+	end
+);
+=TEX
+=POLYML
+fun €pp'make_database› (child : string) : unit = (
+	let	open PolyML.SaveState;
+		val _ = pp'save_name := child;
+		val h = showHierarchy();
+		val _ = saveChild(child ^ ".polydb", length h);
+	in	OS.Process.exit OS.Process.success
+	end	handle exn => diagnose_exn("pp'make_database", exn)
+);
+=SML
 end (* of structure PPBuild *);
 =TEX
 \subsection{Standard ML '97 Basis Library}
@@ -568,13 +688,12 @@ in
 	val _ = map execute_string cmds;
 end;
 =TEX
+\section{EXPORTING MAIN FUNCTION}
+This section is for the Poly/ML model where this module provides
+the entry point for an executable used to launch {\Product} sessions.
 =POLYML
-val _ =
-	let	val sig_int = 2;
-		val handler = Signal.SIG_HANDLE
-			(fn _ => Process.interruptConsoleProcesses ());
-	in	Signal.signal(sig_int, handler)
-	end;
+val _ = PolyML.shareCommonData PPBuild.pp'main;
+val _ = PolyML.export ("pp-ml", PPBuild.pp'main);
 =TEX
 \twocolumn[\section{INDEX}]
 \small
