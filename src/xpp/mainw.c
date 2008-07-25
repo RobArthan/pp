@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.103 2008/07/21 17:15:31 rda Exp rda $
+ * mainw.c,v 2.104 2008/07/24 11:44:14 rda Exp
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -133,6 +133,7 @@ XtAppContext app; /* global because needed in msg.c */
  * toolsmenu    menubar     the tools menu
  * editmenu     menubar     the edit menu
  * popupeditmenu menubar    the popup edit menu
+ * winmenu      menubar     the window menu
  * cmdmenu      menubar     the command menu
  * helpmenu     menubar     the help menu
  *
@@ -149,7 +150,8 @@ static Widget
 	frame, infobar, filelabel, filename, infolabel, newfile,
 	namestring, logo, linenumber, lnpopup,
 	mainpanes, scriptpanes,
-	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, cmdmenu, helpmenu;
+	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, winmenu,
+	cmdmenu, helpmenu;
 
 XtPointer undo_ptr;
 
@@ -174,7 +176,8 @@ static void
 	popup_command_line_tool_cb(CALLBACK_ARGS),
 	popup_options_tool_cb(CALLBACK_ARGS),
 	new_editor_session_cb(CALLBACK_ARGS),
-	new_command_session_cb(CALLBACK_ARGS);
+	new_command_session_cb(CALLBACK_ARGS),
+	show_hide_cb(CALLBACK_ARGS);
 
 static void setup_reopen_menu(char *filename);
 static void defer_resize (EVENT_HANDLER_ARGS);
@@ -192,7 +195,6 @@ static void script_redo_action(ACTION_PROC_ARGS);
 static void script_save_action(ACTION_PROC_ARGS);
 static void script_undo_action(ACTION_PROC_ARGS);
 static void search_action(ACTION_PROC_ARGS);
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
  * N.b. parts of what follow (e.g., those dealing with menu item
@@ -303,6 +305,12 @@ static MenuItem tools_menu_items[] = {
     {NULL}
 };
 
+static MenuItem window_menu_items[] = {
+    { "Show/hide Script", &xmPushButtonGadgetClass, 't', NULL, NULL,
+        show_hide_cb, (XtPointer)&scriptpanes, (MenuItem *)NULL, False },
+    {NULL}
+};
+
 /* Item 2 is a separator */
 #define CMD_MENU_EXECUTE    2
 #define CMD_MENU_RETURN     3
@@ -339,9 +347,10 @@ static MenuItem cmd_menu_items[] = {
 #define	HELP_MENU_TUTORIAL      2
 #define	HELP_MENU_FILE_MENU     3
 #define	HELP_MENU_TOOLS_MENU    4
-#define	HELP_MENU_EDIT_MENU     5
-#define	HELP_MENU_FILE_NAME_BAR 6
-#define	HELP_MENU_COMMAND_MENU  7
+#define	HELP_MENU_WINDOW_MENU   5
+#define	HELP_MENU_EDIT_MENU     6
+#define	HELP_MENU_FILE_NAME_BAR 7
+#define	HELP_MENU_COMMAND_MENU  8
 static MenuItem help_menu_items[] = {
     { "About Xpp", &xmPushButtonGadgetClass, 'A', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_ABOUT_XPP, (MenuItem *)NULL, False },
@@ -355,6 +364,8 @@ static MenuItem help_menu_items[] = {
         help_menu_cb, (XtPointer)HELP_MENU_EDIT_MENU, (MenuItem *)NULL, False },
     { "Tools Menu", &xmPushButtonGadgetClass, 'T', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_TOOLS_MENU, (MenuItem *)NULL, False },
+    { "Window Menu", &xmPushButtonGadgetClass, 'W', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_WINDOW_MENU, (MenuItem *)NULL, False },
     { "File Name Bar", &xmPushButtonGadgetClass, 'N', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_FILE_NAME_BAR, (MenuItem *)NULL, False },
     { "Command Menu", &xmPushButtonGadgetClass, 'C', NULL, NULL,
@@ -887,8 +898,12 @@ static Boolean setup_main_window(
  * Command menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	if( !global_options.edit_only ) {
+		winmenu = setup_menu(
+			menubar, XmMENU_PULLDOWN, "Window", 'W',
+				False, window_menu_items);
 		cmdmenu = setup_menu(
-			menubar, XmMENU_PULLDOWN, "Command", 'C', False, cmd_menu_items);
+			menubar, XmMENU_PULLDOWN, "Command", 'C',
+				False, cmd_menu_items);
 	}
 /*
  * Users have complained that the "Execute Selection" item in the command menu
@@ -1481,6 +1496,22 @@ static void popup_command_line_tool_cb(
 }
 
 /*
+ * show_hide_cb: callback for the window menu
+ */
+static void show_hide_cb(
+		Widget		unused_w,
+		XtPointer	cbd,
+		XtPointer	unused_cbs)
+{
+	Widget w = *(Widget*) cbd;
+	if(XtIsManaged(w)) {
+		XtUnmanageChild(w);
+	} else {
+		XtManageChild(w);
+	}
+}
+
+/*
  * cmd_menu_cb: callback for the command menu
  */
 static void cmd_menu_cb(
@@ -1548,6 +1579,9 @@ static void help_menu_cb(
 		break;
 	case HELP_MENU_TOOLS_MENU:
 		help_dialog(root, Help_Tools_Menu);
+		break;
+	case HELP_MENU_WINDOW_MENU:
+		help_dialog(root, Help_Window_Menu);
 		break;
 	case HELP_MENU_EDIT_MENU:
 		help_dialog(root, Help_Edit_Menu);
