@@ -185,8 +185,8 @@ static void journal_resize_handler (EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
 static void file_menu_op(int op, Boolean *success);
 static Boolean check_save(void);
-static void execute_action(ACTION_PROC_ARGS);
 static void command_line_action(ACTION_PROC_ARGS);
+static void execute_action(ACTION_PROC_ARGS);
 static void goto_line_action(ACTION_PROC_ARGS);
 static void interrupt_action(ACTION_PROC_ARGS);
 static void quit_action(ACTION_PROC_ARGS);
@@ -194,6 +194,7 @@ static void script_open_action(ACTION_PROC_ARGS);
 static void script_redo_action(ACTION_PROC_ARGS);
 static void script_save_action(ACTION_PROC_ARGS);
 static void script_undo_action(ACTION_PROC_ARGS);
+static void show_hide_action(ACTION_PROC_ARGS);
 static void search_action(ACTION_PROC_ARGS);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -393,6 +394,7 @@ static XtActionsRec actions[] = {
 	{ "script-redo", script_redo_action },
 	{ "script-save", script_save_action },
 	{ "script-undo", script_undo_action },
+	{ "show-hide", show_hide_action },
 	{ "search", search_action }
 };
 
@@ -1496,6 +1498,18 @@ static void popup_command_line_tool_cb(
 }
 
 /*
+ * show_hide: support function for the window menu
+ */
+static void show_hide(Widget w)
+{
+	if(XtIsManaged(w)) {
+		XtUnmanageChild(w);
+	} else {
+		XtManageChild(w);
+	}
+}
+
+/*
  * show_hide_cb: callback for the window menu
  */
 static void show_hide_cb(
@@ -1503,12 +1517,7 @@ static void show_hide_cb(
 		XtPointer	cbd,
 		XtPointer	unused_cbs)
 {
-	Widget w = *(Widget*) cbd;
-	if(XtIsManaged(w)) {
-		XtUnmanageChild(w);
-	} else {
-		XtManageChild(w);
-	}
+	show_hide(*(Widget*) cbd);
 }
 
 /*
@@ -1889,7 +1898,7 @@ static void command_line_action(
 		add_command_line_tool(script);
 	}
 }
-			
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * execute action function; if no params does execute_command
  * to execute selection; else params give strings to execute;
@@ -2014,6 +2023,19 @@ static void search_action(
     Cardinal*	unused_num_params)
 {
 	add_search_tool(script);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * show-hide action function; if no params does execute_command
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void show_hide_action(
+    Widget 		unused_widget,
+    XEvent*		unused_event,
+    String*		unused_params,
+    Cardinal*		unused_num_params)
+{
+	show_hide(scriptpanes);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
