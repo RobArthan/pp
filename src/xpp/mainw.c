@@ -182,11 +182,13 @@ static void
 static void setup_reopen_menu(char *filename);
 static void defer_resize (EVENT_HANDLER_ARGS);
 static void journal_resize_handler (EVENT_HANDLER_ARGS);
-static Bool execute_command(void);
+static void execute_command(void);
+static void execute_current_line(void);
 static void file_menu_op(int op, Boolean *success);
 static Boolean check_save(void);
 static void command_line_action(ACTION_PROC_ARGS);
 static void execute_action(ACTION_PROC_ARGS);
+static void execute_line_action(ACTION_PROC_ARGS);
 static void goto_line_action(ACTION_PROC_ARGS);
 static void interrupt_action(ACTION_PROC_ARGS);
 static void quit_action(ACTION_PROC_ARGS);
@@ -313,14 +315,15 @@ static MenuItem window_menu_items[] = {
 };
 
 /* Item 2 is a separator */
-#define CMD_MENU_EXECUTE    2
-#define CMD_MENU_RETURN     3
-#define CMD_MENU_SEMICOLON  4
-/* Item 5 is a separator */
-#define CMD_MENU_INTERRUPT  6
-/* Item 7 is a separator */
-#define CMD_MENU_KILL       8
-#define CMD_MENU_RESTART    9
+#define CMD_MENU_EXECUTE      2
+#define CMD_MENU_EXECUTE_LINE 3
+#define CMD_MENU_RETURN       4
+#define CMD_MENU_SEMICOLON    5
+/* Item 6 is a separator */
+#define CMD_MENU_INTERRUPT    7
+/* Item 8 is a separator */
+#define CMD_MENU_KILL         9
+#define CMD_MENU_RESTART     10
 
 static MenuItem cmd_menu_items[] = {
     { "Command Line ...", &xmPushButtonGadgetClass, 'C', NULL, NULL,
@@ -328,6 +331,8 @@ static MenuItem cmd_menu_items[] = {
     MENU_ITEM_SEPARATOR,
     { "Execute Selection", &xmPushButtonGadgetClass, 'x', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_EXECUTE, (MenuItem *)NULL, False },
+    { "Execute Line", &xmPushButtonGadgetClass, 'L', NULL, NULL,
+        cmd_menu_cb, (XtPointer)CMD_MENU_EXECUTE_LINE, (MenuItem *)NULL, False },
     { "Return", &xmPushButtonGadgetClass, 'e', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_RETURN, (MenuItem *)NULL, False },
     { "Semicolon", &xmPushButtonGadgetClass, 'S', NULL, NULL,
@@ -387,6 +392,7 @@ static XtActionsRec actions[] = {
 	{ "command-history-down", command_history_down},
 	{ "command-line", command_line_action},
 	{ "execute", execute_action },
+	{ "execute-line", execute_line_action },
 	{ "goto-line", goto_line_action },
 	{ "interrupt", interrupt_action },
 	{ "quit", quit_action },
@@ -1539,6 +1545,9 @@ static void cmd_menu_cb(
 	case CMD_MENU_EXECUTE:
 		execute_command();
 		break;
+	case CMD_MENU_EXECUTE_LINE:
+		execute_current_line();
+		break;
 	case CMD_MENU_RETURN:
 		send_nl();
 		break;
@@ -1828,59 +1837,89 @@ void check_quit_cb (
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * execute_string: common function for execute_command and
+ * execute_current_line.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void execute_string(char *cmd)
+{
+	int len = strlen(cmd);
+	if(len == 0) {
+		return;
+	} else if (cmd[len-1] == '\n') {
+		send_to_application(cmd, len);
+	} else if (global_options.add_new_line_mode
+			== EXECUTE_ADD_NEW_LINES) {
+		send_to_application(cmd, len);
+		send_to_application("\n", 1);
+	} else if (global_options.add_new_line_mode
+			== EXECUTE_IGNORE_NEW_LINES) {
+		send_to_application(cmd, len);
+	} else if (global_options.add_new_line_mode
+				== EXECUTE_PROMPT_NEW_LINES) {
+		switch(yes_no_cancel_dialog(root,
+				add_new_line_message,
+				"   Yes  ",
+				"   No   ",
+				" Cancel ",
+				XmTRAVERSE_HOME)) {
+			case 1: /* yes */
+				send_to_application(cmd, len);
+				send_to_application("\n", 1);
+				break;
+			case 0: /* no */
+				send_to_application(cmd, len);
+				break;
+			case -1: /* cancel */
+				break;
+		}
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Executing text from the selection in a text window.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static Bool execute_command(void)
+static void execute_command(void)
 {
 	char *cmd;
 	NAT len;
 	XmTextPosition dontcare;
-
 	if(global_options.edit_only) {
-		return False;
+		return;
 	}
 	if(!application_alive()) {
 		beep();
-		return False;
+		return;
 	}
 	cmd = get_selection(script, no_selection_message);
 	if(cmd != NULL) {
-		len = strlen(cmd);
-		if(len == 0) {
-			return False;
-		} else if (cmd[len-1] == '\n') {
-			send_to_application(cmd, len);
-		} else if (global_options.add_new_line_mode
-				== EXECUTE_ADD_NEW_LINES) {
-			send_to_application(cmd, len);
-			send_to_application("\n", 1);
-		} else if (global_options.add_new_line_mode
-				== EXECUTE_IGNORE_NEW_LINES) {
-			send_to_application(cmd, len);
-		} else if (global_options.add_new_line_mode
-					== EXECUTE_PROMPT_NEW_LINES) {
-			switch(yes_no_cancel_dialog(root,
-					add_new_line_message,
-					"   Yes  ",
-					"   No   ",
-					" Cancel ",
-					XmTRAVERSE_HOME)) {
-				case 1: /* yes */
-					send_to_application(cmd, len);
-					send_to_application("\n", 1);
-					break;
-				case 0: /* no */
-					send_to_application(cmd, len);
-					break;
-				case -1: /* cancel */
-					break;
-			}
-		}
+		execute_string(cmd);
 		XtFree(cmd);
-		return True;
-	} else {
-		return False;
+	}
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * execute_current_line: execute the current line and move
+ * the insertion position on to the next line.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void execute_current_line(void)
+{
+	char *cmd;
+	XmTextPosition eoln;
+	if(global_options.edit_only) {
+		return;
+	}
+	if(!application_alive()) {
+		beep();
+		return;
+	}
+	cmd = text_get_line(script, &eoln);
+	if(cmd != NULL) {
+		execute_string(cmd);
+		XmTextSetInsertionPosition(script, eoln + 1);
 	}
 }
 
@@ -1905,7 +1944,7 @@ static void command_line_action(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void execute_action(
-    Widget 		widget,
+    Widget 		unused_widget,
     XEvent*		unused_event,
     String*		params,
     Cardinal*		num_params)
@@ -1920,6 +1959,19 @@ static void execute_action(
 	}
 }
 
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * execute_line action function; calls execute_current_line
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void execute_line_action(
+    Widget 		unused_widget,
+    XEvent*		unused_event,
+    String*		unused_params,
+    Cardinal*		unused_num_params)
+{
+	execute_current_line();
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * goto-line action function; pop-up goto-line tool.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -2026,7 +2078,7 @@ static void search_action(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * show-hide action function; if no params does execute_command
+ * show-hide action function:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void show_hide_action(

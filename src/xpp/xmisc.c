@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.34 2007/05/30 08:08:05 rda Exp rda $
+ * $Id: xmisc.c,v 2.35 2008/07/24 11:44:14 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -389,6 +389,72 @@ void text_field_verify_cb(
 		ok_dialog(text_w, binary_data_message);
 	}
 }
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * text_get_line: returns a pointer to an XtMalloced string containing
+ * the line containing the insertion position in a text widget.
+ * The string includes the final new-line character if any and is
+ * null-terminated. If non-zero the position in the text widget of the
+ * last character in the string is returned in eoln.
+ * Return is NULL if anything goes wrong.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+extern char *text_get_line(
+			Widget text_w,
+			XmTextPosition *eoln)
+{
+	XmTextPosition ins_pos, left, right, prev_pos, cur_pos, last_pos;
+	int len;
+	char data[BUFSIZ + 1], *p, *res;
+	Boolean done = False;
+	ins_pos = XmTextGetInsertionPosition(text_w);
+	last_pos = XmTextGetLastPosition(text_w);
+	right = last_pos;
+	for(	cur_pos = ins_pos; cur_pos <= last_pos; cur_pos += BUFSIZ) {
+		char *p;
+		if(XmTextGetSubstring(text_w, cur_pos, BUFSIZ, BUFSIZ + 1, data)
+					== XmCOPY_FAILED ) {
+			return NULL;
+		}
+		for(p = data; *p && *p != '\n'; p += 1) {
+			;
+		}
+		if(*p == '\n') {
+			right = ins_pos + (p - data);
+			break;
+		}
+	}
+	left = 0;
+	for(	prev_pos = ins_pos; prev_pos > 0; prev_pos = cur_pos) {
+		char *p, *q;
+		cur_pos = prev_pos > BUFSIZ ? prev_pos - BUFSIZ : 0;
+		if(XmTextGetSubstring(text_w, cur_pos, prev_pos - cur_pos, BUFSIZ + 1, data)
+					== XmCOPY_FAILED ) {
+			return NULL;
+		}
+		for(p = data, q = 0; *p; p += 1) {
+			if(*p == '\n') {
+				q = p;
+			}
+		}
+		if(q) {
+			left = cur_pos + (q - data) + 1;
+			break;
+		}
+	}
+	len = right - left + 1;
+	if(len <= 0) { /* e.g., there is no text */
+		return NULL;
+	}
+	res = XtMalloc(len + 1);
+	if(XmTextGetSubstring(text_w, left, len, len + 1, res) == XmCOPY_FAILED ) {
+		return NULL;
+	}
+	if(eoln) {
+		*eoln = right;
+	}
+	return res;
+}
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Common set-up for custom dialogues:
  * Deals with initial positioning of the dialogues and with

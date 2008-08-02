@@ -320,6 +320,9 @@ typedef enum {
 	extern void number_verify_cb(CALLBACK_ARGS);
 	extern void text_verify_cb(CALLBACK_ARGS);
 	extern void text_field_verify_cb(CALLBACK_ARGS);
+	extern char *text_get_line(
+			Widget text_w,
+			XmTextPosition *eoln);
 	extern void common_dialog_setup(
 			Widget shell,
 			void cancel_cb(CALLBACK_ARGS),
