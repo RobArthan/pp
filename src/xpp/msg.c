@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2007/05/29 16:48:32 $ $Revision: 2.50 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2008/07/21 17:15:31 $ $Revision: 2.51 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -289,6 +289,7 @@ Boolean quit_new_dialog(Widget w, char *question)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void yes_no_cb(CALLBACK_ARGS), cancel_cb(CALLBACK_ARGS);
 int yes_no_cancel_dialog(Widget w,
+		char *title,
 		char *question,
 		char *yes_label,
 		char *no_label,
@@ -306,10 +307,8 @@ int yes_no_cancel_dialog(Widget w,
 #ifdef EDITRES
 		add_edit_res_handler(dialog);
 #endif
-		confirm = XmStringCreateSimple("Confirm-or-Cancel");
 		XtVaSetValues(dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
-			XmNdialogTitle, 	confirm,
 			XmNdialogType,		XmDIALOG_QUESTION,
 			NULL);
 		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
@@ -322,19 +321,21 @@ int yes_no_cancel_dialog(Widget w,
 			WM_DELETE_WINDOW,
 			cancel_cb,
 			&reply);
-		XmStringFree(confirm);
 	}
 
+	confirm = XmStringCreateSimple(title);
 	text = format_msg(question, MSG_LINE_LEN);
 	yes = XmStringCreateSimple(yes_label);
 	no = XmStringCreateSimple(no_label);
 	cancel = XmStringCreateSimple(cancel_label);
 	XtVaSetValues(dialog,
+		XmNdialogTitle, 	confirm,
 		XmNmessageString,	text,
 		XmNokLabelString,	yes,
 		XmNcancelLabelString,	no,
 		XmNhelpLabelString,	cancel,
 		NULL);
+	XmStringFree(confirm);
 	XmStringFree(text);
 	XmStringFree(yes);
 	XmStringFree(no);

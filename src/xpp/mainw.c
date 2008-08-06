@@ -48,11 +48,8 @@ static struct {
 /* Messages for various purposes */
 
 
-static char *changed_message_file_name =
-"The text has been modified. Do you want to save to \"%s\"?";
-
-static char *changed_message_no_file_name =
-"The text has been modified. Do you want to save your work?";
+static char *do_you_want_to_save_your_work =
+"Do you want to save your work?";
 
 static char *want_to_continue =
 "Do you want to continue?";
@@ -74,15 +71,6 @@ static char *confirm_quit = "Confirm Quit";
 static char *confirm_kill = "Confirm Kill";
 
 static char *confirm_restart = "Confirm Restart";
-
-static char *file_changed_quit_message =
-"The file \"%s\" you are currently editing appears to have been modified since it was last opened or saved.";
-
-static char *file_created_quit_message =
-"The file \"%s\" appears to have been created since this xpp session was started.";
-
-static char *file_deleted_quit_message =
-"The file \"%s\" appears to have been deleted since it was last opened or saved.";
 
 static char *want_to_quit =
 "Do you really want to quit?";
@@ -1772,26 +1760,22 @@ static Boolean check_save (void)
 	Boolean changed = file_info.changed, success = True;
 	char *fname = get_file_name();
 	if(changed) {
-		char *question, *yes_label, *no_label, *cancel_label;
+		char *yes_label, *no_label, *cancel_label;
 		int operation;
 		if(fname != NULL && *fname) {
-			question = XtMalloc(strlen(changed_message_file_name) +
-					strlen(fname) + 1);
-			sprintf(question, changed_message_file_name, fname);
-			yes_label =    "    Save    ";
-			no_label =     " Don't Save ";
-			cancel_label = "   Cancel   ";
+			yes_label =    "  Save   ";
+			no_label =     " Discard ";
+			cancel_label = "  Cancel ";
 			operation = FILE_MENU_SAVE;
 		} else {
-			question = XtMalloc(strlen(changed_message_no_file_name) + 1);
-			sprintf(question, changed_message_no_file_name);
 			yes_label =    " Save As ... ";
-			no_label =     " Don't Save  ";
+			no_label =     "   Discard   ";
 			cancel_label = "   Cancel    ";
 			operation = FILE_MENU_SAVE_AS;
 		}
 		switch(yes_no_cancel_dialog(root,
-					question,
+					"Save your work?",
+					do_you_want_to_save_your_work,
 					yes_label,
 					no_label,
 					cancel_label,
@@ -1806,7 +1790,6 @@ static Boolean check_save (void)
 				success = False;
 				break;
 		}
-		XtFree(question);
 	}
 	return success;
 }
@@ -1858,6 +1841,7 @@ static void execute_string(char *cmd)
 	} else if (global_options.add_new_line_mode
 				== EXECUTE_PROMPT_NEW_LINES) {
 		switch(yes_no_cancel_dialog(root,
+				"Add new line?",
 				add_new_line_message,
 				"   Yes  ",
 				"   No   ",
