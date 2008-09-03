@@ -1496,6 +1496,9 @@ static void popup_command_line_tool_cb(
  */
 static void show_hide(Widget w)
 {
+	if(global_options.edit_only) {
+		return;
+	}
 	if(XtIsManaged(w)) {
 		XtUnmanageChild(w);
 	} else {
