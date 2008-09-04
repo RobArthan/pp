@@ -1907,6 +1907,7 @@ static void execute_current_line(void)
 	if(cmd != NULL) {
 		execute_string(cmd);
 		XmTextSetInsertionPosition(script, eoln + 1);
+		XmTextClearSelection(script, CurrentTime);
 	}
 }
 
