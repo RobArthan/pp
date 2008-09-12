@@ -48,8 +48,8 @@ static struct {
 /* Messages for various purposes */
 
 
-static char *do_you_want_to_save_your_work =
-"Do you want to save your work?";
+static char *do_you_want_to_save_changes =
+"Do you want to save changes?";
 
 static char *want_to_continue =
 "Do you want to continue?";
@@ -1627,6 +1627,14 @@ void show_unmodified(void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Has the file been modified
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+Boolean get_modified(void)
+{
+	return file_info.changed;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor line number
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean line_number_req_pending = False;
@@ -1766,19 +1774,19 @@ static Boolean check_save (void)
 		char *yes_label, *no_label, *cancel_label;
 		int operation;
 		if(fname != NULL && *fname) {
-			yes_label =    "  Save   ";
-			no_label =     " Discard ";
-			cancel_label = "  Cancel ";
+			yes_label =    "  Yes   ";
+			no_label =     "   No   ";
+			cancel_label = " Cancel ";
 			operation = FILE_MENU_SAVE;
 		} else {
-			yes_label =    " Save As ... ";
-			no_label =     "   Discard   ";
-			cancel_label = "   Cancel    ";
+			yes_label =    " Yes ... ";
+			no_label =     "   No    ";
+			cancel_label = "  Cancel ";
 			operation = FILE_MENU_SAVE_AS;
 		}
 		switch(yes_no_cancel_dialog(root,
-					"Save your work?",
-					do_you_want_to_save_your_work,
+					"Save changes?",
+					do_you_want_to_save_changes,
 					yes_label,
 					no_label,
 					cancel_label,
