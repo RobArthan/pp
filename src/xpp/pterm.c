@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.54 2008/02/15 17:38:35 rda Exp rda $
+ * $Id: pterm.c,v 2.55 2008/02/16 15:17:01 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -364,6 +364,9 @@ static char* signal_handled_message =
 
 static char* attempt_to_save_message =
 "attempting to save the editor text";
+
+static char* no_changes_message =
+"no changes to be saved";
 
 static char* initialisation_error_message =
 "apparently during X initialisation";
@@ -1166,8 +1169,12 @@ static void panic_exit(char * m, NAT code)
 		kill_application();
 	}
 	if(script) {
-		msg(m, attempt_to_save_message);
-		panic_save(script);
+		if(get_modified()) {
+			msg(m, attempt_to_save_message);
+			panic_save(script);
+		} else {
+			msg(m, no_changes_message);
+		}
 	} else {
 		msg(m, initialisation_error_message);
 	}
