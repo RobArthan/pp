@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2008/07/21 17:15:31 $ $Revision: 2.51 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2008/08/06 11:04:42 $ $Revision: 2.52 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -287,7 +287,7 @@ Boolean quit_new_dialog(Widget w, char *question)
  * or XmTRAVERSE_RIGHT) passed as an argument to XmProcessTraversal
  * after traversing to the yes button.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void yes_no_cb(CALLBACK_ARGS), cancel_cb(CALLBACK_ARGS);
+static void yes_cb(CALLBACK_ARGS), no_cb(CALLBACK_ARGS), cancel_cb(CALLBACK_ARGS);
 int yes_no_cancel_dialog(Widget w,
 		char *title,
 		char *question,
@@ -296,7 +296,7 @@ int yes_no_cancel_dialog(Widget w,
 		char *cancel_label,
 		int direction)
 {
-	static Widget dialog;
+	static Widget dialog, no_btn;
 	XmString text, yes, no, cancel, confirm;
 	Atom WM_DELETE_WINDOW;
 	static int reply;
@@ -307,13 +307,17 @@ int yes_no_cancel_dialog(Widget w,
 #ifdef EDITRES
 		add_edit_res_handler(dialog);
 #endif
+		XtUnmanageChild(
+			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
+		no_btn = XmCreatePushButton(dialog, "no-button", NULL, 0);
+		XtManageChild(no_btn);
 		XtVaSetValues(dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
 			XmNdialogType,		XmDIALOG_QUESTION,
 			NULL);
-		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
-		XtAddCallback(dialog, XmNcancelCallback, yes_no_cb, &reply);
-		XtAddCallback(dialog, XmNhelpCallback, cancel_cb, &reply);
+		XtAddCallback(dialog, XmNokCallback, yes_cb, &reply);
+		XtAddCallback(no_btn, XmNactivateCallback, no_cb, &reply);
+		XtAddCallback(dialog, XmNcancelCallback, cancel_cb, &reply);
 		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
 			"WM_DELETE_WINDOW",
 			False);
@@ -332,8 +336,10 @@ int yes_no_cancel_dialog(Widget w,
 		XmNdialogTitle, 	confirm,
 		XmNmessageString,	text,
 		XmNokLabelString,	yes,
-		XmNcancelLabelString,	no,
-		XmNhelpLabelString,	cancel,
+		XmNcancelLabelString,	cancel,
+		NULL);
+	XtVaSetValues(no_btn,
+		XmNlabelString,		no,
 		NULL);
 	XmStringFree(confirm);
 	XmStringFree(text);
@@ -374,7 +380,26 @@ static void yes_no_cb(
 			break;
 	}
 }
+
 static void yes_no_destroy_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	NAT *reply = cbd;
+	*reply = NO;
+}
+
+static void yes_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	NAT *reply = cbd;
+	*reply = YES;
+}
+
+static void no_cb(
 	Widget		w,
 	XtPointer	cbd,
 	XtPointer	cbs)
