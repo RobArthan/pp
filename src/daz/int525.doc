@@ -51,9 +51,9 @@ for versions 2.7.4 to 2.7.7 of the Compliance Tool during 2004--2006.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.72 $%
+\def\Version{$Revision: 1.73 $%
 }
-\def\Date{\FormatDate{$Date: 2008/05/05 13:05:08 $%
+\def\Date{\FormatDate{$Date: 2008/07/24 12:12:34 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -141,6 +141,7 @@ h{\raggedright
 \item[Issue 1.68] Tests for child packages.
 \item[Issue 1.69, 1.70] Modular types.
 \item[Issue 1.71] Tests for modular types backed out temporarily.
+\item{Issue 1.72] Added tests for QQ306 and QQnnn.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -3700,3 +3701,284 @@ val [] = get_unproved_conjectures "-";
 =SML
  (* END OF COMMENTED OUT MATERIAL *) *)
 =TEX
+\subsection{QQ306: Erroneous Scope Names}
+=TEX
+=SML
+clean_up();
+new_script {name = "A", unit_type = "spec"};
+¹CN
+package A is
+
+end A;
+°
+=SML
+new_script {name = "A", unit_type = "body"};
+¹CN
+package body A is
+
+  procedure P is separate;
+
+end A;
+°
+=SML
+new_script {name = "A.P", unit_type = "proc"};
+¹CN
+separate (A)
+procedure P
+is
+  § procedure Q ¢    (1)
+begin
+  null;
+end P;
+°
+¹CN
+ (1) é
+  procedure Q
+  is
+  begin
+    § body ¢    (2)
+  end Q;
+°
+=SML
+store_mt_results
+mt_run
+ [("QQ306.1", open_scope , "A.P.Q", ())];
+=TEX
+\subsection{QQnnn: Output Valid Compliance Notation}
+First load code supplied by QinetiQ.
+=SML
+(*
+ * code for generating refinements, roughly as we would have it...
+ *  (this example does not generate open_scope comamnds)
+ *)
+
+local
+
+fun flatmap f = flat o (map f);
+
+open TextIO;
+open CNAdaOutput;
+open CNZGenerator;
+
+fun output_web_clause ostream wc = (
+	let
+		val outf = make_output_fun ostream;
+
+	in	outf "¹CN"; outf "\n";
+		fmt_web_clause {outf = outf, fmt_repl = Nil} wc;
+		outf "°";
+		outf "\n";
+		outf "\n"
+	end
+);
+
+open WebClauses.LabelUtilities;
+
+in
+
+fun output_replacement ostream label = case get_replacement label of
+	Value repl	=> (case repl of
+		ReplaceComp (x as {comp, ...})		=> (
+			output_web_clause ostream (WCReplacedByCompilation x);
+			app (output_replacement ostream) (flatmap extract_labels_from_kslot_comp_unit comp)
+		)
+	|	ReplacePPart (x as {private, ...})		=> (
+			output_web_clause ostream (WCReplacedByPrivatePart x);
+			app (output_replacement ostream) (flatmap extract_labels_from_declaration private)
+		)
+	|	ReplaceVPart (x as {visible, ...})		=> (
+			output_web_clause ostream (WCReplacedByVisiblePart x);
+			app (output_replacement ostream) (flatmap extract_labels_from_declaration visible)
+		)
+	|	ReplaceDecl (x as {decls, ...})		=> (
+			output_web_clause ostream (WCReplacedByDecl x);
+			app (output_replacement ostream) (flatmap extract_labels_from_declaration decls)
+		)
+	|	ReplaceStat (x as {statement = s, ...})     => (
+			output_web_clause ostream (WCReplacedBy x);
+			app (output_replacement ostream) (extract_labels_from_statement s)
+		)
+	|	ReplaceArbitrary x						=> (
+			output_web_clause ostream (WCReplacedByArbitraryAda x)
+		)
+	|	RefineStat (x as {statement = s, ...})	=> (
+			output_web_clause ostream (WCRefinedBy x);
+			app (output_replacement ostream) (extract_labels_from_statement s)
+		)
+	|	ReplaceAnnotation (x as {replacement, ...})	=> (
+			output_web_clause ostream (WCReplacedByAnnotation x);
+			app (output_replacement ostream) (extract_labels_from_annotation replacement)
+		)
+	|	UnReplaced _				=> ()
+	)
+|	Nil		=> ();
+
+fun output_spark_prog ostream : unit =
+	let
+		val kcus = #spark_prog (get_z_generator_state ());
+
+	in	output_web_clause ostream (WCCompilation kcus);
+		app (output_replacement ostream) (flatmap extract_labels_from_kslot_comp_unit kcus)
+	end;
+
+end (* of local ... in ... *);
+=TEX
+Now test it out by outputting various web clauses, reading them back in
+=SML
+clean_up();
+new_script {name = "A", unit_type = "spec"};
+¹CN
+package A is
+  $auxiliary v : ú;
+  procedure P (N : Integer)
+    „ v [ v = N ];
+  function F (N : Integer) return Integer
+    ˜ v [ AoF v N = v + N ];
+end A;
+°
+=SML
+val strm = open_out "int525_1_A_ads.ML";
+output_spark_prog strm;
+val _ = close_out strm;
+=SML
+clean_up();
+new_script {name = "A", unit_type = "spec"};
+store_mt_results
+mt_run
+ [("QQnnn.1.1", use_file , "int525_1_A_ads.ML", ())];
+val strm = open_out "int525_2_A_ads.ML";
+output_spark_prog strm;
+val _ = close_out strm;
+=TEX
+=SML
+fun get_diff f1 f2 = (
+	let	val  _ = ExtendedIO.system
+			("diff " ^ f1 ^ " " ^ f2 ^ " 2>&1");
+		val s = open_in "int513.diff";
+		val res = ExtendedIO.input_line s;
+	in 	close_in s;
+		res
+	end
+);
+store_mt_results_show
+mt_run [
+    ("QQnnn.2,1", get_diff"int525_1_A_ads.ML" , "int525_2_A_ads.ML", "")
+];
+=TEX
+=SML
+new_script {name = "A", unit_type = "body"};
+¹CN
+package body A is
+  $using V : Integer; $implement v $by V = v;
+  $implicit
+  procedure P (N : Integer)
+    „ V [ V = N ];
+  procedure P (N : Integer)
+    „ V [ V = N ]
+  is
+  begin
+   while false
+   $till û true ý
+   loop
+     „[true] (1)
+   end loop;
+   V := N;
+  end P;
+  $deferred
+  procedure local_proc
+   „ V[V < 0 ]
+  is
+  begin
+     § deferred body ¢			( 2 )
+  end;
+  function F (N : Integer) return Integer
+    ˜ V [ AoF V N = V + N ]
+  is
+  begin
+   return V + N;
+  end F;
+end A;
+°
+=SML
+val strm = open_out "int525_1_a_adb.ML";
+output_spark_prog strm;
+val _ = close_out strm;
+=SML
+clean_up();
+new_script {name = "A", unit_type = "spec"};
+use_file "int525_2_A_ads.ML";
+new_script {name = "A", unit_type = "body"};
+store_mt_results
+mt_run
+ [("QQnnn.3.1", use_file , "int525_1_a_adb.ML", ())];
+val strm = open_out "int525_2_a_adb.ML";
+output_spark_prog strm;
+val _ = close_out strm;
+store_mt_results_show
+mt_run [
+    ("QQnnn.4.1", get_diff"int525_1_a_adb.ML" , "int525_2_a_adb.ML", "")
+];
+=TEX
+=SML
+clean_up();
+new_script {name = "Q", unit_type = "proc"};
+¹CN
+procedure Q(x : integer; y : in out integer)
+„ Y [ Y = 2*X ]
+is
+ t : integer;
+begin
+ „T[T = X + 1] (1)
+ „T[T = X + 1, T = 2*X + 2] (2)
+ „Y[T = 2*X + 2, Y = T - 2] (3)
+end;
+°
+¹CN
+ (1) Ã
+ $block anonymous:
+ declare
+   s : integer;
+ begin
+   s := x-1;
+   t := s + 2;
+  end $block anonymous;
+°
+¹CN
+ (2) Ã
+  named:
+  declare
+      s : integer;
+  begin
+    s := t;
+    t := s + s;
+  end named;
+°
+¹CN
+ (3) Ã
+  $nothing;
+  y := t - 2;
+°
+=SML
+val strm = open_out "int525_1_q_adb.ML";
+output_spark_prog strm;
+val _ = close_out strm;
+=SML
+clean_up();
+new_script {name = "Q", unit_type = "proc"};
+store_mt_results
+mt_run
+ [("QQnnn.5.1", use_file , "int525_1_q_adb.ML", ())];
+val strm = open_out "int525_2_q_adb.ML";
+output_spark_prog strm;
+val _ = close_out strm;
+store_mt_results_show
+mt_run [
+    ("QQnnn.6.1", get_diff"int525_1_q_adb.ML" , "int525_2_q_adb.ML", "")
+];
+val _ = ExtendedIO.system "rm int525_[12]_[aq]_ad[bs].ML";
+=TEX
+\section{EPILOGUE}
+=SML
+diag_line(summarize_mt_results());
+=TEX
+\end{document}
