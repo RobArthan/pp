@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.162 2008/05/05 11:28:14 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.163 2008/07/24 16:43:42 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Ada Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.162 $%
+\def\SCCSversion{$Revision: 1.163 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/05/05 11:28:14 $%
+\TPPdate{\FormatDate{$Date: 2008/07/24 16:43:42 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -237,6 +237,7 @@ used as identifiers are now escaped with a dollar sign (as required if they are 
 \item[Issues 1.158-1.161] Child packages.
 \item[Issues 1.162] Modular types.
 \item[Issue 1.163] Arranged to put Quine corners round Z strings.
+\item[Issue 1.164] When expansion of k-slots and specification statements is not selected (i.e., {\em fmt\_repl} is not supplied), we now make a determined effort to output valid Compliance Notation.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1706,7 +1707,8 @@ fun €fmt_loop_or_block_label› (fmtinfo as {outf, ...})  (n : LOOP_OR_BLOCK_NAME)
 	) |	LBAdaName n => (
 		fmt_id fmtinfo n; outf ":"; outf "\n"
 	) |	LBCNName n => (
-		outf "-- "; outf "$BLOCK";
+		(if is_expansion_selected fmtinfo then outf "-- " else ());
+		outf (kw"$BLOCK");
 		fmt_id fmtinfo n; outf ":"; outf "\n"
 	)
 );
@@ -1719,9 +1721,10 @@ fun €finish_loop_or_block› (fmtinfo as {outf, ...})  (n : LOOP_OR_BLOCK_NAME): u
 	) |	LBAdaName n => (
 		fmt_id fmtinfo n; outf ";"; outf "\n"
 	) |	LBCNName n => (
-		outf ";";
-		outf "--"; outf "$BLOCK";
+		(if is_expansion_selected fmtinfo then outf "; -- " else ());
+		outf (kw"$BLOCK");
 		fmt_id fmtinfo n;
+		outf ";";
 		outf "\n"
 	)
 );
@@ -1729,18 +1732,23 @@ fun €finish_loop_or_block› (fmtinfo as {outf, ...})  (n : LOOP_OR_BLOCK_NAME): u
 =SML
 fun €fmt_loop_body›
 	(fmt_stat : PP_FMT_INFO -> STATEMENT -> unit)
-	(fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) ({t=Value t, stmt=s} : STATEMENT LOOP_BODY) =  (
-    (case fmt_repl of
-    Value _  => (outf "-- $TILL statement"; outf "\n")
-    | Nil =>  (
-		outf (translate_for_output "$TILL ˚");
+	(fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) ({t=Value t, stmt=s} : STATEMENT LOOP_BODY, n : LOOP_OR_BLOCK_NAME) =  (
+	(case fmt_repl of
+	Value _  => (outf "-- $TILL statement"; outf "\n")
+	| Nil =>  (
+		outf (kw"$TILL");
+		outf (translate_for_output "˚");
 		(fmt_z_tm fmtinfo t);
 		outf (translate_for_output "˝");
 		outf "\n")
-    );
-    (inc_tabs(); fmt_stat fmtinfo s; dec_tabs())
-   )  | fmt_loop_body fmt_stat (fmtinfo) ({t=Nil, stmt=s, ...}) = (
-	(inc_tabs(); fmt_stat fmtinfo s; dec_tabs())
+	);
+	outf (kw"LOOP"); outf "\n";
+	inc_tabs(); fmt_stat fmtinfo s; dec_tabs();
+	outf (kw2"END""LOOP"); finish_loop_or_block fmtinfo n
+)  | fmt_loop_body fmt_stat (fmtinfo as {outf, ...}) ({t=Nil, stmt=s, ...}, n) = (
+	outf (kw"LOOP"); outf "\n";
+	inc_tabs(); fmt_stat fmtinfo s; dec_tabs();
+	outf (kw2"END""LOOP"); finish_loop_or_block fmtinfo n
 );
 =TEX
 =SML
@@ -1754,7 +1762,8 @@ fun €fmt_loop›
 	(    if is_expansion_selected fmtinfo
 	then    (outf "-- $TILL statement"; outf "\n")
 	else    (
-		outf (translate_for_output "$TILL ˚");
+		outf (kw"$TILL");
+		outf (translate_for_output "˚");
 		(fmt_z_tm fmtinfo t);
 		outf (translate_for_output "˝"); outf "\n")
 	);
@@ -1786,9 +1795,7 @@ in_new_scope false (get_scope_name n) (fn () => (
 	fmt_loop_or_block_label fmtinfo n;
 	outf  (kw"WHILE"); (fmt_cond fmtinfo g); outf "\n";
 	fmt_warnings fmtinfo;
-	outf (kw"LOOP"); outf "\n";
-	(fmt_loop_body fmt_stat fmtinfo l);
-	outf (kw2"END""LOOP"); finish_loop_or_block fmtinfo n))
+	fmt_loop_body fmt_stat fmtinfo (l, n)))
 );
 =TEX
 =SML
@@ -1807,9 +1814,7 @@ fun €fmt_for_static›
 	(case t of Value tm => (fmt_tmark fmtinfo tm; outf (kw"RANGE")) | Nil => non_spark_warning 510116);
 	(fmt_range fmtinfo r); outf"\n";
 	fmt_warnings fmtinfo;
-	outf (kw"LOOP"); outf "\n";
-	(fmt_loop_body fmt_stat fmtinfo loop);
-	outf (kw2"END""LOOP"); finish_loop_or_block fmtinfo n
+	fmt_loop_body fmt_stat fmtinfo (loop, n)
 )));
 =TEX
 =SML
@@ -1826,9 +1831,7 @@ fun €fmt_for_tmark›
 	outf (kw"FOR"); fmt_id fmtinfo i; outf (kw"IN");
 	(fmt_loop_direction fmtinfo d);(fmt_tmark fmtinfo t); outf "\n";
 	fmt_warnings fmtinfo;
-	outf (kw"LOOP"); outf "\n";
-	(fmt_loop_body fmt_stat fmtinfo loop);
-	outf (kw2"END""LOOP"); finish_loop_or_block fmtinfo n
+	fmt_loop_body fmt_stat fmtinfo (loop, n)
 )));
 =TEX
 =SML
@@ -1857,7 +1860,7 @@ fun €fmt_log_con› (fmtinfo as {outf,...} : PP_FMT_INFO)
 			outdefs more
 		);
 	   in
-		outf "$CON ";
+		outf (kw"$CON ");
 		outdefs defs;
 		outf "∑";
 		(loc_fmt_spec fmtinfo (SpecStatement, [], s));
@@ -2813,16 +2816,19 @@ Subprogram declarations.
 
 =SML
 fun €fmt_procedure_declaration› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
-	({implicit = false, spec = {name=n, formal_part=f, spec=Value s, annotation=ann, globals=gs}}
+	({implicit, spec = {name=n, formal_part=f, spec=Value s, annotation=ann, globals=gs}}
 		: PROCEDURE_DECLARATION) =
     in_new_scope false n (fn () =>
-    (case fmt_repl of
-    Value _ =>  (
-	outf (kw"PROCEDURE"); 
-	(fmt_id fmtinfo n);
-	(fmt_parameter_specification_list fmtinfo f); outf ";"; outf "\n";
-	inc_tabs(); outf "-- Spec ..."; outf "\n"; dec_tabs()
-    ) | Nil => (
+    (if	is_expansion_selected fmtinfo
+     then (
+	if	not implicit
+	then	(outf (kw"PROCEDURE"); 
+		(fmt_id fmtinfo n);
+		(fmt_parameter_specification_list fmtinfo f); outf ";"; outf "\n";
+		inc_tabs(); outf "-- Spec ..."; outf "\n"; dec_tabs()
+	) else ()
+    ) else (
+	(if implicit then outf (kw"$IMPLICIT") else ());
 	outf (kw"PROCEDURE"); 
 	(fmt_id fmtinfo n);
 	(fmt_parameter_specification_list fmtinfo f); outf "\n";
@@ -2836,30 +2842,44 @@ fun €fmt_procedure_declaration› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
     )
 )
   | fmt_procedure_declaration (fmtinfo as {outf,...})
-	({implicit = false, spec = {name=n, formal_part=f, spec=Nil, annotation=ann, globals=_}}) =
+	({implicit, spec = {name=n, formal_part=f, spec=Nil, annotation=ann, globals=_}}) =
     in_new_scope false n (fn () => (
-	outf (kw"PROCEDURE"); (fmt_id fmtinfo n);
-	(fmt_parameter_specification_list fmtinfo f); 
-	outf ";"; outf "\n";
-	fmt_warnings fmtinfo;
-	fmt_annotation fmtinfo ann
+	if	is_expansion_selected fmtinfo
+	then	if	not implicit
+		then	(outf (kw"PROCEDURE"); (fmt_id fmtinfo n);
+			(fmt_parameter_specification_list fmtinfo f); 
+			outf ";"; outf "\n";
+			fmt_warnings fmtinfo;
+			fmt_annotation fmtinfo ann
+		) else	()
+	else	(
+		(if implicit then outf (kw"$IMPLICIT") else ());
+		outf (kw"PROCEDURE"); (fmt_id fmtinfo n);
+		(fmt_parameter_specification_list fmtinfo f); 
+		outf ";"; outf "\n";
+		fmt_warnings fmtinfo;
+		fmt_annotation fmtinfo ann
+	)
    )
-)  | fmt_procedure_declaration _ ({implicit = true, ...}) = ();
-
+);
 =TEX
 =SML
 fun €fmt_function_declaration› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
-	({implicit = false, spec = {designator=d, return=r, formal_part=f,
+	({implicit, spec = {designator=d, return=r, formal_part=f,
 		spec=Value s, annotation=ann,globals=gs}}
 		: FUNCTION_DECLARATION) =
     in_new_scope false d (fn () =>
-    (case fmt_repl of
-    Value _ => (
+    (if	is_expansion_selected fmtinfo
+     then (
+	if	not implicit
+	then	(
 	outf (kw"FUNCTION");(fmt_id fmtinfo d);
 	(fmt_parameter_specification_list fmtinfo f); outf (kw"RETURN");
 	(fmt_tmark fmtinfo r); outf ";"; outf "\n";
-	inc_tabs(); outf "-- Spec ..."; dec_tabs(); outf "\n"
-    ) | Nil => (
+	inc_tabs(); outf "-- Spec ..."; dec_tabs(); outf "\n")
+	else	()
+    ) else (
+	(if implicit then outf (kw"$IMPLICIT") else ());
 	outf (kw"FUNCTION");(fmt_id fmtinfo d);
 	(fmt_parameter_specification_list fmtinfo f); 
 	outf (kw"RETURN"); (fmt_tmark fmtinfo r); outf "\n";
@@ -2872,16 +2892,25 @@ fun €fmt_function_declaration› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
     fmt_annotation fmtinfo ann
     )
 )  | fmt_function_declaration  (fmtinfo as {outf,...})
-	({implicit = false, spec = {designator=d, return=r, formal_part=f,
+	({implicit, spec = {designator=d, return=r, formal_part=f,
 		spec=Nil, annotation=ann, globals=_}}) = (
-    in_new_scope false d (fn () => (
-	outf (kw"FUNCTION");(fmt_id fmtinfo d);
-	(fmt_parameter_specification_list fmtinfo f); outf (kw"RETURN"); 
-	(fmt_tmark fmtinfo r); outf ";"; outf "\n";
-	fmt_warnings fmtinfo;
-	fmt_annotation fmtinfo ann
-    ))
-)  | fmt_function_declaration  _ ({implicit = true, ...}) = ();
+    in_new_scope false d (fn () =>
+	if	is_expansion_selected fmtinfo
+	then	if	not implicit
+		then	(outf (kw"FUNCTION");(fmt_id fmtinfo d);
+			(fmt_parameter_specification_list fmtinfo f); outf (kw"RETURN"); 
+			(fmt_tmark fmtinfo r); outf ";"; outf "\n";
+			fmt_warnings fmtinfo;
+			fmt_annotation fmtinfo ann)
+		else	()
+	else	((if implicit then outf (kw"$IMPLICIT") else ());
+		outf (kw"FUNCTION");(fmt_id fmtinfo d);
+		(fmt_parameter_specification_list fmtinfo f); outf (kw"RETURN"); 
+		(fmt_tmark fmtinfo r); outf ";"; outf "\n";
+		fmt_warnings fmtinfo;
+		fmt_annotation fmtinfo ann)
+    )
+);
 =TEX
 =SML
 fun €fmt_procedure_stub› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
@@ -2959,7 +2988,8 @@ fun €fmt_auxiliary› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (av : AUX_VAR) =
     (case fmt_repl of
     Value _ => (outf "-- $AUXILIARY ... ;"; outf "\n")
     | Nil => (
-	outf "-- $AUXILIARY"; (fmt_z_id_list fmtinfo (#aux av));
+	outf (kw"$AUXILIARY"); (fmt_z_id_list fmtinfo (#aux av));
+	outf ":"; fmt_z_tm fmtinfo (#t av);
 	outf" ;"; outf "\n"
     )
 );
@@ -3012,10 +3042,14 @@ fun €fmt_procedure_body›
 	(fmt_stat : PP_FMT_INFO -> STATEMENT -> unit)
 	(fmt_decls : PP_FMT_INFO -> DECLARATION list -> unit)
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
-	({deferred = _, procedure_spec=p, declarative_part=d, statement=s, end_name = en} :
+	({deferred, procedure_spec=p, declarative_part=d, statement=s, end_name = en} :
 	PROCEDURE_BODY) = (
 	let	val _ = check_decl (#name p);
 		val res = (
+			(if	not(is_expansion_selected fmtinfo)
+			 andalso	deferred
+			 then	outf (kw"$DEFERRED")
+			 else	());
 			fmt_procedure_specification fmtinfo p;
 			outf (kw"IS"); outf "\n";
 			(inc_tabs();
@@ -3037,10 +3071,15 @@ fun €fmt_function_body›
 	(fmt_stat : PP_FMT_INFO -> STATEMENT -> unit)
 	(fmt_decls : PP_FMT_INFO -> DECLARATION list -> unit)
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
-	({deferred = _, function_spec=f, declarative_part=d, statement=s, end_name = en} :
+	({deferred, function_spec=f, declarative_part=d, statement=s, end_name = en} :
 	FUNCTION_BODY) = (
 	let	val _ = check_decl (#designator f);
-		val res = (fmt_function_specification fmtinfo f;
+		val res = (
+			(if	not(is_expansion_selected fmtinfo)
+			 andalso	deferred
+			 then	outf (kw"$DEFERRED")
+			 else	());
+			fmt_function_specification fmtinfo f;
 			outf (kw"IS"); outf "\n";
 			(inc_tabs(); 
 				fmt_decls fmtinfo d;
@@ -3305,6 +3344,15 @@ fun €fmt_context_item› (fmtinfo as {outf,...} : PP_FMT_INFO)
 );
 =TEX
 =SML
+fun €fmt_references› (fmtinfo as {outf, fmt_repl, ...} : PP_FMT_INFO)
+	(x : EXPANDED_NAME list) = (
+	case (x, fmt_repl) of
+		(_::_, Nil) => (
+		outf (kw"$REFERENCES"); loc_fmt_expanded_name_list fmtinfo x; outf ";"; outf "\n"
+	) |	_ => ()
+);
+=TEX
+=SML
 fun €fmt_compilation_unit› (fmtinfo as {outf, ... }: PP_FMT_INFO)
 	(CUPackageDeclaration {private, pack_decl} : COMPILATION_UNIT) = (
 	(if private then outf(kw"PRIVATE") else ());
@@ -3322,6 +3370,7 @@ fun €fmt_context_compilation_unit› (fmtinfo : PP_FMT_INFO)
 	({context=cil, references=r, comp_unit=c, annotation=ann}
 		: CONTEXT_COMPILATION_UNIT) = (
 	map (fmt_context_item fmtinfo) cil;
+	fmt_references fmtinfo r;
 	fmt_annotation fmtinfo ann;
 	fmt_compilation_unit fmtinfo c ;
 	fmt_warnings fmtinfo
@@ -3344,7 +3393,6 @@ fun €loc_fmt_kslot_compilation_unit_list› (fmtinfo : PP_FMT_INFO)
   | loc_fmt_kslot_compilation_unit_list (fmtinfo as {outf,...} : PP_FMT_INFO)
     (x::xs : KSLOT_COMPILATION_UNIT list) =
     (loc_fmt_kslot_compilation_unit fmtinfo x;
-    outf "\n"; outf "\n";
     loc_fmt_kslot_compilation_unit_list fmtinfo xs);
 =TEX
 =SML
@@ -3447,7 +3495,7 @@ let  val max_line_len = get_int_control("cn_automatic_line_splitting");
 		let val len_s = size(s);
 		in
 			if ((!curr_line_length) = 0) 
-			then (  skipspace := false; 
+			then (  skipspace := false;
 				let	val tab_s = fmt_tabs(get_PPTab_no());
 					val len_tab_s = size(tab_s);
 				in
