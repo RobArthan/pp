@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp501.doc   %Z% $Date: 2007/05/18 16:31:05 $ $Revision: 1.76 $ $RCSfile: imp501.doc,v $
+% imp501.doc   %Z% $Date: 2008/09/05 14:26:57 $ $Revision: 1.77 $ $RCSfile: imp501.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Compliance Notation Lexical Analyser}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP501}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.76 $%
+\def\SCCSversion{$Revision: 1.77 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/05/18 16:31:05 $%
+\TPPdate{\FormatDate{$Date: 2008/09/05 14:26:57 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -115,6 +115,8 @@ used as identifiers.
 \item[Issue 1.75] Added support for deferred subprograms.
 \item[Issue 1,76] New reserved word for naming anonymous blocks.
 \item[Issue 1.77] Fixed bug in handling of strings in annotations.
+\item[Issue 1.78] Annotations are now recognised in the reader/writer and passed
+in here using the {\emLex.Separator} constructor.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -258,6 +260,14 @@ end; (* of structure CaseIndependence *)
 structure ÛCNLexÝ : CNLex = struct
 	open CNTypes CaseIndependence Lex ZLex;
 =TEX
+=SML
+val Ûcn_ignore_spark_annotationsÝ : bool ref = ref false;
+val _ = new_flag{
+	name = "cn_ignore_spark_annotations",
+	check = fun_true,
+	control = cn_ignore_spark_annotations,
+	default = fun_false} handle Fail _ => ();
+=TEX
 The main lexical analysis algorithm is exception-driven
 using the following local exception:
 =SML
@@ -374,33 +384,8 @@ fun Ûis_dollarÝ  (c : string) = (
 );
 =TEX
 =SML
-val Ûcn_spark_annotation_charÝ : string ref = ref "#";
-val _ = new_string_control{
-	name = "cn_spark_annotation_char",
-	check = (fn c => if size c = 1 then true else
-		fail "set_string_control" 501005 []),
-	control = cn_spark_annotation_char,
-	default = (fn () => "#")} handle Fail _ => ();
-=TEX
-=SML
-fun Ûis_annotationÝ  (c : string) = (
-		size c = 3
-	andalso	substring(c, 0, 2) = "--"
-	andalso 	substring(c, 2, 1) = !cn_spark_annotation_char
-);
-=TEX
-=SML
-val Ûcn_ignore_spark_annotationsÝ : bool ref = ref false;
-val _ = new_flag{
-	name = "cn_ignore_spark_annotations",
-	check = fun_true,
-	control = cn_ignore_spark_annotations,
-	default = fun_false} handle Fail _ => ();
-=TEX
-=SML
 fun Ûis_commentÝ  (c : string) = (
 		c = "--"
-	orelse	(!cn_ignore_spark_annotations andalso is_annotation c)
 );
 =TEX
 =SML
@@ -475,7 +460,6 @@ fun ÛnextÝ (test : string -> bool) ((c :: _, _) : LEX_STATE) = test c
 =TEX
 When a lexeme 
 has been recognised, the following material is used to classify the result.
-(Note that an annotation may be reclassified as a hidden part depending on what follows the characters ``\verb"--#"''.)
 
 We list the Ada symbols and reserved words first
 =SML
@@ -623,10 +607,8 @@ in
 				),
 			CNText ("$" ^ converted))
 		end
-	else if	is_comment what (* must test for this before testing for annotations : see code of is_comment *)
+	else if	is_comment what
 	then	(LCComment, CNText what)
-	else if	is_annotation what
-	then	(LCAnnotation, CNText what)
 	else	let	val converted = convert what;
 		in	(case e_lookup converted class_table of
 			Value cl => cl
@@ -662,16 +644,12 @@ fun  Ûrec_delimiterÝ ( (cs, _) : LEX_STATE ) : LEX_STATE = (
 	else	raise Unrecognised
 );
 =TEX
-$rec\_delimiter$ returns an appropriately updated state if the input
-begins with a delimiter symbol, if not it raises $Unrecognised$.
+$rec\_comment$ returns an appropriately updated state if the input
+begins with a comment symbol, if not it raises $Unrecognised$.
 =SML
-fun  Ûrec_comment_or_annotationÝ ( (cs as ("-"::"-":: (more1 as (c::more2))), _) : LEX_STATE ) : LEX_STATE = (
-	if	c = !cn_spark_annotation_char
-	then	(more2, Known ("--" ^ c))
-	else	(more1, Known "--")
-) | rec_comment_or_annotation ((cs as ("-"::"-":: more)), _) = (
+fun  Ûrec_commentÝ ( (cs as ("-"::"-":: more), _) : LEX_STATE ) : LEX_STATE = (
 	(more, Known "--")
-) | rec_comment_or_annotation _ = raise Unrecognised;
+) | rec_comment _ = raise Unrecognised;
 =TEX
 \subsection{Recognition of Identifiers}
 The following simply picks up the next identifier:
@@ -824,7 +802,7 @@ fun Ûrec_next_tokenÝ (st : LEX_STATE) : LEX_STATE = (
 	handle Unrecognised =>
 		(rec_primedid st))
 	handle Unrecognised =>
-		(rec_comment_or_annotation st))
+		(rec_comment st))
 	handle Unrecognised =>
 		(rec_delimiter st))
 	handle Unrecognised =>
@@ -840,9 +818,9 @@ The following constitute some essential requirements of this lexical analyser.
 The function $rec\_next\_token$ allows us to recognise the next lexeme
 in an input stream according to the SPARK (and Compliance Notation) lexis.
 We must now put this to use in constructing the overall lexical analyser.
-To do this we must handle embedded Z and also annotations, comments and pragmas.
+To do this we must handle embedded Z, comments and pragmas.
 To handle embedded Z we need to be able to recognise the end of the Z fragment while using the Z lexical analyser to process the Z lexemes.
-To handle comments and annotations is just a question of scanning to the end of line (or in the case of the hide annotation to the end marker for the annotation).
+To handle comments is just a question of scanning to the end of line.
 Similarly, we take a pragma to be any text after the pragma keyword up to a semi-colon.
 
 \subsection{Comments}
@@ -861,41 +839,6 @@ fun Ûignore_commentÝ (slist : string list) (rest : INPUT list)
 		|	_ :: inputs => ignore_comment [] inputs
 		|	[] => ([], [])
 	)
-);
-=TEX
-\subsection{Annotations}
-The function $spark\_annotation$ assumes an annotation symbol has just been read.
-It returns a $CN\_LEX\_ITEM$ containing the text of the annotation (including the \verb"--#" but without the final new-line together with
-two lists giving the unread part of the input (cf. $ignore\_comment$).
-=SML
-fun Ûspark_annotation_auxÝ (acc : string) (pending_tfo : string)
-		(slist : string list) (rest : INPUT list)
-	: (CN_LEX_ITEM * string list * INPUT list)  = (
-	case slist of 
-		("\n" :: more) =>
-		((LCAnnotation, (CNText (acc ^ translate_for_output pending_tfo))), more, rest)
-	|	(ch :: more) =>
-		spark_annotation_aux acc  (pending_tfo ^ ch) more rest
-	|	[] => (
-		case rest of
-			Lex.Text s :: inputs =>
-				spark_annotation_aux
-				(acc ^ translate_for_output pending_tfo) ""
-				(explode s) inputs
-		|	Lex.String s :: inputs =>
-				spark_annotation_aux (acc ^ translate_for_output pending_tfo ^ "\"" ^ s ^ "\"") "" [] inputs
-		|	_ :: inputs => 
-				((LCAnnotation, (CNText (acc ^ translate_for_output pending_tfo))), [], rest)
-		|	[] =>
-				((LCAnnotation, (CNText  (acc ^ translate_for_output pending_tfo))), [], [])
-	)
-);
-=TEX
-=SML
-fun Ûspark_annotationÝ (comment_tok : string)
-		(slist : string list) (rest : INPUT list)
-	: (CN_LEX_ITEM * string list * INPUT list)  = (
-	spark_annotation_aux comment_tok "" slist rest
 );
 =TEX
 \subsection{Arbitrary Ada}
@@ -1164,11 +1107,6 @@ fun Ûspark_xtextÝ (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  
 						ignore_comment srest rest;
 					in	spark_xtext srest' rest'
 					end
-				)|(LCAnnotation, Nil) => (
-					let val (tok, srest', rest') =
-						spark_annotation s srest rest;
-					in	tok :: spark_xtext srest' rest'
-					end
 				)|(LCArbitraryAda, Nil) => (
 					let val (tok, srest', rest') =
 						spark_arbitrary srest rest;
@@ -1189,7 +1127,7 @@ and Ûspark_lexÝ ((ip::more) : INPUT list) : CN_LEX_ITEM list = (
 		Lex.Text s => (
 			spark_xtext (explode s) more
 	) |	Lex.String s => (
-			(LCStringLiteral, CNString s)::spark_lex more
+			(LCStringLiteral, CNString s) :: spark_lex more
 	) |	Lex.Char s => (
 			fail "CN-Parser" 501001  [fn () => "`"^s^"`"]
 	) |	Lex.Type ty => (
@@ -1197,7 +1135,9 @@ and Ûspark_lexÝ ((ip::more) : INPUT list) : CN_LEX_ITEM list = (
 	) |	Lex.Term tm => (
 			fail "CN-Parser" 501001  [fn () => "antiquotation"]
 	) |	Lex.Separator s => (
-			fail "CN-Parser" 501001  [fn () => s]
+			if	not(!cn_ignore_spark_annotations)
+			then	(LCAnnotation, CNText s) :: spark_lex more
+			else	spark_lex more
 	) |	Lex.Error n => (fail "CN-Parser" 501003 [fn () => string_of_int n])
 ) | spark_lex _ = [];
 =TEX
@@ -1222,7 +1162,7 @@ end (* of structure CNLex *);
 \end{document}
 =IGN
 val spark_lex = CNLex.cn_lex (Combinators.I);
-spark_lex [Lex.Text "abcd def (12) --"];
+spark_lex [Lex.Separator "abcd def (12) --"];
 spark_lex [Lex.Text "abcd def (12) --# banana"];
 set_string_control("cn_spark_annotation_char", "$");
 spark_lex [Lex.Text "abcd def (12) --$ banana"];
