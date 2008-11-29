@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.353 $ $RCSfile: imp507.doc,v $ $Date: 2008/10/11 14:12:39 $
+% imp507.doc %Z% $Revision: 1.354 $ $RCSfile: imp507.doc,v $ $Date: 2008/11/12 12:29:43 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.353 $%
+\def\SCCSversion{$Revision: 1.354 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/10/11 14:12:39 $%
+\TPPdate{\FormatDate{$Date: 2008/11/12 12:29:43 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -289,6 +289,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.353] Fixed bug in {\em k\_slot\_doc}.
 \item[Issue 1.354] {\em save\_z\_generator\_state} now does nothing if the script name is not yet known (fixing a problem with
 {\em delete\_script}).
+\item[Issue 1.355] Allowed for rationalisation to {\em FORMAL\_FUN} type.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -493,8 +494,7 @@ val €dummy_informal_fun› : INFORMAL_FUN = {
 val €dummy_formal_fun› : FORMAL_FUN = {
 		informal_fun	=	dummy_informal_fun,
 		spec		=	dummy_spec,
-		globals		=	[],
-		renames		=	Nil};
+		globals		=	[]};
 val €dummy_formal_proc› : FORMAL_PROC = {
 		name		=	"*dummy formal proc*",
 		formal_ids	=	[],
@@ -1732,7 +1732,8 @@ fun €package_formal_fun›
 	({vc_vars, consts_types, formal_procs, informal_procs, informal_funs,
 		formal_funs, aux_vars, obj_renamings, zmod, decl, local_dict, private_dict, with_dict}
 	: PACKAGE,
-	new_formal_fun as {renames, ...} : FORMAL_FUN)
+	new_formal_fun : FORMAL_FUN,
+	renames : Z_ID OPT)
 	: PACKAGE = (
 	{	vc_vars				=	vc_vars,
 		consts_types			=	consts_types,
@@ -2789,8 +2790,7 @@ fun €ti_context_of_speclab› (speclab : SPECLAB) : TYPE E_DICT = (
 				case env (trans_id (#name inf_fun)) of
 					Value{info =EIEnvFunction {deps = gs, ...}, ...} => gs
 				|	_ =>
-					fail "ti_context_of_speclab" 508081 [fn()=> #name inf_fun],
-			renames = Nil};
+					fail "ti_context_of_speclab" 508081 [fn()=> #name inf_fun]};
 		in	list_e_enter cxt (map dest_var(frees(fun_decl env form_fun)))
 		end
 	else	ti_context_of_in_scope (#in_scope speclab)
@@ -5542,16 +5542,16 @@ fun €update_envs_fun›
 =SML
 fun €update_envs_form_fun›
 	(pfx_priv : PREFIX_INFO * bool)
-	(formfun : FORMAL_FUN) : unit = (
+	(formfun : FORMAL_FUN, renames : Z_ID OPT) : unit = (
 	update_envs_fun pfx_priv true
-	(#renames formfun) (#globals formfun) (#informal_fun formfun)
+	renames (#globals formfun) (#informal_fun formfun)
 );
 =TEX
 \subsection{The SID function stub\_spec\_fun}
 =SML
 fun €stub_spec_fun› (form_fun : FORMAL_FUN) : unit = (
 	stub_spec_proc_fun (#spec form_fun) (#globals form_fun);
-	update_envs_form_fun (current_prefix_info 2, false) form_fun
+	update_envs_form_fun (current_prefix_info 2, false) (form_fun, Nil)
 );
 =TEX
 \subsection{The SID function inf\_fun}
@@ -5683,12 +5683,11 @@ fun €inf_fun› (informal_fun as {name, ...}: INFORMAL_FUN): unit = (
 =SML
 fun €prefix_formal_fun›
 	(pfx_info : PREFIX_INFO)
-	({spec, informal_fun, globals, renames} : FORMAL_FUN)
+	({spec, informal_fun, globals} : FORMAL_FUN)
 		: FORMAL_FUN = (
 	{spec = spec,
 	 informal_fun = prefix_informal_fun pfx_info informal_fun,
-	 globals = globals,
-	 renames = renames}
+	 globals = globals}
 );
 =TEX
 =SML
@@ -5725,8 +5724,7 @@ fun €trans_formal_fun›
 	(form_fun as {
 		spec as {pre, post, ...},
 		informal_fun as {formal_pars, name = simple_name, ...},
-		globals,
-		renames = Nil} : FORMAL_FUN)
+		globals} : FORMAL_FUN)
 			: PARAINFO * Z_PRED * Z_PRED * Z_ID = (
 	let	val pff = prefix_formal_fun pfx_info form_fun;
 		val zn = #name(#informal_fun pff);
@@ -5759,12 +5757,6 @@ fun €trans_formal_fun›
 		val imp = z_imp(z_pre, z_post);
 		val pred = z_forall_opt(globdecs, z_forall_opt(pardecs, imp));
 	in	(AxDesInfo([], mk_z_decl[dec], Value pred, ntys), z_pre, z_post, zn)
-	end
-) | trans_formal_fun pfx_info cnenv {informal_fun as {name = new_n, ...}, renames = Value old_zn, ...} = (
-	let	val tm = zid cnenv old_zn;
-		val pfx = #canon pfx_info;
-		val new_zn = prefix_trans_id pfx new_n;
-	in	(AbbDefInfo(new_zn, [], tm), mk_t, mk_t, new_zn)
 	end
 );
 =TEX
@@ -5845,8 +5837,7 @@ Note that {\em form\_fun\_pack\_body} and {\em form\_fun\_pack\_body\_aux} depen
 fun €form_fun_pack_spec› (form_fun as {
 	informal_fun,
 	spec = {w, w0, pre, post},
-	globals,
-	renames = zno} : FORMAL_FUN) : unit = (
+	globals} : FORMAL_FUN) : unit = (
 	let	val block2 = block 2;
 		val block_name2 = #block_name(#declab block2);
 		val bn2 = expanded_name block_name2;
@@ -5866,13 +5857,12 @@ fun €form_fun_pack_spec› (form_fun as {
 				w0 = w0,
 				pre = z_quote (z_pre, Nil),
 				post = z_quote (z_post, Nil)},
-			globals = globals,
-			renames = zno};
+			globals = globals};
 		val _ = store_para z_para;
 	in	pack_env :=
 		s_enter
 		bn2
-		(package_formal_fun pfx_priv (package, form_fun1))
+		(package_formal_fun pfx_priv (package, form_fun1, Nil))
 		(!pack_env)
 	end
 );
@@ -5895,7 +5885,7 @@ fun €form_fun_pack_body_common› (implicit : bool)
 		val pfx_priv = (pfx_info, false);
 	in	store_trans_formal_fun pfx_info current_cn_env form_fun;
 		add_fun_env pfx_priv true Nil (#globals form_fun) (#informal_fun form_fun);
-		update_envs_form_fun pfx_priv form_fun;
+		update_envs_form_fun pfx_priv (form_fun, Nil);
 		if	any
 			formal_funs4
 			(fn f => #name(#informal_fun f) = bn1)
@@ -6128,7 +6118,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 		val pfx_priv = (pfx_info, false);
 	in	store_trans_formal_fun pfx_info current_cn_env form_fun;
 		add_fun_env pfx_priv true Nil (#globals form_fun) (#informal_fun form_fun);
-		update_envs_form_fun pfx_priv form_fun;
+		update_envs_form_fun pfx_priv (form_fun, Nil);
 		subunit_env := s_delete tbn1_bn2 (!subunit_env);
 		deletion_info := s_enter tbn1_bn2 subunit3 (!deletion_info);
 		if	#specif_flag subunit3
@@ -6176,7 +6166,7 @@ fun €form_fun_otherwise› (form_fun: FORMAL_FUN) : unit = (
 		val pfx_priv = (pfx_info, private);
 	in	store_trans_formal_fun pfx_info current_cn_env form_fun;
 		add_fun_env pfx_priv true Nil (#globals form_fun) (#informal_fun form_fun);
-		update_envs_form_fun pfx_priv form_fun
+		update_envs_form_fun pfx_priv (form_fun, Nil)
 	end
 );
 =TEX
@@ -7267,12 +7257,11 @@ pfx_priv true (Value can_n)
 				val new_ff = {
 					informal_fun = new_if,
 					spec = dummy_spec,
-					globals = old_deps,
-					renames = Value can_n};					
+					globals = old_deps};					
 			in	pack_env :=
 				s_enter
 				bn1
-				(package_formal_fun pfx_priv (package2, new_ff))
+				(package_formal_fun pfx_priv (package2, new_ff, Value can_n))
 				(!pack_env)
 			end
 		) |	_ =>  ( (* missing or informal *)
@@ -8492,7 +8481,7 @@ and €do_function_spec› (implicit : bool) (
 		return_type = curr_real_name return};
 		val spec = expand_frame sp;
 		val formal_fun : FORMAL_FUN =
-		{spec = spec, informal_fun = informal_fun, globals = globals, renames = Nil};
+		{spec = spec, informal_fun = informal_fun, globals = globals};
 		val egs = expand_names globals;
 		val gpno = Value {
 			globals = egs,
