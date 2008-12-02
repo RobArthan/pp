@@ -1,0 +1,333 @@
+=TEX
+%   %Z% $Date: 2002/09/02 14:04:02 $ $Revision: 5.1 $ $RCSfile: imp530.doc,v $
+=TEX
+\documentclass[a4paper,11pt]{article}
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+%\usepackage{fancyhdr}
+\makeindex
+
+\def\Xpp{{\tt xpp}}
+\def\Note#1{{\bf\footnotesize[Note: #1]}}
+\def\Author{R.D.~Arthan}
+\def\EMail{{\tt rda@lemma-one.com}}
+\def\Phone{+44 118 958 4409}
+\def\Title{Implementation: Evaluation Report Generator}
+\def\Reference{LEMMA1/DAZ/IMP530}
+\def\FrontPageTitle{{\huge Implementation \\---\\ Evaluation Report Generator}}
+\def\Version{$Revision:$%
+}
+\def\Date{\FormatDate{$Date:$%
+}}
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+\setcounter{section}{-1}
+\section{DOCUMENT CONTROL}
+
+\subsection{Contents}
+ 
+\tableofcontents
+
+%\pagebreak
+%\subsection{List of Tables}\label{ListofTables}
+%\listoftables
+\subsection{List of Figures}\label{ListofFigures}
+\listoffigures
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}
+\begin{description}
+
+\item[Issue 1.1] Initial author's draft. 
+
+\end{description}
+
+\subsection{Changes Forecast}
+
+None under the current contract.
+
+\newpage
+
+%\subsection{Trademarks}
+
+\section{GENERAL}
+
+\subsection{Scope}
+See~\cite{LEMMA1/DAZ/DTD530}.
+
+
+\subsection{Introduction}
+
+\subsubsection{Purpose and Background}
+See~\cite{LEMMA1/DAZ/DTD530}.
+
+\subsubsection{Possible Enhancements}
+None identified.
+ 
+\subsubsection{Deficiencies}
+None identified.
+
+\section{PROGRAMMER INTERFACE}\label{PI}
+\subsection{Prologue}
+=SML
+structure €CNEvaluationReportAPI› : CNEvaluationReportAPI = struct
+=TEX
+=SML
+open CNZGenerator;
+=TEX
+\subsection{Functions}
+=TEX
+=SML
+fun €is_uc_alpha› (ch : char) = #"A" <= ch andalso ch <= #"Z";
+fun €is_decimal› (ch : char) =  #"0" <= ch andalso ch <= #"9";
+fun €is_alnum› (ch : char) =  is_uc_alpha ch orelse is_decimal ch;
+fun €is_ul› (ch : char) = ch = #"_";
+fun €is_o› (ch : char) = ch = #"o";
+fun €is_prime› (ch : char) = ch = #"'";
+fun €is_id_char› (ch : char) =  is_alnum ch orelse is_ul ch;
+=TEX
+=SML
+fun €parse_simple_name› (s : string) : string * string = (
+	let	val sz = size s;
+		fun aux_o i = (
+			if	i = sz
+			then	("", s)
+			else	let	val ch = String.sub(s, i);
+				in	if	is_uc_alpha ch
+					orelse	is_o ch
+					then	(substring(s, 0, i-1), substring(s, i, sz - i))
+					else	("", s)
+				end
+		);
+		fun aux_ul i = (
+			if	i = sz
+			orelse	not(is_alnum(String.sub(s, i)))
+			then	("", s)
+			else	aux (i+1)
+		)
+		and aux i = (
+			if	i = sz
+			then	(s, "")
+			else 	let	val ch = String.sub(s, i);
+				in	if	is_ul ch
+					then	aux_ul (i+1)
+					else if	is_alnum ch
+					then	aux (i+1)
+					else if	is_o ch
+					then	aux_o (i+1)
+					else	(substring(s, 0, i), substring(s, i, sz - i))
+				end
+		);
+	in	if	sz = 0
+		then	("", "")
+		else 	let	val ch = String.sub(s, 0)
+			in	if	is_uc_alpha ch
+				then	aux 1
+				else	if is_o ch
+				then	aux_o 1
+				else	("", s)
+			end
+	end
+);
+=IGN
+parse_simple_name "Ao'proc";
+parse_simple_name "oBo'proc";
+parse_simple_name "ooBo'proc";
+parse_simple_name "AoBo'proc";
+parse_simple_name "ABCD'Bo'proc";
+parse_simple_name "ABCDoC'Bo'proc";
+parse_simple_name "ABCDooC'Bo'proc";
+=SML
+fun €parse_expanded_name› (s : string) : string list * string = (
+	let	val (sn, rest) = parse_simple_name s;
+	in	if	size s = size rest
+		then	([], s)
+		else	let	val (sns, sfx) = parse_expanded_name rest;
+			in	(sn :: sns, sfx)
+			end
+	end
+);
+=IGN
+parse_expanded_name "Ao'proc";
+parse_expanded_name "AoBo'proc";
+parse_expanded_name "ooBo'proc";
+parse_expanded_name "ooB'proc";
+parse_expanded_name "ABCD'Bo'proc";
+parse_expanded_name "ABCDoC'Bo'proc";
+parse_expanded_name "AAAAooooBBBoooCCooDoE'proc";
+=TEX
+=SML
+val €scope_type_dict› : SCOPE_TYPE S_DICT =
+	[(block_tag, STBlock),
+	 (context_tag, STContext),
+	 (fun_tag, STFunc),
+	 (pack_spec_tag, STSpec),
+	 (pack_body_tag, STBody),
+	 (proc_tag, STProc)];
+=TEX
+=SML
+val €parse_scope_type› : string -> SCOPE_TYPE OPT = switch s_lookup scope_type_dict;
+=TEX
+=SML
+val €unparse_scope_type› : SCOPE_TYPE -> string = rassoc3 scope_type_dict;
+=SML
+fun €parse_scope› (s : string) : SCOPE OPT = (
+	let	val (en, tag) = parse_expanded_name s;
+	in	case parse_scope_type tag of
+			Value st => Value {name = en, scope_type = st}
+		|	Nil => Nil
+	end
+);
+=TEX
+=IGN
+new_script{name = "package", unit_type = "spec"};
+new_script{name = "package", unit_type = "body"};
+open_theory "cn"; new_theory "banana-lib";
+new_script1{name = "proc", unit_type = "proc", library_theories = ["banana-lib"]};
+=SML
+fun €get_ev_scopes› (() : unit) : SCOPE list = (
+	let	fun aux acc [] = acc
+		|   aux acc (sn :: sns) = (
+			case parse_scope sn of
+				Value es => aux (es::acc) sns
+			|	Nil => (
+				warn "get_scripts" 530001 [fn () => sn];
+				aux acc sns
+			)
+		);
+	in	aux [] (get_script_names())
+	end
+);
+=TEX
+=SML
+fun €string_of_scope› ({name, scope_type} : SCOPE) : string = (
+	format_list Combinators.I name "o" ^ unparse_scope_type scope_type
+);
+=TEX
+=SML
+fun €scope_of_string› (str : string) : SCOPE = (
+	case parse_scope str of
+		Value sc => sc
+	|	Nil => fail "scope_of_string" 530002 [fn()=>str]
+);
+=TEX
+=IGN
+val scr_thy_names = map theory_of_ev_scope (get_scopes ());
+val anc_thy_names = "basic_hol" :: flat (map get_ancestors scr_thy_names) diff get_ancestors "cn";
+=TEX
+=SML
+fun €theory_type› (thyn : string) : EV_THEORY_TYPE = (
+	let	fun default () = (
+			if	get_language thyn = "Z"
+			then	ETTZed
+			else	ETTHol
+		);
+	in	if	thyn = "cn"
+		then	ETTCn
+		else if	is_cn_theory thyn
+		then	case parse_scope thyn of
+			Value es => ETTScope es
+		|	Nil => (
+				warn "theory_type" 530003 [fn()=>thyn];
+				default ()
+			)
+		else	default ()
+	end
+);
+=IGN
+map (fn thy => (thy, theory_type thy)) (get_descendants"basic_hol");
+=TEX
+=SML
+fun €get_ev_theory_info› (thyn : string) : EV_THEORY_INFO = (
+	let	val _ = open_theory thyn;
+		fun p pr_vc = (
+			(pr_vc, get_thm thyn pr_vc)
+		);
+		fun u unpr_vc = (
+			(unpr_vc, get_conjecture thyn unpr_vc)
+		);
+	in	{name = thyn,
+		 theory_type = theory_type thyn,
+		 proved_vcs = map p (get_proved_conjectures thyn),
+		 unproved_vcs = map u (get_unproved_conjectures thyn),
+		 axioms = get_axioms thyn}
+	end
+);
+=TEX
+For {\em get\_ev\_infos} we need to work through the theories requested by the user pulling in what we need.
+Theories that are not associated with a scope do not pull in
+anything. Theories that are associated with a scope pull in
+any nested scopes, but not stubs.
+=SML
+val €theory_name_scope_opt_flag_order› :
+	((string * SCOPE OPT) * bool) ORDER =
+	let	fun proj1 STSpec = 1
+		|   proj1 STBody = 2
+		|   proj1 STContext = 3
+		|   proj1 STFunc = 4
+		|   proj1 STProc = 5
+		|   proj1 STBlock = 6;
+		fun proj2 (s, Nil) = (
+			([s], 0)
+		) | proj2 (_, Value{name, scope_type}) = (
+			(name, proj1 scope_type)
+		);
+		val tns_order = induced_order(proj2,
+			pair_order(lexicographic string_order) int_order);
+		val flag_order = induced_order(
+				(fn true => 0 | false => 1),
+				int_order);
+	in	pair_order tns_order flag_order
+	end;
+
+=TEX
+=SML
+fun €get_ev_infos› (thys_in : string list) : EV_INFO list = (
+(*
+	let	val thys = sort string_order thys_in;
+		fun aux1 thy = (thy, theory_type thy);
+		val thys_tys = map aux1 (sort string_order thys);
+*)
+	raise Div
+);
+=TEX
+=ENDDOC
+\subsection{Epilogue}
+=SML
+end (* of structure CNEvaluationReports *);
+=TEX
+\section{REPORT INTERFACE}\label{RI}
+
+=SML
+structure €CNEvaluationReports› : CNEvaluationReports = struct
+=TEX
+\subsection{Functions}
+=TEX
+\subsection{Epilogue}
+=SML
+end (* of structure CNEvaluationReports *);
+=TEX
+
+\twocolumn[\section{INDEX}\label{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+
+
+
+
+
+
+
+
+
+
