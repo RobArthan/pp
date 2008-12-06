@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.355 $ $RCSfile: imp507.doc,v $ $Date: 2008/11/29 14:12:34 $
+% imp507.doc %Z% $Revision: 1.356 $ $RCSfile: imp507.doc,v $ $Date: 2008/11/29 16:20:15 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.355 $%
+\def\SCCSversion{$Revision: 1.356 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/11/29 14:12:34 $%
+\TPPdate{\FormatDate{$Date: 2008/11/29 16:20:15 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -290,6 +290,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.354] {\em save\_z\_generator\_state} now does nothing if the script name is not yet known (fixing a problem with
 {\em delete\_script}).
 \item[Issue 1.355] Allowed for rationalisation to {\em FORMAL\_FUN} type.
+\item[Issue 1.356] Added {\em get\_script\_names}.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -644,6 +645,11 @@ fun €get_saved_z_generator_state› (s : string) : Z_GENERATOR_STATE = (
 			Value st => st
 		|	Nil => fail "get_saved_z_generator_state" 507070 [fn _ => s]
 	end
+);
+=TEX
+=SML
+fun €get_state_db› (() : unit) : Z_GENERATOR_STATE E_DICT = (
+	!state_db
 );
 =TEX
 \subsection{The Environment for Volumes II and III}
@@ -2638,13 +2644,13 @@ The following sets a user data flag to indicate that the theory
 was created by the compliance notation tool (e.g. by $new\_script$,
 or perhaps as a stub or other supporting theory).
 =SML
-fun €set_cn_created› () : unit = (
+fun €set_cn_theory› () : unit = (
 	set_user_datum (cn_created_ud_key, UD_String("CN created",[]))
 );
 =TEX
 And the following checks for the flag:
 =SML
-fun €get_cn_created› (thy : string) : bool = (
+fun €is_cn_theory› (thy : string) : bool = (
 	(get_user_datum thy cn_created_ud_key; true) 
 	handle (Fail _) => false
 );
@@ -2657,7 +2663,7 @@ The name is stored for the purposes of this check and to use
 in the error message.
 =SML
 fun €set_compilation_unit› (cu_name: string, tag : string) : unit = (
-let	val dummy = if (get_cn_created "-")
+let	val dummy = if (is_cn_theory "-")
 			then ()
 			else fail "check17" 507056 [fn () => cu_name,
 				fn () => get_current_theory_name()];	
@@ -3610,7 +3616,7 @@ fun €make_subprog_module› (err_no : int) (msg_insert : string)
 				fail "make_subprog_module" err_no
 				[fn()=>thy, fn()=>msg_insert]
 			);
-		val _ = set_cn_created ();
+		val _ = set_cn_theory ();
 		val _ = open_theory cur_thy;
 		val thy_level = current_level();
 	in	update_user_datum cn_subprog_ud_key
@@ -3651,7 +3657,7 @@ fun get_script_theories (script : string) : string list = (
 				end
 		);
 		val thyn = if script = "-" then get_current_theory_name() else script;
-	in	(if	get_cn_created thyn
+	in	(if	is_cn_theory thyn
 		then	()
 		else	comment "get_script_theories" 507141 [fn () => thyn]);
 		go [] thyn
@@ -6670,7 +6676,13 @@ fun €new_scope_pack_spec›
 				block_flags(empty_block, flags),
 				map Value ident);
 		val zn = trans_expanded_name ident;
-	in	blocks := new_scope_common Nil (block :: !blocks);
+		val scope_entry = {theory = zn ^ pack_spec_tag, deferred = DSNotDeferred, body_labels = Nil};
+	in	(scope_env :=
+		e_extend zn scope_entry (!scope_env)
+		handle Fail _ => (
+			fail "new_scope_pack_spec" 507143
+			[fn () => fmt_expanded_name ident]));
+		blocks := new_scope_common Nil (block :: !blocks);
 		pack_env := s_extend zn (empty_package decl) (!pack_env) 
 	end	handle Fail _ => fail "new_scope_pack_spec" 507007 [fn () => fmt_expanded_name ident]
 );
@@ -9121,7 +9133,7 @@ fun €open_scope› (n: string) : unit = (
 					fail "open_scope" 507139
 					[fn()=>theory, fn()=>zn]
 				));
-				set_cn_created ();
+				set_cn_theory ();
 				scope_env :=
 				e_enter zn scope_entry (!scope_env)
 			end
@@ -9418,7 +9430,7 @@ expected to see in the following.
 		in
 		(	lazy_open_theory "cn";
 			new_theory_aux [] thy_name;
-			set_cn_created();
+			set_cn_theory();
 			set_continuation_flag continue;
 			CaseIndependence.reset_names ();
 			init_cn_z_generator continue thy_name;
@@ -9566,7 +9578,7 @@ comprises the theory names, subunit environment keys and package environments ke
 need to be deleted.
 =SML
 fun €delete_script_aux› (script : string) : string list * string list * string list = (
-	let	val cn_thys = get_descendants "cn" less "cn" drop (not o get_cn_created);
+	let	val cn_thys = get_descendants "cn" less "cn" drop (not o is_cn_theory);
 		fun get_continuation_script_parents scr = (
 			if	get_continuation_flag scr
 			then	let	fun aux p = (
