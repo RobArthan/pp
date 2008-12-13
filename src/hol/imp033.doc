@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp033.doc   %Z% $Date: 2005/05/07 12:08:26 $ $Revision: 1.32 $ $RCSfile: imp033.doc,v $
+% imp033.doc   %Z% $Date: 2008/12/13 13:17:29 $ $Revision: 1.33 $ $RCSfile: imp033.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for Theory Lister}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP033}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.32 $%
+\def\SCCSversion{$Revision: 1.33 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{$Date: 2005/05/07 12:08:26 $%
+\TPPdate{$Date: 2008/12/13 13:17:29 $%
 }
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -116,7 +116,7 @@ entries for generic lister.
 \item[Issue 1.30] Output file names are now passed through {\it translate\_for\_output}.
 \item[Issue 1.31] Now uses {\tt app} rather than {\tt map} wherever appropriate.
 \item[Issue 1.32] HOL now supports left-associative operators.
-\item[Issue 1.33] Now supports nested structures.
+\item[Issue 1.33, 1.34] Now supports nested structures.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -948,15 +948,17 @@ fun €list_do_red_tape›	(ii : IO_INFO)
 	|	_ => do_red_tape ii how istable what
 );
 =TEX
-$gen\_do\_section$ pulls all the above together.
+$gen\_do\_section$ and $gen\_do\_section$ pulls all the above together.
+In the case of a nested structure, it is not very clear whether
+caller would ever want to enable check that the theory
+exists and is in scope, since
+presumably they would have got that right, but
+we pass the flag in in any case.
 =SML
-fun €gen_do_section› (ii : IO_INFO) (thyn : string) (banner : string -> string)
+fun €gen_do_section› (chk : bool)
+	(ii : IO_INFO) (banner : string -> string) (thyn : string) 
 	(sec : LISTER_SECTION) : unit = (
-	if not (get_current_theory_name () mem get_descendants thyn)
-		handle ex => divert ex "get_descendants"
-			"do_theory" 33051 [fn () => thyn]
-	then fail "do_theory" 33050 [fn () => thyn]
-	else 	(case sec of
+	case sec of
 		LSBanner => do_banner_aux ii (banner thyn)
 	|	LSParents => do_parents ii thyn
 	|	LSChildren => do_children ii thyn
@@ -982,25 +984,27 @@ fun €gen_do_section› (ii : IO_INFO) (thyn : string) (banner : string -> string)
 			case f thyn of
 				"" => ()
 			|	str => do_section_header ii str
-		)
-	|	LSADNestedStructure f => (
+	) |	LSADNestedStructure f => (
 			let	val (thyn1, secs) = f thyn;
-			in	app (gen_do_section ii thyn banner) secs
+			in	gen_do_sections chk ii banner thyn secs
 			end
-		)
 	)
-);
+(*
 =TEX
 =SML
-fun €gen_do_sections›
-	(banner : string -> string)
+*)
+) and €gen_do_sections›
+	(chk : bool)
 	(ii : IO_INFO)
-	(secs : LISTER_SECTION list) (thyn : string) : unit = (
-	if not (get_current_theory_name () mem get_descendants thyn)
-		handle ex => divert ex "get_descendants"
-			"gen_do_sections" 33051 [fn () => thyn]
+	(banner : string -> string)
+	(thyn : string)
+	(secs : LISTER_SECTION list) : unit = (
+	if 	chk
+	andalso	not (get_current_theory_name () mem get_descendants thyn)
+			handle ex => divert ex "get_descendants"
+				"gen_do_sections" 33051 [fn () => thyn]
 	then	fail "gen_do_sections" 33050 [fn () => thyn]
-	else	(app (gen_do_section ii thyn banner) secs)
+	else	(app (gen_do_section chk ii banner thyn) secs)
 );
 =TEX
 For the HOL lister, for historic reasons, we use a hard-wired approach.
@@ -1210,12 +1214,12 @@ fun €output_theory1› {theory : string, out_file:string} : unit = (
 =TEX
 \subsection{The Application-Defined Listers}
 =SML
-fun €gen_theory_lister› (secs : LISTER_SECTION list) :
+fun €gen_theory_lister_aux› (chk : bool) (secs : LISTER_SECTION list) :
 	{print : (string -> string) -> string -> unit,
 	out : (string -> string) -> {theory: string, out_file: string} -> unit,
 	out1 : (string -> string) -> {theory: string, out_file: string} -> unit} = (
 	let	fun print banner thy = (
-			(gen_do_sections banner (screen_ii std_out) secs thy)
+			(gen_do_sections chk (screen_ii std_out) banner thy secs)
 				handle ex => (
 					if area_of ex = "gen_do_sections"
 					then reraise ex "gen_theory_lister"
@@ -1227,7 +1231,7 @@ fun €gen_theory_lister› (secs : LISTER_SECTION list) :
 					if out_file <> ""
 					then open_out (translate_for_output out_file)
 					else std_out;
-			in	(gen_do_sections banner (f stream) secs) theory
+			in	gen_do_sections chk (f stream) banner theory secs
 				handle ex => (
 					if area_of ex = "gen_do_sections"
 					then reraise ex "gen_theory_lister"
@@ -1242,6 +1246,20 @@ fun €gen_theory_lister› (secs : LISTER_SECTION list) :
 	in	{print=print, out=out latex_ii, out1= out screen_ii}
 	end
 );
+=TEX
+=SML
+val €gen_theory_lister› : LISTER_SECTION list ->
+	{print : (string -> string) -> string -> unit,
+	 out : (string -> string) -> {theory: string, out_file: string} -> unit,
+	 out1 : (string -> string) -> {theory: string, out_file: string} -> unit} =
+	gen_theory_lister_aux true;
+=TEX
+=SML
+val €gen_theory_lister1› : LISTER_SECTION list ->
+	{print : (string -> string) -> string -> unit,
+	 out : (string -> string) -> {theory: string, out_file: string} -> unit,
+	 out1 : (string -> string) -> {theory: string, out_file: string} -> unit} =
+	gen_theory_lister_aux false;
 =TEX
 \section{EPILOGUE}
 =SML
