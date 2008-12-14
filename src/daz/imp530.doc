@@ -1,5 +1,5 @@
 =TEX
-%   %Z% $Date: 2008/12/02 17:18:49 $ $Revision: 1.1 $ $RCSfile: imp530.doc,v $
+%   %Z% $Date: 2008/12/11 17:57:34 $ $Revision: 1.2 $ $RCSfile: imp530.doc,v $
 =TEX
 \documentclass[a4paper,11pt]{article}
 \usepackage{A4}
@@ -17,9 +17,9 @@
 \def\Title{Implementation: Evaluation Report Generator}
 \def\Reference{LEMMA1/DAZ/IMP530}
 \def\FrontPageTitle{{\huge Implementation \\---\\ Evaluation Report Generator}}
-\def\Version{$Revision: 1.1 $%
+\def\Version{$Revision: 1.2 $%
 }
-\def\Date{\FormatDate{$Date: 2008/12/02 17:18:49 $%
+\def\Date{\FormatDate{$Date: 2008/12/11 17:57:34 $%
 }}
 
 \begin{document}
@@ -45,7 +45,7 @@
 \subsection{Changes History}
 \begin{description}
 
-\item[Issue 1.1] Initial author's draft. 
+\item[Issues 1.1--1.3] Initial drafts to first complete working version. 
 
 \end{description}
 
@@ -74,15 +74,16 @@ None identified.
 \subsubsection{Deficiencies}
 None identified.
 
-\section{PROGRAMMER INTERFACE}\label{PI}
+\section{THE INTERFACE}\label{PI}
+=TEX
 \subsection{Prologue}
 =SML
-structure €CNEvaluationReportAPI› : CNEvaluationReportAPI = struct
+structure €CNEvaluationReports› : CNEvaluationReports = struct
 =TEX
 =SML
-open CNZGenerator;
+open CNZGenerator ListerSupport;
 =TEX
-\subsection{Functions}
+\subsection{Programmer Interface}
 =TEX
 =SML
 fun €is_uc_alpha› (ch : char) = #"A" <= ch andalso ch <= #"Z";
@@ -352,8 +353,10 @@ optimised away if we did not do this,
 but only at the cost of making the code very convoluted).
 
 =SML
-fun €get_ev_infos› (thys : string list) : EV_INFO list = (
+fun €get_ev_infos› (thys : string list) : EV_INFO S_DICT = (
 let
+	val cur_thy = get_current_theory_name();
+in let
 (*
 =TEX
 We will represent scopes here as a pair comprising the string
@@ -585,7 +588,7 @@ via an algorithm whose pattern matches the structure
 		then	(rev acc, rev pending, xs)
 		else if	script_thy1 <> script_thy2
 		then	let	val (t, f) = collect_subtree xs;
-			in	mk_inner_scope_infos (t::pending) (EvStub sc::acc) (root, f)
+			in	mk_inner_scope_infos (t::pending) (EvStub (script_thy2, sc)::acc) (root, f)
 			end
 		else	let	val (info, pending1, more1) = mk_scope_info pending x more;
 			in	mk_inner_scope_infos pending1 (EvNestedScope info::acc) (root, more1)
@@ -622,13 +625,13 @@ via an algorithm whose pattern matches the structure
 			 scope_info = si}
 		end
 	);
-	fun aux8 (acc : EV_INFO list)
-		( [] : SS2 list ) : EV_INFO list = (
+	fun aux8 (acc : EV_INFO S_DICT)
+		( [] : SS2 list ) : EV_INFO S_DICT = (
 		rev acc
 	) | aux8 acc
 		( ((thy, sc1 as {scope_type = STContext, ...}), _) :: more ) = (
 		let	val inf = get_ev_theory_info thy;
-		in	aux8 (EITheoryInfo inf::acc) more
+		in	aux8 ((thy, EITheoryInfo inf)::acc) more
 		end
 	) | aux8 acc
 		( (x as ((thy1, _), (thy2, _))) :: more ) = (
@@ -638,49 +641,345 @@ via an algorithm whose pattern matches the structure
 				then	EIScopeInfo
 				else	mk_ei_script_info thy1;
 			val more1 = flat pending @ rest;
-		in	aux8 (wrapper sci::acc) more1
+		in	aux8 ((thy1, wrapper sci)::acc) more1
 		end
 	);
-(*
-=IGN
-new_theory"AoB'proc";
-val tis = aux8 [] work_list;
-
-=SML
-*)
-in	aux8 [] work_list
+	val res = aux8 [] work_list;
+in	open_theory cur_thy;
+	res
+end	handle ex as Fail _ => (
+		open_theory cur_thy;
+		raise ex
+	)
 end);
 =TEX
-=ENDDOC
+\subsection{User Interface}
+=TEX
+=SML
+type €EV_SUMMARY› = {
+	scripts : string list,
+	other_theories : string list,
+	exceptions : (string * int) list,
+	unproved_vcs : (string * int) list,
+	axioms : (string * int) list};
+=TEX
+=SML
+val €empty_summary› : EV_SUMMARY = {
+	scripts = [],
+	other_theories = [],
+	exceptions = [],
+	unproved_vcs = [],
+	axioms = []};
+=TEX
+=SML
+fun €file_count› (acc : (string * int) list) (_ : string) (0 : int) : (string * int) list = acc
+|    file_count acc s nz = (s, nz) :: acc;
+=TEX
+=SML
+fun €summary_of_ev_info›
+	(acc as ({scripts = st_acc,
+	  other_theories = ot_acc,
+	  exceptions = ex_acc,
+	  unproved_vcs = uv_acc,
+	  axioms = ax_acc} : EV_SUMMARY, ed : (EV_INFO * bool) E_DICT))
+	(ei : EV_INFO)
+	: EV_SUMMARY * (EV_INFO * bool) E_DICT = (
+	case ei of
+		EITheoryInfo {name, unproved_vcs, axioms, ...} => (
+			{scripts = st_acc,
+			 other_theories = ot_acc,
+			 exceptions = ex_acc,
+			 unproved_vcs = file_count uv_acc name (length unproved_vcs),
+			 axioms = file_count ax_acc name (length axioms)},
+			ed
+		)
+	|	EIScriptInfo {exceptions, scope_info} => (
+		let	val acc1 = ({
+				scripts = st_acc,
+				other_theories = ot_acc,
+				exceptions = file_count ex_acc (#name(#scope_theory_info scope_info)) (length exceptions),
+				unproved_vcs = uv_acc,
+				axioms = ax_acc}, ed);
+		in	summary_of_ev_scope_info acc1 scope_info
+		end
+	) |	EIScopeInfo si => summary_of_ev_scope_info acc si
+)
+(*
+=TEX
+=SML
+*)
+and €summary_of_ev_scope_info› 
+	(acc : EV_SUMMARY * (EV_INFO * bool) E_DICT)
+	({scope,
+	  scope_theory_info,
+	  context_theory_info,
+	  scopes} : EV_SCOPE_INFO)
+	: EV_SUMMARY * (EV_INFO * bool) E_DICT = (
+	let	val acc1 = summary_of_ev_info acc (EITheoryInfo scope_theory_info);
+		val acc2 = case context_theory_info of 
+			Value ti => summary_of_ev_info acc1 (EITheoryInfo ti)
+		|	Nil => acc1;
+	in	summary_of_ev_inner_scope_infos acc2 scopes
+	end
+)
+(*
+=TEX
+=SML
+*)
+and €summary_of_ev_inner_scope_infos›
+	(acc :  EV_SUMMARY * (EV_INFO * bool) E_DICT)
+	(x::xs : EV_INNER_SCOPE_INFO list)
+	: EV_SUMMARY * (EV_INFO * bool) E_DICT = (
+	summary_of_ev_inner_scope_infos
+	(summary_of_ev_inner_scope_info acc x)
+	xs
+) | summary_of_ev_inner_scope_infos acc [] = acc
+(*
+=TEX
+=SML
+*)
+and €summary_of_ev_inner_scope_info›
+	(acc as (es, ed) :  EV_SUMMARY * (EV_INFO * bool) E_DICT)
+	(isi : EV_INNER_SCOPE_INFO)
+	: EV_SUMMARY * (EV_INFO * bool) E_DICT = (
+	case isi of
+		EvNestedScope si => summary_of_ev_info acc (EIScopeInfo si)
+	|	EvStub (thy, _) => (
+		case e_lookup thy ed of
+			Value((ei, false)) => (
+			let	val ed1 = e_enter thy (ei, true) ed;
+			in	summary_of_ev_info (es, ed1) ei
+			end
+		) |	_ => acc
+	)
+);
+=TEX
+=SML
+fun €summary_of_ev_infos›
+	({scripts = st_acc,
+	  other_theories = ot_acc,
+	  exceptions = ex_acc,
+	  unproved_vcs = uv_acc,
+	  axioms = ax_acc} : EV_SUMMARY, ed : (EV_INFO * bool) E_DICT)
+	([] : EV_INFO S_DICT)
+	: EV_SUMMARY * (EV_INFO * bool) E_DICT = (
+	({scripts = rev st_acc,
+	 other_theories = rev ot_acc,
+	 exceptions = rev ex_acc,
+	 unproved_vcs = rev uv_acc,
+	 axioms = rev ax_acc}, ed)
+) | summary_of_ev_infos
+	(acc as ({scripts = st_acc,
+	  other_theories = ot_acc,
+	  exceptions = ex_acc,
+	  unproved_vcs = uv_acc,
+	  axioms = ax_acc}, ed))
+	((thyn, ei) :: more) = (
+	case e_lookup thyn ed of
+		Value (_, true) => summary_of_ev_infos acc more
+	|	_ => (
+		let	val (st_acc1, ot_acc1) =
+				case ei of
+					EIScriptInfo _ => (thyn::st_acc, ot_acc)
+				|	_ => (st_acc, thyn::ot_acc);
+			val acc1 = ({
+				scripts = st_acc1,
+				other_theories = ot_acc1,
+				exceptions = ex_acc,
+				unproved_vcs = uv_acc,
+				axioms = ax_acc}, ed);
+			val acc2 = summary_of_ev_info acc1 ei;
+		in	summary_of_ev_infos acc2 more
+		end
+	)
+);
+=TEX
+=SML
+fun €report_none› ([] : string list) : string list = ["(none)"]
+|   report_none some = some;
+=TEX 
+=SML
+fun €table_of_counts› (counts : (string * int) list) : string list = (
+	let	fun aux acc [] = report_none (rev acc)
+		|   aux acc ((_, 0)::more) = aux acc more
+		|   aux acc ((str, c)::more) = (
+			aux
+			((str ^ ": " ^ string_of_int c) :: acc)
+			more
+		);
+	in	aux [] counts
+	end
+);
+=TEX
+=SML
+fun €ls_of_summary› 
+	({scripts, other_theories, exceptions, unproved_vcs, axioms} : EV_SUMMARY)
+	: LISTER_SECTION list = (
+	[LSADSection (fn _ => "Summary"),
+	 LSADStrings (fn _ => (["Script Theories listed:"], report_none scripts)),
+	 LSADStrings (fn _ => (["Other Theories listed:"], report_none other_theories)),
+	 LSADStrings (fn _ => (["Scripts with exceptions:"],  table_of_counts exceptions)),
+	 LSADStrings (fn _ => (["Theories with unproved VCs:"],  table_of_counts unproved_vcs)),
+	 LSADStrings (fn _ => (["Theories with axioms:"],  table_of_counts axioms))]
+);
+=TEX
+=SML
+fun €ls_report_none›
+	(con : (string -> 'a list) -> LISTER_SECTION)
+	(xs : 'a list)
+	: LISTER_SECTION = (
+	case xs of
+		[] => LSADString (fn _ => ([""], "(none)"))
+	|	_ => con (fn _ => xs)
+);
+=SML
+fun €ls_of_theory_info› 
+	({name, parents, theory_type, proved_vcs, unproved_vcs, axioms} : EV_THEORY_INFO)
+	: LISTER_SECTION list = (
+	[LSADSection (fn _ => name ^ ": parents:"),
+	 LSADStrings (fn _ => ([""], parents)),
+	 LSADSection (fn _ => name ^ ": proved VCs:"),
+	 LSADStrings (fn _ => ([""], report_none (map fst proved_vcs))),
+	 LSADSection (fn _ => name ^ ": unproved VCs:"),
+	 ls_report_none LSADTerms (map (fn (s, t) => ([s], t)) unproved_vcs),
+	 LSADSection (fn _ => name ^ ": axioms:"),
+	 ls_report_none LSADThms axioms]
+);
+(*
+=TEX
+=SML
+*)
+fun €ls_of_ev_info›
+	(acc as (lsl: LISTER_SECTION list, ed : (EV_INFO * bool) E_DICT))
+	(ei : EV_INFO)
+	: LISTER_SECTION list * (EV_INFO * bool) E_DICT = (
+	case ei of
+		EITheoryInfo (ti as {name, ...}) => (
+		(LSADNestedStructure (fn _ =>
+			(open_theory name;
+			(name, ls_of_theory_info ti)))::lsl, ed)
+	) |	EIScriptInfo {exceptions, scope_info} => (
+		let	val acc1 = (
+				LSADStrings (fn _ => ([""], report_none exceptions))::lsl, ed);
+		in	ls_of_ev_scope_info acc1 scope_info
+		end
+	) |	EIScopeInfo si => (
+		ls_of_ev_scope_info acc si
+	)
+)
+and €ls_of_ev_scope_info›
+	(acc as (lsl: LISTER_SECTION list, ed : (EV_INFO * bool) E_DICT))
+	({scope,
+	  scope_theory_info,
+	  context_theory_info,
+	  scopes} : EV_SCOPE_INFO)
+	: LISTER_SECTION list * (EV_INFO * bool) E_DICT = (
+	let	val acc1 = case context_theory_info of 
+			Value ti => ls_of_ev_info acc (EITheoryInfo ti)
+		|	Nil => acc;
+		val acc2 = ls_of_ev_info acc (EITheoryInfo scope_theory_info);
+	in	ls_of_ev_inner_scope_infos acc2 scopes
+	end
+)
+(*
+=TEX
+=SML
+*)
+and €ls_of_ev_inner_scope_infos›
+	(acc :  LISTER_SECTION list * (EV_INFO * bool) E_DICT)
+	(x::xs : EV_INNER_SCOPE_INFO list)
+	: LISTER_SECTION list * (EV_INFO * bool) E_DICT = (
+	ls_of_ev_inner_scope_infos
+	(ls_of_ev_inner_scope_info acc x)
+	xs
+) | ls_of_ev_inner_scope_infos acc [] = acc
+(*
+=TEX
+=SML
+*)
+and €ls_of_ev_inner_scope_info›
+	(acc as (es, ed) :  LISTER_SECTION list * (EV_INFO * bool) E_DICT)
+	(isi : EV_INNER_SCOPE_INFO)
+	: LISTER_SECTION list * (EV_INFO * bool) E_DICT = (
+	case isi of
+		EvNestedScope si => ls_of_ev_info acc (EIScopeInfo si)
+	|	EvStub (thy, _) => (
+		case e_lookup thy ed of
+			Value((ei, false)) => (
+			let	val ed1 = e_enter thy (ei, true) ed;
+			in	ls_of_ev_info (es, ed1) ei
+			end
+		) |	_ => acc
+	)
+);
+=TEX
+=SML
+fun €ls_of_ev_infos›
+	(lsl : LISTER_SECTION list, ed : (EV_INFO * bool) E_DICT)
+	([] : EV_INFO S_DICT)
+	: LISTER_SECTION list = (
+	rev lsl
+) | ls_of_ev_infos
+	(acc as (lsl, ed))
+	((thyn, ei) :: more) = (
+	case e_lookup thyn ed of
+		Value (_, true) => ls_of_ev_infos acc more
+	|	_ => (
+		let	val acc1 = (LSADSection (fn _ => thyn)::lsl, ed);
+			val acc2 = ls_of_ev_info acc1 ei;
+		in	ls_of_ev_infos acc2 more
+		end
+	)
+);
+=TEX
+A constructor to make an evaluation report from a list
+of evaluation infos could also be provided. It would have
+to check
+that the keys of the dictionary match the entries,
+that the scopes are properly nested and sorted and
+that there is no recursion.
+=SML
+abstype €EVAL_REPORT› = EvalReport of string * EV_INFO S_DICT
+with
+fun €get_eval_report›
+	{title : string, theories : string list} : EVAL_REPORT = (		EvalReport (title, get_ev_infos theories)
+);
+fun €ev_infos_of_eval_report› (EvalReport (_, y) : EVAL_REPORT) : EV_INFO S_DICT = y;
+fun €title_of_eval_report› (EvalReport (x, _) : EVAL_REPORT) : string = x;
+end;
+=TEX
+=SML
+fun €output_eval_report_either›
+	(latex : bool)
+	{report : EVAL_REPORT, out_file : string} : unit = (
+let	val cur_thy = get_current_theory_name ();
+in let	val eis = ev_infos_of_eval_report report;
+	val title = title_of_eval_report report;
+	val ed = list_e_merge initial_e_dict (map(fn (s, x) => (s, (x, false))) eis);
+	val lsl = LSBanner:: ls_of_ev_infos ([], ed) eis;
+	fun banner (s:string) = s;
+	val {out, out1, ...} = gen_theory_lister1 lsl;
+in	(if latex then out else out1) banner {theory = title, out_file = out_file}
+end	handle ex as Fail _ => (
+		open_theory cur_thy;
+		raise ex
+	)
+end);
+val €output_eval_report› = output_eval_report_either true;
+val €output_eval_report1› = output_eval_report_either false;
+fun €print_eval_report› (rep : EVAL_REPORT) : unit = (
+	output_eval_report1{report = rep, out_file = ""}
+);
+=IGN
+val {print, ...} = gen_theory_lister1 (ls_of_ev_infos ([], ed) eis);
+print (fn s => s) "SUMMARY";
+
+=TEX
 \subsection{Epilogue}
 =SML
 end (* of structure CNEvaluationReports *);
 =TEX
-\section{REPORT INTERFACE}\label{RI}
-
-=SML
-structure €CNEvaluationReports› : CNEvaluationReports = struct
-=TEX
-\subsection{Functions}
-=TEX
-\subsection{Epilogue}
-=SML
-end (* of structure CNEvaluationReports *);
-=TEX
-
 \twocolumn[\section{INDEX}\label{INDEX}]
 \small
 \printindex
 \end{document}
-
-
-
-
-
-
-
-
-
-
-
-
