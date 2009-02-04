@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp002.doc   %Z% $Date: 2005/08/17 14:20:29 $ $Revision: 1.26 $ $RCSfile: imp002.doc,v $
+% imp002.doc   %Z% $Date: 2005/12/16 10:34:27 $ $Revision: 1.27 $ $RCSfile: imp002.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of System Control and Basic Error Reporting}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP002}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.26 $
+\def\SCCSversion{$Revision: 1.27 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/08/17 14:20:29 $%
+\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -104,6 +104,7 @@ Changed to allow uniform saving of controls and error messages.
 \item[Issue 1.25] Added pending reset function for the error messages.
 \item[Issue 1.26] Added $elaborate$.
 \item[Issue 1.27] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.28] {\em get\_message\_text} now catches and reports on failures raised by the insertion functions.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -273,12 +274,26 @@ fun ÛerrorÝ (area : string) (id : int) (inserters : (unit -> string) list) : 'a 
 =SML
 fun Ûget_message_textÝ (Message msg:MESSAGE) : string = (
 	let	val {area:string, id:int, inserters:(unit->string)list} = msg;
-		val inserts = map (fn f=> f())inserters;
-	in	(get_error_message id inserts)
-		handle Error _ => ("* " ^
-			(get_error_message 2002 [string_of_int id]) ^ "[get_error_message.2002]  *")
+		fun aux acc ok [] = (ok, rev acc)
+		|   aux acc ok (f::fs) = (
+			let	val (success, res) =
+				(true, f())
+				handle Fail (Message{area, id, ...}) =>
+				(false, get_error_message 2005 [area, string_of_int id])
+			in	aux (res :: acc) (ok andalso success) fs
+			end
+		);
+		val (ok, inserts) = aux [] true inserters;
+		val res = (get_error_message id inserts)
+			handle Error _ => ("* " ^
+			(get_error_message 2002 [string_of_int id]) ^ "[get_error_message.2002]  *");
+	in	if	ok
+		then	res
+		else	get_error_message 2004 [res]
 	end
 );
+=TEX
+=SML
 fun Ûget_messageÝ ((arg as (Message msg)):MESSAGE) : string = (
 	let	val {area:string, id:int, ...} = msg;
 		val text = get_message_text arg;
@@ -287,6 +302,12 @@ fun Ûget_messageÝ ((arg as (Message msg)):MESSAGE) : string = (
 		handle Error _ => ("* " ^
 			(get_error_message 2002 [string_of_int id]) ^ "[get_error_message.2002] *")
 	end
+);
+=TEX
+=SML
+fun Ûget_message1Ý (msg : MESSAGE) : string = (
+	get_message msg
+	handle ex => string_of_exn ex
 );
 =TEX
 We arrange for PolyML automatically to format error reports
