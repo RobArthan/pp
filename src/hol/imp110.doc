@@ -8,19 +8,19 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp005.doc %Z% $Date: 2008/02/09 16:58:52 $ $Revision: 2.50 $ $RCSfile: imp110.doc,v $
+% imp005.doc %Z% $Date: 2008/02/26 11:20:53 $ $Revision: 2.51 $ $RCSfile: imp110.doc,v $
 
 =TEX
-% imp005.doc %Z% $Date: 2008/02/09 16:58:52 $ $Revision: 2.50 $ $RCSfile: imp110.doc,v $
+% imp005.doc %Z% $Date: 2008/02/26 11:20:53 $ $Revision: 2.51 $ $RCSfile: imp110.doc,v $
 \documentstyle[11pt,TQ,hol1]{article}
 
 \TPPtitle{File and Terminal Reader Writer}
 \TPPref{DS/FMU/IED/IMP005}
-\def\SCCSissue{$Revision: 2.50 $%
+\def\SCCSissue{$Revision: 2.51 $%
 }
 \TPPissue{\SCCSissue}
 
-\TPPdate{\FormatDate{$Date: 2008/02/09 16:58:52 $%
+\TPPdate{\FormatDate{$Date: 2008/02/26 11:20:53 $%
 }}
 \TPPproject{FST PROJECT}
 
@@ -221,6 +221,8 @@ $Lex.Text$ items are now produced for each line of input in $get\_HOL\_any$.
 \item[Issue 2.47] Added function to give the value of the {\em use\_extended\_chars} flag.
 \item[Issues 2.48--2.50] Poly/ML 5.1 port.
 \item[Issue 2.51] Language name may now be attached to the left Quine corner with the ``down'' character.
+\item[Issue 2.52] Now preserves newlines at the beginning of a named reader quotation (as it always
+has for specific reader quotations).
 \end{description}
 
 %********************************************************************
@@ -2323,24 +2325,21 @@ fun Ûget_language_nameÝ (R:READER_ENV) : string = (
 let
 	open PrettyNames;
 
-	fun skip_junk () : unit = (
-		case read_symbol R
-		of	SymWhite _ => skip_junk ()
-		|	SymKnown(_, _, (_, _, Ignore)) => skip_junk ()
-		|	sym => #push_back R (expand_symbol sym)
-	);
+	fun skip_to_newline ("\n" :: chs) = #push_back R (implode(rev chs))
+	|   skip_to_newline (_ :: chs) = skip_to_newline chs
+	|   skip_to_newline [] = ();
 
 	fun done sym = (#push_back R (expand_symbol sym));
 
 	fun get_name (prev:string list) : string list = (
 		case read_symbol R
-		of	SymWhite _ => (skip_junk(); prev)
+		of	SymWhite chs => (skip_to_newline chs; prev)
 		|	SymCharacter ch => get_name (ch :: prev)
 		|	SymEndOfInput => fail  "ReaderWriter" 5031 []
 		|	sym as SymKnown(_, _, (_, _, Starting _)) => (done sym; prev)
 		|	sym as SymKnown(_, _, (_, _, Ending _)) => (done sym; prev)
 		|	sym as SymKnown(_, _, (_, _, Middle _)) => (done sym; prev)
-		|	SymKnown(_, _, (_, _, Ignore)) => (skip_junk(); prev)
+		|	sym as SymKnown(_, _, (_, _, Ignore)) => (done sym; prev)
 		|	SymKnown(_, _, (_, Value ch, _)) => get_name (ch :: prev)
 		|	SymKnown(_, _, (names, _, _)) => get_name ((hd names) :: prev)
 		|	SymUnknownKw(sym, _) => (
@@ -3965,8 +3964,9 @@ let
 		| SymWhite wh =>	if contains wh "\n"
 					then
 						prevN
-					else
-						get_name(" "::prevN)
+					else	if	is_nil prevN
+						then	get_name prevN
+						else	get_name(" "::prevN)
 		| sym as SymKnown(_, _, info) =>
 					get_name(
 						(case info
