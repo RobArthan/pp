@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2006/04/20 09:15:43 $ $Revision: 1.54 $ $RCSfile: imp041.doc,v $
+% %Z% $Date: 2008/10/30 17:43:02 $ $Revision: 1.55 $ $RCSfile: imp041.doc,v $
 
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
@@ -19,10 +19,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Language Predicates}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP041}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.54 $%
+\def\SCCSversion{$Revision: 1.55 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/04/20 09:15:43 $%
+\TPPdate{\FormatDate{$Date: 2008/10/30 17:43:02 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -147,6 +147,8 @@ z_gen_pred_elim1
 list_simple_¶_tac
 =TEX
 .
+\item[Issue 1.56] Eliminated non-exhaustive match and made the
+handling of tthe flag {\em check\_is\_z} more efficient.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1244,6 +1246,7 @@ ZLVar (_,ty,tml) => (aux1 tm ty ; aux tml)
 | ZSchemaPred (tm1,_) => tz tm1
 | ZInt _ => ()
 | ZString _ => ()
+| ZFloat _ => ()
 | Z§¢ (ty,tml) => (aux1 tm ty ; aux tml)
 | ZSetd (ty,tml) => (aux1 tm ty ; aux tml)
 | ZSeta (tm1,tm2,tm3) => (tz tm1 ; tz tm2; tz tm3)
@@ -1275,15 +1278,20 @@ end);
 \subsection{Using the Checks}
 We handle failures from $new\_flag$ to allow repeated loadings of this function.
 =SML
-local
-	val Ûcheck_is_zÝ = ref true;
-in
-	val _ = new_flag{name = "check_is_z",
-		check = fun_true,
-		control = check_is_z,
-		default = (fn () => false)}
-	handle (Fail _) => (set_flag("check_is_z",true);())
-end;
+val Ûcheck_is_zÝ = ref true;
+val _ = new_flag{name = "check_is_z",
+	check = fun_true,
+	control = check_is_z,
+	default = (fn () => false)}
+		handle (Fail _) => ();
+=TEX
+=SML
+fun Ûset_check_is_zÝ (b : bool) : bool = (
+	let	val old_ciz = !check_is_z;
+	in	check_is_z := b;
+		old_ciz
+	end
+);
 =TEX
 =SML
 local
@@ -1330,9 +1338,9 @@ end));
 =TEX
 =SML
 fun ÛCHECK_IS_Z_TÝ (caller:string) (tac:TACTIC) : TACTIC = (fn gl =>
-let	val ciz = set_flag("check_is_z", false);
+let	val ciz = set_check_is_z false;
 	val (sgs,prf) = tac gl;
-	val ciz = set_flag("check_is_z", ciz);
+	val _ = set_check_is_z ciz;
 	val dummy = map (check_is_z_goal caller) sgs;
 in
 	(sgs,prf)
@@ -2393,9 +2401,9 @@ fun Ûall_z_µ_introÝ (thm : THM) : THM = (
 let	val (asms,conc) = dest_thm thm;
 	val fs = rev(frees conc term_diff (flat(map frees asms)));
 	val thm1 = ¤_mp_rule (eq_sym_rule(µ_elim conc comb_i_def)) thm;
-	val was_check_flag = set_flag("check_is_z",false);
+	val ciz = set_check_is_z false;
 	val thm2 = z_µ_intro fs thm1;
-	val restore_check_flag = set_flag("check_is_z",was_check_flag);
+	val _ = set_check_is_z ciz;
 	val thm3 = conv_rule (Z_µ_V_C cnv1) thm2
 in
 	check_is_z_thm "all_z_µ_intro" thm3
@@ -2497,9 +2505,9 @@ open ZPredicateCalculus;
 =SML
 local
 	fun ct args = (
-	let val fl = set_flag("check_is_z",false);
+	let	val ciz = set_check_is_z false;
 		val res = conv_tac z_µ_intro_conv1 args;
-		val dummy = set_flag("check_is_z",fl);
+		val _ = set_check_is_z ciz;
 	in
 		res
 	end);	
@@ -2960,7 +2968,7 @@ let	val (d,p,v) = dest_z_¶‰1 tm
 			simple_Â_conv THEN_C
 			LIST_OP_C[d_dpv_proj_conv,p_dpv_proj_conv,v_dpv_proj_conv]))
 		)))) s1;
-	val was_check = set_flag("check_is_z",false);
+	val ciz = set_check_is_z false;
 	val s3 = conv_rule(RIGHT_C
 		(seq_binder_simple_Á_conv was_sig THEN_C
 		ALL_SIMPLE_¶_C (RIGHT_C
@@ -2969,7 +2977,7 @@ let	val (d,p,v) = dest_z_¶‰1 tm
 		THEN_C z_µ_intro_conv1)
 		THEN_C cnv1)
 		THEN_C z_¶_intro_conv1)) s2;
-	val was_check' = set_flag("check_is_z",was_check);
+	val _ = set_check_is_z ciz;
 in
 	check_is_z_thm "z_¶‰1_conv" s3
 end);
@@ -3656,13 +3664,13 @@ fun Ûz_basic_prove_tacÝ (thms: THM list) : TACTIC = (
 	TRY_T all_var_elim_asm_tac THEN_TRY
 	(z_quantifiers_elim_tac THEN
 	(fn gl =>
-	let	val dummy = set_flag("check_is_z",false);
+	let	val ciz = set_check_is_z false;
 		val res = 
 	 	(all_asm_fc_tac[] THEN
 	 	(basic_res_tac2 3 [eq_refl_thm] 
 	 	ORELSE_T basic_res_tac3 3 [eq_refl_thm]))
 		gl;
-		val dummy = set_flag("check_is_z",dummy);
+		val _ = set_check_is_z ciz;
 	in
 		res
 	end))
@@ -3680,12 +3688,12 @@ tac_proof(([],tm),
 	TRY_T all_var_elim_asm_tac THEN_TRY
 	(z_quantifiers_elim_tac THEN
 	(fn gl =>
-	let	val dummy = set_flag("check_is_z",false);
+	let	val ciz = set_check_is_z false;
 		val res = 
 	 	(all_asm_fc_tac[] THEN
 		 (basic_res_tac2 3 [eq_refl_thm] 
 		 ORELSE_T basic_res_tac3 3 [eq_refl_thm])) gl;
-		val dummy = set_flag("check_is_z",dummy);
+		val _ = set_check_is_z ciz;
 	in
 		res
 	end))
