@@ -224,9 +224,10 @@ $Lex.Text$ items are now produced for each line of input in $get\_HOL\_any$.
 \item[Issues 2.52, 2.53] Now preserves newlines at the beginning of a named reader quotation (as it always
 has for specific reader quotations).
 \item[Issue 2.54] Simplified {\em READER_ENV} type.
-\item[Issue 2.55] New idempotent encoding scheme for keywords allowing
+\item[Issue 2.55] Experimental new idempotent encoding scheme for keywords allowing
 the \verb"%Q%" keyword to be dropped.
 `Q's are no longer treated specially in strings.
+\item[Issue 2.56] Backed out new encoding scheme pending more deisgn thinking.
 \end{description}
 
 %********************************************************************
@@ -427,14 +428,7 @@ fun €is_white› (str:string) : bool = (
 	orelse	str = "\^L"
 );
 =TEX
-=SML
-fun €is_alnum_us› (ch : string) : bool = (
-		("a" <= ch andalso ch <= "z")
-	orelse	("A" <= ch andalso ch <= "Z")
-	orelse	("0" <= ch andalso ch <= "9")
-	orelse	ch = "_"
-);
-=TEX
+
 %********************************************************************
 
 \subsection{Warning Messages} \label{WarningMessages}
@@ -625,19 +619,16 @@ in (* local for add_new_symbols, find_name and find_char *)
 
 fun €add_new_symbols› (pnl:PRETTY_NAME list) : unit = (
 let
-	fun add_name(pcd as (names, _, class) : PRETTY_NAME,
+	fun add_name(pcd as (names, _, _) : PRETTY_NAME,
 			dict : PRETTY_NAME E_DICT
 			) : PRETTY_NAME E_DICT = (
 	let
-		fun ok_kw _ (ch::t) = (
-				is_alnum_us ch
-				andalso ok_kw true t
-		) | ok_kw non_empty [] = non_empty;
+		fun ok_kw("Q"::"Q"::_) = false
+		| ok_kw(_::t) = ok_kw t
+		| ok_kw nil = true;
 
-		val not_simple = case class of Simple => false | _ => true;
 		fun aux(name, dict) = (
-			if	not_simple
-			orelse	ok_kw false (explode name)
+			if ok_kw(explode name)
 			then (	(e_extend name pcd dict)
 				handle E => divert E "e_extend" "add_new_symbols"
 					5103 [fn () => name])
@@ -652,7 +643,7 @@ let
 	fun add_char((_, Nil, _) : PRETTY_NAME, dict : PRETTY_NAME E_DICT
 			) : PRETTY_NAME E_DICT = dict
 	|   add_char(pcd as (names, Value ch, _), dict) = (
-		if size ch = 1 andalso ord ch > 127
+		if size ch = 1 andalso (ord ch > 127 orelse ch = "Q")
 		then (
 			(e_extend ch pcd dict)
 			handle E => divert E "e_extend" "add_new_symbols"
@@ -911,6 +902,14 @@ Maths symbols.
 =TEX
 }
 
+The letter ``{\tt Q}'' is specially treated in several places.  The
+writer, via function $translate_for_output$, converts unexpected letter
+``{\tt Q}''s into uses of the keyword ``{\tt \%Q\%}'', see
+section~\ref{WriterFunction}. For output the string ``{\tt \%Q\%}'' should
+be ``{\tt \%\%\%Q\%\%\%}'', but for input Q is a keyword, as below.
+
+=SMLLITERAL
+	([	"Q"],	Value "Q",			Simple),
 =TEX
 
 Some symbols are just ignored.
@@ -1405,6 +1404,7 @@ fun €string_body› (ML_string:bool) (R:READER_ENV) (prev:string list, preverrs:in
 				else	("\"" (*="=*) :: prev, preverrs)
 		|  "\\"	=>	string_body ML_string R
 					((handle_escape ML_string R) :: prev, preverrs)
+		|  "Q" =>	string_body ML_string R ("QQQQ"::prev, preverrs)
 		|  _ =>		string_body ML_string R (ch::prev, preverrs)
 		)
 	| SymEndOfInput => fail "string_body" 5002 nil
@@ -1541,51 +1541,6 @@ end);
 
 %--------------------------------------------------------------------
 
-\subsubsection{Encoding Keywords}\label{EncodingKeywords}
-In {\ProductML} and in logical object languages such as {\ProductHOL} and {\ProductZ} we want to allow identifiers to include mathematical symbols, either given by pretty characters which display as the symbol on the screen and when typeset or as percent keywords which display as the symbol in typeset documents.
-{\em add\_new\_symbols} above ensures that the names of the (simple) keywords comprise alphanumerics and underscores, so they can validly be included in identifiers.
-An encoded keyword begins and ends with a `Q'.
-Between the `Q's are blocks of up to nine characters, each
-preceded by a decimal digit giving the number of characters
-in the following block.
-Working left to right the blocks are made as long as possible, i.e., all but the last non-empty block has length 9.
-The final block is empty, i.e., the last character before the closing `Q' is always `0'.
-For example:
-=GFT
-Q2or0Q
-Q6forall0Q
-Q9bigtriang6ledown0Q
-=TEX
-=SML
-val €ord_0› = ord "0";
-	
-fun €encode_keyword› (kw : string) : string = (
-	let	val sz = size kw;
-		fun encode_count i = chr(ord_0 + i);
-		fun aux acc i = (
-			if	i = sz
-			then	implode (rev ("0Q"::acc))
-			else	let	val rem = sz - i;
-					val inc =
-					if	rem >= 9
-					then	9
-					else	rem;
-				in	aux
-					(substring(kw, i, inc)::encode_count inc ::acc)
-					(i+inc)
-				end
-		);
-	in	aux ["Q"] 0
-	end
-);
-=TEX
-=IGN
-encode_keyword "bigtriangledown";
-encode_keyword "a";
-encode_keyword "or";
-encode_keyword "abcdefghi";
-=TEX
-%--------------------------------------------------------------------
 \subsubsection{Main Parser Function}
 
 Function $get_ML_any$ is the main parser function.  It reads upto the
@@ -1612,7 +1567,9 @@ let
 	open PrettyNames;
 
 	fun	do_keyword _ (names,_,Simple) p =
-			get_ML_any R (encode_keyword (hd names)::p)
+			if (hd names = "Q")
+			then get_ML_any R ("Q"::p)
+			else get_ML_any R ("QQ"^(hd names)^"QQ"::p)
 	|	do_keyword k (_,_,(Starting(proc, str))) p = proc R k str true p
 	|	do_keyword _ (_,_,Middle str) p = get_ML_any R (str :: p)
 	|	do_keyword (k, is_keyword) (_,_,Ending _) p =
@@ -1648,6 +1605,7 @@ in
 						in
 							get_ML_any R prevC
 						end
+				|  "Q"	=>	get_ML_any R ("QQQQ" :: prev)
 				| _ =>		get_ML_any R (ch :: prev)
 			)
 		|	SymEndOfInput => prev (* shouldn't see this??? *)
@@ -2977,10 +2935,22 @@ val max_copies_of_char_sent = 30;
 A common writer function is used by all three reader writers, its most
 complex tasks are to recognise ASCII keywords and convert them to their
 equivalent pretty characters and to recognise the numeric values of
-pretty characters in strings and print the correct character. 
-See section~\ref{EncodingKeywords} above for the encoding of keywords. Whenever a substring with the form of an encoded keyword is encountered, we decode it.
-If the decoded result is not a known keyword, we just output the original input substring.
-If it is a known keyword we output the pretty character for the keyword, if there is one, or the percent form if not.
+pretty characters in strings and print the correct character.  The
+conversions are as follows.  A keyword is a sequence of alphanumerics enclosed in ``{\tt QQ}'' 
+characters, e.g., ``$\pi$'' is encoded as ``{\tt QQpiQQ}''.
+If a decoding is available then replace the
+whole keyword with the corresponding pretty character.  If no pretty
+character is available then replace the enclosing ``{\tt QQ}'' characters with
+single ``{\tt\%}'' characters.  To preserve ``{\tt Q}''s in the original
+text the string ``{\tt QQQQ}'' is considered to be the keyword whose
+representation is a single ``{\tt Q}''.
+In no cases are an isolated ``{\tt Q}'' or ``{\tt QQQ}'' valid as part
+of a keyword, they indicate that user code has produced a string
+containing these letters.  Such isolated ``{\tt Q}''s are converted
+into uses of the keyword `{\tt \%Q\%}' so that the text may be read
+back in and have the same meaning.  An opening ``{\tt
+QQ}'' with a non-alphanumeric before the closing ``{\tt QQ}'' is
+treated in the same manner.
 
 Keywords enclosed by percent signs are converted to the corresponding
 pretty character if one is available.
@@ -3002,57 +2972,7 @@ fun €get_use_extended_chars_flag› (():unit) : bool = (
 	!use_extended_chars
 );
 =TEX
-=SML
-fun €is_alnum_us› (ch : string) : bool = (
-		("a" <= ch andalso ch <= "z")
-	orelse	("A" <= ch andalso ch <= "Z")
-	orelse	("0" <= ch andalso ch <= "9")
-	orelse	ch = "_"
-);
-=TEX
-=SML
-val €ord_0› = ord "0";
-=TEX
-In {\em translate\_for\_output}, where we need to decode keywords, the string to be translated is already exploded.
-The following decoding function requires its argument to be a list of single character strings.
 
-=SML
-fun €decode_keyword› (input as ("Q"::chs) : string list) : string OPT * string list = (
-	let	exception NotKeyword;
-	in let	fun decode_count ch = (
-			let val c = ord ch - ord_0;
-			in	if	0 <= c
-				andalso	c <= 9
-				then	c
-				else	raise NotKeyword
-			end
-		);
-		fun decode_block acc 0 chs = (acc, chs)
-		|   decode_block _ _ [] = raise NotKeyword
-		|   decode_block acc i (ch::chs) = (
-			if	is_alnum_us ch
-			then	decode_block (ch::acc) (i-1) chs
-			else	raise NotKeyword
-		);
-		fun check_q acc ("Q"::chs) = (acc, chs)
-		|   check_q _ _ = raise NotKeyword;
-		fun decode_blocks true acc (ch::chs) = (
-			if	decode_count ch = 0
-			then	check_q acc chs
-			else	raise NotKeyword
-		) | decode_blocks last acc (ch::chs) = (
-			let	val c = decode_count ch;
-				val (acc', chs') = decode_block acc c chs;
-				val last' = c < 9;
-			in	decode_blocks last' acc' chs'
-			end
-		) | decode_blocks _ _ _ = raise NotKeyword;
-		val (acc, rest) = decode_blocks false [] chs;
-	in	(Value (implode(rev acc)), rest)
-	end	handle NotKeyword => (Nil, input)
-	end
-) | decode_keyword input  = (Nil, input);
-=TEX
 From observation of $PolyML.compiler$ it seems that no identifier or
 string is split over two or more calls of the writer function,
 therefore no memory is required\footnote{This may need to be
@@ -3072,11 +2992,12 @@ aux&Main recursion point of $translate_for_output$, examines the
 aux_str&Sub function of $aux$ for handling Standard~ML string literals.\\
 aux_kw&Sub function of $aux$ and $aux_str$ for completing their actions
 	after handling percent `{\tt\%}' enclosed keywords.\\
-get_kw&Get a keyword enclosed in the encoding of section~\ref{EncodingKeyword}.\\
+get_kw&Get a keyword enclosed in double `{\tt Q}'s.\\
 get_pc&Get a keyword enclosed percent `{\tt\%}' characters.\\
 string_of_kw&Convert a keyword to its percent `{\tt\%}' enclosed form.\\
 string_of_extended_char&Convert an extended character to its
 	percent `{\tt\%}' enclosed form.\\
+pQp, pQppQp, pQppQppQp&To avoid conflicts with SCCS keywords.\\
 \end{tabular}
 \end{center}
 
@@ -3084,77 +3005,96 @@ string_of_extended_char&Convert an extended character to its
 =SMLPLAIN SML
 fun €translate_for_output› (s : string) : string = (
 let
+	val ord_0 = ord "0";
 =TEX
 $get\_kw$ must only return true as its second argument if
 it has been given a recognisable keyword followed by two Qs.
 When it returns false its first argument contains no percents, nor double Qs.
 =SMLPLAIN SML
-	fun kw_string n pc = (
-		case (!use_extended_chars, pc) of
-				(true, Value ch) => ch
-		| _	=> "%" ^ n ^ "%"
-	);
-	fun get_kw chs = (
-		case decode_keyword chs of
-			(Value n, t) => (
-			case PrettyNames.find_name n of
-				Value (_, pc, _) => Value (kw_string n pc, t)
-			|	Nil => Value (n, t)
-		) |	(Nil, _) => Nil
-	);
+	fun get_kw (prev, nil) = (prev, false, nil)
+	|   get_kw (prev, rest as ("Q"::"Q"::t)) = (
+		case PrettyNames.find_name prev of
+		Value _ => (prev, true, t)
+		| Nil => (prev, false, rest)
+	) |  get_kw (prev, h::t) = (	if	(h >= "A" andalso h <= "Z")
+					orelse	(h >= "a" andalso h <= "z")
+					orelse	(h >= "0" andalso h <= "9")
+					then	get_kw(prev ^ h, t)
+					else	(prev, false, h::t));
 =TEX
 $get\_pc$ must only return true as its second argument if
 it has been given a recognisable keyword followed by a percent.
+When it returns false its first argument contains no percents (but maybe
+double Qs).
+If the string ``{\tt \%Q\%}'' is seen then it must be output as 
+``{\tt \%\%\%Q\%\%\%}'', i.e. Q is not a keyword here.
 =SMLPLAIN SML
 	fun get_pc (prev, nil) = (prev, false, nil)
 	|   get_pc ("", rest as ("%"::t)) = ("", false, rest)
 	|   get_pc (prev, rest as ("%"::t)) = (
-		if is_Nil (PrettyNames.find_name prev)
+		if (prev = "Q") orelse is_Nil (PrettyNames.find_name prev)
 		then (prev, false, rest)
 		else (prev, true, t)
 	)|   get_pc (prev, h::t) = (	if	(h >= "A" andalso h <= "Z")
 					orelse	(h >= "a" andalso h <= "z")
 					orelse	(h >= "0" andalso h <= "9")
-					orelse	(h = "_")
 					orelse	(is_special_char h)
 					then	get_pc(prev ^ h, t)
 					else	(prev, false, h::t));
 
-	fun string_of_kw kw = (
-		case PrettyNames.find_name kw of
-			Value(_, pc, _)	=> kw_string kw pc
-		| 	_ => kw_string kw Nil
-	);
+	fun string_of_kw kw =
+		if !use_extended_chars
+		then
+			case	PrettyNames.find_name kw
+			of Value(_, Value ch, _)	=> ch
+			| _				=> "%" ^ kw ^ "%"
+		else
+			"%" ^ kw ^ "%";
 
-	fun string_of_extended_char ch = (
+	fun string_of_extended_char ch =
 		if !use_extended_chars orelse ord ch < 128
-		then	ch
-		else	case PrettyNames.find_char ch of
-				 Value(kw::_, _, _) => "%" ^ kw ^ "%"
-			|	_ => ch
-	);
+		then
+			ch
+		else
+			case	PrettyNames.find_char ch
+			of Value(kw::_, _, _)	=> "%" ^ kw ^ "%"
+			| _			=> ch;
 
 =TEX
+Because the first argument of the $false$ response of $aux\_kw$ may contain double Qs we cannot
+rely on $get\_pcs$ processing to have spotted other simplifications, so
+we discard the first and third argument.
 =SMLPLAIN SML
 	fun aux_kw x_aux tail = (
 		case	get_pc ("", tail)
 		of (_, false, _) => "%":: "%":: (x_aux tail)
 		| (kw, true, tail1) => (string_of_kw kw) :: (x_aux tail1));
 
+	val pQp = "%" ^ "Q" ^ "%";
+	val pQppQp = pQp ^ pQp;
+	val pQppQppQp = pQp ^ pQp ^ pQp;
+
 =TEX
-If $get\_kw$ returns a non-nil value, then even if the flag is $false$, so that the decoded string is not a keyword, the decoded string is alphanumeric so we do not need to analyse it further.
+Because the first argument of the $false$ response of $get\_kw$ 
+cannot contain percents or double Qs we can safely just output
+this first argument.
 =SMLPLAIN SML
-	fun aux [] = []
-	|   aux (f as ("Q"::t)) = (
-		case get_kw f of
-			Nil => "Q" :: aux t
-		|	Value (n, t') => n :: aux t'
-	) | aux ((h as "\"")::t) = h::(aux_str t)  (*="=*)
+	fun aux nil = []
+	|   aux ("Q"::"Q"::"Q"::"Q"::t) = "Q"::(aux t)
+	|   aux (f as "Q"::"Q"::rest) = (
+		case	get_kw ("", rest)
+		of (badkw, false, t) => pQppQp :: (aux ((explode badkw) @ t))
+		|  (kw, true, t) => (string_of_kw kw) :: (aux t))
+	|   aux (f as "Q"::t) = pQp :: (aux t)
+	|   aux ((h as "\"")::t) = h::(aux_str t)  (*="=*)
+	|   aux ("%"::t) = aux_kw aux t
 	|   aux (h::t) = (string_of_extended_char h)::(aux t)
 
 	and aux_str nil = []
 	|   aux_str ("\""::t) = "\""::(aux t)
 	|   aux_str ("%"::t) = aux_kw aux_str t
+	|   aux_str ("Q"::"Q"::"Q"::"Q"::t) = "Q"::(aux_str t)
+	|   aux_str ("Q"::t) = pQp :: (aux_str t)
 	|   aux_str ("\\"::d1::d2::d3::t) = (
 		if		(d1 >= "0" andalso d1 <= "9")
 		andalso	(d2 >= "0" andalso d2 <= "9")
@@ -3889,6 +3829,7 @@ in
 							get_HOL_any R ( "(" ::  prevA))
 			|  "\""	=>	do_string true (*="=*)
 			|  "`"	=>	do_string false
+			|  "Q"	=>	get_HOL_any R ("QQQQ" :: prevA)
 			|  "\\"	=>	get_HOL_any R ("\\\\" :: prevA)
 			|  _ => 	get_HOL_any R (ch :: prevA)
 		)
