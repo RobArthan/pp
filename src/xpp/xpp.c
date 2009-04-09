@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.36 2004/08/21 10:26:06 rda Exp rda $
+ * xpp.c,v 2.37 2008/02/10 16:33:32 rda Exp
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -582,12 +582,16 @@ int main(int argc, char **argv)
 	int i, orig_argc, num_x_args;
 	Boolean use_default_command;
 	char *cmd_line;
+	int x_fd;
 
 	argv0 = argv[0];
 	orig_argc = argc;
+/* When we retry after setting up the fonts, we add an extra option: */
 	retry_argv = (char **) XtMalloc((argc+2)*(sizeof(char*)));
-/* N.b., argc not argc - 1 below because we want the final null, and similarly later */
-	memmove((void*)retry_argv, (void*) argv, argc * (sizeof(char*)));
+/* N.b., argc + 1 not argc below because we want the final null */
+	memmove((void*)retry_argv,
+			(void*) argv,
+			(argc + 1) * (sizeof(char*)));
 
 	set_pp_home();
 
@@ -603,11 +607,16 @@ int main(int argc, char **argv)
 
 	num_x_args = orig_argc - argc;
 
-	memmove((void*) &retry_argv[num_x_args+2], (void*) &retry_argv[num_x_args + 1], argc * (sizeof(char*)));
+/* N.b., again argc + 1 not argc because we want the final null */
+	memmove((void*) &retry_argv[num_x_args+2],
+			(void*) &retry_argv[num_x_args + 1],
+			(argc + 1) * (sizeof(char*)));
 
 	retry_argv[num_x_args+1] = "-h";
 
-	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);
+	x_fd = ConnectionNumber(XtDisplay(root));
+
+	(void) fcntl(x_fd, F_SETFD, 1);
 
 	XtVaSetValues(root,
 		XmNtitle, title,
@@ -640,13 +649,13 @@ int main(int argc, char **argv)
 
 	command_line_list = xpp_resources.command_line_list;
 
-	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 0);
+	(void) fcntl(x_fd, F_SETFD, 0);
 
 	if (!havefonts && get_pp_fonts())  {
 		/* Need to restart to pick up the fonts added to the path by get_pp_fonts */
 		/* don't need X any more: */
 		XtDestroyApplicationContext(app);
-		(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);
+		(void) fcntl(x_fd, F_SETFD, 1);
 		/* Start again asynchronously or synchronously as appropriate */
 		new_session(retry_argv, !synchronous);
 		exit(0);
@@ -656,7 +665,7 @@ int main(int argc, char **argv)
 		XtFree((char*)retry_argv);
 	}
 
-	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);
+	(void) fcntl(x_fd, F_SETFD, 1);
 
 	main_window_go(file_name);
 	return 0;
