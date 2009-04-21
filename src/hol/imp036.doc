@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% 2009/04/21 11:15:21 1.62 imp036.doc,v
+% %Z% $Date: 2009/04/21 11:17:33 $ $Revision: 1.63 $ $RCSfile: imp036.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{HOL PDS System Initialisation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP036}  %% Mandatory field
-\def\SCCSversion{1.62%
+\def\SCCSversion{$Revision: 1.63 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{2009/04/21 11:15:21%
+\TPPdate{\FormatDate{$Date: 2009/04/21 11:17:33 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{ML Literate Script}
@@ -147,9 +147,15 @@ Made {\it load\_files} print file names containing `Q' properly.
 \item[Issue 1.49] Added $new\_save\_fun$.
 \item[Issue 1.50] Initialisation scripts are now run after all the initialisation functions.
 \ite[Issue 1.51] Rationalised initial cache theory set-up.
-\item[Issues 1.52, 1.54] Initial current theory and initialisation scripts in {\tt pp} are now passed in environment variables with more conventional name (and the theory is opened using {\em use\_string} so that `Q's in the name are handled sensibly).
-\item[Issues 1.55, 1.56] Revised interface for initialisation scripts.
-\item[Issue 1.62] HACK TO AVOID BRANCH: revert to 1.56 then add code to work around a problem with user-defined readers on Poly/ML 4.1.3.
+\item[Issues 1.43,1.44] Initial current theory and initialisation scripts in {\tt pp} are now passed in environment variables with more conventional name (and the theory is opened using {\em use\_string} so that `Q's in the name are handled sensibly).
+\item[Issues 1.45--1.50] Revised interface for initialisation scripts.
+\item[Issues 1.51, 1.52] Improved treatment of cache theories.
+\item[Issues 1.53, 1.54] Standardised environment variable names.
+\item[Issues 1.55, 1.56] Comma separated lists of file names are no longer supported.
+\item[Issues 1.57--1.59] Poly/ML 5.1 port.
+\item[Issues 1.60, 1.61] Now announce the database name.
+\item[Issue 1.62] ``Branch'' for Poly/ML 4.1.3.
+\item[Issue 1.63] Revert to main branch.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -440,28 +446,45 @@ then PPCompiler.exit ret
 else raise complaint);
 =TEX
 =SML
-fun ÛsaveÝ (() : unit) : bool = (
-let	val dummy = if valid_thm bool_cases_axiom
-		then ()
-		else error "save" 36017 [];
-	val _ = app (fn f => f()) (Initialisation.get_save_funs()); 
-	val side_effect = clear_compactification_cache();
-	val reset = Initialisation.pp'set_database_info();
-in	if PPBuild.pp'save()
-	then	true	(* same session *)
-	else	(Initialisation.init(); false) (* new session *)
-end);
+fun Ûsave_then_thisÝ (caller : string)
+	(this_session : unit -> unit) : unit -> unit = (fn () =>
+if	!PPBuild.pp'save_name <> ""
+then	let	val dummy = if valid_thm bool_cases_axiom
+			then ()
+			else error "save" 36017 [];
+		val _ = app (fn f => f()) (Initialisation.get_save_funs()); 
+		val _ = clear_compactification_cache();
+		val _ = Initialisation.pp'set_database_info();
+		fun next_session () = (
+			Initialisation.init ();
+			reset_use_terminal ();
+			use_terminal ()
+		);
+	in	PPBuild.pp'save_then {
+			this_session = this_session,
+			next_session = next_session}
+	end
+else	fail caller 36010 []
+);
+=TEX
+=SML
+val ÛsaveÝ : unit -> unit = save_then_this "save" (fn () => ());
+=TEX
+=SML
+fun Ûsave_asÝ (name : string) : unit = (
+	PPBuild.pp'save_name := name;
+	diag_line (get_error_message 36025 [!PPBuild.pp'save_name]);
+	save()
+);
 =TEX
 =SML
 fun Ûsave_and_exitÝ (ret : int) : unit = (
-	if save ()
-	then	PPCompiler.exit ret	(* same session *)
-	else	()			(* new session *)
+	save_then_this "save_and_exit" (fn () => PPCompiler.exit ret) ()
 );
 =TEX
 =SML
 fun Ûsave_and_quitÝ (() : unit) : unit = (
-	save_and_exit 0
+	save_then_this "save_and_quit" (fn () => PPCompiler.exit 0) ()
 );
 =TEX
 =SML
@@ -622,8 +645,10 @@ val _ = new_string_control {
 } handle Fail _ => ();
 =TEX
 =SML
+val Ûcopyright_yearÝ : string = string_of_int(Date.year build_date);
 fun Ûprint_bannerÝ () : unit = (
-	diag_string (get_error_message 36016 [!system_banner, !user_banner] )
+	diag_string (get_error_message 36050 [!system_banner]);
+	diag_string (get_error_message 36051 [copyright_year, !user_banner])
 );
 =TEX
 =SML
@@ -657,36 +682,20 @@ in
 	val _ = Initialisation.new_init_fun init_gc_messages;
 end;
 =TEX
-\subsubsection{Prompt}
+\subsection{Setting the Database Name}
 =SML
-val _ = Initialisation.new_init_fun use_terminal;
+local
+	fun Ûset_db_nameÝ () : unit = (
+		PPBuild.pp'save_name := get_shell_var "PPDATABASENAME";
+		diag_line (get_error_message 36025 [!PPBuild.pp'save_name])
+	);
+in
+	val _ = Initialisation.new_init_fun set_db_name;
+end;
 =TEX
 =SML
 end (* of structure HOLSystem *);
 open HOLSystem;
-=TEX
-The following makes user-defined readers reinstall themselves on system start-up. This is not necessary in Poly/ML 5.X.
-=SML
-structure ReaderWriterSupport : ReaderWriterSupport = struct
-	fun now_and_on_start_up (f : 'a -> unit) (x : 'a ) : unit = (
-		let	fun init_fun () = (
-				f x handle Fail _ => ()
-			);
-		in	Initialisation.new_init_fun init_fun;
-			f x
-		end
-	);
-	open ReaderWriterSupport;
-	structure PrettyNames = struct
-		open PrettyNames;
-		val add_new_symbols = now_and_on_start_up add_new_symbols;
-	end (* of structure PrettyNames *);
-
-	val add_general_reader = now_and_on_start_up add_general_reader;
-	val add_specific_reader = now_and_on_start_up add_specific_reader;
-	val add_named_reader = now_and_on_start_up add_named_reader;
-end (* of structure ReaderWriterSupport *);
-
 =TEX
 
 \small
