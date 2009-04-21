@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.44 2008/02/12 17:45:51 rda Exp rda $
+# $Id: configure.sh,v 1.45 2008/03/05 16:13:37 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -51,6 +51,14 @@
 #
 # PPUSERCLIBS      - additional flags for "gcc -o" calls building xpp
 #
+# PPLD_RUN_PATH	   - the value of LD_RUN_PATH to be used when the pp-ml
+#                    driver program is linked. Only relevant for Poly/ML.
+#                    Allows "cross-compiling" between systems where Poly/ML
+#                    has been installed using different directory names.
+#                    You may need to set LD_LIBRARY_PATH when you run
+#                    ./install so that pp-ml will work locally.
+#                    (default: the lib subdirectory of the Poly/ML
+#                    installation directory on the local system).
 #
 # If any of these is an empty string, it is treated as if it were unset.
 #
@@ -365,6 +373,9 @@ declare_unquoted USERCFLAGS
 declare_unquoted USERCLIBS
 if	[ "$PPCOMPILER" = POLYML ]
 then	declare_quoted PPPOLYHOME
+	if	[ "$PPLD_RUN_PATH" != "" ]
+	then	declare_quoted PPLD_RUN_PATH
+	fi
 fi
 out 'PPHOME="$PPTARGETDIR"'
 out 'PATH="$PPBUILDDIR/src:$PPPOLYHOME/bin:$PATH"'
