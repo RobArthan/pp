@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.63 2006/08/07 16:38:20 rda Exp rda $ 
+ * $Id: search.c,v 2.64 2009/06/15 12:56:14 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -969,13 +969,13 @@ static bm_search_t *bm_search_comp(char *pattern)
 }
 /*
  * The Boyer-Moore search algorithm:
- * If limit is -1, the text is null-terminated, otherwise limit gives
- * the length.
+ * If start_limit is positive, then a match that starts at text+start_limit
+ * or greater is rejected (used to do backwards search by binary chop).
  */
 static Substring bm_search_exec(
 	bm_search_t *bm,
 	char *text,
-	long int limit,
+	long int start_limit,
 	SearchData *cbdata)
 {
 	int cursor, i, next;
@@ -1005,7 +1005,7 @@ static Substring bm_search_exec(
 			i = bm->length - 1;
 		}
 	}
-	if(i < 0 && (limit == -1 || cursor + bm->length <= limit)) {
+	if(i < 0 && (start_limit < 0 || cursor < start_limit)) {
 		/* match at cursor */
 		int j;
 		char **sm = &cbdata->submatches[0];
@@ -1102,14 +1102,14 @@ int fast_regexec(
 #endif
 /*
  * The regular expression search algorithm.
- * If limit is -1, the text is null-terminated, otherwise limit gives
- * the length.
+ * If start_limit is positive, then a match that starts at text+start_limit
+ * or greater is rejected (used to do backwards search by binary chop).
  * The while loop is looking for a non-empty match.
  */
 static Substring re_search_exec(
 		regex_t *preg,
 		char *text,
-		long int limit,
+		long int start_limit,
 		Boolean bol,
 		SearchData *cbdata)
 {
@@ -1141,7 +1141,7 @@ static Substring re_search_exec(
 			break;
 		}
 	}
-	if(len > 0 && (limit == -1 || offset + len <= limit)) {
+	if(len > 0 && (start_limit < 0 || offset < start_limit)) {
 		/* got a match */
 		int j;
 		result.length = len;
