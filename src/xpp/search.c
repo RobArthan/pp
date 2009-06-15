@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.62 2005/09/01 11:50:49 rda Exp rda $ 
+ * $Id: search.c,v 2.63 2006/08/07 16:38:20 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -38,15 +38,22 @@ enum {FORWARDS, BACKWARDS};
 #else
 #define REGEXEC regexec
 #endif
+/*
+ * The number of submatches that we record when we do RE matching.
+ * Includes the overall match \0 and 9 proper submatches \1 .. \9
+ */
+#define NSUBMATCHES 10
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * typedefs
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 /*
- * The following struct includes the various widgets that
- * act as parameters to the various search and replace
- * operations.
+ * The following struct includes all the data needed by the
+ * search and replace operations.
+ *  * the widgets involved
+ *  * flags
+ *  * saved results from the last search (an array of submatch strings)
  */
 typedef struct {
 	Widget	text_w,
@@ -54,6 +61,8 @@ typedef struct {
 		manager_w,
 		search_w,
 		replace_w;
+	Boolean ignore_case, use_wildcards;
+	char 	*submatches[NSUBMATCHES];
 } SearchData;
 /*
  * The following represents a substring of a C string, e.g.,
@@ -104,12 +113,11 @@ static char *re_error =
 	"Error in search pattern: %s";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * static data
+ * static data: this is what would need to be encapsulated to
+ * have separate search tools attached to separate text widgets.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	
 static SearchData search_data;
-
-static Boolean ignore_case, use_wildcards;
 
 /*
  * Forward declarations for callbacks etc.
@@ -452,6 +460,15 @@ Boolean add_search_tool(Widget text_w)
 	search_data.replace_w = replace_text;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * initialise saved results from last search to empty strings
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	for(i = 0; i < NSUBMATCHES; i += 1) {
+		search_data.submatches[i] = XtMalloc(1);
+		search_data.submatches[i][0] = '\0';
+	}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up the text windows in the search dialog as selection sources
  * and palette clients. (This sounds silly but is intuitively right for
  * the line number widget - if focus is in the line number pushing
@@ -473,10 +490,10 @@ Boolean add_search_tool(Widget text_w)
 	XtAddCallback(replace_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
 
 	XtAddCallback(ignore_case_toggle, XmNvalueChangedCallback,
-		toggle_button_cb, (XtPointer)(&ignore_case));
+		toggle_button_cb, (XtPointer)(&search_data.ignore_case));
 
 	XtAddCallback(use_wildcards_toggle, XmNvalueChangedCallback,
-		toggle_button_cb, (XtPointer)(&use_wildcards));
+		toggle_button_cb, (XtPointer)(&search_data.use_wildcards));
 
 	XtAddCallback(search_backwards_btn, XmNactivateCallback,
 		search_backwards_cb, (XtPointer)(&search_data));
@@ -507,9 +524,9 @@ Boolean add_search_tool(Widget text_w)
  * sets in the resource file by initialising search-replace tool widgets.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	ignore_case = XmToggleButtonGetState(ignore_case_toggle);
+	search_data.ignore_case = XmToggleButtonGetState(ignore_case_toggle);
 
-	use_wildcards =XmToggleButtonGetState(use_wildcards_toggle);
+	search_data.use_wildcards = XmToggleButtonGetState(use_wildcards_toggle);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Set up popup edit menus.
@@ -598,7 +615,7 @@ static void toggle_button_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search forwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean search_either(Widget,SearchData*,NAT);
+static Boolean search_either(Widget, SearchData*, NAT);
 static void search_forwards_cb(
 	Widget		w,
 	XtPointer	cbd,
@@ -624,7 +641,7 @@ static void search_backwards_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Support for search callbacks.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Substring search_string(char*,char*,long int,NAT);
+static Substring search_string(char*, char*, long int, NAT, SearchData*);
 static Boolean report_re_error(Widget);
 static Boolean search_either(
 	Widget				w,
@@ -645,7 +662,7 @@ static Boolean search_either(
 		start_point = XmTextGetInsertionPosition(search_data.text_w);
 	}
 	if(*pattern) {
-		ss = search_string(pattern, text_buf, start_point, dir);
+		ss = search_string(pattern, text_buf, start_point, dir, cbdata);
 	} else { /* bypass the much slower detection of this case by re_search_exec */
 		ss.offset = -1;
 	}
@@ -674,7 +691,7 @@ static Boolean search_either(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * replace callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean replace_selection(Widget,SearchData*);
+static Boolean replace_selection(Widget, SearchData*);
 static void replace_cb(
 	Widget		w,
 	XtPointer	cbd,
@@ -688,7 +705,7 @@ static void replace_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * support for replace callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static long int re_replacement_text(char*, char*,Substring*,char*);
+static long int re_replacement_text(char*, char*, Substring*, char*, SearchData*);
 static Boolean replace_selection(
 	Widget				w,
 	SearchData			*cbdata)
@@ -698,7 +715,7 @@ static Boolean replace_selection(
 	if(	XmTextGetSelectionPosition(cbdata->text_w, &left, &right)
 	&&	left < right ) {
 		rep_pattern  = XmTextGetString(cbdata->replace_w);
-		if(use_wildcards) {
+		if(cbdata->use_wildcards) {
 			long int text_len =right - left, rep_len;
 			char *text_buf = XtMalloc(text_len+1), *rep_buf;
 			Substring ss;
@@ -717,7 +734,7 @@ static Boolean replace_selection(
 			ss.offset = 0;
 			ss.length = text_len;
 			rep_len = re_replacement_text(rep_pattern,
-					text_buf, &ss, 0);
+					text_buf, &ss, 0, cbdata);
 			rep_buf = XtMalloc(rep_len + 1);
 			if(rep_buf == 0) {
 				XtFree(rep_pattern);
@@ -728,7 +745,8 @@ static Boolean replace_selection(
 					no_room_for_search_op);
 				return False;
 			}
-			(void) re_replacement_text(rep_pattern, text_buf, &ss, rep_buf);
+			(void) re_replacement_text(rep_pattern, text_buf,
+						   &ss, rep_buf, cbdata);
 			rep_buf[rep_len] = '\0';
 			XtFree(rep_pattern);
 			XtFree(text_buf);
@@ -758,7 +776,7 @@ static Boolean replace_selection(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * replace all callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void replace_all(char*,char*,char*,char**,NAT*);
+static void replace_all(char*, char*, char*, char**, NAT*, SearchData*);
 static void replace_all_cb(
 	Widget		w,
 	XtPointer	cbd,
@@ -773,7 +791,7 @@ static void replace_all_cb(
 	text_buf = XmTextGetString(cbdata->text_w);
 	start_point = XmTextGetInsertionPosition(cbdata->text_w);
 	if(*pattern) {
-		ss = search_string(pattern, text_buf, start_point, FORWARDS);
+		ss = search_string(pattern, text_buf, start_point, FORWARDS, cbdata);
 	} else { /* bypass the much slower detection of this case by re_search_exec */
 		ss.offset = -1;
 	}
@@ -785,7 +803,8 @@ static void replace_all_cb(
 			text_buf,
 			replacement,
 			&all_replaced,
-			&start_point);
+			&start_point,
+			cbdata);
 		if(all_replaced == NULL) {
 			ok_dialog(
 				cbdata->shell_w,
@@ -932,7 +951,7 @@ static bm_search_t *bm_search_comp(char *pattern)
 		return bm;
 	}
 	strcpy(&(bm->pattern)[0], pattern);
-	if(ignore_case) {
+	if(search_data.ignore_case) {
 		for(i = 0; i < len; ++i) {
 			(bm->pattern)[i]= toupper((bm->pattern)[i]);
 		}
@@ -950,8 +969,14 @@ static bm_search_t *bm_search_comp(char *pattern)
 }
 /*
  * The Boyer-Moore search algorithm:
+ * If limit is -1, the text is null-terminated, otherwise limit gives
+ * the length.
  */
-static Substring bm_search_exec(bm_search_t *bm, char *text)
+static Substring bm_search_exec(
+	bm_search_t *bm,
+	char *text,
+	long int limit,
+	SearchData *cbdata)
 {
 	int cursor, i, next;
 	Substring result;
@@ -966,7 +991,9 @@ static Substring bm_search_exec(bm_search_t *bm, char *text)
 		}
 	}
 	while(i >= 0 && text[cursor]) {
-		char ch = ignore_case ? toupper(text[cursor+i]) : text[cursor+i];
+		char ch = search_data.ignore_case
+			? toupper(text[cursor+i])
+			: text[cursor+i];
 		if(ch == (bm->pattern)[i]) { /* possible match at cursor */
 			i -= 1;
 		} else { /* no match at cursor; slide up according to index value: */
@@ -978,9 +1005,22 @@ static Substring bm_search_exec(bm_search_t *bm, char *text)
 			i = bm->length - 1;
 		}
 	}
-	if(i < 0) { /* match at cursor */
+	if(i < 0 && (limit == -1 || cursor + bm->length <= limit)) {
+		/* match at cursor */
+		int j;
+		char **sm = &cbdata->submatches[0];
 		result.offset = cursor;
 		result.length = bm->length;
+		*sm = XtRealloc(*sm, bm->length + 1);
+		strncpy(*sm, &text[cursor], bm->length);
+		(*sm)[bm->length] = '\0';
+		for(j = 1; j < NSUBMATCHES; j += 1) {
+			sm = &cbdata->submatches[j];
+			if(**sm) {
+				*sm = XtRealloc(*sm, 1);
+				(*sm)[0] = '\0';
+			}
+		}
 	}
 	return result;
 }
@@ -999,7 +1039,7 @@ static regex_t *re_search_comp(char *pattern)
 	static regex_t preg;
 	int cflags = REG_EXTENDED | REG_NEWLINE;
 	int error_code;
-	if(ignore_case) {
+	if(search_data.ignore_case) {
 		cflags |= REG_ICASE;
 	}
 	error_code = regcomp(&preg, pattern, cflags);
@@ -1049,7 +1089,7 @@ int fast_regexec(
 		}
 		overwritten = *q;
 		*q = '\0';
-		error_code = regexec(preg, string, 1, pmatch, eflags);
+		error_code = regexec(preg, string, nmatch, pmatch, eflags);
 		if(error_code == 0) {
 			matched = pmatch[0].rm_eo < q - string;
 		} else {
@@ -1062,23 +1102,31 @@ int fast_regexec(
 #endif
 /*
  * The regular expression search algorithm.
+ * If limit is -1, the text is null-terminated, otherwise limit gives
+ * the length.
  * The while loop is looking for a non-empty match.
  */
-static Substring re_search_exec(regex_t *preg, char *text, Boolean bol)
+static Substring re_search_exec(
+		regex_t *preg,
+		char *text,
+		long int limit,
+		Boolean bol,
+		SearchData *cbdata)
 {
 	Substring result;
-	regmatch_t pmatch[1];
+	regmatch_t pmatch[NSUBMATCHES];
 	int eflags = bol ? 0 : REG_NOTBOL;
 	int error_code;
+	long int len, offset;
 	char *p;
 	result.offset = -1; /* assume no match until we get one */
 	p = text;
 	while(*p) {
-		error_code = REGEXEC(preg, p, 1, pmatch, eflags);
+		error_code = REGEXEC(preg, p, 10, pmatch, eflags);
 		if(error_code == 0) {
-			result.length = pmatch[0].rm_eo - pmatch[0].rm_so;
-			if(result.length != 0) {
-				result.offset = pmatch[0].rm_so + (p - text);
+			len = pmatch[0].rm_eo - pmatch[0].rm_so;
+			offset = pmatch[0].rm_so + (p - text);
+			if(len != 0) {
 				break;
 			} else { /* found only 0-length match, go round again: */
 				p += pmatch[0].rm_so;
@@ -1089,7 +1137,26 @@ static Substring re_search_exec(regex_t *preg, char *text, Boolean bol)
 				eflags = *(p-1) == '\n' ? 0 : REG_NOTBOL;
 			}
 		} else {
+			len = 0;
 			break;
+		}
+	}
+	if(len > 0 && (limit == -1 || offset + len <= limit)) {
+		/* got a match */
+		int j;
+		result.length = len;
+		result.offset = offset;
+		for(j = 0; j < NSUBMATCHES; j += 1) {
+			char **sm = &cbdata->submatches[j];
+			if(pmatch[j].rm_so >= 0) {/* got a submatch */
+				int smlen = pmatch[j].rm_eo - pmatch[j].rm_so;
+				*sm = XtRealloc(*sm, smlen + 1);
+				strncpy(*sm, p + pmatch[j].rm_so, smlen);
+				(*sm)[smlen] = '\0';
+			} else if (**sm) { /* no submatch now; had one before */
+				*sm = XtRealloc(*sm, 1);
+				(*sm)[0] = '\0';
+			} /* else no submatch before or now */
 		}
 	}
 	return result;
@@ -1122,29 +1189,44 @@ static Boolean report_re_error(Widget shell_w)
 static long int re_replacement_text(
 	char		*rep_pattern,
 	char		*text,
-	Substring		*match,
-	char		*buf)
+	Substring	*match,
+	char		*buf,
+	SearchData	*cbdata)
 {
 	char	*p, *q;
 	Boolean	escaped = False;
 	long int result;
 	for(p = rep_pattern, q = buf, result = 0; *p; p += 1) {
 		if(!escaped) {
-			if(*p == '\\') { /* backslash - escape */
+			if(*p == '\\') {
+				/* backslash - escape */
 				escaped = True;
-			} else if (*p == '&') { /*ampersand - insert copy of match */
+			} else if (*p == '&') {
+				/*ampersand - insert copy of match */
 				result += match->length;
 				if(buf) {
 					strncpy(q, text + match->offset, match->length);
 					q += match->length;
 				}
-			} else { /* anything else - just copy */
+			} else {
+				/* anything else - just copy */
 				result += 1;
 				if(buf) {
 					*q++ = *p;
 				}
 			}
-		} else { /* anything escaped - just copy */
+		} else if ('0' <= *p && *p <= '9') {
+			/* \0 .. \9 submatch replacement */
+			char *repl = cbdata->submatches[*p - '0'];
+			int len = strlen(repl);
+			result += len;
+			if(buf) {
+				strcpy(q, repl);
+				q += len;
+			}
+			escaped = False;
+		} else {
+			/* anything else escaped - just copy */
 			result += 1;
 			if(buf) {
 				*q++ = *p;
@@ -1163,7 +1245,8 @@ static long int re_replacement_text(
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search_forwards: search a substring matching a pattern
- * in a string starting at a given offset. If pattern is 0, then use the pattern
+ * in a string starting at a given offset and ending at offset+limit
+ * (or null-terminated if limit < 1). If pattern is 0, then use the pattern
  * from the previous call, if any.  If the text to be
  * searched is 0, just set up static data for future use.
  * If both pattern and text are 0, reset static data and free any malloced space;
@@ -1173,7 +1256,9 @@ static long int re_replacement_text(
 static Substring search_forwards(
 	char		*pattern,
 	char		*text,
-	long int		offset)
+	long int	offset,
+	long int	limit,
+	SearchData	*cbdata)
 {
 	static void  *last_comp = 0;
 	void * comp;
@@ -1182,13 +1267,13 @@ static Substring search_forwards(
 		comp = last_comp;
 	} else {
 		if(last_comp != 0) {
-			if(use_wildcards) {
+			if(cbdata->use_wildcards) {
 				regfree((regex_t *)comp);
 			} else {
 	 			XtFree((char*)last_comp);
 			}
 		}
-		if (use_wildcards) {
+		if (cbdata->use_wildcards) {
 			comp = re_search_comp(pattern);
 		} else {
 			comp = bm_search_comp(pattern);
@@ -1197,7 +1282,7 @@ static Substring search_forwards(
 	}
 	if(pattern == 0 && text == 0) {
 		if(last_comp != 0) {
-			if(use_wildcards) {
+			if(cbdata->use_wildcards) {
 				regfree((regex_t *)comp);
 			} else {
 	 			XtFree((char*)last_comp);
@@ -1205,14 +1290,16 @@ static Substring search_forwards(
 		}
 		result.offset = -1;
 		last_comp = 0;
-	} else if (text == 0 || comp == 0) { /* this is were syntax errors in reg. exps. show up */
+	} else if (text == 0 || comp == 0) {
+		/* this is where syntax errors in reg. exps. show up */
 		result.offset = -1;
 	} else {
-		if(use_wildcards) {
-			result = re_search_exec(comp, text + offset,
-				offset == 0 || text[offset-1] == '\n');
+		if(cbdata->use_wildcards) {
+			result = re_search_exec(comp, text + offset, limit,
+				offset == 0 || text[offset-1] == '\n',
+				cbdata);
 		} else {
-			result = bm_search_exec(comp, text + offset);
+			result = bm_search_exec(comp, text + offset, limit, cbdata);
 		}
 	}
 	return result;
@@ -1226,20 +1313,21 @@ static Substring search_string(
 	char		*pattern,
 	char		*text_buf,
 	long int 	start_point,
-	NAT		direction)
+	NAT		direction,
+	SearchData	*cbdata)
 {
 	Substring ss;
 	if(direction == FORWARDS) {
-		ss = search_forwards(pattern, text_buf, start_point);
+		ss = search_forwards(pattern, text_buf, start_point, -1, cbdata);
 		if(ss.offset < 0) {
-			ss = search_forwards(0, text_buf, 0);
+			ss = search_forwards(0, text_buf, 0, -1, cbdata);
 		} else {
 			ss.offset += start_point;
 		}
 	} else { /* Do binary chop to search backwards: */
 		int upb, i;
 		Substring t;
-		ss = search_forwards(pattern, text_buf, 0);
+		ss = search_forwards(pattern, text_buf, 0, -1, cbdata);
 		if(ss.offset >=  0) {
 			if(ss.offset < start_point) {
 				upb = start_point;
@@ -1247,8 +1335,8 @@ static Substring search_string(
 				upb = strlen(text_buf);
 			}
 			for(i = (upb - ss.offset) / 2; i > 0; i = (upb - ss.offset) / 2) {
-				t = search_forwards(0, text_buf, ss.offset + i);
-				if(t.offset >= 0 && t.offset + ss.offset + i <  upb) {
+				t = search_forwards(0, text_buf, ss.offset + i, upb - (ss.offset + i), cbdata);
+				if(t.offset >= 0) {
 					ss.offset = t.offset + ss.offset + i;
 					ss.length = t.length;
 				} else {
@@ -1257,7 +1345,7 @@ static Substring search_string(
 			}
 		}
 	}
-	search_forwards(0, 0, 0);
+	search_forwards(0, 0, 0, -1, cbdata);
 	return ss;
 }
 
@@ -1267,11 +1355,12 @@ static Substring search_string(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void replace_all(
-	char	*pattern,
-	char	*text_buf,
-	char	*rep_pattern,
-	char	**result,
-	NAT	*start_point)
+	char		*pattern,
+	char		*text_buf,
+	char		*rep_pattern,
+	char		**result,
+	NAT		*start_point,
+	SearchData 	*cbdata)
 {
 	long int text_buf_len, rep_pattern_len, rep_len, extra;
 	Substring ss;
@@ -1281,12 +1370,13 @@ static void replace_all(
 
 	p = text_buf;
 	extra = 0;
-	(void) search_forwards(pattern, 0, 0);
+	(void) search_forwards(pattern, 0, 0, -1, cbdata);
 	while(*p) {
-		ss = search_forwards(0, text_buf, p - text_buf);
+		ss = search_forwards(0, text_buf, p - text_buf, -1, cbdata);
 		if(ss.offset >= 0) {
-			if(use_wildcards) {
-				rep_len = re_replacement_text(rep_pattern, p, &ss, 0);
+			if(cbdata->use_wildcards) {
+				rep_len = re_replacement_text(rep_pattern, p,
+						&ss, 0, cbdata);
 				extra += rep_len - ss.length;
 			} else {
 				extra += rep_pattern_len - ss.length;
@@ -1297,18 +1387,19 @@ static void replace_all(
 		}
 	}
 	if((*result = XtMalloc(text_buf_len + extra + 1)) == NULL) {
-		search_forwards(0, 0, 0); /* it _might_ help! */
+		search_forwards(0, 0, 0, -1, cbdata); /* it _might_ help! */
 		return;
 	}
 	p = text_buf;
 	q = *result;
 	sp = q + *start_point;
 	while(*p) {
-		ss = search_forwards(0, text_buf, p - text_buf);
+		ss = search_forwards(0, text_buf, p - text_buf, -1, cbdata);
 		if(ss.offset >= 0) {
 			strncpy(q, p, ss.offset);
-			if(use_wildcards) {
-				rep_len = re_replacement_text(rep_pattern, p, &ss, q+ss.offset);
+			if(cbdata->use_wildcards) {
+				rep_len = re_replacement_text(rep_pattern, p,
+						&ss, q+ss.offset, cbdata);
 			} else {
 				strncpy(q + ss.offset, rep_pattern, rep_pattern_len);
 				rep_len = rep_pattern_len;
@@ -1329,5 +1420,5 @@ static void replace_all(
 	}
 	*q = '\0'; /* in case last match reached to end of text_buf */
 	*start_point = sp - *result;
-	search_forwards(0, 0, 0);
+	search_forwards(0, 0, 0, -1, cbdata);
 }
