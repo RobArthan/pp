@@ -607,10 +607,10 @@ int main(int argc, char **argv)
 
 	num_x_args = orig_argc - argc;
 
-/* N.b., again argc + 1 not argc because we want the final null */
+/* N.b., again argc not argc - 1 because we want the final null */
 	memmove((void*) &retry_argv[num_x_args+2],
 			(void*) &retry_argv[num_x_args + 1],
-			(argc + 1) * (sizeof(char*)));
+			argc * (sizeof(char*)));
 
 	retry_argv[num_x_args+1] = "-h";
 
