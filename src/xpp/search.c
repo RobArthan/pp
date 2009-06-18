@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.64 2009/06/15 12:56:14 rda Exp rda $ 
+ * $Id: search.c,v 2.65 2009/06/15 16:19:26 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -615,7 +615,7 @@ static void toggle_button_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search forwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean search_either(Widget, SearchData*, NAT);
+static Boolean search_and_show(Widget, SearchData*, NAT);
 static void search_forwards_cb(
 	Widget		w,
 	XtPointer	cbd,
@@ -623,7 +623,7 @@ static void search_forwards_cb(
 {
 	SearchData *cbdata = cbd;
 	CHECK_MAP_STATE(cbdata)
-	(void) search_either(w, cbdata, FORWARDS);
+	(void) search_and_show(w, cbdata, FORWARDS);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search backwards callback.
@@ -635,15 +635,15 @@ static void search_backwards_cb(
 {
 	SearchData *cbdata = cbd;
 	CHECK_MAP_STATE(cbdata)
-	(void) search_either(w, cbdata, BACKWARDS);
+	(void) search_and_show(w, cbdata, BACKWARDS);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Support for search callbacks.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Substring search_string(char*, char*, long int, NAT, SearchData*);
+static Substring search_cyclic(char*, char*, long int, NAT, SearchData*);
 static Boolean report_re_error(Widget);
-static Boolean search_either(
+static Boolean search_and_show(
 	Widget				w,
 	SearchData			*cbdata,
 	NAT				dir)
@@ -662,7 +662,7 @@ static Boolean search_either(
 		start_point = XmTextGetInsertionPosition(search_data.text_w);
 	}
 	if(*pattern) {
-		ss = search_string(pattern, text_buf, start_point, dir, cbdata);
+		ss = search_cyclic(pattern, text_buf, start_point, dir, cbdata);
 	} else { /* bypass the much slower detection of this case by re_search_exec */
 		ss.offset = -1;
 	}
@@ -791,7 +791,7 @@ static void replace_all_cb(
 	text_buf = XmTextGetString(cbdata->text_w);
 	start_point = XmTextGetInsertionPosition(cbdata->text_w);
 	if(*pattern) {
-		ss = search_string(pattern, text_buf, start_point, FORWARDS, cbdata);
+		ss = search_cyclic(pattern, text_buf, start_point, FORWARDS, cbdata);
 	} else { /* bypass the much slower detection of this case by re_search_exec */
 		ss.offset = -1;
 	}
@@ -847,7 +847,7 @@ static void replace_search_backwards_cb(
 	SearchData *cbdata = cbd;
 	CHECK_MAP_STATE(cbdata)
 	if(replace_selection(w, cbdata)) {
-		(void) search_either(w, cbdata, BACKWARDS);
+		(void) search_and_show(w, cbdata, BACKWARDS);
 	}
 }
 
@@ -862,7 +862,7 @@ static void replace_search_forwards_cb(
 	SearchData *cbdata = cbd;
 	CHECK_MAP_STATE(cbdata)
 	if(replace_selection(w, cbdata)) {
-		(void) search_either(w, cbdata, FORWARDS);
+		(void) search_and_show(w, cbdata, FORWARDS);
 	}
 }
 
@@ -937,8 +937,6 @@ static void empty_replace_cb(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 /*
  * Pre-processing for the Boyer-Moore search algorithm.
- * The memory allocation here is relying on long int being
- * at least as aligned as char.
  */
 
 static bm_search_t *bm_search_comp(char *pattern)
@@ -953,7 +951,7 @@ static bm_search_t *bm_search_comp(char *pattern)
 	strcpy(&(bm->pattern)[0], pattern);
 	if(search_data.ignore_case) {
 		for(i = 0; i < len; ++i) {
-			(bm->pattern)[i]= toupper((bm->pattern)[i]);
+			(bm->pattern)[i] = toupper((bm->pattern)[i]);
 		}
 	}
 	for(i = 0; i < 256; ++i) {
@@ -969,18 +967,17 @@ static bm_search_t *bm_search_comp(char *pattern)
 }
 /*
  * The Boyer-Moore search algorithm:
- * If start_limit is positive, then a match that starts at text+start_limit
+ * If offset_limit is positive, then a match that starts at text+offset_limit
  * or greater is rejected (used to do backwards search by binary chop).
  */
 static Substring bm_search_exec(
 	bm_search_t *bm,
 	char *text,
-	long int start_limit,
+	long int offset_limit,
 	SearchData *cbdata)
 {
 	int cursor, i, next;
 	Substring result;
-	result.offset = -1; /* assume no match until we get one */
 	if(bm->length == 0) {
 		return result;
 	}
@@ -1005,7 +1002,7 @@ static Substring bm_search_exec(
 			i = bm->length - 1;
 		}
 	}
-	if(i < 0 && (start_limit < 0 || cursor < start_limit)) {
+	if(i < 0 && (offset_limit < 0 || cursor < offset_limit)) {
 		/* match at cursor */
 		int j;
 		char **sm = &cbdata->submatches[0];
@@ -1021,6 +1018,8 @@ static Substring bm_search_exec(
 				(*sm)[0] = '\0';
 			}
 		}
+	} else {
+		result.offset = -1; /* tell caller no match */
 	}
 	return result;
 }
@@ -1102,14 +1101,13 @@ int fast_regexec(
 #endif
 /*
  * The regular expression search algorithm.
- * If start_limit is positive, then a match that starts at text+start_limit
- * or greater is rejected (used to do backwards search by binary chop).
- * The while loop is looking for a non-empty match.
+ * If offset_limit is positive, then a match that starts at text+offset_limit
+ * or greater is rejected (this is used to do backwards search by binary chop).
  */
 static Substring re_search_exec(
 		regex_t *preg,
 		char *text,
-		long int start_limit,
+		long int offset_limit,
 		Boolean bol,
 		SearchData *cbdata)
 {
@@ -1119,10 +1117,10 @@ static Substring re_search_exec(
 	int error_code;
 	long int len, offset;
 	char *p;
-	result.offset = -1; /* assume no match until we get one */
-	p = text;
-	while(*p) {
-		error_code = REGEXEC(preg, p, 10, pmatch, eflags);
+	len = 0; /* assume no match until we get one */
+	p = text; /* start at the beginning */
+	while(*p) { /* look for a non-empty match */
+		error_code = REGEXEC(preg, p, NSUBMATCHES, pmatch, eflags);
 		if(error_code == 0) {
 			len = pmatch[0].rm_eo - pmatch[0].rm_so;
 			offset = pmatch[0].rm_so + (p - text);
@@ -1141,7 +1139,7 @@ static Substring re_search_exec(
 			break;
 		}
 	}
-	if(len > 0 && (start_limit < 0 || offset < start_limit)) {
+	if(len > 0 && (offset_limit < 0 || offset < offset_limit)) {
 		/* got a match */
 		int j;
 		result.length = len;
@@ -1158,6 +1156,8 @@ static Substring re_search_exec(
 				(*sm)[0] = '\0';
 			} /* else no submatch before or now */
 		}
+	} else {
+		result.offset = -1; /* tell caller no match*/
 	}
 	return result;
 }
@@ -1202,7 +1202,7 @@ static long int re_replacement_text(
 				/* backslash - escape */
 				escaped = True;
 			} else if (*p == '&') {
-				/*ampersand - insert copy of match */
+				/*ampersand - insert copy of matching substring */
 				result += match->length;
 				if(buf) {
 					strncpy(q, text + match->offset, match->length);
@@ -1306,10 +1306,10 @@ static Substring search_forwards(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * search_string is the search function that can search cyclically in both directions.
+ * search_cyclic is the search function that can search cyclically in both directions.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static Substring search_string(
+static Substring search_cyclic(
 	char		*pattern,
 	char		*text_buf,
 	long int 	start_point,
