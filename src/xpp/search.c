@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.66 2009/06/18 10:13:49 rda Exp rda $ 
+ * $Id: search.c,v 2.67 2009/06/20 14:35:30 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -222,6 +222,8 @@ Boolean add_search_tool(Widget text_w)
 	char	*pattern;
 
 	XmString s;
+#ifdef USEPANED
+#else
 /*
  * The following are used to record what sashes in paned before the
  * replacement text pane is added. This then allows us to remove the unwanted
@@ -241,7 +243,7 @@ Boolean add_search_tool(Widget text_w)
 		set_input_focus(search_data.search_w);
 		return True;
 	}
-
+#endif
 	shell = XtVaCreatePopupShell("xpp-Search-and-Replace",
 		transientShellWidgetClass, text_w,
 		XmNdeleteResponse,		XmUNMAP,
@@ -359,6 +361,8 @@ Boolean add_search_tool(Widget text_w)
 		XmNbottomAttachment,		XmATTACH_FORM,
 		NULL);
 	XmStringFree(s);
+#ifdef USEPANED
+#else
 /*
  * Now take a snapshot of the children before creating the replacement text widget.
  */
@@ -370,10 +374,13 @@ Boolean add_search_tool(Widget text_w)
 	for(i = 0; i < num_children_before; ++i) {
 		children_before[i] = children[i];
 	}
-
+#endif
 	replace_text = XtVaCreateManagedWidget("replace-text",
 		xmTextWidgetClass,		paned,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
+#ifdef USEPANED
+		XmNshowSash,			False,
+#endif
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -569,6 +576,8 @@ Boolean add_search_tool(Widget text_w)
 	fix_pane_height(replace_form, replace_form);
 	fix_pane_height(toggle_form, toggle_form);
 	fix_pane_height(action_form, action_form);
+#ifdef USEPANED
+#else
 /*
  * Now remove any sashes introduced while or since the replacement text pane
  * was added.
@@ -596,7 +605,7 @@ Boolean add_search_tool(Widget text_w)
 		}
 	}
 	XtFree((char*)children_before);
-
+#endif
 	XmProcessTraversal(search_text, XmTRAVERSE_CURRENT);
 
 	return True;
