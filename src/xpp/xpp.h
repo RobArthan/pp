@@ -27,7 +27,7 @@
 #include <X11/Intrinsic.h>
 #include <Xm/XmAll.h>
 #ifdef USEPANED
-#include <Xm/XmPaned.h>
+#include <Xm/Paned.h>
 #define XMPANEDCLASS xmPanedWidgetClass
 #else
 #define XMPANEDCLASS xmPanedWindowWidgetClass
