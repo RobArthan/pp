@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.37 2008/07/10 09:13:39 rda Exp rda $
+ * $Id: files.c,v 2.38 2008/07/24 11:44:14 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -49,24 +49,24 @@ static char *cant_write_backup_message =
 	"Do you want to overwrite the file \"%s\" without a backup?";
 
 static char *cant_open_file_to_backup_message =
-	"Cannot read the file \"%s\" to take a backup\n "
+	"Cannot read the file \"%s\" to take a backup.\n\n"
 	"Do you want to overwrite your file without a backup?";
 
 static char *backup_file_same_as_file_message =
 	"Cannot take a backup of the file. "
 	"It is probably on an MS-DOS or similar file system that will "
-	"not support a file named \"%s.xpp.backup\".\n"
+	"not support a file named \"%s.xpp.backup\".\n\n"
 	"Do you want to overwrite your file without a backup?";
 
 static char *cant_open_backup_message =
-	"Cannot open a backup file.\n"
-	"Do you want the file \"%s\" to be overwritten anyway?";
+	"Cannot open a backup file.\n\n"
+	"Do you want to overwrite the file \"%s\" anyway?";
 
 static char *cant_stat_message =
-	 "The file \"%s\" does not seem to exist";
+	 "The file \"%s\" does not seem to exist.";
 
 static char *cant_stat_message2 =
-	 "The file \"%s\" does not seem to exist:\n"
+	 "The file \"%s\" does not seem to exist.\n\n"
 	  "Do you want to edit a new empty buffer?";
 
 static char *load_not_reg_message =
@@ -85,7 +85,7 @@ static char *no_message_space_message =
 	"Not enough memory is available to report a file error";
 
 static char *overwrite_message =
-	 "The file \"%s\" exists.\n"
+	 "The file \"%s\" exists.\n\n"
 	"Do you want to overwrite it?";
 
 static char *panic_file_cant_be_opened =
@@ -102,16 +102,18 @@ static char *read_error_message =
 
 static char *root_read_only_message =
 	 "You are running as the super-user. "
-	"The file \"%s\" does not have owner write-permission and will be opened read-only.\n"
-	 "Do you want to open it?";
+	"The file \"%s\" does not have owner write-permission "
+	"and will be opened read-only.\n\n"
+	"Do you want to open it?";
 
 static char *root_not_owner_message =
 	 "You are running as the super-user. "
-	"The file \"%s\"  is not owned by the super-user and will be opened read-only.\n"
+	"The file \"%s\"  is not owned by the super-user "
+	"and will be opened read-only.\n\n"
 	 "Do you want to open it?";
 
 static char *save_read_only_message =
-	"The read-only option is turned on.\n"
+	"The read-only option is turned on.\n\n"
 	"Do you really want to turn this option off "
 	"and save the file \"%s\"?";
 
@@ -122,42 +124,39 @@ static char *write_error_message =
 	 "Error writing the file \"%s\"";
 
 static char *save_file_changed_message =
-	 "The file \"%s\" appears to have been modified since it was last "
-	 "opened or saved.\n"
+	 "Another program has modified the file \"%s\".\n\n"
 	"Do you want to overwrite it?";
 
 static char *save_file_created_message =
-	 "The file \"%s\" appears to have been created since this "
-	 "xpp session was started.\n"
+	 "Another program has created the file \"%s\".\n\n"
 	"Do you want to overwrite it?";
 
 static char *save_file_deleted_message =
-	 "The file \"%s\" appears to have been deleted since it was last "
-	 "opened or saved.\n"
+	"Cannot access the file \"%s\". "
+	 "Another program may have moved or deleted it.\n\n"
 	"Do you want to create it?";
 
 static char *old_file_changed_message =
-	 "The file \"%s\" that you are currently editing appears to have been modified since it was last "
-	 "opened or saved.";
+	 "Another program has modified the file \"%s\".";
 
 static char *old_file_created_message =
-	 "The file \"%s\" that you are currently editing appears to have been created since this "
-	 "xpp session was started.";
+	 "Another program has created the file \"%s\".\n";
 
 static char *old_file_deleted_message =
-	 "The file \"%s\" that you are currently editing appears to have been deleted since it was last "
-	 "opened or saved.";
+	"Cannot access the file \"%s\". "
+	 "Another program may have moved or deleted it.\n";
 
 static char *writable_binary_message =
 	"The file \"%s\" contains binary data."
 	" If you open it, uneditable characters will be replaced by question"
-	" marks and the read-only option will be set."
-	" Do you wish to open it?";
+	" marks and the read-only option will be set.\n\n"
+	"Do you wish to open it?";
 
 static char *read_only_binary_message =
 	"The file \"%s\" is read-only and contains binary data."
 	" If you open it, uneditable characters will be replaced by question"
-	" marks. Do you wish to open it?";
+	" marks.\n\n"
+	"Do you wish to open it?";
 
 static char *mixed_file_type_message =
 	 "The file \"%s\"  contains a mixture of Unix, MS-DOS or Macintosh line terminators."
