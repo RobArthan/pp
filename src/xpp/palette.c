@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.30 2005/01/27 17:07:06 rda Exp rda $ 
+ * $Id: palette.c,v 2.31 2006/08/07 16:38:20 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -205,7 +205,7 @@ void popup_palette(Widget w)
 	common_dialog_setup(shell, popdown_cb, shell);
 
 	paned = XtVaCreateWidget("paned",
-		xmPanedWindowWidgetClass, 	shell,
+		XMPANEDCLASS, 	shell,
 		NULL);
 
 	palette_info.palette_w = paned;

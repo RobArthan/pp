@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.30 2005/01/27 17:07:06 rda Exp rda $ 
+ * $Id: templates.c,v 2.31 2006/08/07 16:38:20 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -265,7 +265,7 @@ Boolean init_templates_tool(Widget w)
 	common_dialog_setup(shell, popdown_cb, shell);
 
 	paned = XtVaCreateWidget("paned",
-		xmPanedWindowWidgetClass, 	shell,
+		XMPANEDCLASS, 	shell,
 		NULL);
 
 	top_form = XtVaCreateWidget("top-form",
@@ -452,9 +452,9 @@ static void templates_help_cb(
 #endif
 	common_dialog_setup(shell, popdown_cb, shell);
 	help_pane = XtVaCreateWidget("help-pane",
-		xmPanedWindowWidgetClass,	shell,
+		XMPANEDCLASS,	shell,
 		XmNsashWidth,			1,
-			/* PanedWindow won't let us set these to 0! */
+			/* Motif won't let us set these to 0! */
 		XmNsashHeight,			1,
 			/* Make small so user doesn't try to resize */
 		NULL);

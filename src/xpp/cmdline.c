@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.34 2006/03/28 09:00:32 rda Exp rda $
+ * $Id: cmdline.c,v 2.35 2006/08/07 16:38:20 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -155,7 +155,7 @@ void add_command_line_tool(Widget text_w)
 #endif
 	common_dialog_setup(shell, popdown_cb, shell);
 	paned = XtVaCreateWidget("command-paned",
-		xmPanedWindowWidgetClass, 	shell,
+		XMPANEDCLASS, 	shell,
 		NULL);
 
 

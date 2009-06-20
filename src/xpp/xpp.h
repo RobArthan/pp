@@ -26,6 +26,12 @@
 
 #include <X11/Intrinsic.h>
 #include <Xm/XmAll.h>
+#ifdef USEPANED
+#include <Xm/XmPaned.h>
+#define XMPANEDCLASS xmPanedWidgetClass
+#else
+#define XMPANEDCLASS xmPanedWindowWidgetClass
+#endif
 
 #define CALLBACK_ARGS Widget,XtPointer,XtPointer
 #define EVENT_HANDLER_ARGS Widget,XtPointer,XEvent*,Boolean*

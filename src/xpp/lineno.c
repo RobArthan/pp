@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.11 2006/06/13 13:51:36 rda Exp rda $ 
+ * $Id: lineno.c,v 1.12 2006/08/07 16:38:20 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -156,7 +156,7 @@ Boolean add_line_no_tool(Widget text_w)
 	common_dialog_setup(shell, popdown_cb, shell);
 
 	paned = XtVaCreateWidget("paned",
-		xmPanedWindowWidgetClass, 		shell,
+		XMPANEDCLASS, 		shell,
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

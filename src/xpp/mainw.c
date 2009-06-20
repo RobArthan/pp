@@ -703,7 +703,7 @@ static Boolean setup_main_window(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	mainpanes = XtVaCreateWidget("mainpanes",
-		xmPanedWindowWidgetClass,
+		XMPANEDCLASS,
 		frame, NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -720,7 +720,7 @@ static Boolean setup_main_window(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	scriptpanes = XtVaCreateWidget("scriptpanes",
-		xmPanedWindowWidgetClass,
+		XMPANEDCLASS,
 		mainpanes, NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -767,7 +767,7 @@ static Boolean setup_main_window(
 		XmNleftWidget,		filename,
 		NULL);
 	XmStringFree(s1);
-
+ 
 	logo = XtVaCreateManagedWidget("logo",
 		xmLabelWidgetClass, infobar,
 		XmNlabelType,		XmPIXMAP,
