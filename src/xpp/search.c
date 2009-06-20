@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.67 2009/06/20 14:35:30 rda Exp rda $ 
+ * $Id: search.c,v 2.68 2009/06/20 16:23:10 rda Exp $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -222,6 +222,7 @@ Boolean add_search_tool(Widget text_w)
 	char	*pattern;
 
 	XmString s;
+	int	i, j;
 #ifdef USEPANED
 #else
 /*
@@ -230,7 +231,7 @@ Boolean add_search_tool(Widget text_w)
  * sash underneath the replacement text.
  */
 	Widget	*children_before, *children;
-	int	num_children_before, num_children, i, j;
+	int	num_children_before, num_children;
 
 	if((search_data.shell_w) != NULL) {
 		XmTextPosition last_pos;
