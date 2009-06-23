@@ -323,6 +323,7 @@ typedef enum {
 	extern void fix_pane_height(
 			Widget child_w,
 			Widget scale_w);
+	extern void remove_sashes(Widget paned_w);
 	extern Boolean flash_widget(Widget w);
 	extern void idle(unsigned long interval);
 	extern void number_verify_cb(CALLBACK_ARGS);

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.12 2006/08/07 16:38:20 rda Exp rda $ 
+ * lineno.c,v 1.13 2009/06/20 14:35:30 rda Exp 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -126,8 +126,7 @@ Boolean add_line_no_tool(Widget text_w)
 		help_btn;
 
 	char	*pattern;
-	int	i, j, num_children;
-	Widget	*children;
+	int	i, j;
 
 	XmString s;
 	XmTextPosition last_pos;
@@ -312,20 +311,7 @@ Boolean add_line_no_tool(Widget text_w)
 
 	fix_pane_height(bottom_form, bottom_form);
 
-	XtVaGetValues(paned,
-		XmNchildren,		&children,
-		XmNnumChildren,		&num_children,
-		NULL);
-
-	for(i = 0; i < num_children; ++i) {
-		if(!strcmp(XtName(children[i]), "Sash")) {
-			XtVaSetValues(children[i],
-				XmNheight,	1,
-				XmNwidth,	1,
-				XmNsensitive,	False,
-				NULL);
-		}
-	}
+	remove_sashes(paned);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Select all the text in the text window and give it the focus

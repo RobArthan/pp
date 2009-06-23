@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.35 2008/07/24 11:44:14 rda Exp rda $
+ * xmisc.c,v 2.36 2008/08/02 09:13:28 rda Exp
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -653,7 +653,39 @@ void fix_pane_height(
 		XmNpaneMinimum,	height,
 		NULL);
 }
-
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * remove_sashes: remove all sash buttons from a Paned or
+ * PanedWindow widget (note XmIsPanedWindow returns true for Paned,
+ * so we make the decision statically.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void remove_sashes(Widget paned_w)
+{
+	int i, num_children;
+	Widget *children;
+	XtVaGetValues(paned_w,
+		XmNchildren,		&children,
+		XmNnumChildren,		&num_children,
+		NULL);
+#ifdef USEPANED
+	for(i = 0; i < num_children; ++i) {
+		if(strcmp(XtName(children[i]), "sash")) {
+			XtVaSetValues(children[i],
+				XmNshowSash,	False,
+				NULL);
+		}
+	}
+#else
+	for(i = 0; i < num_children; ++i) {
+		if(!strcmp(XtName(children[i]), "Sash")) {
+			XtVaSetValues(children[i],
+				XmNheight,	1,
+				XmNwidth,	1,
+				XmNsensitive,	False,
+				NULL);
+		}
+	}
+#endif
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set_input_focus: try to set the input focus to a given
  * widget trying not to fall over if it can't be done.

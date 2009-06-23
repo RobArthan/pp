@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.31 2006/08/07 16:38:20 rda Exp rda $ 
+ * templates.c,v 2.32 2009/06/20 14:35:30 rda Exp 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -238,8 +238,8 @@ static void	templates_help_cb(CALLBACK_ARGS),
 
 Boolean init_templates_tool(Widget w)
 {
-	NAT i, x, y, fbase, num_children;
-	Widget template_btn, *children;
+	NAT i, x, y, fbase;
+	Widget template_btn;
 
 	if(!templates || !*templates) {
 		/* resource not set up */
@@ -345,20 +345,7 @@ Boolean init_templates_tool(Widget w)
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
 		popdown_cb, shell);
 
-	XtVaGetValues(paned,
-		XmNchildren,		&children,
-		XmNnumChildren,		&num_children,
-		NULL);
-
-	for(i = 0; i < num_children; ++i) {
-		if(!strcmp(XtName(children[i]), "Sash")) {
-			XtVaSetValues(children[i],
-				XmNheight,	1,
-				XmNwidth,	1,
-				XmNsensitive,	False,
-				NULL);
-		}
-	}
+	remove_sashes(paned);
 
 	return True;
 }

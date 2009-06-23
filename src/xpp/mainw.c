@@ -833,7 +833,12 @@ static Boolean setup_main_window(
 			XmNnumChildren, &num_children, NULL);
 
 		for(i = 0; i < num_children; ++i) {
-			if(!strcmp(XtName(children[i]), "Sash")) {
+#ifdef USEPANED
+#define SASH "sash"
+#else
+#define SASH "Sash"
+#endif
+			if(!strcmp(XtName(children[i]), SASH)) {
 				XtInsertEventHandler(children[i],
 					ButtonPressMask,
 					False,

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.31 2006/08/07 16:38:20 rda Exp rda $ 
+ * palette.c,v 2.32 2009/06/20 14:35:30 rda Exp 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -180,10 +180,9 @@ void popup_palette(Widget w)
 {
 	XmString lab;
 	char label_buf[2], name_buf[sizeof "charXX"];
-	int i, j, x, y, num_children;
+	int i, j, x, y;
 	int cbdata;
 	Widget shell, paned, top_form, bottom_form, button, dismiss_btn, help_btn;
-	Widget *children;	
 	PaletteConfig *palette_config;
 	char pretty_char;
 	
@@ -311,20 +310,7 @@ void popup_palette(Widget w)
 
 	fix_pane_height(bottom_form, bottom_form);
 
-	XtVaGetValues(paned,
-		XmNchildren,		&children,
-		XmNnumChildren,		&num_children,
-		NULL);
-
-	for(i = 0; i < num_children; ++i) {
-		if(!strcmp(XtName(children[i]), "Sash")) {
-			XtVaSetValues(children[i],
-				XmNheight,	1,
-				XmNwidth,	1,
-				XmNsensitive,	False,
-				NULL);
-		}
-	}
+	remove_sashes(paned);
 
 }
 
