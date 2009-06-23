@@ -232,7 +232,7 @@ Boolean add_search_tool(Widget text_w)
  */
 	Widget	*children_before, *children;
 	int	num_children_before, num_children;
-
+#endif
 	if((search_data.shell_w) != NULL) {
 		XmTextPosition last_pos;
 		XtManageChild(search_data.manager_w);
@@ -244,7 +244,6 @@ Boolean add_search_tool(Widget text_w)
 		set_input_focus(search_data.search_w);
 		return True;
 	}
-#endif
 	shell = XtVaCreatePopupShell("xpp-Search-and-Replace",
 		transientShellWidgetClass, text_w,
 		XmNdeleteResponse,		XmUNMAP,
@@ -988,6 +987,7 @@ static Substring bm_search_exec(
 {
 	int cursor, i, next;
 	Substring result;
+	result.offset = -1; /* no match yet */
 	if(bm->length == 0) {
 		return result;
 	}
@@ -1028,8 +1028,6 @@ static Substring bm_search_exec(
 				(*sm)[0] = '\0';
 			}
 		}
-	} else {
-		result.offset = -1; /* tell caller no match */
 	}
 	return result;
 }
