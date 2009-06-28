@@ -1802,7 +1802,7 @@ static Boolean check_save (void)
 					yes_label,
 					no_label,
 					cancel_label,
-					XmTRAVERSE_LEFT)) {
+					XmTRAVERSE_HOME)) {
 			case 1: /* yes */
 				file_menu_op(operation, &success);
 				idle(100);
