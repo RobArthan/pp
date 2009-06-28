@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.41 2009/06/28 09:42:40 rda Exp rda $
+ * $Id: files.c,v 2.42 2009/06/28 10:09:30 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -950,6 +950,7 @@ Boolean open_file(
 		if (outcome != (OpenOutcome *) NULL) {
 			*outcome = EMPTY_FILE;
 		}
+		current_file_status = NULL; /*  not known */
 		return True;
 	}
 	if((buf = get_file_contents(w, name, cmd_line,
