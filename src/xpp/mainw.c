@@ -43,6 +43,7 @@
 static struct {
 	Boolean	new;
 	Boolean changed;
+	Boolean named;
 } file_info; /* read-only is in the global options */
 
 /* Messages for various purposes */
@@ -485,14 +486,13 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * get_file_name: extract the file name from the file name text field.
- * Return null if no file name (following the convention that the
- * string given in no_file_name means no file name).
+ * Return null if no file name
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static char *get_file_name(void)
 {
 	char *fname;
 	fname = XmTextFieldGetString(namestring);
-	if(!fname || !*fname || !strcmp(fname, no_file_name)) {
+	if(!file_info.named || !fname || !*fname) {
 		if(fname) {XtFree(fname);}
 		fname = NULL;
 	}
@@ -570,12 +570,16 @@ static void set_icon_name_and_title(void)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * flash_file_name: update and flash the file name displayed in
- * the script editor's namestring text field.
+ * the script editor's namestring text field. Supply 0 if the file
+ * has no name.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void flash_file_name(char *fname)
 {
-	XmTextFieldSetString(namestring, fname);
-	XmTextFieldShowPosition(namestring, strlen(fname));
+	char *s;
+	file_info.named = fname != 0;
+	s = file_info.named ? fname : no_file_name;
+	XmTextFieldSetString(namestring, s);
+	XmTextFieldShowPosition(namestring, strlen(s));
 	flash_widget(namestring);
 }
 
@@ -663,7 +667,7 @@ static Boolean setup_main_window(
 	XmString s1;
 	Atom WM_DELETE_WINDOW;
 	Widget *wp;
-	FileOpenAction foAction = NoAction;
+	OpenOutcome outcome = NO_ACTION;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Main window setup:  (root is created in main in xpp.c)
@@ -1010,23 +1014,23 @@ static Boolean setup_main_window(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	pause_undo(undo_ptr);
 
-	if(open_file(script, script, file_name, True, &foAction)
+	if(open_file(script, script, file_name, True, &outcome)
 	&& file_name != NULL) {
 		flash_file_name(file_name);
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
 		file_info.new = False;
 	} else {
-		switch(foAction) {
-			case EmptyFile:
-				flash_file_name(no_file_name);
+		switch(outcome) {
+			case EMPTY_FILE:
+				flash_file_name(0);
 				set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, False);
 				break;
-			case NewFile:
+			case NEW_FILE:
 				flash_file_name(file_name);
 				set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
 				file_info.new = True;
 				break;
-			default:	/* QuitNow */
+			default:	/* QUIT_NOW */
 				return False;
 				break;
 		}
@@ -1054,7 +1058,7 @@ static Boolean setup_main_window(
 static void file_menu_op(int op, Boolean *success)
 {
 	static Widget dialog = NULL;
-	char *fname, *oldfname;
+	char *fname, *old_fname;
 	char *buf;
 	Boolean first_go;
 	if(success) {
@@ -1083,10 +1087,10 @@ static void file_menu_op(int op, Boolean *success)
 		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_SAVE_AS:
-		oldfname = get_file_name();
+		old_fname = get_file_name();
 		if(old_file_checks(
 			script,
-			oldfname,
+			old_fname,
 			want_to_continue,
 			confirm_save_as)) {
 			for(first_go = True; ; first_go = False) {
@@ -1097,8 +1101,8 @@ static void file_menu_op(int op, Boolean *success)
 					}
 					break; /* user cancelled! */
 				} else if(save_file_as(script, dialog, fname)) {
-					if(oldfname != NULL) {
-						setup_reopen_menu(oldfname);
+					if(old_fname != NULL) {
+						setup_reopen_menu(old_fname);
 					}
 					flash_file_name(fname);
 					set_icon_name_and_title();
@@ -1114,7 +1118,7 @@ static void file_menu_op(int op, Boolean *success)
 			}
 			XtPopdown(XtParent(dialog));
 		}
-		if(oldfname) {XtFree(oldfname);}
+		if(old_fname) {XtFree(old_fname);}
 		break;
 	case FILE_MENU_SAVE_SELECTION:
 		if((buf = get_selection(script, no_selection_message))
@@ -1138,7 +1142,7 @@ static void file_menu_op(int op, Boolean *success)
 		}
 		break;
 	case FILE_MENU_OPEN:
-		oldfname = get_file_name();
+		old_fname = get_file_name();
 		if(!check_save()) {
 			if(success) {
 				*success = False;
@@ -1147,7 +1151,7 @@ static void file_menu_op(int op, Boolean *success)
 		}
 		if(old_file_checks(
 			script,
-			oldfname,
+			old_fname,
 			want_to_continue,
 			confirm_open)) {
 			pause_undo(undo_ptr);
@@ -1159,9 +1163,9 @@ static void file_menu_op(int op, Boolean *success)
 					}
 					break; /* user cancelled! */
 				} else {
-					if(open_file(script, dialog, fname, False, (FileOpenAction *) NULL)) {
-						if(oldfname && strcmp(fname, oldfname)) {
-							setup_reopen_menu(oldfname);
+					if(open_file(script, dialog, fname, False, (OpenOutcome *) NULL)) {
+						if(old_fname && strcmp(fname, old_fname)) {
+							setup_reopen_menu(old_fname);
 						}
 						flash_file_name(fname);
 						set_icon_name_and_title();
@@ -1175,7 +1179,7 @@ static void file_menu_op(int op, Boolean *success)
 			XtPopdown(XtParent(dialog));
 			unpause_undo(undo_ptr);
 		}
-		if(oldfname) {XtFree(oldfname);}
+		if(old_fname) {XtFree(old_fname);}
 		break;
 	case FILE_MENU_INCLUDE:
 		for(first_go = True; ; first_go = False) {
@@ -1211,9 +1215,9 @@ static void file_menu_op(int op, Boolean *success)
 			if(fname == NULL) {
 /* No file name: get an empty file */
 				XmTextSetString(script, "");
-				flash_file_name(no_file_name);
+				flash_file_name(0);
 				reinit_file_info(False, False, True);
-			} else if(open_file(script, script, fname, False,(FileOpenAction *) NULL)){
+			} else if(open_file(script, script, fname, False,(OpenOutcome *) NULL)){
 				set_icon_name_and_title();
 				flash_file_name(fname);
 				reinit_file_info(False, file_info.new, False);
@@ -1233,18 +1237,18 @@ static void file_menu_op(int op, Boolean *success)
 			}
 			break;
 		}
-		oldfname = get_file_name();
+		old_fname = get_file_name();
 		if(old_file_checks(
 			script,
-			oldfname,
+			old_fname,
 			want_to_continue,
 			confirm_empty_file)) {
 			pause_undo(undo_ptr);
-			if(open_file(script, script, NULL, False, (FileOpenAction*)NULL)) {
-				if(oldfname != NULL) {
-					setup_reopen_menu(oldfname);
+			if(open_file(script, script, NULL, False, (OpenOutcome*)NULL)) {
+				if(old_fname != NULL) {
+					setup_reopen_menu(old_fname);
 				}
-				flash_file_name(no_file_name);
+				flash_file_name(0);
 				set_icon_name_and_title();
 				reinit_file_info(False, False, True);
 				set_menu_item_sensitivity(filemenu,
@@ -1256,7 +1260,7 @@ static void file_menu_op(int op, Boolean *success)
 				unpause_undo(undo_ptr);
 			}
 		}
-		if(oldfname) {XtFree(oldfname);}
+		if(old_fname) {XtFree(old_fname);}
 		break;
 	case FILE_MENU_QUIT:
 		check_quit_cb(root, NULL, NULL);
@@ -1350,24 +1354,26 @@ static void reopen_cb(
 		XtPointer 	cbd,
 		XtPointer	cbs)
 {
-	char *oldfname, *fname;
+	char *old_fname, *fname;
+	Boolean old_named;
 	NAT i = (NAT) cbd;
-	oldfname = get_file_name();
+	old_fname = get_file_name();
 	fname = reopen_menu_items[i].label;
 	strcpy(fname,reopen_menu_items[i].label);
 	if(!check_save()) {
 		return;
 	}
+	old_named = file_info.named;
 	if(old_file_checks(
 		script,
-		oldfname,
+		old_fname,
 		want_to_continue,
 		confirm_reopen)) {
 		pause_undo(undo_ptr);
-		if(open_file(script, script, fname, False, (FileOpenAction *) NULL)) {
+		if(open_file(script, script, fname, False, (OpenOutcome *) NULL)) {
 			flash_file_name(fname);
-			if(oldfname && *oldfname && strcmp(oldfname, no_file_name)) {
-				setup_reopen_menu(oldfname);
+			if(old_named && old_fname && *old_fname) {
+				setup_reopen_menu(old_fname);
 			}
 			set_icon_name_and_title();
 			reinit_file_info(False, False, False);
@@ -1377,7 +1383,7 @@ static void reopen_cb(
 			unpause_undo(undo_ptr);
 		}
 	}
-	if(oldfname) {XtFree(oldfname);}
+	if(old_fname) {XtFree(old_fname);}
 }
 
 /*

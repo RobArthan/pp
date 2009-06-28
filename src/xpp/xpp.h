@@ -102,14 +102,14 @@ typedef enum {
 	FS_CHANGED,
 	FS_DELETED,
 	FS_CREATED}
-	file_status;
+	FileStatus;
 /* what to do in open_file if the file's not there, or has funny permisions */
 typedef enum {
-	NoAction,
-	QuitNow,
-	NewFile,
-	EmptyFile
-} FileOpenAction;
+	NO_ACTION,
+	QUIT_NOW,
+	NEW_FILE,
+	EMPTY_FILE
+} OpenOutcome;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * EXTERNS
@@ -140,13 +140,11 @@ typedef enum {
 		char	*continue_message,
 		char	*title);
 	extern Boolean open_file(
-		Widget	text,
-		Widget	dialog,
-		char	*name,
-		Boolean cmdLine,
-		FileOpenAction *foAction);
-	extern file_status check_status(
-		char	*name);
+		Widget		text,
+		Widget		dialog,
+		char		*name,
+		Boolean 	cmd_line,
+		OpenOutcome	*outcome);
 	extern Boolean save_file(
 		Widget	text,
 		Widget	dialog,
@@ -162,6 +160,8 @@ typedef enum {
 	extern Boolean include_file(
 		Widget	text,
 		Widget	dialog,
+		char	*name);
+	extern void set_panic_save_name(
 		char	*name);
 	extern void panic_save(
 		Widget text);

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.38 2008/07/24 11:44:14 rda Exp rda $
+ * $Id: files.c,v 2.39 2009/06/20 16:05:19 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -240,7 +240,7 @@ static Boolean file_yes_no_dialog(
  *
  * The second parameter, name, is a pointer to the file name.
  *
- * The third parameter, cmdLine, should be set true iff. this is the call
+ * The third parameter, cmd_line, should be set true iff. this is the call
  * to open the file named on the command line (for which it is not
  * an error if the file does not exist).
  *
@@ -255,7 +255,7 @@ static Boolean file_yes_no_dialog(
  * confusion with null-termination). Caller is informed  via the binary parameter
  * if binary data was encountered.
  *
- * The fifth parameter, foAction, tells caller more about what happened (supply
+ * The fifth parameter, outcome, tells caller more about what happened (supply
  * NULL if not interested).
  *
  * The sixth parameter, stat_buf, is a buffer to contain the stat of the file
@@ -280,9 +280,9 @@ static Boolean file_yes_no_dialog(
 static char *get_file_contents(
 	Widget		w,
 	char		*name,
-	Boolean	 	cmdLine,
+	Boolean	 	cmd_line,
 	Boolean		including,
-	FileOpenAction 	*foAction,
+	OpenOutcome 	*outcome,
 	struct stat 	*stat_buf,
 	Boolean		*binary,
 	FileType	*file_type_return)
@@ -296,15 +296,15 @@ static char *get_file_contents(
 	enum {FT_ANY, FT_UNIX, FT_DOS_OR_MAC, FT_DOS,  FT_MAC,
 		FT_MIXED,  FT_DOS_CR, FT_MAC_CR, FT_MIXED_CR, FT_BINARY} ft_state;
 	if(stat(name, &status) != 0) {
-		if (cmdLine) {
+		if (cmd_line) {
 			if (file_quit_new_dialog(w, cant_stat_message2, name)) {
-				if (foAction != (FileOpenAction *) NULL) {
-					*foAction = NewFile;
+				if (outcome != (OpenOutcome *) NULL) {
+					*outcome = NEW_FILE;
 				}
 			}
 			else {
-				if (foAction != (FileOpenAction *) NULL) {
-					*foAction = QuitNow;
+				if (outcome != (OpenOutcome *) NULL) {
+					*outcome = QUIT_NOW;
 				}
 			}
 			return NULL;
@@ -325,13 +325,13 @@ static char *get_file_contents(
 	};
 	if((fp = fopen(name, "r")) == NULL) {
 		if (file_quit_new_dialog(w, cant_read_message, name)) {
-			if (foAction != (FileOpenAction *) NULL) {
-				*foAction = EmptyFile;
+			if (outcome != (OpenOutcome *) NULL) {
+				*outcome = EMPTY_FILE;
 			}
 		}
 		else {
-			if (foAction != (FileOpenAction *) NULL) {
-				*foAction = QuitNow;
+			if (outcome != (OpenOutcome *) NULL) {
+				*outcome = QUIT_NOW;
 			}
 		}
 		XtFree(buf);
@@ -701,7 +701,7 @@ static Boolean store_file_contents(
  * time we took it.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-file_status check_file_status(char *name)
+FileStatus check_file_status(char *name)
 {
 	char *buf;
 	struct stat new_status;
@@ -931,8 +931,8 @@ Boolean open_file(
 		Widget	text,
 		Widget	w,
 		char	*name,
-		Boolean cmdLine,
- 		FileOpenAction *foAction)
+		Boolean cmd_line,
+ 		OpenOutcome *outcome)
 {
 	char *buf;
 	static struct stat status;
@@ -942,13 +942,13 @@ Boolean open_file(
 	FileType file_type;
 	if(!(name && *name)) { /* NULL or empty */
 		XmTextSetString(text, "");
-		if (foAction != (FileOpenAction *) NULL) {
-			*foAction = EmptyFile;
+		if (outcome != (OpenOutcome *) NULL) {
+			*outcome = EMPTY_FILE;
 		}
 		return True;
 	}
-	if((buf = get_file_contents(w, name, cmdLine,
-			False, foAction, &new_status, &binary, &file_type))
+	if((buf = get_file_contents(w, name, cmd_line,
+			False, outcome, &new_status, &binary, &file_type))
 				!= NULL) {
 		read_only = is_read_only(name, &read_only_message, &new_status);
 		if(read_only_message && !binary) {
@@ -1055,6 +1055,9 @@ void panic_save(
 		}
 	}
 	fp = (FILE*) fdopen(fd, "w"); /* some stdio.h implementations don't declare fdopen */
+	if(current_file_status != NULL) {
+		fchmod(fd, current_file_status->st_mode);
+	}
 	i = 0;
 	while((success = XmTextGetSubstring(text, i,
 						BUFSIZ, BUFSIZ + 1, buf))
