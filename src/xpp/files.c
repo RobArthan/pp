@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.40 2009/06/28 08:53:01 rda Exp rda $
+ * $Id: files.c,v 2.41 2009/06/28 09:42:40 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -1085,6 +1085,7 @@ void panic_save(
 	strcpy(name + strlen(name) - 6, "XXXXXX");
 	if((fd = mkstemp(name)) < 0 ) {
 		name = panic_save_name;
+		strcpy(name + strlen(name) - 6, "XXXXXX");
 		if((fd = mkstemp(name)) < 0 ) {
 			fprintf(stderr, panic_file_cant_be_opened);
 			return;
