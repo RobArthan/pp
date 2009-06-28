@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.39 2009/06/20 16:05:19 rda Exp rda $
+ * $Id: files.c,v 2.40 2009/06/28 08:53:01 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -167,6 +167,11 @@ static char *mixed_file_type_message =
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static struct stat *current_file_status = NULL;
+
+#define MAX_PANIC_SAVE_NAME 100
+	/* allow for /tmp/xpp.panic.<user's file name>.XXXXXX */
+
+static char panic_save_name[MAX_PANIC_SAVE_NAME];
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Private functions:
@@ -1020,6 +1025,36 @@ Boolean include_file(
 		return False;
 	}
 }
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * set_panic_save_name: some users have a habit of provoking panics;
+ * e.g., by using flaky X servers that crash. As a kindness to these
+ * souls, we set up the name of the panic save file to include the
+ * basename of the file name (or as much of that as will fit).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void set_panic_save_name(char	*name)
+{
+	char *prefix= "/tmp/xpp-panic-";
+	const char *suffix = "-XXXXXX";
+	int prelen = strlen(prefix);
+	int spare = MAX_PANIC_SAVE_NAME - prelen - strlen(suffix) - 1;
+	char *base, *p, *q;
+	if(name) {
+		for(base = name, p = name; *p; p += 1) {
+			if(*p == '/') {
+				base = p + 1;
+			}
+		}
+	} else {
+		base = "no-file-name";
+	}
+	strcpy(panic_save_name, prefix);
+	for(	q = panic_save_name + prelen, p = base;
+		*p && p - base < spare;
+		p += 1, q += 1) {
+		*q = *p;
+	}
+	strcpy(q, suffix);
+}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * panic_save: attempt to save the contents of a text widget, e.g.,
@@ -1038,17 +1073,18 @@ void panic_save(
 
 {
 	extern char *mktemp(char *);
-	static char buf[BUFSIZ+1];
-	const char *nameXXX = "xpp.panic.XXXXXX";
-	const char *tmp = "/tmp/";
-	static char name[30];
+	static char buf[BUFSIZ + 1];
+	static char *name = panic_save_name + 5; /* skip "/tmp/" */
 	static int fd;
 	static FILE *fp;
 	static NAT bytes_written, success, i;
-	strcpy(name, nameXXX);
+	if(!*name) { /* set_panic_save_name has not been called */
+		strcpy(panic_save_name, "/tmp/xpp.panic.XXXXXX");
+	}
+	/* In case we have been called before, restore name for mkstemp */
+	strcpy(name + strlen(name) - 6, "XXXXXX");
 	if((fd = mkstemp(name)) < 0 ) {
-		strcpy(name, tmp);
-		strcat(name, nameXXX);
+		name = panic_save_name;
 		if((fd = mkstemp(name)) < 0 ) {
 			fprintf(stderr, panic_file_cant_be_opened);
 			return;

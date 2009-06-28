@@ -578,6 +578,7 @@ static void flash_file_name(char *fname)
 	char *s;
 	file_info.named = fname != 0;
 	s = file_info.named ? fname : no_file_name;
+	set_panic_save_name(fname);
 	XmTextFieldSetString(namestring, s);
 	XmTextFieldShowPosition(namestring, strlen(s));
 	flash_widget(namestring);
