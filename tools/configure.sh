@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.45 2008/03/05 16:13:37 rda Exp rda $
+# $Id: configure.sh,v 1.47 2009/06/29 16:26:49 rda Exp $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -376,9 +376,12 @@ then	declare_quoted PPPOLYHOME
 	if	[ "$PPLD_RUN_PATH" != "" ]
 	then	declare_quoted PPLD_RUN_PATH
 	fi
+	out 'PATH="$PPPOLYHOME/bin:$PATH"'
+	out 'LD_LIBRARY_PATH="$PPPOLYHOME/lib"'
+	out 'export LD_LIBRARY_PATH'
 fi
 out 'PPHOME="$PPTARGETDIR"'
-out 'PATH="$PPBUILDDIR/src:$PPPOLYHOME/bin:$PATH"'
+out 'PATH="$PPBUILDDIR/src:$PATH"'
 out 'PPDATABASEPATH="$PPBUILDDIR/src"'
 out 'PPETCPATH="$PPBUILDDIR/src"'
 out 'TEXINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$TEXINPUTS:"'
