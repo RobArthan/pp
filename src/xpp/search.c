@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.68 2009/06/20 16:23:10 rda Exp $ 
+ * $Id: search.c,v 2.70 2009/06/23 16:09:02 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -49,10 +49,12 @@ enum {FORWARDS, BACKWARDS};
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 /*
- * The following struct includes all the data needed by the
+ * The following struct includes most of the data needed by the
  * search and replace operations.
  *  * the widgets involved
  *  * flags
+ *  * indicator that another part of xpp has changed the selection
+ *    so that it is not the result of a search or user selection.
  *  * saved results from the last search (an array of submatch strings)
  */
 typedef struct {
@@ -62,6 +64,7 @@ typedef struct {
 		search_w,
 		replace_w;
 	Boolean ignore_case, use_wildcards;
+	Boolean	selection_changed;
 	char 	*submatches[NSUBMATCHES];
 } SearchData;
 /*
@@ -112,6 +115,10 @@ static char *not_found =
 static char *re_error = 
 	"Error in search pattern: %s";
 
+static char *selection_has_changed =
+	"The selection may have changed since the last search.\n"
+	"Do you wish to continue?";
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data: this is what would need to be encapsulated to
  * have separate search tools attached to separate text widgets.
@@ -132,7 +139,8 @@ static void	toggle_button_cb(CALLBACK_ARGS),
 		replace_all_cb(CALLBACK_ARGS),
 		replace_set_cb(CALLBACK_ARGS),
 		replace_search_backwards_cb(CALLBACK_ARGS),
-		replace_search_forwards_cb(CALLBACK_ARGS);
+		replace_search_forwards_cb(CALLBACK_ARGS),
+		selection_changed_cb(CALLBACK_ARGS);
 
 static void line_no_set(SearchData*);
 
@@ -474,7 +482,7 @@ Boolean add_search_tool(Widget text_w)
 		search_data.submatches[i] = XtMalloc(1);
 		search_data.submatches[i][0] = '\0';
 	}
-
+	search_data.selection_changed = True;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up the text windows in the search dialog as selection sources
  * and palette clients. (This sounds silly but is intuitively right for
@@ -525,6 +533,9 @@ Boolean add_search_tool(Widget text_w)
 
 	XtAddCallback(help_btn, XmNactivateCallback,
 		help_cb, (XtPointer)Help_Search_and_Replace_Tool);
+
+	XtAddCallback(text_w, XmNmotionVerifyCallback,
+		selection_changed_cb, (XtPointer)(&search_data));
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up initial values of search-replace options which the user
@@ -684,6 +695,7 @@ static Boolean search_and_show(
 			ss.offset,
 			ss.offset + ss.length,
 			CurrentTime);
+		cbdata->selection_changed = False;
 		result = True;
 	} else if (!(*pattern)){
 		ok_dialog(search_data.shell_w, no_search_string);
@@ -744,6 +756,13 @@ static Boolean replace_selection(
 			ss.length = text_len;
 			rep_len = re_replacement_text(rep_pattern,
 					text_buf, &ss, 0, cbdata);
+			if(rep_len == -1) { /* user cancelled */
+				XtFree(rep_pattern);
+				if(text_buf != 0) {
+					XtFree(text_buf);
+				}
+				return False;
+			}
 			rep_buf = XtMalloc(rep_len + 1);
 			if(rep_buf == 0) {
 				XtFree(rep_pattern);
@@ -940,6 +959,17 @@ static void empty_replace_cb(
 	SearchData *cbdata = cbd;
 	XmTextSetString(cbdata->replace_w, "");
 }
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * selection_changed_cb: flag that the selection may have changed.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void selection_changed_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	SearchData *cbdata = cbd;
+	cbdata->selection_changed = True;
+}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * actually doing the work:
@@ -1015,6 +1045,7 @@ static Substring bm_search_exec(
 	if(i < 0 && (offset_limit < 0 || cursor < offset_limit)) {
 		/* match at cursor */
 		int j;
+		cbdata->selection_changed = False;
 		char **sm = &cbdata->submatches[0];
 		result.offset = cursor;
 		result.length = bm->length;
@@ -1152,6 +1183,7 @@ static Substring re_search_exec(
 		int j;
 		result.length = len;
 		result.offset = offset;
+		cbdata->selection_changed = False;
 		for(j = 0; j < NSUBMATCHES; j += 1) {
 			char **sm = &cbdata->submatches[j];
 			if(pmatch[j].rm_so >= 0) {/* got a submatch */
@@ -1193,6 +1225,8 @@ static Boolean report_re_error(Widget shell_w)
  * If buf is 0 it just returns the length of the
  * the replacement string (without a null-terminator). If  buf is not 0 the replacement
  * string is copied into it (not null-terminated).
+ * Returns -1 if the user has cancelled the operation (cannot happen
+ * if control not returned to the user since last successful search).
  */
 static long int re_replacement_text(
 	char		*rep_pattern,
@@ -1225,6 +1259,12 @@ static long int re_replacement_text(
 			}
 		} else if ('0' <= *p && *p <= '9') {
 			/* \0 .. \9 submatch replacement */
+			if(	cbdata->selection_changed
+			&&	!yes_no_dialog(cbdata->shell_w,
+					selection_has_changed,
+					"Confirm")) {
+				return -1;
+			}
 			char *repl = cbdata->submatches[*p - '0'];
 			int len = strlen(repl);
 			result += len;
