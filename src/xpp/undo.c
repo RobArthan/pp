@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.22 2007/05/19 15:42:43 rda Exp rda $
+ * $Id: undo.c,v 2.23 2008/07/10 12:55:38 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -655,6 +655,7 @@ void unpause_undo(XtPointer xtp)
 {
 	UndoBuffer *ub = xtp;
 	ub->enabled = True;
+	setUndoRedo(ub);
 }
 
 
