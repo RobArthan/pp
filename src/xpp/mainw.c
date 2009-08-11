@@ -1162,6 +1162,7 @@ static void file_menu_op(int op, Boolean *success)
 					if(success) {
 						*success = False;
 					}
+					unpause_undo(undo_ptr);
 					break; /* user cancelled! */
 				} else {
 					if(open_file(script, dialog, fname, False, (OpenOutcome *) NULL)) {
