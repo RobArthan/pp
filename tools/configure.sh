@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.47 2009/06/29 16:26:49 rda Exp $
+# $Id: configure.sh,v 1.47 2009/06/30 17:10:27 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -212,8 +212,11 @@ then
 			*)	give_up 'PPCOMPILER must be one of "POLYML" or "SMLNJ"';;
 		esac
 		check_bin "$C" "$C not found on search path; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
-	elif	find_in_path poly >/dev/null 2>&1
+	elif	[ "$PPPOLYTHOME" != "" ]
 	then	PPCOMPILER=POLYML
+	elif	POLY=`find_in_path poly 2>/dev/null`
+	then	PPCOMPILER=POLYML
+		POLYFROMPATH=y
 	elif	find_in_path sml >/dev/null 2>&1
 	then	PPCOMPILER=SMLNJ
 	else	give_up 'cannot find a Standard ML compiler'
@@ -223,7 +226,17 @@ then
 	#
 	if	[ "$PPCOMPILER" = POLYML ]
 	then	if	[ "${PPPOLYHOME:-}" = "" ]
-		then	PPPOLYHOME=/usr/local
+		then	if	[ "$POLYFROMPATH" != y ]
+			then	# User specified PPCOMPILER=POLYML but not PPPOLYHOME
+				if	POLY=`find_in_path poly 2>/dev/null`
+				then	POLYFROMPATH=y
+				fi
+			fi
+			if	[ "$POLYFROMPATH" = "y" ]
+			then	PPPOLYHOME=`dirname "$POLY"`
+				PPPOLYHOME=`dirname "$PPPOLYHOME"`
+			else	give_up "Cannot find the Poly/ML home directory; please set PPPOLYHOME"
+			fi
 		fi
 		if	[ ! -f "$PPPOLYHOME"/bin/poly ]
 		then	give_up "The file \"$PPPOLYHOME/bin/poly\" does not exist"
@@ -376,12 +389,14 @@ then	declare_quoted PPPOLYHOME
 	if	[ "$PPLD_RUN_PATH" != "" ]
 	then	declare_quoted PPLD_RUN_PATH
 	fi
-	out 'PATH="$PPPOLYHOME/bin:$PATH"'
+	if	[ "$POLYFROMPATH" != y ]
+	then	out 'PATH="$PPPOLYHOME/bin:$PATH"'
+	fi
 	out 'LD_LIBRARY_PATH="$PPPOLYHOME/lib"'
 	out 'export LD_LIBRARY_PATH'
 fi
-out 'PPHOME="$PPTARGETDIR"'
 out 'PATH="$PPBUILDDIR/src:$PATH"'
+out 'PPHOME="$PPTARGETDIR"'
 out 'PPDATABASEPATH="$PPBUILDDIR/src"'
 out 'PPETCPATH="$PPBUILDDIR/src"'
 out 'TEXINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$TEXINPUTS:"'
