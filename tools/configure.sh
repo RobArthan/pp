@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.47 2009/06/30 17:10:27 rda Exp rda $
+# $Id: configure.sh,v 1.48 2009/08/21 16:34:44 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -212,7 +212,7 @@ then
 			*)	give_up 'PPCOMPILER must be one of "POLYML" or "SMLNJ"';;
 		esac
 		check_bin "$C" "$C not found on search path; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
-	elif	[ "$PPPOLYTHOME" != "" ]
+	elif	[ "$PPPOLYHOME" != "" ]
 	then	PPCOMPILER=POLYML
 	elif	POLY=`find_in_path poly 2>/dev/null`
 	then	PPCOMPILER=POLYML
