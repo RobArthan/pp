@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.42 2009/06/28 10:09:30 rda Exp rda $
+ * $Id: files.c,v 2.43 2009/06/28 10:50:18 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -679,7 +679,7 @@ static Boolean store_file_contents(
 	p = buf;
 	while(*p && !ferror(fp)) {
 		if(*p == '\n') {
-			fprintf(fp, eoln);
+			fprintf(fp, "%s", eoln);
 		} else {
 			putc(*p, fp);
 		}
@@ -1088,7 +1088,7 @@ void panic_save(
 		name = panic_save_name;
 		strcpy(name + strlen(name) - 6, "XXXXXX");
 		if((fd = mkstemp(name)) < 0 ) {
-			fprintf(stderr, panic_file_cant_be_opened);
+			fprintf(stderr, "%s", panic_file_cant_be_opened);
 			return;
 		}
 	}
