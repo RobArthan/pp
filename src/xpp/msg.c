@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2008/09/12 15:21:09 $ $Revision: 2.53 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2009/06/20 14:35:30 $ $Revision: 2.54 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -25,6 +25,7 @@
  * include files: 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include "xpp.h"
 
