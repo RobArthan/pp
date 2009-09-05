@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.55 2008/02/16 15:17:01 rda Exp rda $
+ * $Id: pterm.c,v 2.56 2008/09/12 15:20:52 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -184,6 +184,7 @@ macros before using them.
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <signal.h>
@@ -255,7 +256,6 @@ macros before using them.
 #ifdef MACOSX
 #define XTABS (OXTABS)
 #define OLCUC (0)
-#define OCRNL (0)
 	#ifndef USE_GRANTPT
 		#define USE_OPENPTY
 	#endif
@@ -846,7 +846,7 @@ static Boolean get_from_app_work_proc(XtPointer continue_flag)
 	if(ct == XFER_SIZE) { /* Probably more to do */
 		return False;	/* arrange to be called again */ 
 	} else	{
-		switch((int)continue_flag) {
+		switch((int) (uintptr_t) continue_flag) {
 			case CONTINUE_LISTENING:
 				listening_state(LISTEN);
 				break;

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.31 2006/06/13 11:23:03 rda Exp rda $
+ * $Id: options.c,v 2.32 2006/08/07 16:38:20 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -24,6 +24,7 @@
 
 
 #include <stdio.h>
+#include <stdint.h>
 #include <ctype.h>
 
 #include "xpp.h"
@@ -637,7 +638,7 @@ static void add_new_line_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	add_new_line_mode_mirror = (int) cbd;
+	add_new_line_mode_mirror = (int) (uintptr_t) cbd;
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * File type callback.
@@ -647,5 +648,5 @@ void file_type_cb (
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	file_type_mirror = (int)cbd;
+	file_type_mirror = (int) (uintptr_t) cbd;
 }

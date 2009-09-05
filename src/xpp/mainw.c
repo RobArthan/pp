@@ -27,6 +27,8 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "xpp.h"
@@ -1280,7 +1282,7 @@ static void file_menu_cb(
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	file_menu_op( (int) cbd, 0 );
+	file_menu_op( (int) (uintptr_t) cbd, 0 );
 }
 
 /*
@@ -1315,7 +1317,7 @@ static void setup_reopen_menu(char *filename)
 		set_menu_item_sensitivity(filemenu, FILE_MENU_REOPEN, False);
 		for(i = 0; i < MAX_REOPEN_MENU_ITEMS; i += 1) {
 			reopen_menu_items[i] = item_template;
-			reopen_menu_items[i].callback_data = (XtPointer) i;
+			reopen_menu_items[i].callback_data = (XtPointer) (uintptr_t) i;
 		}
 		return;
 	} /* else ... */
@@ -1358,7 +1360,7 @@ static void reopen_cb(
 {
 	char *old_fname, *fname;
 	Boolean old_named;
-	NAT i = (NAT) cbd;
+	NAT i = (NAT) (uintptr_t) cbd;
 	old_fname = get_file_name();
 	fname = reopen_menu_items[i].label;
 	strcpy(fname,reopen_menu_items[i].label);
@@ -1538,7 +1540,7 @@ static void cmd_menu_cb(
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	NAT i = (NAT) cbd;
+	NAT i = (NAT) (uintptr_t) cbd;
 	
 	if(!application_alive() && i != CMD_MENU_RESTART) {
 		ok_dialog(root, not_running_message);
@@ -1585,7 +1587,7 @@ static void help_menu_cb(
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	NAT i = (NAT)cbd;
+	NAT i = (NAT) (uintptr_t) cbd;
 	switch(i) {
 	case HELP_MENU_ABOUT_XPP:
 		help_dialog(root, Help_About_Xpp);

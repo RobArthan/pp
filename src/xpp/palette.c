@@ -22,6 +22,7 @@
  * include files: 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #include <stdio.h>
+#include <stdint.h>
 #include <ctype.h>
 #include <Xm/DialogS.h>
 #include <Xm/MainW.h>
@@ -215,7 +216,8 @@ void popup_palette(Widget w)
 		lab = XmStringCreateSimple(no_config_msg);
 		top_form = XtVaCreateWidget("message",
 			xmLabelWidgetClass, paned,
-			XmNlabelString, lab);
+			XmNlabelString, lab,
+			NULL);
 		XmStringFree(lab);
 	} else {
 
@@ -256,7 +258,7 @@ void popup_palette(Widget w)
 				XmStringFree(lab);
 				cbdata = pretty_char;
 				XtAddCallback(button, XmNactivateCallback, type_char_cb,
-					(XtPointer) cbdata);
+					(XtPointer) (uintptr_t) cbdata);
 			}
 		}
 		XtFree((void*)palette_config);
@@ -344,7 +346,7 @@ static void type_char_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	NAT cbdata = (NAT) cbd;
+	NAT cbdata = (NAT) (uintptr_t) cbd;
 	char buf[2];
 	XmTextPosition start, end;
 	Widget text_w = palette_info.text_w;
