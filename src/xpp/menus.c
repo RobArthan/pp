@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: menus.c,v 2.12 2003/06/26 12:17:01 rda Exp rda $
+ * $Id: menus.c,v 2.13 2003/06/26 13:45:00 rda Exp rda $
  *
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
@@ -150,7 +150,7 @@ static Widget setup_menu_aux(
 			menu_name, xmCascadeButtonGadgetClass, parent,
 			XmNsubMenuId,	menu,
 			XmNlabelString,	lab,
-			XmNmnemonic,	menu_mnemonic,
+			XmNmnemonic,	(KeySym)menu_mnemonic,
 			NULL);
 		XmStringFree(lab);
 	}
