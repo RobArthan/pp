@@ -236,7 +236,7 @@ void usage (void)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void set_pp_home(void)
 {
-	char *env_val, *dir, *base, *real_name, *find_file_path, *env_entry, *unix_path, *x_search_path;
+	char *env_val, *dir, *base, *real_name, *env_entry, *unix_path, *x_search_path;
 /*
  * The first part of this is closely based on what the shell scripts like pp do.
  * If the environment variable PPENVDEBUG is set and non-empty, we output diagnostics about all this.
@@ -579,7 +579,7 @@ char *default_command_line(char *cmd_line)
 int main(int argc, char **argv)
 {
 	char **retry_argv;
-	int i, orig_argc, num_x_args;
+	int orig_argc, num_x_args;
 	Boolean use_default_command;
 	char *cmd_line;
 	int x_fd;

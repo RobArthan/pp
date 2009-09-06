@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.57 2009/09/05 15:18:06 rda Exp rda $
+ * $Id: pterm.c,v 2.58 2009/09/06 13:20:10 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -199,14 +199,15 @@ macros before using them.
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * OS dependencies:
+ * OS dependencies (macros calculated here based on LINUX/MACOSX/SOLARIS
+ * etc. unless otherwise specified):
  *
  * How to do ioctls and to get/set termio attributes:
  *	USE_STREAMS - Solaris style STREAMS
  *	USE_POSIX_TERMIO - use POSIX tcgetattr/tcsetattr
  *	else ioctls direct on the file descriptor
  * How to get a pseudo-terminal:
- *	USE_GRANTPT - SUSv3 grantpt/unlockpt
+ *	USE_GRANTPT - SUSv3 grantpt/unlockpt (calculated in make file xpp.mkf)
  *	USE_OPENPTY - BSD openpty
  *	else hunt in /dev
  * When to set termio attributes:
@@ -386,10 +387,6 @@ static char* signal_in_signal_handler_message =
 static char* send_error_message = 
 "A system error occurred writing to the application.";
 
-static char* carry_on_waiting_message = 
-"The application does not seem to have responded to the interrupt."
-" Do you want to continue waiting for a response?";
-
 /*
  * The following data types are used to define our disposition of the various signals in a table.
  */
@@ -521,14 +518,15 @@ static void set_pty_attrs(int fd, void die(int));
 
 void get_pty(void)
 {
-	char c;
 	int one = 1;
 	int slave_fd;
-	char *slavename, line[32];
+	char *slavename;
 	char *ptsname(int);
-	int i;
 	short line_length;
 #ifdef USE_GRANTPT
+/* I can't persuade stdlib.h to yield up the prototypes: */
+	int grantpt(int);
+	int unlockpt(int);
 /* When available, e.g., on SVR4, we use the grantpt/lockpt interfaces */
 	if ((control_fd = open("/dev/ptmx", O_RDWR)) < 0) {
 		msg("system error", "no pseudo-terminal devices available");
@@ -552,7 +550,10 @@ void get_pty(void)
 	}
 #else
 /* we have to look for a pseudo-terminal ourselves */
+	char c;
+	char line[32];
 	for(control_fd = -1, c = 'p'; control_fd < 0 && c <= 'z'; c++) {
+		int i;
 		for(i = 0; control_fd < 0 && i < 16; i++) {
 			sprintf(line, "/dev/pty%c%x", c, i );
 	      		control_fd = open(line, O_RDWR);
@@ -872,7 +873,7 @@ static Boolean get_from_app_work_proc(XtPointer continue_flag)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean dequeue(void)
 {
-	long int bytes_written, line_len, i, top;
+	long int bytes_written, line_len, i;
 	Boolean sent_something = False;
 	Boolean sys_error = False;
 
@@ -937,7 +938,6 @@ static Boolean dequeue(void)
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
 static Boolean enqueue(char *buf, Cardinal siz)
 {
-	Cardinal buf_i, q_i;
 /* start the queue off if it's empty: */
 	if(queue == 0) {
 		queue = XtMalloc(INIT_Q_LEN+1);
@@ -1148,13 +1148,13 @@ static void sig_ask_callback(XtPointer cbd_ignored, XtSignalId *s_ignored)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * sig_panic_handler:
- * use panic_exit to save the editor text if the widget's there then bomb out.
+ * panic_exit:
+ * save the editor text if the widget's there then bomb out.
  * This does no X windows work, so the Xt signal handling functions
  * does not need to be used (and we trust that the panic_save function
  * and the Motif functions it calls don't do anything silly).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void panic_exit(char * m, Cardinal code)
+static int panic_exit(char * m, Cardinal code)
 {
 	static Boolean recursive = False;
 	if(recursive) {
@@ -1177,14 +1177,18 @@ static void panic_exit(char * m, Cardinal code)
 		msg(m, initialisation_error_message);
 	}
 	exit(code);
+	return -1; /* C library broken! */
 }
 
-
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * sig_panic_handler: handle an unmasked signal by exiting with
+ * an error message identifying the signal.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void sig_panic_handler(int sig)
 {
 	char msg_buf[80];
 	sprintf(msg_buf, signal_handled_message, sig, sig_desc(sig)); 
-	panic_exit(msg_buf, 15);
+	(void) panic_exit(msg_buf, 15);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1193,7 +1197,7 @@ static void sig_panic_handler(int sig)
 static void xt_error_handler(char * m)
 {
 	msg(xt_error_handled_message, m);
-	panic_exit("exiting", 16);
+	(void) panic_exit("exiting", 16);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * as does x_error_handler ...
@@ -1203,7 +1207,7 @@ static int x_error_handler(Display *d, XErrorEvent *ev)
 	char error_text[100];
 	XGetErrorText(d, ev->error_code, error_text, 100);
 	msg(x_error_handled_message, error_text);
-	panic_exit("exiting", 17);
+	return panic_exit("exiting", 17);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * and x_io_error_handler ...
@@ -1211,7 +1215,7 @@ static int x_error_handler(Display *d, XErrorEvent *ev)
 static int x_io_error_handler(Display *d)
 {
 	msg(x_error_handled_message, x_io_error_message);
-	panic_exit("exiting", 17);
+	return panic_exit("exiting", 17);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * handle signals and Xt errors: the derivation of the following list
@@ -1357,10 +1361,11 @@ int new_session(char *argv[], Boolean async)
 			if(WIFEXITED(status)) {
 				return(WEXITSTATUS(status));
 			} else {
-				return(255);
+				return 255;
 			}
 		}
 	}
+	return 255; /* something is desperately wrong if we get here */
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

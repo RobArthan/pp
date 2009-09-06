@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.24 2009/08/11 16:59:09 rda Exp rda $
+ * $Id: undo.c,v 2.25 2009/09/06 13:20:10 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -765,7 +765,6 @@ static Boolean monitor_typing(
 	Boolean    *noMA)
 {
 	Cardinal len, lst = last(ub);
-	Widget *wp;
 
 	if(!cbs->text->length &&
 	   !ub->undoing &&
@@ -794,7 +793,6 @@ static Boolean monitor_typing(
 						return False;
 					}
 				} else {
-					char *newptr;
 					setUndo(ub, True);
 					setMoved_away(ub, False);
 					setFirst(ub,      cbs->startPos);
@@ -817,7 +815,6 @@ static Boolean monitor_typing(
 					return False;
 				}
 			} else {
-				char *newptr;
 				setUndo(ub, True);
 				setMoved_away(ub, False);
 				setLast(ub,       cbs->startPos);
@@ -827,7 +824,6 @@ static Boolean monitor_typing(
 			}
 		}
 	} else if(cbs->startPos < cbs->endPos) {
-		char *cut_chars;
 		/* deleted something else */
 		len = cbs->endPos - cbs->startPos;
 

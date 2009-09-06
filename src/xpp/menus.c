@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: menus.c,v 2.14 2009/09/05 15:15:20 rda Exp rda $
+ * $Id: menus.c,v 2.15 2009/09/06 13:20:10 rda Exp rda $
  *
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
@@ -25,6 +25,7 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 #include "xpp.h"
+#include "ctype.h"
 
 static Widget setup_menu_aux(
 	Widget	parent,
@@ -173,7 +174,6 @@ Widget setup_menu(
 	Boolean tear_off_enabled,
 	MenuItem        *items)
 {
-	Widget  cascade, menu;
 	if(type == XmMENU_POPUP) {
 		return 
 			setup_menu_aux(
@@ -199,7 +199,6 @@ void resetup_menu(
 {
 	Widget *btns;
 	Cardinal num_btns;
-	Bool sens;
 	int i;
 
 	XtVaGetValues(menu, XmNchildren, &btns,

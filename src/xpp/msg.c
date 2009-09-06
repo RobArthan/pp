@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2009/09/05 15:14:24 $ $Revision: 2.55 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2009/09/06 13:20:10 $ $Revision: 2.56 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -43,7 +43,7 @@ static void c_format_msg(char *buf, char *msg, Cardinal line_len)
 	char *p1, *p2, *pm;
 	unsigned cursor;
 	for(	p1 = buf, p2 = buf, pm = msg, cursor=0;
-		*p2 = *pm;
+		(*p2 = *pm);
 		++p2, ++pm ) {
 		if(*p2 == '\n') {
 			cursor = 0;
@@ -66,8 +66,6 @@ static void c_format_msg(char *buf, char *msg, Cardinal line_len)
 XmString format_msg(char *msg, Cardinal line_len)
 {
 	char *buf;
-	char *p1, *p2, *pm;
-	unsigned cursor;
 	XmString str;
 	if((buf = XtMalloc(strlen(msg) + 1)) == NULL) {
 		return(XmStringCreateLtoR(buf, XmFONTLIST_DEFAULT_TAG));
@@ -85,7 +83,6 @@ void help_dialog(Widget w, char *str)
 {
 	Widget form, widget;
 	static Widget dialog, pane, help_text;
-	Atom WM_DELETE_WINDOW;
 	Dimension h;
 	Arg args[12];
 	int i;

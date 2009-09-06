@@ -72,7 +72,6 @@ static Widget	shell,
 		paned,
 		top_form,
 		bottom_form,
-		other_btn_area,
 		dismiss_btn,
 		help_btn,
 		text_w;

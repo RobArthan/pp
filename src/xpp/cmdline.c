@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.35 2006/08/07 16:38:20 rda Exp rda $
+ * $Id: cmdline.c,v 2.36 2009/06/20 14:35:30 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -41,7 +41,6 @@ static void
 	cmd_modify_cb(CALLBACK_ARGS),
 	add_cb(CALLBACK_ARGS),
 	delete_cb(CALLBACK_ARGS),
-	focus_cb(CALLBACK_ARGS),
 	cmd_set_cb(CALLBACK_ARGS),
 	empty_cmd_cb(CALLBACK_ARGS);
 
@@ -130,9 +129,6 @@ void add_command_line_tool(Widget text_w)
 		btn_form, exec_btn, add_btn, delete_btn, dismiss_btn, help_btn;
 	Arg args[12];
 	int i, j;
-
-	XmFontList fontlist;
-
 
 	if((cmd_line_data.shell_w) != NULL) {
 		XtManageChild(cmd_line_data.manager_w);

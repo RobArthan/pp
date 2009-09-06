@@ -57,8 +57,6 @@ static char *do_you_want_to_save_changes =
 static char *want_to_continue =
 "Do you want to continue?";
 
-static char *confirm_save = "Confirm Save";
-
 static char *confirm_save_as = "Confirm Save As";
 
 static char *confirm_open = "Confirm Open";
@@ -138,7 +136,7 @@ Widget  script,
 	journal;	/* global because needed in pterm.c */
 
 static Widget
-	frame, infobar, filelabel, filename, infolabel, newfile,
+	frame, infobar, filelabel, filename, infolabel,
 	namestring, logo, linenumber, lnpopup,
 	mainpanes, scriptpanes,
 	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, winmenu,
@@ -1893,8 +1891,6 @@ static void execute_string(char *cmd)
 static void execute_command(void)
 {
 	char *cmd;
-	Cardinal len;
-	XmTextPosition dontcare;
 	if(global_options.edit_only) {
 		return;
 	}

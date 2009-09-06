@@ -248,7 +248,7 @@ static Boolean flash_widget_work_proc(XtPointer xtp)
 		xtp);
 	return True;
 }
-Boolean flash_widget(Widget w)
+void flash_widget(Widget w)
 {
 	XtAppAddWorkProc(app, flash_widget_work_proc, w);
 }
@@ -404,8 +404,7 @@ extern char *text_get_line(
 {
 	XmTextPosition ins_pos, left, right, prev_pos, cur_pos, last_pos;
 	int len;
-	char data[BUFSIZ + 1], *p, *res;
-	Boolean done = False;
+	char data[BUFSIZ + 1], *res;
 	ins_pos = XmTextGetInsertionPosition(text_w);
 	last_pos = XmTextGetLastPosition(text_w);
 	right = last_pos;
@@ -479,7 +478,7 @@ static void cancel_handler (
 	Modifiers modifiers;
 	XKeyPressedEvent *kpe;
 	cancel_info *info = x;
-	char *str;
+
 	if(evp->type != KeyRelease) {
 		return;
 	} /* else */
@@ -766,7 +765,6 @@ void attach_ro_edit_popup(Widget text_w)
 	attach_edit_popup(text_w, ro_edit_menu_items);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
-/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Callback routines for the edit menus:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void edit_cut_cb(
@@ -890,7 +888,6 @@ static void selection_cb (
 }
 static char *get_remote_selection(Boolean *timed_out)
 {
-	Boolean timeout_proc_registered;
 	sel_req_info.data = NULL;
 	sel_req_info.failed = False;
 	XtGetSelectionValue(root,

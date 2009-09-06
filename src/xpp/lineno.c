@@ -115,7 +115,6 @@ static MenuItem line_no_edit_menu_items[] = {
 
 Boolean add_line_no_tool(Widget text_w)
 {
-	Cardinal cbdata;
 	Widget shell, 
 		paned,
 		top_form,
@@ -124,10 +123,7 @@ Boolean add_line_no_tool(Widget text_w)
 		line_no_text,
 		dismiss_btn,
 		help_btn;
-
-	char	*pattern;
 	int	i, j;
-
 	XmString s;
 	XmTextPosition last_pos;
 

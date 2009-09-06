@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.44 2009/09/05 15:14:48 rda Exp rda $
+ * $Id: files.c,v 2.45 2009/09/06 13:20:10 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -23,6 +23,7 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -541,6 +542,7 @@ static char *get_file_contents(
 			file_type = MSDOS;
 			break;
 		case FT_BINARY:
+		default:
 			file_type = UNIX;
 			if(binary) {
 				*binary = True;
@@ -620,7 +622,7 @@ static Boolean backup_file(
 	} else {
 		char buf[BUFSIZ];
 		size_t bytes_read;
-		while(bytes_read = fread(buf, 1, BUFSIZ, fp)) {
+		while((bytes_read = fread(buf, 1, BUFSIZ, fp))) {
 			if(fwrite(buf, 1, bytes_read, backup_fp)
 					!= bytes_read) {
 				Boolean reply;
@@ -708,7 +710,6 @@ static Boolean store_file_contents(
 
 FileStatus check_file_status(char *name)
 {
-	char *buf;
 	struct stat new_status;
 	if(name == NULL) {
 		return FS_OK;

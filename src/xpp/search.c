@@ -148,8 +148,6 @@ static void	toggle_button_cb(CALLBACK_ARGS),
 		replace_search_forwards_cb(CALLBACK_ARGS),
 		submatch_status_cb(CALLBACK_ARGS);
 
-static void line_no_set(SearchData*);
-
 /*
  * Popup menu for the search, replace and line number text widgets:
  */
@@ -213,7 +211,6 @@ static MenuItem replace_text_edit_menu_items[] = {
 
 Boolean add_search_tool(Widget text_w)
 {
-	Cardinal cbdata;
 	Widget shell,
 		paned,
 		search_form,
@@ -232,8 +229,6 @@ Boolean add_search_tool(Widget text_w)
 		action_form,
 			dismiss_btn,
 			help_btn;
-
-	char	*pattern;
 
 	XmString s;
 	int	i, j;

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.33 2009/09/05 15:18:06 rda Exp rda $
+ * $Id: options.c,v 2.34 2009/09/06 13:20:10 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -96,8 +96,8 @@ static Widget
 			button_form,
 				apply_btn, current_btn, original_btn, dismiss_btn, help_btn;
 
-static char add_new_line_mode_mirror; /* mirrors value of the radio buttons */
-static char file_type_mirror; /* mirrors value of the file type menu  */
+static AddNewLineMode add_new_line_mode_mirror; /* mirrors value of the radio buttons */
+static FileType file_type_mirror; /* mirrors value of the file type menu  */
 
 static char *confirm_restart = "Confirm Restart";
 
@@ -638,7 +638,7 @@ static void add_new_line_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	add_new_line_mode_mirror = (int) (uintptr_t) cbd;
+	add_new_line_mode_mirror = (AddNewLineMode) (uintptr_t) cbd;
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * File type callback.
@@ -648,5 +648,5 @@ void file_type_cb (
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	file_type_mirror = (int) (uintptr_t) cbd;
+	file_type_mirror = (FileType) (uintptr_t) cbd;
 }

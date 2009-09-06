@@ -52,7 +52,19 @@
  * TYPE DEFS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 /* Note the following are used as indices into the array file_type_names */
-typedef enum {UNIX = 0, MSDOS = 1, MACINTOSH = 2} FileType;
+typedef enum {
+		UNIX = 0,
+		MSDOS,
+		MACINTOSH} FileType;
+/*
+ * The following are the values of execute_new_line_mode:
+ * (they are in the order that the buttons appear in the
+ * radio box in the options tool and are also used as indices).
+ */
+typedef enum {
+	EXECUTE_ADD_NEW_LINES = 0,
+	EXECUTE_PROMPT_NEW_LINES,
+	EXECUTE_IGNORE_NEW_LINES} AddNewLineMode;
 typedef struct {
 /* session type: */
 	Boolean			edit_only;
@@ -64,17 +76,9 @@ typedef struct {
 /* journal option: */
 	Cardinal		journal_max;
 /* command menu options: */
-	char			add_new_line_mode;
+	AddNewLineMode		add_new_line_mode;
 	String			command_line;}
 		GlobalOptions;	
-/*
- * The following are the values of execute_new_line_mode:
- * (they are in the order that the buttons appear in the
- * radio box in the options tool).
- */
-#define EXECUTE_ADD_NEW_LINES 0
-#define EXECUTE_PROMPT_NEW_LINES 1
-#define EXECUTE_IGNORE_NEW_LINES 2
 
 /*
  * The following is based on the ideas in Heller's
@@ -170,12 +174,16 @@ typedef enum {
 		char *name,
 		char **dir,
 		char **base);
-	char  *find_file(
+	extern char  *find_file(
 		char *name,
 		char *dirs,
 		int is_reg);
-/* Module: help.c (automatically generated during build) */
+	extern int is_dir(char *name);
+/* Module: help (automatically generated during build) */
 	#include "help.h"
+/* Module: lineno */
+	extern Boolean add_line_no_tool(
+		Widget text_w);
 /* Module: mainw */
 	extern void main_window_go(
 		char	*file_name);
@@ -187,7 +195,7 @@ typedef enum {
 	extern void scroll_out(char *buf, Cardinal ct, Boolean ignored);
 	extern void show_modified(Boolean force);
 	extern void show_unmodified(void);
-	extern Boolean get_unmodified(void);
+	extern Boolean get_modified(void);
 	extern void show_file_info(void);
 	extern char *not_running_message;
 /* Module: menus */
@@ -230,6 +238,9 @@ typedef enum {
 		char	*button_label,
 		char	*title,
 		Boolean	reset);
+	extern Boolean quit_new_dialog(
+		Widget w,
+		char *question);
 	extern void startup_dialog(
 		Widget	w,
 		char	**cmd_line,
@@ -322,7 +333,7 @@ typedef enum {
 			Widget child_w,
 			Widget scale_w);
 	extern void remove_sashes(Widget paned_w);
-	extern Boolean flash_widget(Widget w);
+	extern void flash_widget(Widget w);
 	extern void idle(unsigned long interval);
 	extern void number_verify_cb(CALLBACK_ARGS);
 	extern void text_verify_cb(CALLBACK_ARGS);
