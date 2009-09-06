@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.34 2009/09/06 13:20:10 rda Exp rda $
+ * $Id: options.c,v 2.35 2009/09/06 14:50:50 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -413,16 +413,19 @@ if(!global_options.edit_only) {
 			global_options.command_line);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * use callbacks  as a handy way to store the values in the widgets
- * and initialize add_new_line_mode and file type
+ * use callback  as a handy way to store the values in the widgets
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	reset_cb(NULL, (XtPointer)&orig_global_options, NULL);
 
-	add_new_line_cb(NULL, NULL, NULL);
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * initialize add new line mode mirror variable and set file type
+ * option to default of UNIX in original, current and mirror variables
+ * by calling set_file_type.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+	add_new_line_mode_mirror = orig_global_options.add_new_line_mode;
 	set_file_type(UNIX);
-
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -521,10 +524,13 @@ void set_read_only(Boolean read_only)
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set the file type:
+ * note that setting the history does not invoke the activate callbacks
+ * so we have to set the mirror variable.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void set_file_type(FileType file_type)
 {
-	global_options.file_type = file_type;
+	orig_global_options.file_type = global_options.file_type = 
+				file_type_mirror = file_type;
 	XtVaSetValues(file_type_menu, XmNmenuHistory, file_type_buttons[file_type], NULL);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -599,6 +605,7 @@ static void reset_cb(
 	XmToggleButtonSetState(read_only_toggle,
 		options->read_only, False);
 
+	file_type_mirror = options->file_type;
 	XtVaSetValues(file_type_menu, XmNmenuHistory, file_type_buttons[options->file_type], NULL);
 
 	if(command_text) {
@@ -622,6 +629,7 @@ static void reset_cb(
 	}
 
 	if(add_new_line_radio_buttons) {
+		add_new_line_mode_mirror = options->add_new_line_mode;
 		XtVaGetValues(add_new_line_radio_buttons,
 			XmNchildren,		&btns, NULL);
 		XmToggleButtonSetState(
