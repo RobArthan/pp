@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.23 2008/07/10 12:55:38 rda Exp rda $
+ * $Id: undo.c,v 2.24 2009/08/11 16:59:09 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -37,16 +37,16 @@ static char *read_only_warning = "The read-only option is turned on. "
 				 "and edit the text?";
 
 /* The following is used to implement undo/redo in the edit menu */
-static NAT next_debug_no = 0;
+static Cardinal next_debug_no = 0;
 typedef struct undo_node {
-	NAT debug_no;           /* only for debugging */
+	Cardinal debug_no;      /* only for debugging */
 	Boolean in_business;    /* true if first & last are valid */
 	Boolean changes_saved;  /* true if changes have been saved */
 	Boolean moved_away;     /* true if the change is complete */
-	NAT first,              /* position in text of chars to */
-	    last;               /* be replaced by an undo */
-	char *old_text;          /* deleted characters to put in */
-	NAT   old_text_size;      /* current amount of space in the old_text buffer */
+	Cardinal first,         /* position in text of chars to */
+	         last;          /* be replaced by an undo */
+	char *old_text;         /* deleted characters to put in */
+	Cardinal old_text_size; /* current amount of space in the old_text buffer */
     Boolean was_null;
 	struct undo_node *next,
 	                 *prev;
@@ -56,8 +56,8 @@ typedef struct undo_node {
 typedef struct undo_details {
 	Widget text_w;
 	Widget *menu_ws;
-	NAT undo_menu_entry_offset;
-	NAT redo_menu_entry_offset;
+	Cardinal undo_menu_entry_offset;
+	Cardinal redo_menu_entry_offset;
 	Boolean can_undo;               /* true iff. can do an undo */
 	Boolean can_redo;               /* true iff. can do a redo */
 	Boolean undoing;                /* true while undo in progress */
@@ -154,7 +154,7 @@ static void clear_old_text(UndoBuffer *ub)
 	 * be a realloc.  If it isn't the old value will be freed then.    */
 }
 
-static Boolean grow_old_text_to(UndoBuffer *ub, NAT len, Boolean *answer)
+static Boolean grow_old_text_to(UndoBuffer *ub, Cardinal len, Boolean *answer)
 {
 	/* Make the old_text buffer (at least) len+1 big */
 	char *ptr;
@@ -191,7 +191,7 @@ static Boolean grow_old_text_to(UndoBuffer *ub, NAT len, Boolean *answer)
 static Boolean grow_old_text(UndoBuffer *ub, Boolean *answer)
 {
 	/* Make the old_text buffer (at least) one character bigger */
-	NAT len,
+	Cardinal len,
 	    new_size;
 	char *ptr;
 
@@ -399,14 +399,14 @@ static void setChanges_saved(UndoBuffer *ub, Boolean value)
 	}
 }
 
-static NAT first(UndoBuffer *ub)
+static Cardinal first(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return 0;
 	}
 	return ub->active->first;
 }
-static void setFirst(UndoBuffer *ub, NAT value)
+static void setFirst(UndoBuffer *ub, Cardinal value)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -414,14 +414,14 @@ static void setFirst(UndoBuffer *ub, NAT value)
 	ub->active->first = value;
 }
 
-static NAT last(UndoBuffer *ub)
+static Cardinal last(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return 0;
 	}
 	return ub->active->last;
 }
-static void setLast(UndoBuffer *ub, NAT value)	
+static void setLast(UndoBuffer *ub, Cardinal value)	
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -679,8 +679,8 @@ void notify_save(XtPointer xtp)
 XtPointer add_undo(
 		Widget	text_w,
 		Widget *menu_ws,
-		NAT undo_menu_entry_offset,
-		NAT redo_menu_entry_offset)
+		Cardinal undo_menu_entry_offset,
+		Cardinal redo_menu_entry_offset)
 {
 	UndoBuffer *ub;
 	/* NB this Malloc must not use the local one and ... */
@@ -764,7 +764,7 @@ static Boolean monitor_typing(
 	XmTextVerifyCallbackStruct	*cbs,
 	Boolean    *noMA)
 {
-	NAT len, lst = last(ub);
+	Cardinal len, lst = last(ub);
 	Widget *wp;
 
 	if(!cbs->text->length &&
@@ -977,7 +977,7 @@ static Boolean undo_redo(
     	Boolean     amUndoing)
 {
 	XmTextPosition fst, lst;
-	NAT len;
+	Cardinal len;
 
 	if(changes_saved(ub) &&
 	   amUndoing &&

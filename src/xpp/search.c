@@ -213,7 +213,7 @@ static MenuItem replace_text_edit_menu_items[] = {
 
 Boolean add_search_tool(Widget text_w)
 {
-	NAT cbdata;
+	Cardinal cbdata;
 	Widget shell,
 		paned,
 		search_form,
@@ -244,8 +244,8 @@ Boolean add_search_tool(Widget text_w)
  * replacement text pane is added. This then allows us to remove the unwanted
  * sash underneath the replacement text.
  */
-	Widget	*children_before, *children;
-	int	num_children_before, num_children;
+	Widget *children_before, *children;
+	Cardinal num_children_before, num_children;
 #endif
 	if((search_data.shell_w) != NULL) {
 		XmTextPosition last_pos;
@@ -641,7 +641,7 @@ static void toggle_button_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search forwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean search_and_show(Widget, SearchData*, NAT);
+static Boolean search_and_show(Widget, SearchData*, Cardinal);
 static void search_forwards_cb(
 	Widget		w,
 	XtPointer	cbd,
@@ -667,15 +667,15 @@ static void search_backwards_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Support for search callbacks.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Substring search_cyclic(char*, char*, long int, NAT, SearchData*);
+static Substring search_cyclic(char*, char*, long int, Cardinal, SearchData*);
 static Boolean report_re_error(Widget);
 static Boolean search_and_show(
 	Widget				w,
 	SearchData			*cbdata,
-	NAT				dir)
+	Cardinal			dir)
 {
 	Substring ss;
-	NAT start_point;
+	Cardinal start_point;
 	char *pattern, *text_buf;
 	Boolean result;
 	XmTextPosition pl, pr;
@@ -810,7 +810,7 @@ static Boolean replace_selection(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * replace all callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void replace_all(char*, char*, char*, char**, NAT*, SearchData*);
+static void replace_all(char*, char*, char*, char**, Cardinal*, SearchData*);
 static void replace_all_cb(
 	Widget		w,
 	XtPointer	cbd,
@@ -818,7 +818,7 @@ static void replace_all_cb(
 {
 	SearchData *cbdata = cbd;
 	Substring ss;
-	NAT start_point;
+	Cardinal start_point;
 	char *pattern, *text_buf, *replacement, *all_replaced;
 	CHECK_MAP_STATE(cbdata)
 	pattern = XmTextGetString(cbdata->search_w);
@@ -1373,7 +1373,7 @@ static Substring search_cyclic(
 	char		*pattern,
 	char		*text_buf,
 	long int 	start_point,
-	NAT		direction,
+	Cardinal	direction,
 	SearchData	*cbdata)
 {
 	Substring ss;
@@ -1419,7 +1419,7 @@ static void replace_all(
 	char		*text_buf,
 	char		*rep_pattern,
 	char		**result,
-	NAT		*start_point,
+	Cardinal	*start_point,
 	SearchData 	*cbdata)
 {
 	long int text_buf_len, rep_pattern_len, rep_len, extra;

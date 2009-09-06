@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.56 2008/09/12 15:20:52 rda Exp rda $
+ * $Id: pterm.c,v 2.57 2009/09/05 15:18:06 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -935,9 +935,9 @@ static Boolean dequeue(void)
  * The queue always has one more byte than q_size actually says it does
  * to allow for scroll_out null-terminating a string right at the end.
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
-static Boolean enqueue(char *buf, NAT siz)
+static Boolean enqueue(char *buf, Cardinal siz)
 {
-	NAT buf_i, q_i;
+	Cardinal buf_i, q_i;
 /* start the queue off if it's empty: */
 	if(queue == 0) {
 		queue = XtMalloc(INIT_Q_LEN+1);
@@ -1039,9 +1039,7 @@ static void clear_queue (void)
  * Send commands to the application via the queue
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void send_to_application (buf, siz)
-char *buf;
-NAT siz;
+void send_to_application (char *buf, Cardinal siz)
 {
 
 /* Check there's something to talk to: */
@@ -1156,7 +1154,7 @@ static void sig_ask_callback(XtPointer cbd_ignored, XtSignalId *s_ignored)
  * does not need to be used (and we trust that the panic_save function
  * and the Motif functions it calls don't do anything silly).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void panic_exit(char * m, NAT code)
+static void panic_exit(char * m, Cardinal code)
 {
 	static Boolean recursive = False;
 	if(recursive) {

@@ -115,7 +115,7 @@ static MenuItem line_no_edit_menu_items[] = {
 
 Boolean add_line_no_tool(Widget text_w)
 {
-	NAT cbdata;
+	Cardinal cbdata;
 	Widget shell, 
 		paned,
 		top_form,
@@ -340,7 +340,7 @@ static void line_no_set_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * go to line number callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void line_no_to_offset(Widget,NAT,long int*,long int*);
+static void line_no_to_offset(Widget,Cardinal,long int*,long int*);
 static void goto_line_no_cb(
 	Widget		w,
 	XtPointer	cbd,
@@ -427,7 +427,7 @@ long int get_line_no(Widget text_w)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void line_no_to_offset(
 	Widget		text_w,
-	NAT		line_no,
+	Cardinal	line_no,
 	long int	*first,
 	long int	*last)
 {

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.32 2006/08/07 16:38:20 rda Exp rda $
+ * $Id: options.c,v 2.33 2009/09/05 15:18:06 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -234,7 +234,7 @@ if(!global_options.edit_only) {
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_FORM,
 		XmNleftPosition,		3,
-		XmNcolumns,			30,
+		XmNcolumns,			(short) 30,
 		NULL);
 
 	attach_rw_edit_popup(command_text);
@@ -265,7 +265,7 @@ if(!global_options.edit_only) {
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_FORM,
 		XmNleftPosition,		3,
-		XmNcolumns,			30,
+		XmNcolumns,			(short) 30,
 		NULL);
 
 	attach_rw_edit_popup(journal_max_text);

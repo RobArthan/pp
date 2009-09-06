@@ -94,10 +94,10 @@ Widget get_top_shell(Widget w)
  * toggle_menu_item_sensitivity: given a menu w toggle the
  * sensitivity of the i-th item in the menu.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void toggle_menu_item_sensitivity(Widget w, NAT i)
+void toggle_menu_item_sensitivity(Widget w, Cardinal i)
 {
 	Widget *btns;
-	NAT num_btns;
+	Cardinal num_btns;
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
@@ -110,10 +110,10 @@ void toggle_menu_item_sensitivity(Widget w, NAT i)
  * set_menu_item_sensitivity: given a menu w set the
  * sensitivity of the i-th item in the menu to a given value.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void set_menu_item_sensitivity(Widget w, NAT i, Boolean b)
+void set_menu_item_sensitivity(Widget w, Cardinal i, Boolean b)
 {
 	Widget *btns;
-	NAT num_btns;
+	Cardinal num_btns;
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
@@ -125,10 +125,10 @@ void set_menu_item_sensitivity(Widget w, NAT i, Boolean b)
  * set_menu_item_label: given a menu w change the
  * label of the i-th item in the menu.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void set_menu_item_label(Widget w, NAT i, char *lab)
+void set_menu_item_label(Widget w, Cardinal i, char *lab)
 {
 	Widget *btns;
-	NAT num_btns;
+	Cardinal num_btns;
 	XmString str;
 
 	XtVaGetValues(w, XmNchildren, &btns,
@@ -150,10 +150,10 @@ void set_menu_item_label(Widget w, NAT i, char *lab)
  * done without deleting more than 10%. Expects to be called *after*
  * the new text has been inserted.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void check_text_window_limit(Widget w, NAT max)
+void check_text_window_limit(Widget w, Cardinal max)
 {
 	XmTextPosition siz;
-	NAT bytes_to_go;
+	Cardinal bytes_to_go;
 
 	char *text, *p;
 	const char *fmt =
@@ -497,7 +497,7 @@ static void cancel_handler (
 static void add_cancel_handlers(Widget w, XtPointer cbd)
 {
 	Widget *children;
-	int i, num_children;
+	Cardinal i, num_children;
 	if(XtIsComposite(w)) {
 		XtVaGetValues(w,
 			XmNchildren,		&children,
@@ -678,8 +678,8 @@ void remove_sashes(Widget paned_w)
 	for(i = 0; i < num_children; ++i) {
 		if(!strcmp(XtName(children[i]), "Sash")) {
 			XtVaSetValues(children[i],
-				XmNheight,	1,
-				XmNwidth,	1,
+				XmNheight,	(Dimension) 1,
+				XmNwidth,	(Dimension) 1,
 				XmNsensitive,	False,
 				NULL);
 		}
@@ -949,7 +949,7 @@ static void list_widget_and_descendants(Widget w, path p)
 	fprintf(stderr, "\n");
 	if(XtIsComposite(w)) {
 		Widget *children;
-		int i, num_children;
+		Cardinal i, num_children;
 		XtVaGetValues(w,
 			XmNchildren,		&children,
 			XmNnumChildren,		&num_children,

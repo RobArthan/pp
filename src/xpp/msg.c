@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2009/06/20 14:35:30 $ $Revision: 2.54 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2009/09/05 15:14:24 $ $Revision: 2.55 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -38,7 +38,7 @@
  * at appropriate places to fit in lines of length line-len.
  * buf should be at least as long as msg
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void c_format_msg(char *buf, char *msg, NAT line_len)
+static void c_format_msg(char *buf, char *msg, Cardinal line_len)
 {
 	char *p1, *p2, *pm;
 	unsigned cursor;
@@ -63,7 +63,7 @@ static void c_format_msg(char *buf, char *msg, NAT line_len)
 	}
 }
 
-XmString format_msg(char *msg, NAT line_len)
+XmString format_msg(char *msg, Cardinal line_len)
 {
 	char *buf;
 	char *p1, *p2, *pm;
@@ -99,8 +99,10 @@ void help_dialog(Widget w, char *str)
 #endif
 		common_dialog_setup(dialog, popdown_cb, dialog);
 		pane = XtVaCreateWidget("pane", XMPANEDCLASS, dialog,
-			XmNsashWidth,  1, /* Motif won't let us set these to 0! */
-			XmNsashHeight, 1, /* Make small so user doesn't try to resize */
+				/* Motif won't let us set these to 0! */
+				/* Make small so user can't try to resize */
+			XmNsashWidth,  (Dimension) 1,
+			XmNsashHeight, (Dimension) 1,
 			NULL);
 		i = 0;
 		XtSetArg(args[i], XmNscrollVertical,        True); ++i;
@@ -125,8 +127,8 @@ void help_dialog(Widget w, char *str)
 			XmNleftPosition,         2,
 			XmNrightAttachment,      XmATTACH_POSITION,
 			XmNrightPosition,        3,
-			XmNshowAsDefault,        True,
-			XmNdefaultButtonShadowThickness, 1,
+			XmNshowAsDefault,        (Dimension) XmEXTERNAL_HIGHLIGHT, /* sic! */
+			XmNdefaultButtonShadowThickness, (Dimension) XmEXTERNAL_HIGHLIGHT,
 			NULL);
 		XtAddCallback(widget, XmNactivateCallback, popdown_cb, dialog);
 		XtManageChild(form);
@@ -368,7 +370,7 @@ static void yes_no_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	NAT *reply = cbd;
+	Cardinal *reply = cbd;
 	XmAnyCallbackStruct *acbs = cbs;
 	switch (acbs->reason) {
 		case XmCR_OK:
@@ -387,7 +389,7 @@ static void yes_no_destroy_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	NAT *reply = cbd;
+	Cardinal *reply = cbd;
 	*reply = NO;
 }
 
@@ -396,7 +398,7 @@ static void yes_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	NAT *reply = cbd;
+	Cardinal *reply = cbd;
 	*reply = YES;
 }
 
@@ -405,7 +407,7 @@ static void no_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	NAT *reply = cbd;
+	Cardinal *reply = cbd;
 	*reply = NO;
 }
 
@@ -414,7 +416,7 @@ static void cancel_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	NAT *reply = cbd;
+	Cardinal *reply = cbd;
 	*reply = CANCEL;
 }
 
@@ -823,9 +825,9 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 			XmNtopAttachment,		XmATTACH_WIDGET,
 			XmNtopWidget,			cmd_label,
 			XmNbottomAttachment,		XmATTACH_FORM,
-			XmNleftAttachment,			XmATTACH_FORM,
+			XmNleftAttachment,		XmATTACH_FORM,
 			XmNrightAttachment,		XmATTACH_FORM,
-			XmNcolumns,			30,
+			XmNcolumns,			(short) 30,
 			NULL);
 
 		XtAddCallback(cmd_text, XmNactivateCallback, file_ok_cb, &reply);
@@ -907,7 +909,7 @@ static void file_ok_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	NAT *reply = cbd;
+	Cardinal *reply = cbd;
 	*reply = YES;
 }
 
@@ -916,7 +918,7 @@ static void file_cancel_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	NAT *reply = cbd;
+	Cardinal *reply = cbd;
 	*reply = NO;
 }
 static void file_help_cb(

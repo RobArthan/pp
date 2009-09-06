@@ -346,7 +346,7 @@ static void type_char_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	NAT cbdata = (NAT) (uintptr_t) cbd;
+	Cardinal cbdata = (uintptr_t) cbd;
 	char buf[2];
 	XmTextPosition start, end;
 	Widget text_w = palette_info.text_w;

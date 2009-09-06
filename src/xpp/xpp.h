@@ -21,8 +21,6 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MACROS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#define NAT Cardinal
-#define INT long int
 
 #include <X11/Intrinsic.h>
 #include <Xm/XmAll.h>
@@ -64,7 +62,7 @@ typedef struct {
 	Boolean			read_only;
 	FileType		file_type;
 /* journal option: */
-	NAT			journal_max;
+	Cardinal		journal_max;
 /* command menu options: */
 	char			add_new_line_mode;
 	String			command_line;}
@@ -168,11 +166,11 @@ typedef enum {
 /* Module: findfile (generated from imp096.doc during build); only list interfaces actually used here */
 	extern char *get_real_name (
 		char * name);
-	extern voidsplit_file_name(
+	extern void split_file_name(
 		char *name,
 		char **dir,
 		char **base);
-	char * find_file(
+	char  *find_file(
 		char *name,
 		char *dirs,
 		int is_reg);
@@ -186,7 +184,7 @@ typedef enum {
 	extern Widget script;
 	extern Widget journal;
 	extern void check_quit_cb(CALLBACK_ARGS);
-	extern void scroll_out(char *buf, NAT ct, Boolean ignored);
+	extern void scroll_out(char *buf, Cardinal ct, Boolean ignored);
 	extern void show_modified(Boolean force);
 	extern void show_unmodified(void);
 	extern Boolean get_unmodified(void);
@@ -206,8 +204,8 @@ typedef enum {
 		MenuItem	*items);
 /* Module: msg */
 	extern XmString format_msg(
-		char *msg,
-		NAT line_len);
+		char 		*msg,
+		Cardinal	line_len);
 	extern void help_dialog(
 		Widget	w,
 		char	*msg);
@@ -265,8 +263,8 @@ typedef enum {
 	extern void restart_application(void);
 	extern void send_nl(void);
 	extern void send_to_application(
-		char	*buf,
-		NAT	siz);
+		char		*buf,
+		Cardinal	siz);
 	extern int new_session(char *argv[], Boolean async);
 	extern void new_editor_session(void);
 	extern void new_command_session(void);
@@ -289,10 +287,10 @@ typedef enum {
 		XtPointer undo_ptr);
 	extern void notify_save(XtPointer xtp);
 	extern XtPointer add_undo(
-		Widget	text_w,
-		Widget	*menu_w,
-		NAT	undo_menu_entry_offset,
-		NAT	redo_menu_entry_offset);
+		Widget		text_w,
+		Widget		*menu_w,
+		Cardinal	undo_menu_entry_offset,
+		Cardinal	redo_menu_entry_offset);
 	extern void undo_modify_cb(CALLBACK_ARGS);
 	extern void undo(XtPointer undo_ptr);
 	extern void redo(XtPointer undo_ptr);
@@ -301,19 +299,19 @@ typedef enum {
 	extern int get_map_state(Widget w); /* From XGetWindowAttributes */
 	Widget get_top_shell(Widget w);
 	extern void set_menu_item_sensitivity(
-		Widget	w,	/* menu widget */
-		NAT	i,	/* i-th menu entry */
+		Widget		w,	/* menu widget */
+		Cardinal	i,	/* i-th menu entry */
 		Boolean	b	/* true => sensitise */);
 	extern void toggle_menu_item_sensitivity(
-		Widget	w,	/* menu widget */
-		NAT	i	/* i-th menu entry */);
+		Widget		w,	/* menu widget */
+		Cardinal	i	/* i-th menu entry */);
 	extern void set_menu_item_label(
-		Widget	w,	/* menu widget */
-		NAT	i,	/* i-th menu entry */
+		Widget		w,	/* menu widget */
+		Cardinal	i,	/* i-th menu entry */
 		char	*lab);
 	extern void check_text_window_limit(
-		Widget	w,
-		NAT	max);
+		Widget		w,
+		Cardinal	max);
 	extern void copy_font_list(
 		Widget	to_w,
 		Widget	from_w);

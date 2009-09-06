@@ -430,7 +430,7 @@ static void scroll_out_timeout_proc (XtPointer unused1, XtIntervalId *unused2)
 	scroll_pending = False;
 }
 
-void scroll_out(char *buf, NAT ct, Boolean ignored)
+void scroll_out(char *buf, Cardinal ct, Boolean ignored)
 {
 
 	XmTextPosition ins_pos, last_pos;
@@ -666,7 +666,7 @@ static Boolean setup_main_window(
 	char	*file_name)
 {
 	Arg args[12];
-	NAT i;
+	Cardinal i;
 	XmString s1;
 	Atom WM_DELETE_WINDOW;
 	Widget *wp;
@@ -818,7 +818,7 @@ static Boolean setup_main_window(
 	if( !global_options.edit_only ) {
 		Boolean editable;
 		Widget *children;
-		NAT num_children;
+		Cardinal num_children;
 
 		i = 0;
 		XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
@@ -936,7 +936,7 @@ static Boolean setup_main_window(
 
 	{
 		Widget *btns;
-		NAT num_btns;
+		Cardinal num_btns;
 		XtVaGetValues(menubar,
 			XmNchildren, &btns,
 			XmNnumChildren, &num_btns, NULL);
@@ -1360,7 +1360,7 @@ static void reopen_cb(
 {
 	char *old_fname, *fname;
 	Boolean old_named;
-	NAT i = (NAT) (uintptr_t) cbd;
+	Cardinal i = (uintptr_t) cbd;
 	old_fname = get_file_name();
 	fname = reopen_menu_items[i].label;
 	strcpy(fname,reopen_menu_items[i].label);
@@ -1540,7 +1540,7 @@ static void cmd_menu_cb(
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	NAT i = (NAT) (uintptr_t) cbd;
+	Cardinal i = (uintptr_t) cbd;
 	
 	if(!application_alive() && i != CMD_MENU_RESTART) {
 		ok_dialog(root, not_running_message);
@@ -1587,7 +1587,7 @@ static void help_menu_cb(
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	NAT i = (NAT) (uintptr_t) cbd;
+	Cardinal i = (uintptr_t) cbd;
 	switch(i) {
 	case HELP_MENU_ABOUT_XPP:
 		help_dialog(root, Help_About_Xpp);
@@ -1893,7 +1893,7 @@ static void execute_string(char *cmd)
 static void execute_command(void)
 {
 	char *cmd;
-	NAT len;
+	Cardinal len;
 	XmTextPosition dontcare;
 	if(global_options.edit_only) {
 		return;

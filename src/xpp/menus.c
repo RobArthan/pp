@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: menus.c,v 2.13 2003/06/26 13:45:00 rda Exp rda $
+ * $Id: menus.c,v 2.14 2009/09/05 15:15:20 rda Exp rda $
  *
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
@@ -198,7 +198,7 @@ void resetup_menu(
 	MenuItem	*items)
 {
 	Widget *btns;
-	NAT num_btns;
+	Cardinal num_btns;
 	Bool sens;
 	int i;
 

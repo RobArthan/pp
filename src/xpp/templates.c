@@ -61,8 +61,8 @@ typedef char * TemplateCallbackData;
 #define MAX_TEMPLATES 100
 
 static TemplateEntry template_table[MAX_TEMPLATES];
-static NAT template_table_size;
-static NAT template_table_bitmaps_size;
+static int template_table_size;
+static int template_table_bitmaps_size;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * the static Widgets for the template tool
@@ -100,7 +100,7 @@ static char *bad_pixmap_nomalloc_msg =
 static void get_templates_data(void)
 {
 	char *ptr = templates;
-	NAT i;
+	Cardinal i;
 
 	while (*ptr != '/' && *ptr != '\0') ptr++;
 	template_table_size = 0;
@@ -238,7 +238,7 @@ static void	templates_help_cb(CALLBACK_ARGS),
 
 Boolean init_templates_tool(Widget w)
 {
-	NAT i, x, y, fbase;
+	int i, x, y, fbase;
 	Widget template_btn;
 
 	if(!templates || !*templates) {
@@ -440,10 +440,10 @@ static void templates_help_cb(
 	common_dialog_setup(shell, popdown_cb, shell);
 	help_pane = XtVaCreateWidget("help-pane",
 		XMPANEDCLASS,	shell,
-		XmNsashWidth,			1,
 			/* Motif won't let us set these to 0! */
-		XmNsashHeight,			1,
-			/* Make small so user doesn't try to resize */
+			/* Make small so user can't try to resize */
+		XmNsashWidth,	(Dimension) 1,
+		XmNsashHeight,	(Dimension) 1,
 		NULL);
 
 	introduction = XtVaCreateManagedWidget("introduction",

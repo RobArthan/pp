@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.43 2009/06/28 10:50:18 rda Exp rda $
+ * $Id: files.c,v 2.44 2009/09/05 15:14:48 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -293,7 +293,7 @@ static char *get_file_contents(
 	FileType	*file_type_return)
 {
 	struct stat status;
-	NAT siz;
+	Cardinal siz;
 	FILE *fp;
 	char *buf, *p;
 	int whatgot;
@@ -577,7 +577,7 @@ static Boolean backup_file(
 	char	**backup_name)
 {
 	struct stat status, bu_status;
-	NAT siz;
+	Cardinal siz;
 	FILE *fp, *backup_fp;
 	const char *suffix = ".xpp.backup";
 
@@ -1078,7 +1078,7 @@ void panic_save(
 	static char *name = panic_save_name + 5; /* skip "/tmp/" */
 	static int fd;
 	static FILE *fp;
-	static NAT bytes_written, success, i;
+	static Cardinal bytes_written, success, i;
 	if(!*name) { /* set_panic_save_name has not been called */
 		strcpy(panic_save_name, "/tmp/xpp.panic.XXXXXX");
 	}
