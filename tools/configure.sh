@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.48 2009/08/21 16:34:44 rda Exp rda $
+# $Id: configure.sh,v 1.49 2009/08/26 16:52:05 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -59,6 +59,13 @@
 #                    ./install so that pp-ml will work locally.
 #                    (default: the lib subdirectory of the Poly/ML
 #                    installation directory on the local system).
+#
+# PPPOLYLINKFLAGS  - any extra flags needed to link poly programs.
+#                    e.g., '-arch i386' to get a 32-bit executable if
+#                    64-bit is the default. Or '-segprot POLY rwx rwx'
+#                    to work around a permissions problem on Mac OS X 10.6
+#                    with 64-bit executables (default is '-segprot POLY rwx rwx'
+#                    on MacOS X, empty string otherwise).
 #
 # If any of these is an empty string, it is treated as if it were unset.
 #
@@ -244,6 +251,10 @@ then
 		if	[ ! -f "$PPPOLYHOME"/lib/libpolymain.a ]
 		then	give_up "The file \"$PPPOLYHOME/lib/libpolymain.a\" does not exist"
 		fi
+		if	uname -a | grep -i darwin >/dev/null
+		then	POLYLINKFLAGS="${PPPOLYLINKFLAGS:--segprot POLY rwx rwx}"
+		else	POLYLINKFLAGS="${PPPOLYLINKFLAGS:-}"
+		fi
 		echo "Using Poly/ML from $PPPOLYHOME"
 	elif	[ "$PPCOMPILER" = SMLNJ ]
 	then	if	! find_in_path .arch-n-opsys >/dev/null 2>&1
@@ -304,10 +315,8 @@ then	if	[ "${PPMOTIFLINKING:-}" != "" ]
 	elif	[ -d /sw/include/Xm ]
 	then	PPMOTIFHOME=/sw
 	fi
-	if	[ "${PPMOTIFHOME:-}" != "" ]
-	then	USERCFLAGS="-I\"$PPMOTIFHOME\"/include $USERCFLAGS"
-		USERCLIBS="-L\"$PPMOTIFHOME\"/lib $USERCLIBS"
-	else	warn 'Motif installation not found'
+	if	[ "${PPMOTIFHOME:-}" == "" ]
+	then	warn 'Motif installation not found'
 	fi
 fi
 #
@@ -395,6 +404,7 @@ then	declare_quoted PPPOLYHOME
 	out 'LD_LIBRARY_PATH="$PPPOLYHOME/lib"'
 	out 'export LD_LIBRARY_PATH'
 fi
+declare_quoted POLYLINKFLAGS
 out 'PATH="$PPBUILDDIR/src:$PATH"'
 out 'PPHOME="$PPTARGETDIR"'
 out 'PPDATABASEPATH="$PPBUILDDIR/src"'
@@ -404,7 +414,7 @@ out 'BIBINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BIBINPUTS:"'
 out 'BSTINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BSTINPUTS:"'
 out 'export LC_ALL PPCACHESIZE PPCOMPILER PPMOTIFLINKING PPTARGETDIR'
 out 'export PPHOME PATH PPDATABASEPATH PPETCPATH PPPOLYHOME'
-out 'export TEXINPUTS BIBINPUTS BSTINPUTS'
+out 'export POLYLINKFLAGS TEXINPUTS BIBINPUTS BSTINPUTS USERCFLAGS USERCLIBS'
 out 'give_up(){'
 out '	echo "install: installation failed; see $1 for more details"'
 out '	exit 1'
