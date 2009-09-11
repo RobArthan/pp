@@ -1,0 +1,506 @@
+=IGN
+********************************************************************************
+imp120.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+\documentclass[a4paper,12pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+\makeindex
+
+\def\Title{ Higher-Order Matching: Implementation }
+
+\def\Abstract{\begin{center}
+{\bf Abstract}\par\parbox{0.7\hsize}
+{\small This document gives the implementation of a higher-order matching function for HOL terms.}
+\end{center}}
+
+\def\Reference{LEMMA1/HOL/IMP120}
+
+\def\Author{R.D. Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 118 958 4409}
+
+\def\Fax{+44 118 956 1920}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+\begin{centering}
+
+
+
+\end{centering}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{$Revision:$
+}
+\def\Date{\FormatDate{$Date:$
+}}
+
+%%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+%%%%% STANDARD RED-TAPE SECTIONS (MAY WANT TO INTERLEAVE SOME \newpage COMMANDS IN THESE)
+
+%%%%% CONTENTS:
+
+\subsection{Contents}
+
+\tableofcontents
+
+%%%%% REFERENCES:
+
+\newpage
+\subsection{References}
+
+\bibliographystyle{fmu}
+
+%%%%% CHANGE THE FOLLOWING AS NECESSARY (E.G., TO PICK UP daz.bib):
+{\raggedright
+\bibliography{fmu}
+}
+%%%%% CHANGES HISTORY:
+\subsection{Changes History}
+\begin{description}
+\item[Issue 1.1] First draft.
+\end{description}
+
+%%%%%  CHANGES FORECAST:
+
+\subsection{Changes Forecast}
+
+None.
+
+%%%%% DISTRIBUTION LIST
+
+\subsection{Distribution}
+
+Lemma 1 build system.
+
+\newpage
+
+\section{Introduction}
+\subsection{Scope}
+This document gives the implementation of higher-order matching for HOL terms and
+of proof procedures based on it.
+
+\subsection{Purpose and Background}
+See \cite{LEMMA1/HOL/DTD120}.
+
+\subsection{Algorithms}
+We follow Nipkow's
+``Functional Unification of Higher-Order Patterns''
+\cite{Nipkow93}.
+As Nipkow says matching turns out to be significantly
+easier than unification.
+
+\section{THE STRUCTURE}
+=TEX
+=SML
+=IGN
+structure ÛHigherOrderMatchingÝ : HigherOrderMatching = struct
+=TEX
+The narrative here refers mainly to the implementation
+of unification given in figures 9 and 10 in Nipkow's paper.
+Equivalents of the functional programming utilities of his figure 7
+and the term manipulation functions of his figure 8
+are provided with {\Product}.
+=TEX
+Nipkow's {\tt foldl} is our {\tt revfold} and
+his {\tt foldr} is our {\tt fold}.
+=TEX
+Also we need a variant of type matching that allows us to extend an existing partial match and that does not optimise the result by removing trivial matches.
+=SML
+	fun Ûtyaux1Ý (match : (TYPE * string) list) (t1 : TYPE) (t2 : TYPE)
+		: (TYPE * string) list = (
+		if	is_vartype t2
+		then	let	val s2 = dest_vartype t2
+			in	case rassoc5 match s2 of
+					Value t => (
+						if	t = t1
+						then	match
+						else	fail "type_match" 3053 []
+				) |	Nil => match grab (t1, s2)
+
+			end
+		else if	is_ctype t1
+		then	let	val (s1, tl1) = dest_ctype t1;
+				val (s2, tl2) = dest_ctype t2;
+				fun tyaux0 match [] [] = (match
+				) | tyaux0 match (h1 :: t1) (h2 :: t2) = (
+					tyaux0 (tyaux1 match h1 h2) t1 t2
+				) | tyaux0 _ _ _ = fail "type_match" 3053 []
+			in	if s1 = s2
+				then tyaux0 match tl1 tl2
+				else fail "type_match" 3053 []
+			end
+		else fail "type_match" 3053 []
+	);
+	fun Ûtype_match1Ý (m : (TYPE * TYPE) list)
+		(ty1 : TYPE) (ty2 : TYPE) : (TYPE * TYPE) list = (
+	let	val match = map(Combinators.I ** dest_vartype) m
+			handle Fail _ => type_fail "type_match1" 3999 (map snd m drop is_vartype);
+	in
+		map(Combinators.I ** mk_vartype)
+		((tyaux1 match ty1 ty2))
+		handle complaint =>
+		if area_of complaint = "type_match"
+		then type_fail "type_match" 3053 [ty1,ty2]
+		else reraise complaint (area_of complaint)
+	end);
+=TEX
+Nipkow distinguishes between free variables and loose bound variables in his syntax, the free variables being the variables that are subject to substitution, while the loose bound variables are treated as constants.
+We work in an environment containing the current substitution and the list of loose bound variables.
+Here and throughout we follow the {\Product}
+convention of putting things relating to the target of the match to the left of things relating to the pattern:
+so we represent a substition $[t_1/F_1, \ldots, t_k/F_k]$
+using the pairs $(t_i, F_i)$ not $(F_i, t_i)$ as Nipkow does.
+We carry around the type instantiation $\sigma$ and
+term substitution $\theta$ (which becomes {\tt S}
+in Nipkow's final code).
+Each free variable appearing on the right-hand
+side of a pair $(t_i, F_i)$ in $\theta$ has already been
+instantiated to its final target type when it is
+put in $\theta$ and no further instantation can apply to it.
+The bound variables never need instantiation.
+=SML
+type ÛHOM_ENVÝ = {
+	theta : (TERM * TERM) list,
+	sigma : (TYPE * TYPE) list,
+	bvars : TERM list
+};
+=TEX
+=SML
+fun Ûenv_assocÝ ({theta, ...} : HOM_ENV) (f : TERM) : TERM OPT = (
+	rassoc5 theta f
+);
+=TEX
+=SML
+fun ÛredÝ (s : TERM) ([] : TERM list) : TERM = s
+|   red (t : TERM) (yys as (y :: ys)) = (
+	let	val (x, s) = dest_simple_Ì t;
+	in	red (subst [(y, x)] s) ys
+	end	handle Fail _ => list_mk_app (t, yys)
+);
+=TEX
+In the following we do not need to test whether $t$ is a free variable: if it is in the domain of $\sigma$ it must be a free variable.
+=SML
+fun ÛdevarÝ (env : HOM_ENV) (t : TERM) = (
+	let	val (f, ys) = strip_app t;
+	in	case env_assoc env f of
+			Value t => devar env (red t ys)
+		|	Nil => t
+	end
+);
+=TEX
+We use the following local exception in place of Nipkow's {\tt Unif}.
+=SML
+exception HOMatch;
+=TEX
+To keep the pattern to the right of the target, we do {\tt rigidflex} rather than {\tt flexrigid}
+=IGN
+val bvars = [¬i:î®];
+val f = ¬f : î ­ BOOL®;
+val ym = bvars;
+val t = ¬i + 1 > j®;
+val env as {theta, sigma, bvars} : HOM_ENV = {
+	theta = [], sigma = [], bvars = bvars
+};
+=SML
+fun ÛrigidflexÝ ({theta, sigma, bvars} : HOM_ENV)
+	(t : TERM) (f : TERM, ym : TERM list) : HOM_ENV = (
+	let	fun ok v = v mem ym orelse not(v mem bvars);
+	in	case frees t drop ok of
+			[] => (
+				let	val s = list_mk_Ì(ym, t);
+					val theta' = (s, f)::theta;
+				in	{theta = theta',
+					 sigma = sigma,
+					 bvars = bvars}
+				end
+		) |	_ =>	raise HOMatch
+	end
+);
+=TEX
+{\tt matchtypes} is used in the rigid-rigid case to
+maintain the invariant that the two terms have the
+same type. Note the type-matching here is necessary
+even if $a = b$ since we must not further instantiate
+the type variables in the type of $a$.
+The code drops redundant entries from $\sigma'$ here
+to avoid the type instantiations doing unnecessary copying.
+=SML
+fun ÛmatchtypesÝ ({theta, sigma, bvars} : HOM_ENV)
+	(a : TERM, ss : TERM list)
+	(b : TERM, ts : TERM list) : HOM_ENV * TERM list = (
+	let	val ty_a = type_of a;
+		val ty_b = type_of b;
+		val sigma'= type_match1 sigma ty_a ty_b;
+		val env' = {
+			theta = theta,
+			sigma = sigma',
+			bvars = bvars};
+	in	if	a = b
+		then	(env', ts)
+		else if	fst(dest_const a) = fst(dest_const b)
+		then	let	val i = inst [] (sigma' drop (op =));
+				val ts' = map i ts;
+			in	(env', ts')
+			end
+		else	raise HOMatch
+	end	handle Fail _ => raise HOMatch	
+);
+=TEX
+=SML
+fun ÛpushbvarÝ ({theta, sigma, bvars} : HOM_ENV)
+	(x : TERM) : HOM_ENV = (
+	{theta = theta,
+	 sigma = sigma,
+	 bvars = x :: bvars}
+);
+=TEX
+=SML
+fun ÛpopbvarÝ ({theta, sigma, bvars} : HOM_ENV) : HOM_ENV = (
+	{theta = theta,
+	 sigma = sigma,
+	 bvars = tl bvars}
+);
+=TEX
+{\tt hom} is Nipkow's {\tt unif} simplified to do matching rather than unification.
+It assumes caller has ensured that $s$ and $t$ have the same type and has recorded the type instantiation
+used to do this in $\theta$.
+=SML
+fun ÛhomÝ ((s : TERM, t : TERM), env : HOM_ENV) : HOM_ENV = (
+	let	val t1 = devar env t;
+	in	case (dest_simple_term s, dest_simple_term t1) of
+			(SimpleÌ(x, bs), SimpleÌ(y, bt)) => (
+				let	val bt1 =
+					if	x = y
+					then	bt
+					else	subst [(x, y)] bt;
+					val env1 = pushbvar env x;
+					val env2 = hom ((bs, bt1), env1);
+				in	popbvar env2
+				end
+		) |	(SimpleÌ(x, bs), _) => (
+				let	val t_x = mk_app(t, x);
+					val env1 = pushbvar env x;
+					val env2 = hom ((bs, t_x), env1);
+				in	popbvar env2
+				end
+		) |	(_, SimpleÌ(y, t)) => (
+				let	val s_y = mk_app(s, y);
+					val env1 = pushbvar env y;
+					val env2 = hom((s_y, t), env1);
+				in	popbvar env2
+				end
+		) |	_ => cases ((s, t), env)
+	end
+)
+and ÛcasesÝ ((s : TERM, t : TERM), env : HOM_ENV) : HOM_ENV = (
+	let	val g_zn as (g, _) = strip_app t;
+	in	if	is_var g
+		andalso	not(g mem #bvars env)
+		then	rigidflex env s g_zn
+		else	rigidrigid env (strip_app s) g_zn
+	end
+)
+and ÛrigidrigidÝ (env : HOM_ENV)
+	(a_ss as (_, ss) : TERM * TERM list)
+	(b_ts : TERM * TERM list) : HOM_ENV = (
+	let	val (env1, ts) = matchtypes env a_ss b_ts;
+		val ss_ts = combine ss ts;
+	in	revfold hom ss_ts env1
+	end	handle Fail _ => raise HOMatch
+);
+=TEX
+=SML
+fun Ûho_matchÝ (s : TERM) (t : TERM) : (TYPE * TYPE) list * (TERM * TERM) list = (
+	let	val s_ty = type_of s;
+		val t_ty = type_of t;
+		val sigma = type_match1 [] s_ty t_ty;
+		val t = inst [] sigma t;
+		val env = {
+			theta = [],
+			sigma = sigma,
+			bvars = []
+		};
+		val {theta, sigma, ...} = hom ((s, t), env);
+	in	(sigma drop (op =), theta drop (op =))
+	end	handle HOMatch =>
+		term_fail "ho_match" 3054 [s, t]
+);
+=TEX
+Decent error-handling is TBS throughout the following.
+
+The following puts a term in $\beta$-$\eta$-normal form, failing if it is already normalised.
+=SML
+val rec Ûsimple_Â_È_norm_convÝ : CONV = (fn tm =>
+	(case dest_simple_term tm of
+		Var _ => fail_conv
+	|	Const _ => fail_conv
+	|	SimpleÌ _ => (
+			SIMPLE_Ì_C simple_Â_È_norm_conv AND_OR_C
+			È_conv
+	) |	App _ => (
+			RAND_C simple_Â_È_norm_conv AND_OR_C
+			RATOR_C simple_Â_È_norm_conv AND_OR_C
+			(simple_Â_conv THEN_TRY_C simple_Â_È_norm_conv)
+	)) tm
+);
+=TEX
+If $s$ and $t$ are $\beta$-$\eta$-equivalent,
+the following proves $s = t$.
+=SML
+fun Ûsimple_Â_È_convÝ (t : TERM) : CONV = (
+	let	val thm1 = TRY_C simple_Â_È_norm_conv t;
+		val thm2 = eq_sym_rule thm1;
+	in	fn s =>
+		let	val thm3 = TRY_C simple_Â_È_norm_conv s;
+			val thm4 = eq_trans_rule thm3 thm2;
+		in	thm4
+		end
+	end
+);
+=TEX
+=SML
+fun Ûsimple_ho_eq_match_convÝ (thm : THM) : CONV = (
+	let	val thm1 = all_µ_elim thm;
+		val pat = fst(dest_eq(concl thm1));
+	in	fn tm =>
+		let	val (ty_m, tm_m) = ho_match tm pat;
+			val thm2 = asm_inst_type_rule ty_m thm1;
+			val thm3 = inst_term_rule tm_m thm2;
+			val ipat = fst(dest_eq(concl thm3));
+			val thm4 = simple_Â_È_conv ipat tm;
+			val thm4 = eq_trans_rule thm4 thm3;
+			val thm5 = conv_rule(RIGHT_C(TRY_C(simple_Â_È_norm_conv))) thm4;
+		in	thm5
+		end
+	end
+);
+=TEX
+
+=IGN
+
+val (m1, s1) = term_match ¬(Ì(b:'b)·(a:'a))® ¬x:'a®;
+
+ho_match ¬ x ® ¬ x ®;
+ho_match ¬ 1 ® ¬ x ®;
+ho_match ¬ µx· x < 1 ² x = y ® ¬ µx· P x ®;
+ho_match ¬ µx· x < 1 ² Fst (T, (T, F))® ¬ µx· P x ² Fst y®;
+ho_match ¬ µx· x < 1 ± x = y ® ¬ µx· P x ± Q x®;
+ho_match ¬ (t : 'a ­ 'b) ® ¬ Ìx:'a·(f x : 'b)®;
+ho_match ¬ (t : î ­ î ¸ î ­ BOOL) ® ¬ Ìx:'a; y : 'b·(f x y: 'c)®;
+
+
+simple_Â_È_norm_conv ¬ x ®;
+simple_Â_È_norm_conv ¬ 1 ®;
+simple_Â_È_norm_conv ¬ Ìx·f x ®;
+simple_Â_È_norm_conv ¬ (Ìx·x + 1) 2 ®;
+simple_Â_È_norm_conv ¬ (Ìf g·f 1 + g 2) ($* 2) ($- 2)®;
+simple_Â_È_norm_conv ¬ (Ìf·f 1 + f(f(f((Ìj· f j) k)))) (Ìi·2 * i)®;
+simple_Â_È_norm_conv ¬ ((Ìx·$+ x), (Ìx·Fst x), (Ìx·Succ x)) ®;
+simple_Â_È_conv ¬ (Ìx·$+ x) ® ¬ ($+) ®;
+
+val ³_µ_thm =
+	prove_rule[]¬µP·³(µx· P x) ¤ (¶x·³P x) ®;
+val µ_±_thm =
+	prove_rule[]¬µP Q·((µx· P x) ± (µx·Q x)) ¤ (µx·P x ± Q x) ®;
+val µ_²_thm =
+	prove_rule[]¬µP Q·((µx· P x) ² (µx·Q x)) ¤ (µx y·P x ² Q y) ®;
+val ³_¶_thm =
+	prove_rule[]¬µP·³(¶x· P x) ¤ (µx·³P x) ®;
+val ¶_±_thm =
+	prove_rule[]¬µP Q·((¶x· P x) ± (¶x·Q x)) ¤ (¶x y·P x ± Q y) ®;
+val ¶_²_thm =
+	prove_rule[]¬µP Q·(P ² (¶x·Q x)) ¤ (¶x·P ² Q x) ®;
+
+val ³_³_thm =
+	prove_rule[]¬µa·³³a ¤ a®;
+val ³_±_thm =
+	prove_rule[]¬µa b·³(a ± b) ¤ ³a ² ³b®;
+val ³_²_thm =
+	prove_rule[]¬µa b·³(a ² b) ¤ ³a ± ³b®;
+val ´_thm =
+	prove_rule[]¬µa b·a ´ b ¤ ³a ² b®;
+val ¤_thm =
+	prove_rule[]¬µa b·(a ¤ b) ¤ (³a ² b) ± (a ² ³b)®;
+
+val thms1 = [³_µ_thm, µ_±_thm, µ_²_thm, ³_¶_thm, ¶_±_thm,
+	¶_²_thm, ³_³_thm, ³_±_thm, ³_²_thm, ´_thm, ¤_thm];
+
+val µ_±_thm2a =
+	prove_rule[]¬µa Q·(a ± (µx· Q x)) ¤ (µx·a ± Q x) ®;
+val µ_±_thm2b =
+	prove_rule[]¬µP b·((µx· P x) ± b) ¤ (µx·P x ± b) ®;
+val µ_²_thm2a =
+	prove_rule[]¬µa Q·(a ² (µx· Q x)) ¤ (µx·a ² Q x) ®;
+val µ_²_thm2b =
+	prove_rule[]¬µP b·((µx· P x) ² b) ¤ (µx·P x ² b) ®;
+val ¶_±_thm2a =
+	prove_rule[]¬µa Q·(a ± (¶x· Q x)) ¤ (¶x·a ± Q x) ®;
+val ¶_±_thm2b =
+	prove_rule[]¬µP b·((¶x· P x) ± b) ¤ (¶x·P x ± b) ®;
+val ¶_²_thm2a =
+	prove_rule[]¬µa Q·(a ² (¶x· Q x)) ¤ (¶x·a ² Q x) ®;
+val ¶_²_thm2b =
+	prove_rule[]¬µP b·((¶x· P x) ² b) ¤ (¶x·P x ² b) ®;
+
+val thms2 = [
+	µ_±_thm2a, µ_±_thm2b, µ_²_thm2a, µ_²_thm2b, ¶_±_thm2a, ¶_±_thm2b, ¶_²_thm2a, ¶_²_thm2b];
+
+val quant_out_conv = TOP_MAP_C
+	(FIRST_C (map simple_ho_eq_match_conv thms) ORELSE_C
+	 FIRST_C (map simple_ho_eq_match_conv thms2));
+
+quant_out_conv ¬(µx· x < 1) ± (µx·x > 2)®;
+
+quant_out_conv ¬(¶x·x < 1) ² (¶x·x = 0)®;
+
+quant_out_conv ¬(¶x·x < 1) ´ (¶x·x = 0)®;
+quant_out_conv ¬¶x· (µ x· ³ x < 1) ² x = 0®;
+
+simple_ho_eq_match_conv µ_²_thm ¬(µ x· ³ x < 1) ² x = 0®;
+simple_ho_eq_match_conv µ_²_thm ¬(µx· x < 1) ² (µx·x > 2)®;
+
+
+=TEX
+=SML
+=IGN
+end (* of structure HigherOrderMatching *);
+open QuantElimTools;
+=TEX
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
+
+
+
+
+
+
+
