@@ -8,13 +8,13 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp047.doc  %Z% $Date: 2007/09/11 10:01:28 $ $Revision: 1.63 $ $RCSfile: imp047.doc,v $
+% imp047.doc  %Z% $Date: 2008/02/15 11:54:36 $ $Revision: 1.64 $ $RCSfile: imp047.doc,v $
 
 doctex imp047 ; texdvi imp047
 bibtex imp047
 
 =TEX
-% imp047.doc  %Z% $Date: 2007/09/11 10:01:28 $ $Revision: 1.63 $ $RCSfile: imp047.doc,v $
+% imp047.doc  %Z% $Date: 2008/02/15 11:54:36 $ $Revision: 1.64 $ $RCSfile: imp047.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \makeindex
@@ -24,10 +24,10 @@ bibtex imp047
 \TPPtitle{Implementation for Z Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Z Types and Terms}
 \TPPref{DS/FMU/IED/IMP047}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.63 $%
+\def\SCCSversion{$Revision: 1.64 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/09/11 10:01:28 $%
+\TPPdate{\FormatDate{$Date: 2008/02/15 11:54:36 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -107,11 +107,12 @@ The destructor for Ê-terms now checks the operand more carefully.
 \item[Issue 1.56] Added let-expressions.
 \item[Issue 1.57] Type constructors for given sets are now in Z namespace.
 \item[Issue 1.58] Now support decoration of fancyfix identifiers.
-\item[Issue 1.59] The name of the decoration operator is now based on the stem {\em decor} throughout, rather than {\em decor} in some places and {\eqm dec} in others.
+\item[Issue 1.59] The name of the decoration operator is now based on the stem {\em decor} throughout, rather than {\em decor} in some places and {\em dec} in others.
 \item[Issue 1.60] Added support for floating point literals.
 \item[Issues 1.61, 1.62] Now support dollar-quoted identifiers as schema component names.
 \item[Issues 1.63] Fixed broken error message.
 \item[Issue 1.64] Added discriminator function for dollar-quoted identifiers.
+\item[Issue 1.65] Support for empty schemas.
 \end{description}
 %\subsection{Changes Forecast}
 \newpage
@@ -276,7 +277,7 @@ get_id "abc[xyz, abc][a][c]";
 (get_id "ab‰" ; fail "" 0 []) handle Badname => ();
 (get_id "ab‰‰" ; fail "" 0 []) handle Badname => ();
 (get_id "‰abc" ; fail "" 0 []) handle Badname => ();
-get_id "_ $\"xyz\[" _[xyz, abc][a][c]";
+get_id "_ $\"xyz[\" _[xyz, abc][a][c]";
 get_id "_ $\"xyz\" _ $\"\\\" [[\" [xyz, abc][a][c]";
 
 
@@ -881,6 +882,8 @@ of "Z'Dec" => (
 =TEX
 Then schema declarations. Note that unlike Ê-terms and schemas-as-predicates
 it would not be valid to have a global variable in the binding.
+An empty schema declaration always returns no decoration even though
+the declaration could have had a decoration.
 =SML
 *)
 | "Z'SchemaDec" => (
@@ -888,15 +891,21 @@ it would not be valid to have a global variable in the binding.
 	of ([],[bind, sch]) => (
 		let	val btym = map dest_var (snd(strip_app bind));
 			val stym = dest_z_schema_type(dest_z_power_type(type_of sch));
-			val (_, bdec) = unpack_ident(fst(hd btym));
-			val (_, sdec) = unpack_ident(fst(hd stym));
-			val sz_bdec = size bdec;
-			val sz_sdec = size sdec;
-		in	if	sz_sdec <= sz_bdec
-			then	BdzOk(ZSchemaDec(sch,String.extract(bdec, sz_sdec, NONE)))
-			else	BdzNotZ 47911
+		in
+			case (btym, stym) of
+				((bname, _)::_, (sname, _)::_)	=> 
+				let
+					val (_, bdec) = unpack_ident bname;
+					val (_, sdec) = unpack_ident sname;
+					val sz_bdec = size bdec;
+					val sz_sdec = size sdec;
+				in	if	sz_sdec <= sz_bdec
+					then	BdzOk(ZSchemaDec(sch,String.extract(bdec, sz_sdec, NONE)))
+					else	BdzNotZ 47911
+				end
+			|	([], [])	=> BdzOk(ZSchemaDec(sch, ""))
+			|	_		=> BdzNotZ 47911
 		end
-		handle Fail _ => BdzNotZ 47911
 		)
 	| _ => BdzFail{BdzFCode=47911, BdzFCompc=0, BdzFArgc=1}
 )
@@ -1014,9 +1023,14 @@ types of their operands.  Equivalence has both arguments of type $BOOL$.
 			val lvars = map gvar_to_lvar vars;
 			val btym = map dest_var lvars;
 			val stym = dest_z_schema_type(dest_z_power_type(type_of sch));
-			val d = implode(
-					(explode(fst (hd btym))) from 
-					(length(explode(fst(hd stym)))));
+			val d =
+				case (btym, stym) of
+					((bname, _)::_, (sname, _)::_)	=> 
+						implode(
+						(explode bname) from 
+						(length(explode sname)))
+				|	([], [])			=> ""
+				|	_				=> fail "" 0 [];
 			val orig_term = list_mk_app(hdterm, args);
 			val reverse_term = subst(combine vars lvars) (mk_z_schema_pred(sch, d));
 			val dummy = if (orig_term =$ reverse_term)
@@ -1141,9 +1155,14 @@ constant part.
 			val lvars =map gvar_to_lvar vars;
 			val btym = map dest_var lvars;
 			val stym = dest_z_schema_type(dest_z_power_type(type_of sch));
-			val d = implode(
-					(explode(fst (hd btym))) from 
-					(length(explode(fst(hd stym)))));
+			val d =
+				case (btym, stym) of
+					((bname, _)::_, (sname, _)::_)	=> 
+						implode(
+						(explode bname) from 
+						(length(explode sname)))
+				|	([], [])			=> ""
+				|	_				=> fail "" 0 [];
 			val orig_term = list_mk_app(hdterm, args);
 			val reverse_term = subst(combine vars lvars) (mk_z_Ê(sch, d));
 			val dummy = if (orig_term =$ reverse_term)
@@ -2058,7 +2077,10 @@ fun	Ûmk_z_schema_decÝ ((sch,d):TERM * string) :TERM =
 =TEX
 =SML
 fun	Ûmk_z_declÝ (tml:TERM list) :TERM =
-	let	val lis = mk_list tml;
+	let	val lis =
+			case tml of
+				_::_	=> mk_list tml
+			|	[]	=> mk_empty_list BOOL;
 		val decl = mk_const("Z'Decl",mk_­_type(type_of lis,BOOL));
 	in
 		mk_app(decl,lis)
@@ -2176,10 +2198,11 @@ fun	Ûmk_z_bindingÝ (stl:(string * TERM) list) :TERM = (
 	let	val (nl, tl) = split stl;
 		val side =  moccurs "mk_z_binding" 47152 nl;
 		val sortnl = idsetseq nl;
-	in	case stl of
-			[] => fail "mk_z_binding" 47153 []
-		|	_ => list_mk_app(bind_cterm (combine nl (map type_of tl)), 
-				map (lassoc3 stl) sortnl)
+	in
+		list_mk_app (
+			bind_cterm (combine nl (map type_of tl)), 
+			map (lassoc3 stl) sortnl
+		)
 	end
 );
 
@@ -2226,7 +2249,7 @@ fun	f ([]:Z_TERM list) :TERM list = []
 
 fun	chartuple ((ZDecl tml):Z_TERM) :TERM = (
 		case (f (map dest_z_term tml)) of
-			[] => fail "mk_z_Ì" 0 []
+			[] => mk_z_binding []
 		|	[tm] => tm
 		|	tml' => mk_z_tuple tml'
 		)
