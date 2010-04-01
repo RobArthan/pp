@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Schema Calculus}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP043}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.30 $%
+\def\SCCSversion{$Revision: 1.31 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/01/25 13:03:04 $%
+\TPPdate{\FormatDate{$Date: 2006/01/25 17:19:11 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -95,6 +95,7 @@ Adding checks for renames to own components.
 \item[Issue 1.29] Tidied up some confusing relics.
 \item[Issue 1.30] Now support decoration of fancyfix identifiers.
 \item[Issue 1.31] The name of the decoration operator is now based on the stem {\em decor} throughout, rather than {\em decor} in some places and {\em dec} in others.
+\item[Issue 1.32] Support for empty schemas.  $lz\_ç\_renameâs\_conv$ based on $lz\_ç\_decorâs\_conv$.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -206,6 +207,33 @@ fun €LIST_OP_C› [cnv] = cnv
 	APP_C(RAND_C cnv, LIST_OP_C cnvl)
 | LIST_OP_C [] = fail "LIST_±_C" 0 [];
 =TEX
+Apply a list of $N$ conversions to the $N$ outermost operands,
+working inwards from the outermost:
+=FRULE 1 Conversional
+LIST_RAND_C
+[cnv1,cnv2,cnv3,...]
+¨f ... a3 a2 a1Æ
+˜
+˜
+Ù f ... a3 a2 a1 =
+   f ... a3' a2' a1'
+=TEX
+where
+=GFT
+cnv1 a1 = Ù a1 = a1'
+cnv2 a2 = Ù a2 = a2'
+cnv3 a3 = Ù a3 = a3'
+ ...
+=TEX
+=SML
+fun €LIST_RAND_C› (cnvs : CONV list) : CONV =
+	case cnvs of
+		cnv::cnvs'	=> APP_C (LIST_RAND_C cnvs', cnv)
+	|	[]		=> id_conv;
+=TEX
+=SML
+fun €LEFT_RIGHT_C› (cnv1, cnv2) = LIST_RAND_C [cnv2, cnv1];
+=TEX
 Rename a sequence of quantified variables:
 =SML
 local
@@ -228,12 +256,12 @@ end
 end;
 =TEX
 =SML
-val rec €seq_simple_¬_conv›:CONV = (fn tm =>
+val rec €seq_simple_¬_conv›:CONV = fn tm => (
 	(simple_¬_conv
 	ORELSE_C 
 	(RATOR_C seq_simple_¬_conv THEN_C simple_¬_conv)
 	ORELSE_C
-	(fn tm1 => term_fail "seq_simple_¬_conv" 27008 [tm1]))
+	refl_conv)
 	tm
 );
 =TEX
@@ -245,8 +273,32 @@ val rec €seq_simple_¬_conv1›:CONV = (fn tm =>
 	ORELSE_C 
 	(RATOR_C seq_simple_¬_conv1 THEN_C simple_¬_conv)
 	ORELSE_C
-	(fn tm1 => term_fail "seq_simple_¬_conv1" 27008 [tm1])))
+	refl_conv))
 	tm
+);
+=TEX
+=SML
+fun €list_±_disch_rule› (tms : TERM list) (t : THM) =
+case rev tms of
+	tm::tms	=> (
+		foldl (¥_±_rule o uncurry disch_rule) (disch_rule tm t) tms
+			handle ex => reraise ex "list_±_disch_rule"
+	)
+|	[]		=> fail "list_±_disch_rule" 7107 [];
+=TEX
+=SML
+fun €sort_±_conv› (order : TERM ORDER) : CONV = fn tm => (
+case strip_± tm of
+	tms1 as _::_::_	=>
+	let
+		val tms2 = sort order tms1;
+		val t1 = list_±_disch_rule tms1 (list_±_intro (map asm_rule tms2));
+		val t2 = list_±_disch_rule tms2 (list_±_intro (map asm_rule tms1));
+	in
+		§_intro t1 t2
+	end
+
+|	_		=> fail_conv tm
 );
 =TEX
 \subsubsection{Projection Conversions}
@@ -562,8 +614,14 @@ end);
 A local version of $z\_binding\_eq\_conv2$, that just processes the LHS binding,
 which had better be present.
 =SML
+local
+val z_empty_schema_type = mk_z_schema_type [];
+in
 val €z_binding_eq_conv3› : CONV = (fn tm => (
 let	val (b1,b2) = dest_z_eq tm;
+	val b1args = case dest_z_term b1 of
+		ZBinding xs	=> map snd xs
+	|	_		=> term_fail "z_binding_eq_conv3" 42021 [tm];
 	val aconst = const_of_binding_type (type_of b1);
 	val spec = binding_gen_semantic_const aconst
 		handle (Fail _) => 
@@ -571,22 +629,36 @@ let	val (b1,b2) = dest_z_eq tm;
 		get_spec aconst);
 	val (bcons,bproj) = get_binding_info (type_of b1);
 	val ty_insts = type_match (type_of b1) (type_of(fst(dest_µ(concl spec))));
-	val bcons' = map (inst[] ty_insts) bproj;
-	val s1 = asm_rule tm;
-	val s1s = map (fn x => app_fun_rule  x s1) bcons';
-	val s2 = list_±_intro s1s;
-	val s3s = strip_±_rule(asm_rule(list_mk_± (map concl s1s)));
-	val s4 = fold (fn (x,y) =>  mk_app_rule y x) (rev s3s)
-		(refl_conv (inst [] ty_insts bcons));
+	val bproj' = map (inst[] ty_insts) bproj;
+	val bcons' = inst [] ty_insts bcons;
+	val (s2, s4) = case bproj' of
+		_::_	=>
+		let
+			val s1 = asm_rule tm;
+			val s1s = map (fn x => app_fun_rule x s1) bproj';
+			val s2 = list_±_intro s1s;
+			val s3s = strip_±_rule(asm_rule(concl s2));
+			val s4 = fold (fn (x,y) => mk_app_rule y x)
+				(rev s3s) (refl_conv bcons');
+		in
+			(s2, s4)
+		end
+	|	[]	=>
+		let
+			val s2 = asm_intro tm t_thm;
+			val s4 = asm_intro mk_z_true (refl_conv bcons');
+		in
+			(s2, s4)
+		end;
 	val s5 = all_µ_intro(hd(rev(strip_±_rule(all_µ_elim spec))));
-	val s6 = conv_rule(LEFT_C (simple_eq_match_conv1 s5)
-		THEN_C RIGHT_C (simple_eq_match_conv1 s5)) s4;
+	val s6 = conv_rule (
+		LEFT_RIGHT_C (fn _ => µ_elim b1 s5, fn _ => µ_elim b2 s5)) s4;
 	val s7 = §_intro (all_¥_intro s2) (all_¥_intro s6);
-	val b1args = map snd(dest_z_binding b1);
-	val proj_thms = rev(tl(rev
-		(strip_±_rule(list_µ_elim (b1 :: b1args)(inst_type_rule ty_insts spec)))));
-	val s8 = conv_rule (RIGHT_C(LIST_OP_C
-		(map (fn thm => LEFT_C (fn _ => thm)) proj_thms))) s7;
+	val spec' = inst_type_rule ty_insts spec;
+	val proj_thms = rev(tl(rev(strip_±_rule(list_µ_elim (b1 :: b1args) spec'))));
+	val s8 = case map (fn thm => LEFT_C (fn _ => thm)) proj_thms of
+		[]	=> s7
+	|	convs	=> conv_rule (RIGHT_C(LIST_OP_C convs)) s7;
 in
 	(eq_trans_rule (refl_conv tm) s8)
 end
@@ -598,6 +670,7 @@ list_divert complaint "z_binding_eq_conv3"
 	("const_of_binding_type", 43005, [fn () => string_of_term tm]),
 	("eq_trans_rule", 43000, [fn () => string_of_term tm])])
 ;
+end (* of local ... in ... *);
 =TEX
 =IGN
 z_binding_eq_conv3 Ò(x ¶ 1, y ¶ 2, z ¶ 3) = (y ¶ 2, x ¶ 1, z ¶ 3)Æ; (* not in signature *)
@@ -626,11 +699,17 @@ let	val (x,s) = dest_z_ç tm;
 	val s3 = (z_∂_elim_conv2 THEN_C ALL_SIMPLE_∂_C
 		(RIGHT_C(RIGHT_C (LEFT_C c1 THEN_C 
 			z_binding_eq_conv3)))) res;
-	val wits = map (snd o dest_eq)
-		(strip_±(snd(dest_app(snd(dest_app(
-		snd(strip_∂ (snd(dest_eq (concl s3))))))))));
-	val s4 = conv_rule (RIGHT_C(EVERY_C (map local_prove_∂_conv wits)
-			)) s3;
+	val eqtm = snd(dest_app(snd(dest_app(
+			snd(strip_∂ (snd(dest_eq (concl s3))))))));
+	val s4 =
+		if is_z_true eqtm
+		then s3
+		else
+		let
+			val wits = map (snd o dest_eq) (strip_± eqtm);
+		in
+			conv_rule (RIGHT_C(EVERY_C (map local_prove_∂_conv wits))) s3
+		end;
 	val s5 = conv_rule (RIGHT_C (RIGHT_C c2)) s4;
 	val s6 = eq_trans_rule s2 (eq_sym_rule s5);
 in
@@ -846,6 +925,7 @@ end;
 =IGN
 z_norm_h_schema_conv Ò[x,y1:X; z: Y; p,q : É; r : É; S; S' | x1 = x]Æ;
 =TEX
+Due to the similar form of the semantic constants for renaming and decoration, the following code is also used for $lz\_ç\_renameâs\_conv$ below.
 =SML
 val €lz_ç_decorâs_conv› : CONV = (fn tm => (
 let	val (x,sd) = dest_z_ç tm;
@@ -856,15 +936,18 @@ let	val (x,sd) = dest_z_ç tm;
 		get_spec sd);
 	val s1 = conv_rule(BINDER_C(RIGHT_C(BINDER_C(BINDER_C
 		(RIGHT_C (z_binding_eq_conv1)))))) spec;
-	val wits = map dest_eq
-		(strip_±(snd(dest_app(
-		snd(strip_∂ (snd(dest_set_comp(snd(dest_eq (snd(dest_µ(concl s1))))))))))));
+	val (bind, body) =
+		dest_∂ (snd(dest_set_comp(snd(dest_eq (snd(dest_µ(concl s1)))))));
+	val eqtm = snd(dest_app body);
+	val wits =
+		if is_z_true eqtm
+		then []
+		else map dest_eq (strip_± eqtm);
 	val labs = map (snd o dest_z_selâs o snd) wits;
 	val vs = map fst wits;
 	val wit = mk_z_binding(combine labs vs);
-	val bind = fst(dest_z_selâs(snd(hd wits)));
-	val s2 =eq_sym_rule(z_binding_eq_conv3 (mk_eq(wit,bind)));
-	val s3= conv_rule(BINDER_C(RIGHT_C(BINDER_C(BINDER_C(RIGHT_C
+	val s2 = eq_sym_rule(z_binding_eq_conv3 (mk_eq(wit,bind)));
+	val s3 = conv_rule(BINDER_C(RIGHT_C(BINDER_C(BINDER_C(RIGHT_C
 		(fn _ => s2)))))) s1;
 	val s4 = conv_rule (BINDER_C(RIGHT_C(BINDER_C(local_prove_∂_conv1 wit))))
 			s3;
@@ -1261,13 +1344,9 @@ z_≥âs_convÒ(≥[x:É; y:É| f x y]) ∫ ÉÆ;
 =TEX
 \section{SCHEMA QUANTIFICATION}
 =SML
-fun €QUANT_SOP_BINDING_C› cnv1 = BINDER_C(
-	RIGHT_C(LEFT_C(BINDING_C cnv1)));
-val €quant_sop_binding_sel_conv› = QUANT_SOP_BINDING_C (TRY_C z_selâs_conv);
-=TEX
-=SML
 local
-	val cnv1 = BINDER_C(LEFT_C(
+	fun OPT_SIMPLE_BINDER_C cnv = (SIMPLE_BINDER_C cnv) ORELSE_C cnv;
+	val cnv1 =
 		fn tm1 =>
 		let	val ¬red = snd(dest_app(fst(dest_± tm1)));
 			val ¬red_thm = seq_simple_¬_conv ¬red;
@@ -1276,29 +1355,36 @@ local
 		RAND_C(RAND_C (fn _ => ¬red_thm) THEN_C 
 			d_dp_proj_conv THEN_C z_decl_pred_conv),
 		RAND_C (fn _ => ¬red_thm) THEN_C p_dp_proj_conv) tm1
-		end));
+		end;
 in
+val €quant_sop_conv› = OPT_SIMPLE_BINDER_C (
+	LEFT_RIGHT_C (cnv1, LEFT_C (BINDING_C (TRY_C z_selâs_conv)))
+);
+end (* of local ... in ... *);
+=TEX
+=SML
 val €lz_ç_∂âs_conv› : CONV = (fn tm =>(
 let	val (x,st) = dest_z_ç tm;
 	val (d,p,v) = dest_z_∂âs st;
 	val xnm = give_n_name tm;
 	val spec = quantâs_gen_semantic_const st;
-	val spec' = conv_rule(ALL_SIMPLE_µ_C(RAND_C(BINDER_C
-		(RAND_C(simple_¡_conv xnm))))) spec;
-	val s1 = (RAND_C (simple_eq_match_conv1 spec') THEN_C
-		ç_comp_conv) tm;
-	val s1' = conv_rule (RIGHT_C quant_sop_binding_sel_conv) s1;
-	val s2 = conv_rule(RIGHT_C cnv1) s1';
-	val s3 = conv_rule(RIGHT_C z_∂_intro_conv) s2;
+	val spec' = conv_rule(TRY_C(ALL_SIMPLE_µ_C(RAND_C(BINDER_C
+		(RAND_C(simple_¡_conv xnm)))))) spec;
+	val s1 = (
+		RAND_C (simple_eq_match_conv1 spec')
+		THEN_C ç_comp_conv
+		THEN_C quant_sop_conv
+		THEN_TRY_C z_∂_intro_conv
+	) tm;
 in
 	check_is_z_conv_result "z_ç_∂âs_conv" 
-		(eq_trans_rule (refl_conv tm) s3)
+		(eq_trans_rule (refl_conv tm) s1)
 end)
 handle complaint =>
 list_divert complaint "z_ç_∂âs_conv" 
 	[("dest_z_ç", 43020, [fn () => string_of_term tm]),
 	("dest_z_∂âs", 43020, [fn () => string_of_term tm])]);
-end;
+
 val €z_ç_∂âs_conv› : CONV = DUP_SAP_C lz_ç_∂âs_conv;
 val €z_∂âs_conv› = Z_ç_ELIM_C z_ç_∂âs_conv;
 =IGN
@@ -1308,39 +1394,28 @@ z_∂âs_conv Ò((∂ x,y:X;z:É | p x z ∑ ([w:W;x,y:X;z:É | q w x y z] ∫ É))∫ É)Æ;
 
 =TEX
 =SML
-local
-	val cnv1 = BINDER_C(LEFT_C(
-		fn tm1 =>
-		let	val ¬red = snd(dest_app(fst(dest_± tm1)));
-			val ¬red_thm = seq_simple_¬_conv ¬red;
-		in
-		APP_C (
-		RAND_C(RAND_C (fn _ => ¬red_thm) THEN_C d_dp_proj_conv 
-			THEN_C z_decl_pred_conv),
-		RAND_C (fn _ => ¬red_thm) THEN_C p_dp_proj_conv) tm1
-		end));
-in
 val €lz_ç_µâs_conv› : CONV = (fn tm =>(
 let	val (x,st) = dest_z_ç tm;
 	val (d,p,v) = dest_z_µâs st;
 	val xnm = give_n_name tm;
 	val spec = quantâs_gen_semantic_const st;
-	val spec' = conv_rule(ALL_SIMPLE_µ_C(RAND_C(BINDER_C
-		(RAND_C(simple_¡_conv xnm))))) spec;
-	val s1 = (RAND_C (simple_eq_match_conv1 spec') THEN_C
-		ç_comp_conv) tm;
-	val s1' = conv_rule (RIGHT_C quant_sop_binding_sel_conv) s1;
-	val s2 = conv_rule(RIGHT_C cnv1) s1';
-	val s3 = conv_rule(RIGHT_C z_µ_intro_conv) s2;
+	val spec' = conv_rule(TRY_C(ALL_SIMPLE_µ_C(RAND_C(BINDER_C
+		(RAND_C(simple_¡_conv xnm)))))) spec;
+	val s1 = (
+		RAND_C (simple_eq_match_conv1 spec')
+		THEN_C ç_comp_conv
+		THEN_C quant_sop_conv
+		THEN_TRY_C z_µ_intro_conv
+	) tm;
 in
 	check_is_z_conv_result "z_ç_µâs_conv" 
-		(eq_trans_rule (refl_conv tm) s3)
+		(eq_trans_rule (refl_conv tm) s1)
 end)
 handle complaint =>
 list_divert complaint "z_ç_µâs_conv" 
 	[("dest_z_ç", 43030, [fn () => string_of_term tm]),
 	("dest_z_µâs", 43030, [fn () => string_of_term tm])]);
-end;
+
 val €z_ç_µâs_conv› : CONV = DUP_SAP_C lz_ç_µâs_conv;
 val €z_µâs_conv› :CONV = Z_ç_ELIM_C z_ç_µâs_conv;
 
@@ -1350,39 +1425,28 @@ z_µâs_conv Ò((µ x,y:X;z:É | p x z ∑ ([w:W;x,y:X;z:É | q w x y z] ∫ É))∫ É)Æ;
 
 =TEX
 =SML
-local
-	val cnv1 = BINDER_C(LEFT_C(
-		fn tm1 =>
-		let	val ¬red = snd(dest_app(fst(dest_± tm1)));
-			val ¬red_thm = seq_simple_¬_conv ¬red;
-		in
-		APP_C (
-		RAND_C(RAND_C (fn _ => ¬red_thm) THEN_C 
-			d_dp_proj_conv THEN_C z_decl_pred_conv),
-		RAND_C (fn _ => ¬red_thm) THEN_C p_dp_proj_conv) tm1
-		end));
-in
 val €lz_ç_∂â1âs_conv› : CONV = (fn tm =>(
 let	val (x,st) = dest_z_ç tm;
 	val (d,p,v) = dest_z_∂â1âs st;
 	val xnm = give_n_name tm;
 	val spec = quantâs_gen_semantic_const st;
-	val spec' = conv_rule(ALL_SIMPLE_µ_C(RAND_C(BINDER_C
-		(RAND_C(simple_¡_conv xnm))))) spec;
-	val s1 = (RAND_C (simple_eq_match_conv1 spec') THEN_C
-		ç_comp_conv) tm;
-	val s1' = conv_rule (RIGHT_C quant_sop_binding_sel_conv) s1;
-	val s2 = conv_rule(RIGHT_C cnv1) s1';
-	val s3 = conv_rule(RIGHT_C z_∂â1_intro_conv) s2;
+	val spec' = conv_rule(TRY_C(ALL_SIMPLE_µ_C(RAND_C(BINDER_C
+		(RAND_C(simple_¡_conv xnm)))))) spec;
+	val s1 = (
+		RAND_C (simple_eq_match_conv1 spec')
+		THEN_C ç_comp_conv
+		THEN_C quant_sop_conv
+		THEN_TRY_C z_∂â1_intro_conv
+	) tm;
 in
 	check_is_z_conv_result "z_ç_∂â1âs_conv" 
-		(eq_trans_rule (refl_conv tm) s3)
+		(eq_trans_rule (refl_conv tm) s1)
 end)
 handle complaint =>
 list_divert complaint "z_ç_∂â1âs_conv" 
 	[("dest_z_ç", 43021, [fn () => string_of_term tm]),
 	("dest_z_∂â1âs", 43021, [fn () => string_of_term tm])]);
-end;
+
 val €z_ç_∂â1âs_conv› : CONV = DUP_SAP_C lz_ç_∂â1âs_conv;
 val €z_∂â1âs_conv› = Z_ç_ELIM_C z_ç_∂â1âs_conv;
 =IGN
@@ -1446,81 +1510,61 @@ val €z_ç_ªâs_conv› = DUP_SAP_C (ç_C z_ªâs_conv);
 z_ç_ªâs_convÒp ç ([x,x':X; y,z,w':Y| f w' x x' z y] ªâs [p:P;x:X;w,y:Y | g x p y])Æ;
 z_ªâs_convÒ[x,x':X; y,z,w':Y| f x x' z y] ªâs [p:P;x:X;w,y:Y | g x p y]Æ;
 =TEX
-The following is only intended for the very specific uses made of it here. 
-=SML
-val €z_binding_elim_conv› : CONV = (fn tm =>
-let	val s1 = binding_gen_semantic_const tm
-		handle (Fail _) => 
-		(diag_string "z_binding_elim_conv - semantic constant generator failed";
-		get_spec tm);
-	val s2 = all_µ_intro((hd(rev(strip_±_rule(all_µ_elim s1)))));
-in
-	(simple_eq_match_conv1 s2 tm)
-end);
-=TEX
+Due to the similar form of the semantic constants for renaming and decoration,
+$lz\_ç\_renameâs\_conv$ is derived from $lz\_ç\_renameâs\_conv$ as follows:
+\begin{enumerate}
+\item All occurrences of $decorâs$ have been replaced by $renameâs$.
+\item Error 43015 has been changed to 43031.
+\item An extra failure handler has been added for $mk\_eq$ for error 43035.
+\item The conjunction of equalities returned by $z\_binding\_eq\_conv3$ needs reordering as renaming can change the order of components, unlike decoration.
+\end{enumerate}
 =SML
 local
-	val rwt = pure_rewrite_tac[
-		pc_rule1 "hol1" prove_rule[] ¨µ x ∑ (x = x) § TÆ];
+	fun eq_order tm1 tm2 =
+		let	fun key tm = #2 (dest_z_selâs (#1 (dest_eq tm)));
+		in	z_sig_order (key tm1) (key tm2)
+		end;
 in
-val €lz_ç_renameâs_conv› : CONV = (fn tm =>
-let	val (x,st) = dest_z_ç tm
-		handle complaint => 
-		divert complaint "dest_z_ç" "z_ç_renameâs_conv" 43031 
-			[fn () => string_of_term tm];
-	val (s,rs) = dest_z_renameâs st
-		handle complaint => 
-		divert complaint "dest_z_renameâs" "z_ç_renameâs_conv" 43031 
-			[fn () => string_of_term tm];
-	val spec = renameâs_gen_semantic_const st
-		handle (Fail _) => 
-		(diag_string "z_ç_renameâs_conv - semantic constant generator failed";
-		get_spec st);
-	val s1 = (RAND_C(simple_eq_match_conv1 spec) THEN_C
-		ç_comp_conv)tm handle (Fail _)
-		=> term_fail "z_ç_renameâs_conv" 43035 [st];
-	val bind = snd(dest_eq(snd(dest_±(snd(dest_simple_∂
-		(snd(dest_eq (concl s1))))))));
-	val change = map (fn (nm,sel) =>
-		(snd(dest_z_selâs sel),mk_z_selâs(x,nm)))
-		(dest_z_binding bind);
-	val wit = mk_z_binding change;
-	val rhs = mk_z_ç(wit,s) handle (Fail _)
-		=> term_fail "z_ç_renameâs_conv" 43035 [st];
-	val s2 = tac_proof(([],mk_eq(snd(dest_eq(concl s1)),
-		rhs)),
-		§_T2
-		(fn ∂_thm => SIMPLE_∂_THEN 
-		  (fn thm => 
-			asm_tac (±_left_elim thm)
-			THEN (let 	val rtm = 
-					 (snd o dest_eq o snd o dest_± o concl) thm;
-					val l_sel_conv = z_selâs_1_conv rtm;
-					val rwthm = (conv_rule 
-		 	  		 (z_binding_eq_conv THEN_C
-		 	   		 (±_C (RIGHT_C l_sel_conv)))(±_right_elim thm));
-				in
-				pure_rewrite_thm_tac rwthm
-				end)
-		  )
-		 ∂_thm
-	       	 THEN conv_tac(LEFT_C z_binding_elim_conv)
-		 THEN concl_in_asms_tac)
-		(fn res_thm =>
-		simple_∂_tac wit THEN ±_tac THEN_LIST
-		[accept_tac res_thm,
-		 conv_tac(RIGHT_C(ONCE_MAP_C (z_selâs_1_conv wit))
-			THEN_C RIGHT_C z_binding_elim_conv)
-  	   	   THEN rwt]
-		));
-	val s3 = conv_rule(RIGHT_C(LEFT_C(BINDING_C
-		(TRY_C z_selâs_conv)))) s2;
-	val s4 = eq_trans_rule s1 s3;
+val €lz_ç_renameâs_conv› : CONV = (fn tm => (
+let	val (x,sd) = dest_z_ç tm;
+	val (s,dec) = dest_z_renameâs sd;
+	val spec = renameâs_gen_semantic_const sd
+		handle (Fail _) =>
+		(diag_string "renameâs_gen_semantic_const fail - z_ç_renameâs_conv";
+		get_spec sd);
+	val s1 = conv_rule(BINDER_C(RIGHT_C(BINDER_C(BINDER_C
+		(RIGHT_C (z_binding_eq_conv1)))))) spec;
+	val (bind, body) =
+		dest_∂ (snd(dest_set_comp(snd(dest_eq (snd(dest_µ(concl s1)))))));
+	val eqtm = snd(dest_app body);
+	val wits =
+		if is_z_true eqtm
+		then []
+		else map dest_eq (strip_± eqtm);
+	val labs = map (snd o dest_z_selâs o snd) wits;
+	val vs = map fst wits;
+	val wit = mk_z_binding(combine labs vs);
+	val s2 = eq_sym_rule(
+		(z_binding_eq_conv3 THEN_TRY_C sort_±_conv eq_order) (mk_eq(wit,bind)))
+			handle (Fail _) => term_fail "z_ç_renameâs_conv" 43035 [sd];
+	val s3 = conv_rule(BINDER_C(RIGHT_C(BINDER_C(BINDER_C(RIGHT_C
+		(fn _ => s2)))))) s1;
+	val s4 = conv_rule (BINDER_C(RIGHT_C(BINDER_C(local_prove_∂_conv1 wit))))
+			s3;
+	val s5 = (RIGHT_C (simple_eq_match_conv1 s4)
+		THEN_C ç_comp_conv) tm;
+	val s6 = conv_rule(RIGHT_C(LEFT_C(BINDING_C(TRY_C z_selâs_conv)))) s5; 
 in
-	check_is_z_conv_result "z_ç_renameâs_conv" 
-		(eq_trans_rule (refl_conv tm) s4)
-end);
-end;
+	check_is_z_conv_result "z_ç_renameâs_conv" s6
+end)
+handle complaint =>
+list_divert complaint "z_ç_renameâs_conv" 
+	[("dest_z_renameâs", 43031, [fn () => string_of_term tm]),
+	("dest_z_ç", 43031, [fn () => string_of_term tm]),
+	("simple_eq_match_conv1", 43031, [fn () => string_of_term tm]),
+	("eq_trans_rule", 43000, [fn () => string_of_term tm])])
+;
+end (* of local ... in ... *);
 val €z_ç_renameâs_conv› : CONV = DUP_SAP_C lz_ç_renameâs_conv;
 val €z_renameâs_conv› : CONV = Z_ç_ELIM_C z_ç_renameâs_conv;
 =IGN
