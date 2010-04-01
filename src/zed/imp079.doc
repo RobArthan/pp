@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp079.doc   %Z% $Date: 2006/12/02 17:18:27 $ $Revision: 1.37 $ $RCSfile: imp079.doc,v $
+% imp079.doc   %Z% $Date: 2007/08/04 10:51:17 $ $Revision: 1.38 $ $RCSfile: imp079.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for Z User Interface Support}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP079}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.37 $%
+\def\SCCSversion{$Revision: 1.38 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/12/02 17:18:27 $%
+\TPPdate{\FormatDate{$Date: 2007/08/04 10:51:17 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -112,6 +112,7 @@ Removed dependency on PolyML.makestring.
 \item[Issue 1.36] Made it work with SML/NJ.
 \item[Issue 1.37] {\em string\_of\_float} renamed as {\em z\_string\_of\_float}.
 \item[Issue 1.38] Tidied error handling in {\em template\_of\_string}.
+\item[Issue 1.39] Support for empty schemas.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -230,16 +231,15 @@ the data type has a single constructor with optional components in its
 operand type.
 
 =SML
-datatype ÛPREDÝ		= ÛPredQuantifierÝ of
-				Z_QUANT * DECL * (PRED OPT) * PRED
+datatype ÛPREDÝ	= ÛPredQuantifierÝ of Z_QUANT * SCH_TEXT * PRED
 			| ÛPredLetÝ of EQ_DEF list * PRED
 			| ÛPredLogInOpÝ of PRED * Z_LOG_IN_OP * PRED
 			| ÛPredNotÝ of bool * PRED
 			| ÛPredSchInOpÝ of PRED * SCH_IN_OP * PRED
 			| ÛPredSchPreOpÝ of SCH_PRE_OP * PRED
 			| ÛPredSchemaHidingÝ of PRED * (PRED list)
-			| ÛPredMuÝ of DECL * (PRED OPT) * (PRED OPT)
-			| ÛPredLambdaÝ of DECL * (PRED OPT) * (PRED OPT)
+			| ÛPredMuÝ of SCH_TEXT * (PRED OPT)
+			| ÛPredLambdaÝ of SCH_TEXT * (PRED OPT)
 			| ÛPredFancyFixÝ of TEMPLATE * DECOR * ((PRED list) list)
 			| ÛPredCrossProductÝ of PRED list
 			| ÛPredPowÝ of PRED
@@ -256,8 +256,8 @@ datatype ÛPREDÝ		= ÛPredQuantifierÝ of
 			| ÛPredBindingÝ of EQ_DEF list
 			| ÛPredSetDisplayÝ of PRED list
 			| ÛPredSeqDisplayÝ of PRED list
-			| ÛPredSetCompÝ of DECL * (PRED OPT) * (PRED OPT)
-			| ÛPredHorizSchemaÝ of  DECL * (PRED OPT)
+			| ÛPredSetCompÝ of SCH_TEXT * (PRED OPT)
+			| ÛPredHorizSchemaÝ of SCH_TEXT
 			| ÛPredGenInstÝ of PRED list
 			| ÛPredRenameListÝ of (PRED * PRED) list
 			| ÛPredBracketedÝ of PRED * DECOR
@@ -268,7 +268,8 @@ a declaration is much simpler here than in the grammar (which is
 complicated by a need to single out declarations consisting of a single
 schema expression as a special case).
 =SML
-withtype ÛDECLÝ		= (PRED list * PRED OPT) list
+withtype ÛDECLÝ	= (PRED list * PRED) list
+and ÛSCH_TEXTÝ	= (PRED list * PRED) list * (PRED OPT) (* = DECL * (PRED OPT) *)
 and ÛEQ_DEFÝ		= PRED * PRED;
 =TEX
 The following type abbreviations and data types correspond to the
@@ -633,11 +634,8 @@ newline if desired.
 =SML
 fun Ûformat_predÝ (pred : PRED) : string = (
 	case pred of
-			PredQuantifier (q, decl, Value pred1, pred2) =>
-			format_quant q ^ format_decl decl ^ " | "
-			^ format_pred pred1 ^ " · " ^ format_pred pred2
-	|	PredQuantifier (q, decl, Nil, pred2) =>
-			format_quant q ^ format_decl decl ^ " · " ^ format_pred pred2
+		PredQuantifier (q, sch_text, pred) =>
+			format_quant q ^ format_sch_text sch_text ^ " · " ^ format_pred pred
 	|	PredLet (eqdefs, pred) =>
 			format_list format_eq_def eqdefs "; " ^ format_pred pred
 	|	PredLogInOp (pred1, rator, pred2) =>
@@ -650,8 +648,8 @@ fun Ûformat_predÝ (pred : PRED) : string = (
 			format_sch_pre_op rator ^ format_pred pred
 	|	PredSchemaHiding (pred, preds) =>
 			format_pred pred ^ "\\[" ^ format_list format_pred preds ", " ^ "]"
-	|	PredMu body => "Í " ^ format_decl_bar_pred_dot_pred body
-	|	PredLambda body => "Ì " ^ format_decl_bar_pred_dot_pred body
+	|	PredMu body => "Í " ^ format_sch_text_dot_pred body
+	|	PredLambda body => "Ì " ^ format_sch_text_dot_pred body
 	|	PredFancyFix (tmpl, decor, args) =>
 			format_fancy_fix
 			(fn ps => format_list format_pred ps ", ")
@@ -672,9 +670,9 @@ fun Ûformat_predÝ (pred : PRED) : string = (
 			"(" ^ format_list format_eq_def eqdefs ", " ^ ")"
 	|	PredSetDisplay preds  => "{" ^ format_list format_pred preds ", " ^ "}"
 	|	PredSeqDisplay preds  => "§" ^ format_list format_pred preds ", " ^ "¢"
-	|	PredSetComp body => "{" ^ format_decl_bar_pred_dot_pred body ^ "}"
-	|	PredHorizSchema (decl, predopt) =>
-			"[" ^ format_decl_bar_pred_dot_pred(decl, predopt, Nil) ^ "]"
+	|	PredSetComp body => "{" ^ format_sch_text_dot_pred body ^ "}"
+	|	PredHorizSchema sch_text =>
+			"[" ^ format_sch_text sch_text ^ "]"
 	|	PredGenInst preds => "[" ^ format_list format_pred preds ", " ^ "]"
 	|	PredRenameList renames =>
 			"["
@@ -685,11 +683,16 @@ fun Ûformat_predÝ (pred : PRED) : string = (
 		^	"]"
 	|	PredBracketed (pred, decor) => "(" ^ format_pred pred ^ ")" ^ decor
 )
+and Ûformat_sch_textÝ ((decl, predopt) : SCH_TEXT) : string = (
+	case predopt of
+		Value pred	=> format_decl decl ^ " | " ^ format_pred pred
+	|	Nil		=> format_decl decl
+)
 and Ûformat_declÝ (decs : DECL) : string = (
-	let	fun format_dec (preds, Nil) =  format_list format_pred preds ", "
-		|   format_dec (preds, Value pred2) =
+	let	fun format_dec ([],		pred)	= format_pred pred
+		|   format_dec (preds as _::_,	pred)	=
 			format_list format_pred preds ", "
-			 ^ " : " ^ format_pred pred2;
+			 ^ " : " ^ format_pred pred;
 	in	format_list format_dec decs "; "
 	end
 )
@@ -700,18 +703,12 @@ and Ûformat_eq_defÝ ((pred1, pred2) : EQ_DEF) : string = (
 )
 =TEX
 =SML
-and Ûformat_decl_bar_pred_dot_predÝ
-	(body : DECL * (PRED OPT) * (PRED OPT))
+and Ûformat_sch_text_dot_predÝ
+	(body : SCH_TEXT * (PRED OPT))
 	: string = (
 	case body of
-		(decl, Value pred1, Value pred2) =>
-			format_decl decl ^ " | " ^ format_pred pred1 ^ " · " ^ format_pred pred2
-	|	(decl, Nil, Value pred) =>
-			format_decl decl ^ " · " ^ format_pred pred
-	|	(decl, Value pred, Nil) =>
-			format_decl decl ^ " | " ^ format_pred pred
-	|	(decl, Nil, Nil) =>
-			format_decl decl
+		(sch_text, Value pred)	=> format_sch_text sch_text ^ " · " ^ format_pred pred
+	|	(sch_text, Nil)		=> format_sch_text sch_text
 );
 =TEX
 =SML
