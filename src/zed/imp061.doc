@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp061.doc   %Z% $Date: 2007/05/28 14:26:16 $ $Revision: 1.45 $ $RCSfile: imp061.doc,v $
+% imp061.doc   %Z% $Date: 2007/08/03 16:44:15 $ $Revision: 1.46 $ $RCSfile: imp061.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Parser}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP061}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.45 $%
+\def\SCCSversion{$Revision: 1.46 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/05/28 14:26:16 $%
+\TPPdate{\FormatDate{$Date: 2007/08/03 16:44:15 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -100,11 +100,12 @@ Relaxed dependency on makestring.
 \item[Issue 1.40] Now support decoration of fancyfix names.
 \item[Issue 1.41] Fixed version numbers in this changes history.
 \item[Issue 1.42] Added support for floating point literals
-\end{description}
 \item[Issue 1.43] {\em string\_of\_float} renamed as {\em z\_string\_of\_float}.
 \item[Issue 1.44] Fixed messy format produced by {\em format\_core\_expr}.
 \item[Issue 1.45] Made errors in phase 2 raise the standard failure exception.
 \item[Issue 1.46] Quoted identifiers are not allowed in templates.
+\item[Issue 1.47] Support for empty schemas.  Updated for change to SLRP grammar for declarations, obviating error 61104 from phase 2 syntax check.
+\end{description}
 \subsection{Changes Forecast}
 \pagebreak
 \section{GENERAL}
@@ -208,6 +209,7 @@ datatype €PP›		= PPParagraph of PARAGRAPH
 			| PPEqDefs of EQ_DEF list
 			| PPPred of PRED
 			| PPDecl of DECL
+			| PPSchText of SCH_TEXT
 			| PPCoreExpr of CORE_EXPR
 			| PPSomeExprs of PRED list
 			| PPIdDec of (ID * DECOR)
@@ -256,6 +258,7 @@ fun €format_pp› (pp : PP) : string = (
 	|	PPEqDefs eqdefs => format_list format_eq_def eqdefs ", "
 	|	PPPred pred => format_pred pred
 	|	PPDecl decl => format_decl decl
+	|	PPSchText st => format_sch_text st
 	|	PPCoreExpr ce =>  format_core_expr ce
 	|	PPSomeExprs es => format_list format_pred es ", "
 	|	PPIdDec (id, dec) => id ^ dec
@@ -866,20 +869,11 @@ fun €quant_aux› (Token (ZTµ b, _)) = ZQuantµ b
 =TEX
 =SML
 fun €red_quant›
-	q (Parsed(PPDecl d))
-	_ (Parsed(PPPred p1))
-	_ (Parsed(PPPred p2)) _ = (
-	PPPred(PredQuantifier(quant_aux q, d, Value p1, p2))
-) | red_quant x1 x2 x3 x4 x5 x6 stk =
-		stack_error "red_quant" (x1::x2::x3::x4::x5::x6::stk);
-=TEX
-=SML
-fun €red_quant_no_bar›
-	q (Parsed(PPDecl d))
+	q (Parsed(PPSchText st))
 	_ (Parsed(PPPred p)) _ = (
-	PPPred(PredQuantifier(quant_aux q, d, Nil, p))
-) | red_quant_no_bar x1 x2 x3 x4 stk =
-		stack_error "red_quant_no_bar" (x1::x2::x3::x4::stk);
+	PPPred(PredQuantifier(quant_aux q, st, p))
+) | red_quant x1 x2 x3 x4 stk =
+		stack_error "red_quant" (x1::x2::x3::x4::stk);
 =TEX
 =SML
 fun €red_let› _ (Parsed(PPEqDefs e)) _ (Parsed(PPPred p)) _ = (
@@ -970,6 +964,50 @@ fun €red_renames›
 		stack_error "red_renames" (x1::x2::x3::x4::x5::stk);
 =TEX
 =SML
+fun €red_sch_text_minus_pred› (Parsed(PPSchText st)) _ = (
+	PPSchText st
+) | red_sch_text_minus_pred x1 stk =
+		stack_error "red_sch_text_minus_pred" (x1::stk);
+=TEX
+=SML
+fun €red_pred1_as_sch_text›
+	(Parsed(PPPred p)) _ = (
+	PPSchText ([([], p)], Nil)
+) | red_pred1_as_sch_text x1 stk =
+		stack_error "red_pred1_as_sch_text" (x1::stk);
+=TEX
+=SML
+fun €red_sch_text_minus_empty_minus_pred› (Parsed(PPSchText st)) _ = (
+	PPSchText st
+) | red_sch_text_minus_empty_minus_pred x1 stk =
+		stack_error "red_sch_text_minus_empty_minus_pred" (x1::stk);
+=TEX
+=SML
+fun €red_no_sch_text› _ = PPSchText ([], Nil);
+=TEX
+=SML
+fun €red_decl_minus_pred_as_sch_text›
+	(Parsed(PPDecl rd)) _ = (
+	PPSchText (rd, Nil)
+) | red_decl_minus_pred_as_sch_text x1 stk =
+		stack_error "red_decl_minus_pred_as_sch_text" (x1::stk);
+=TEX
+=SML
+fun €red_decl_bar_pred_as_sch_text›
+	(Parsed(PPDecl rd)) _
+	(Parsed(PPPred p)) _ = (
+	PPSchText (rd, Value p)
+) | red_decl_bar_pred_as_sch_text x1 x2 x3 stk =
+		stack_error "red_decl_bar_pred_as_sch_text" (x1::x2::x3::stk);
+=TEX
+=SML
+fun €red_bar_pred_as_sch_text›
+	_ (Parsed(PPPred p)) _ = (
+	PPSchText ([], Value p)
+) | red_bar_pred_as_sch_text x1 x2 stk =
+		stack_error "red_bar_pred_as_sch_text" (x1::x2::stk);
+=TEX
+=SML
 fun €red_decl_minus_pred› (Parsed(PPDecl rd)) _ = (
 	PPDecl rd
 ) | red_decl_minus_pred x1 stk =
@@ -977,8 +1015,8 @@ fun €red_decl_minus_pred› (Parsed(PPDecl rd)) _ = (
 =TEX
 =SML
 fun €red_pred1_as_decl›
-	(Parsed(PPSomeExprs es)) _ = (
-	PPDecl [(es, Nil)]
+	(Parsed(PPPred p)) _ = (
+	PPDecl [([], p)]
 ) | red_pred1_as_decl x1 stk =
 		stack_error "red_pred1_as_decl" (x1::stk);
 =TEX
@@ -987,15 +1025,15 @@ fun €red_decl_semi_var_decs_pred1›
 	(Parsed(PPDecl rd))
 	(Parsed(PPSomeExprs es)) _
 	(Parsed(PPPred p)) _ = (
-	PPDecl (rd @ [(es, Value p)])
+	PPDecl (rd @ [(es, p)])
 ) | red_decl_semi_var_decs_pred1 x1 x2 x3 x4 stk =
 		stack_error "red_decl_semi_var_decs_pred1" (x1::x2::x3::x4::stk);
 =TEX
 =SML
 fun €red_decl_semi_pred1›
 	(Parsed(PPDecl rd))
-	(Parsed(PPSomeExprs es)) _ = (
-	PPDecl (rd @ [(es, Nil)])
+	(Parsed(PPPred p)) _ = (
+	PPDecl (rd @ [([], p)])
 ) | red_decl_semi_pred1 x1 x2 stk =
 		stack_error "red_decl_semi_pred1" (x1::x2::stk);
 =TEX
@@ -1003,7 +1041,7 @@ fun €red_decl_semi_pred1›
 fun €red_var_decs_pred1›
 	(Parsed(PPSomeExprs es)) _
 	(Parsed(PPPred p)) _ = (
-	PPDecl [(es, Value p)]
+	PPDecl [(es, p)]
 ) | red_var_decs_pred1 x1 x2 x3 stk =
 		stack_error "red_var_decs_pred1" (x1::x2::x3::stk);
 =TEX
@@ -1013,8 +1051,8 @@ fun €red_var_decs_pred1_semi› x1 x2 x3 _ stk = (
 );
 =TEX
 =SML
-fun €red_pred1_as_decl_semi› (Parsed(PPSomeExprs es)) _ _ = (
-		PPDecl [(es, Nil)]
+fun €red_pred1_as_decl_semi› (Parsed(PPPred p)) _ _ = (
+		PPDecl [([], p)]
 ) | red_pred1_as_decl_semi x1 x2 stk =
 		stack_error "red_pred1_as_decl_semi" (x1::x2::stk);
 =TEX
@@ -1038,40 +1076,30 @@ fun €mu_lambda_aux› (Token (ZTÕ, _)) = PredMu
 |   mu_lambda_aux _ = raise PARSER_ERROR "mu_lambda_aux";;
 =TEX
 =SML
-fun €red_mu_lambda_no_pred›
-	mu_lambda
-	(Parsed(PPDecl dec)) _
-	(Parsed(PPPred p)) _ = (
-	 PPPred(mu_lambda_aux mu_lambda (dec, Nil, Value p))
-) | red_mu_lambda_no_pred x1 x2 x3 x4 stk =
-		stack_error "red_mu_lambda_no_pred" (x1::x2::x3::x4::stk);
-=TEX
-=SML
-fun €red_mu_lambda_no_pred_no_spot›
-	_ mu_lambda
-	(Parsed(PPDecl dec)) _ _ = (
-	 PPPred(mu_lambda_aux mu_lambda (dec, Nil, Nil))
-) | red_mu_lambda_no_pred_no_spot x1 x2 x3 x4 stk =
-		stack_error "red_mu_lambda_no_pred_no_spot" (x1::x2::x3::x4::stk);
-=TEX
-=SML
 fun €red_mu_lambda›
 	mu_lambda
-	(Parsed(PPDecl dec)) _
-	(Parsed(PPPred p1)) _
-	(Parsed(PPPred p2)) _ = (
-	 PPPred(mu_lambda_aux mu_lambda (dec, Value p1, Value p2))
-) | red_mu_lambda x1 x2 x3 x4 x5 x6 stk =
-		stack_error "red_mu_lambda" (x1::x2::x3::x4::x5::x6::stk);
+	(Parsed(PPSchText st)) _
+	(Parsed(PPPred p)) _ = (
+	 PPPred(mu_lambda_aux mu_lambda (st, Value p))
+) | red_mu_lambda x1 x2 x3 x4 stk =
+		stack_error "red_mu_lambda" (x1::x2::x3::x4::stk);
 =TEX
 =SML
 fun €red_mu_lambda_no_spot›
 	_ mu_lambda
-	(Parsed(PPDecl dec)) _
-	(Parsed(PPPred p1)) _ _ = (
-	 PPPred(mu_lambda_aux mu_lambda (dec, Value p1, Nil))
-) | red_mu_lambda_no_spot x1 x2 x3 x4 x5 x6 stk =
-		stack_error "red_mu_lambda_no_spot" (x1::x2::x3::x4::x5::x6::stk);
+	(Parsed(PPSchText st)) _ _ = (
+	 PPPred(mu_lambda_aux mu_lambda (st, Nil))
+) | red_mu_lambda_no_spot x1 x2 x3 x4 stk =
+		stack_error "red_mu_lambda_no_spot" (x1::x2::x3::x4::stk);
+=TEX
+=SML
+fun €red_no_eq_defs› _ = PPEqDefs [];
+=TEX
+=SML
+fun €red_some_eq_defs› (Parsed(PPEqDefs eds)) _ = (
+	PPEqDefs eds
+) | red_some_eq_defs x1 stk =
+		stack_error "red_some_eq_defs" (x1::stk);
 =TEX
 =SML
 fun €red_eq_def_as_eq_defs› (Parsed(PPEqDef ed)) _ = (
@@ -1080,7 +1108,9 @@ fun €red_eq_def_as_eq_defs› (Parsed(PPEqDef ed)) _ = (
 		stack_error "red_eq_def_as_eq_defs" (x1::stk);
 =TEX
 =SML
-fun €red_eq_defs› (Parsed(PPEqDef ed)) _ (Parsed(PPEqDefs eds)) _ = (
+fun €red_eq_defs›
+	(Parsed(PPEqDef ed)) _
+	(Parsed(PPEqDefs eds)) _ = (
 	PPEqDefs (ed :: eds)
 ) | red_eq_defs x1 x2 x3 stk =
 		stack_error "red_eq_defs" (x1::x2::x3::stk);
@@ -1304,50 +1334,25 @@ fun €red_seq_display› _ (Parsed(PPSomeExprs ps)) _ _ = (
 =TEX
 =SML
 fun €red_set_comp_no_spot›
-	_ (Parsed(PPDecl d))
-	_ (Parsed(PPPred p)) _ _ = (
-	PPPred(PredSetComp(d, Value p, Nil))
-) | red_set_comp_no_spot x1 x2 x3 x4 x5 stk =
-		stack_error "red_set_comp_no_spot" (x1::x2::x3::x4::x5::stk);
-=TEX
-=SML
-fun €red_set_comp_no_pred›
-	_ (Parsed(PPDecl d)) _ _ = (
-	PPPred(PredSetComp(d, Nil, Nil))
-) | red_set_comp_no_pred x1 x2 x3 stk =
-		stack_error "red_set_comp_no_pred" (x1::x2::x3::stk);
+	_ (Parsed(PPSchText st)) _ _ = (
+	PPPred(PredSetComp(st, Nil))
+) | red_set_comp_no_spot x1 x2 x3 stk =
+		stack_error "red_set_comp_no_spot" (x1::x2::x3::stk);
 =TEX
 =SML
 fun €red_set_comp›
-	_ (Parsed(PPDecl d))
-	_ (Parsed(PPPred p1))
-	_ (Parsed(PPPred p2)) _ _ = (
-	PPPred(PredSetComp(d, Value p1, Value p2))
-) | red_set_comp x1 x2 x3 x4 x5 x6 x7 stk =
-		stack_error "red_set_comp" (x1::x2::x3::x4::x5::x6::x7::stk);
-=TEX
-=SML
-fun €red_set_comp_no_bar›
-	_ (Parsed(PPDecl d))
+	_ (Parsed(PPSchText st))
 	_ (Parsed(PPPred p)) _ _ = (
-	PPPred(PredSetComp(d, Nil, Value p))
-) | red_set_comp_no_bar x1 x2 x3 x4 x5 stk =
-		stack_error "red_set_comp_no_bar" (x1::x2::x3::x4::x5::stk);
+	PPPred(PredSetComp(st, Value p))
+) | red_set_comp x1 x2 x3 x4 x5 stk =
+		stack_error "red_set_comp" (x1::x2::x3::x4::x5::stk);
 =TEX
 =SML
 fun €red_h_schema›
-	_ (Parsed(PPDecl d))
-	_ (Parsed(PPPred p)) _ _ = (
-	PPPred(PredHorizSchema(d, Value p))
-) | red_h_schema x1 x2 x3 x4 x5 stk =
-		stack_error "red_h_schema" (x1::x2::x3::x4::x5::stk);
-=TEX
-=SML
-fun €red_h_schema_no_pred›
-	_ (Parsed(PPDecl d)) _ _ = (
-	PPPred(PredHorizSchema(d, Nil))
-) | red_h_schema_no_pred x1 x2 x3 stk =
-		stack_error "red_h_schema_no_pred" (x1::x2::x3::stk);
+	_ (Parsed(PPSchText st)) _ _ = (
+	PPPred(PredHorizSchema st)
+) | red_h_schema x1 x2 x3 stk =
+		stack_error "red_h_schema" (x1::x2::x3::stk);
 =TEX
 =SML
 fun €red_gen_inst› _ (Parsed(PPSomeExprs ps)) _ _ = (
@@ -1772,14 +1777,13 @@ a predicate is allowed.
 val €max_selector› : INTEGER = @@"1000000";
 fun €x_pred› (expr : bool) (p : PRED) : Z_TM = (
 	case p of
-		PredQuantifier (q, decl, p1opt, p2) => 
+		PredQuantifier (q, st, p) => 
 			let	val expr' = schema_op_expr expr (quant_expr q);
-				val xdecl = x_decl decl;
-				val xp1opt = x_pred_opt false p1opt;
-				val xp2 = x_pred expr' p2
+				val xst = x_sch_text st;
+				val xp = x_pred expr' p
 			in	if expr'
-				then ZTmQuantâS(q, (xdecl, xp1opt, Nil), xp2)
-				else ZTmQuantâF(q, (xdecl, xp1opt, Nil), xp2)
+				then ZTmQuantâS(q, xst, xp)
+				else ZTmQuantâF(q, xst, xp)
 			end
 	|	PredLet (eqdefs, p) =>
 			ZTmLet(map x_loc_eq_def eqdefs, x_pred expr p)
@@ -1802,18 +1806,12 @@ fun €x_pred› (expr : bool) (p : PRED) : Z_TM = (
 			x_sch_pre_op rator (x_pred true p)
 	|	PredSchemaHiding (p, ps) =>
 			ZTmHide(x_pred true p, map x_dec_name ps)
-	|	PredMu (decl, Value p1, Value p2) =>
-			ZTmÕ2 ((x_decl decl, Value(x_pred false p1), Nil), x_pred true p2)
-	|	PredMu (decl, Nil, Value p) =>
-			ZTmÕ2 ((x_decl decl, Nil, Nil), x_pred true p)
-	|	PredMu (decl, Value p, Nil) =>
-			ZTmÕ1 (x_decl decl, Value(x_pred false p), Nil)
-	|	PredMu (decl, Nil, Nil) =>
-			ZTmÕ1 (x_decl decl, Nil, Nil)
-	|	PredLambda (decl, Value p1, Value p2) =>
-			ZTmÃ ((x_decl decl, Value(x_pred false p1), Nil), x_pred true p2)
-	|	PredLambda (decl, Nil, Value p) =>
-			ZTmÃ ((x_decl decl, Nil, Nil), x_pred true p)
+	|	PredMu (st, Value p) =>
+			ZTmÕ2 (x_sch_text st, x_pred true p)
+	|	PredMu (st, Nil) =>
+			ZTmÕ1 (x_sch_text st)
+	|	PredLambda (st, Value p) =>
+			ZTmÃ (x_sch_text st, x_pred true p)
 	|	PredLambda _ => raise PARSER_ERROR "invalid PredLambda arguments"
 	|	PredFancyFix (tmpl, decor, args) =>
 			x_fancyfix_args expr x_pred tmpl decor args
@@ -1867,16 +1865,12 @@ fun €x_pred› (expr : bool) (p : PRED) : Z_TM = (
 			ZTmSetd (Nil, map (x_pred true) ps)
 	|	PredSeqDisplay ps  =>
 			ZTmß¢ (Nil, map (x_pred true) ps)
-	|	PredSetComp (decl, Value p1, Value p2) =>
-			ZTmSeta2 ((x_decl decl, Value(x_pred false p1), Nil), x_pred true p2)
-	|	PredSetComp (decl, Nil, Value p) =>
-			ZTmSeta2 ((x_decl decl, Nil, Nil), x_pred true p)
-	|	PredSetComp (decl, Value p, Nil) =>
-			ZTmSeta1 (x_decl decl, Value(x_pred false p), Nil)
-	|	PredSetComp (decl, Nil, Nil) =>
-			ZTmSeta1 (x_decl decl, Nil, Nil)
-	|	PredHorizSchema (decl, popt) =>
-			ZTmHorizSchema(x_decl decl, x_pred_opt false popt, Nil) 
+	|	PredSetComp (st, Value p) =>
+			ZTmSeta2 (x_sch_text st, x_pred true p)
+	|	PredSetComp (st, Nil) =>
+			ZTmSeta1 (x_sch_text st)
+	|	PredHorizSchema st =>
+			ZTmHorizSchema (x_sch_text st) 
 	|	PredGenInst ps =>
 			x_gen_inst_as_schema x_pred ps
 	|	PredRenameList renames =>
@@ -1893,25 +1887,18 @@ fun €x_pred› (expr : bool) (p : PRED) : Z_TM = (
 			then ZTmDecor(ZTmLVar(x_var_name p, Nil, []), decor)
 			else ZTmDecor(x_pred true(PredBracketed(p1, "")), decor)
 )
+and €x_sch_text› ((decl, popt) : SCH_TEXT) = (x_decl decl, x_pred_opt false popt, Nil)
 and €x_pred_opt› (expr : bool)(Value p : PRED OPT) = Value (x_pred expr p)
 |    x_pred_opt _ Nil = Nil
 and €x_decl› (decl : DECL) : (Z_DEC list) = (
-	let	fun x_dec (ps, popt) = (
-			case popt of
-				Value p => 
-				let	val ps' = map x_dec_name ps;
-					val p' = x_pred true p;
-				in	ZDDec(ps', p', Nil)
-				end
-			|	Nil => case ps of
-				[p] => ZDSchemaDec(x_pred true p, Nil)
-			|	_ => (
-				phase_2_error
-				61012
-				[format_list format_pred ps ", ",
-				get_error_message 61104 []]
-			)
-			
+	let	fun x_dec (ps, p) = (
+			case ps of
+				_::_	=>
+					let	val xps = map x_dec_name ps;
+						val xp = x_pred true p;
+					in	ZDDec (xps, xp, Nil)
+					end
+			|	[]	=> ZDSchemaDec (x_pred true p, Nil)
 		);
 	in	map x_dec decl
 	end		
@@ -1995,11 +1982,6 @@ fun €x_eq_def› ((lp, rp) : EQ_DEF) : IDENT * IDENT list * Z_TM * EXTYPE OPT = (
 	let	val (id, ids) = x_def_lhs lp;
 	in	(id, ids, x_pred true rp, Nil)
 	end
-);
-=TEX
-=SML
-fun €x_sch_text› (decs : DECL, p : PRED OPT) : Z_SCH_TEXT = (
-	(x_decl decs, x_pred_opt false p, Nil)
 );
 =TEX
 =SML
