@@ -8,18 +8,18 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp064.doc   %Z% $Date: 2008/09/05 14:23:03 $ $Revision: 1.58 $ $RCSfile: imp064.doc,v $
+% imp064.doc   %Z% $Date: 2010/04/01 17:28:44 $ $Revision: 1.60 $ $RCSfile: imp064.doc,v $
 
 =TEX
-% imp064.doc   %Z% $Date: 2008/09/05 14:23:03 $ $Revision: 1.58 $ $RCSfile: imp064.doc,v $
+% imp064.doc   %Z% $Date: 2010/04/01 17:28:44 $ $Revision: 1.60 $ $RCSfile: imp064.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 
 \TPPtitle{Implementation of the Z Pretty Printer}
 \TPPref{DS/FMU/IED/IMP064}
-\def\SCCSissue{$Revision: 1.58 $%
+\def\SCCSissue{$Revision: 1.60 $%
 }
 \TPPissue{\SCCSissue}
-\TPPdate{\FormatDate{$Date: 2008/09/05 14:23:03 $%
+\TPPdate{\FormatDate{$Date: 2010/04/01 17:28:44 $%
 }}
 \TPPproject{FST PROJECT}
 
@@ -147,13 +147,14 @@ lasp -s -u imp064.OKwords imp064.doc > zz1
 \item[Issue 1.47] Now uses proper SML escape sequences in string displays.
 \item[Issue 1.48] New improved \$-feature; now uses HOL quotations to print invalid variable names.
 \item[Issue 1.49, 1.50] Now have full support for decorated fancyfix identifiers (e.g., as signature variables).
-\item[Issue 1.52] Added support for floating point literals#
+\item[Issue 1.52] Added support for floating point literals.
 \item[Issue 1.53] Now allows for possibility of the calls to {\em z\_lex} failing.
 \item[Issue 1.54] {\em string\_of\_float} renamed as {\em z\_string\_of\_float}.
 \item[Issues 1.55, 1.56] Fixed and improved support for dollar-quoted identifiers.
 \item[Issue 1.57] Added flag that lets the Compliance Tool have Quine corners around Z strings.
-\item[Issue 1.57] Quine corners are now only around Z strings that contain control or escape characters \ldots
-\item[Issue 1.57] \ldots or the letter `Q'.
+\item[Issue 1.58] Quine corners are now only around Z strings that contain control or escape characters \ldots
+\item[Issue 1.59] \ldots or the letter `Q'.
+\item[Issue 1.60] Support for empty schemas.
 \end{description}
 
 %********************************************************************
@@ -707,7 +708,7 @@ do_decl
 =TEX
 .
 
-The check to be made on the declaration is that it is a non-empty
+The check to be made on the declaration is that it is a
 list of things which are either schemas-as-declarations or variable
 declarations in which the variables are Z local variables (i.e. HOL variables)
 with valid Z names (the test in $test\_var\_name$ raises an exception if not,
@@ -749,8 +750,7 @@ local
 in
 fun €make_a_dec_list› (t : TERM) : (A_DEC list) OPT = (
 	(case dest_z_term t of
-		ZDecl [] => Nil
-	|	ZDecl ts => (Value (map make_a_dec ts) handle NotADecl => Nil)
+		ZDecl ts => (Value (map make_a_dec ts) handle NotADecl => Nil)
 	|	_ => Nil)
 	handle Fail _ => Nil
 );
@@ -817,19 +817,25 @@ let	fun chk (tm :: tms) (Colon(v :: vs, t) :: decl) = (
 		end	handle Fail _ => false
 	) | chk [] [] = (true
 	) | chk _ _ = false;
-	val tms = (dest_z_tuple tm) handle Fail _ => [tm];
+	val tms =
+		case dest_z_term tm of
+			ZTuple tms	=> tms
+		|	ZBinding []	=> []
+		|	_		=> [tm];
 in	chk tms decs
 end
 );
 =TEX
-\subsection{$is\_single\_schema\_decl$}
-If we are outputing a set abstraction whose delcaration consists of a single schema we need to output the ``|'' and second part, regardless of whether
+\subsection{$is\_empty\_or\_single\_schema\_decl$}
+If we are outputing a set abstraction whose delcaration is either empty or consists of a single schema we need to output the ``|'' and second part, regardless of whether
 the second part is true.
+This is to ensure that a set abstraction is not formatted with the syntax of a set display.
 We thus have to test for this condition:
 =SML
-fun €is_single_schema_decl› (d : TERM) : bool = (
+fun €is_empty_or_single_schema_decl› (d : TERM) : bool = (
 	case dest_z_term d of
-	ZDecl [d1] => (
+	ZDecl [] => true
+	| ZDecl [d1] => (
 		case dest_z_term d1 of
 		ZSchemaDec _ => true
 		| _ => false
@@ -873,14 +879,15 @@ in	(if omit_t3 then addstring "(" else ());
 	do_decl ds new_env;
 	if omit_t2
 	then	()
-	else	(space(1, 0);
+	else	(
+		if is_nil ds then () else space(1, 0);
 		addstring "| ";
 		recur_pp new_env t2
 	);
 	if omit_t3
 	then	(addstring ")")
 	else	(
-		space(1, 0);
+		if is_nil ds andalso omit_t2 then () else space(1, 0);
 		addstring "∑ ";
 		recur_pp new_env t3
 	)
@@ -1431,7 +1438,7 @@ fun €string_any› (s : string) (test : char -> bool) : bool = (
 	end
 );
 =TEX
-=SML
+=SMLPLAIN
 fun €needs_quoting› (s : string) : bool = (
 	let	fun test c = (
 				c = #"\""
@@ -1600,7 +1607,7 @@ not easy.
 			do_decl ds new_env;
 			if is_z_true t2 andalso 
 				(not ict orelse
-				not(is_single_schema_decl t1))
+				not(is_empty_or_single_schema_decl t1))
 			then ()
 			else (	space(1, 2);
 				addstring "| ";
