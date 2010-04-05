@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Language Expressions}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP042}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.48 $%
+\def\SCCSversion{$Revision: 1.50 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/04/13 15:32:25 $%
+\TPPdate{\FormatDate{$Date: 2010/04/01 17:19:02 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -119,6 +119,7 @@ Fixing $Z\_ç_ELIM\_C$.
 \item[Issues 1.45--1.47] Improved coverage of {\em z\_let\_conv}.
 \item[Issue 1.48] Fixed buf in {\em z\_let\_conv}.
 \item[Issue 1.49] Made handling of the {\em check\_is\_z} flag more efficient.
+\item[Issue 1.50] Support for empty schemas.  Improved $z\_ç\_seta\_conv1$.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -267,7 +268,34 @@ cnv3 a3 = Ù a3 = a3'
 fun €LIST_OP_C› [cnv] = cnv
 | LIST_OP_C ((cnv:: cnvl):CONV list) :CONV = 
 	APP_C(RAND_C cnv, LIST_OP_C cnvl)
-| LIST_OP_C [] = fail "LIST_±_C" 0 [];
+| LIST_OP_C [] = fail "LIST_OP_C" 0 [];
+=TEX
+Apply a list of $N$ conversions to the $N$ outermost operands,
+working inwards from the outermost:
+=FRULE 1 Conversional
+LIST_RAND_C
+[cnv1,cnv2,cnv3,...]
+¨f ... a3 a2 a1Æ
+˜
+˜
+Ù f ... a3 a2 a1 =
+   f ... a3' a2' a1'
+=TEX
+where
+=GFT
+cnv1 a1 = Ù a1 = a1'
+cnv2 a2 = Ù a2 = a2'
+cnv3 a3 = Ù a3 = a3'
+ ...
+=TEX
+=SML
+fun €LIST_RAND_C› (cnvs : CONV list) : CONV =
+	case cnvs of
+		cnv::cnvs'	=> APP_C (LIST_RAND_C cnvs', cnv)
+	|	[]		=> id_conv;
+=TEX
+=SML
+fun €LEFT_RIGHT_C› (cnv1, cnv2) = LIST_RAND_C [cnv2, cnv1];
 =TEX
 Rename a sequence of quantified variables:
 =SML
@@ -289,7 +317,7 @@ val rec €seq_simple_¬_conv›:CONV = fn tm => (
 	ORELSE_C 
 	(RATOR_C seq_simple_¬_conv THEN_C simple_¬_conv)
 	ORELSE_C
-	(fn tm1 => term_fail "seq_simple_¬_conv" 27008 [tm1]))
+	refl_conv)
 	tm
 );
 =TEX
@@ -1635,15 +1663,29 @@ let	val (b1,b2) = dest_z_eq tm;
 	val (bcons,bproj) = get_binding_info (type_of b1);
 	val ty_insts = type_match (type_of b1) (type_of(fst(dest_µ(concl spec))));
 	val bproj' = map (inst[] ty_insts) bproj;
-	val s1 = asm_rule tm;
-	val s1s = map (fn x => app_fun_rule  x s1) bproj';
-	val s2 = list_±_intro s1s;
-	val s3s = strip_±_rule(asm_rule(list_mk_± (map concl s1s)));
-	val s4 = fold (fn (x,y) =>  mk_app_rule y x) (rev s3s)
-		(refl_conv (inst [] ty_insts bcons));
+	val bcons' = inst [] ty_insts bcons;
+	val (s2, s4) = case bproj' of
+		_::_	=>
+		let
+			val s1 = asm_rule tm;
+			val s1s = map (fn x => app_fun_rule x s1) bproj';
+			val s2 = list_±_intro s1s;
+			val s3s = strip_±_rule(asm_rule(concl s2));
+			val s4 = fold (fn (x,y) => mk_app_rule y x)
+				(rev s3s) (refl_conv bcons');
+		in
+			(s2, s4)
+		end
+	|	[]	=>
+		let
+			val s2 = asm_intro tm t_thm;
+			val s4 = asm_intro mk_z_true (refl_conv bcons');
+		in
+			(s2, s4)
+		end;
 	val s5 = all_µ_intro(hd(rev(strip_±_rule(all_µ_elim spec))));
-	val s6 = conv_rule(LEFT_C (simple_eq_match_conv1 s5)
-		THEN_C RIGHT_C (simple_eq_match_conv1 s5)) s4;
+	val s6 = conv_rule(
+		LEFT_RIGHT_C (fn _ => µ_elim b1 s5, fn _ => µ_elim b2 s5)) s4;
 	val s7 = §_intro (all_¥_intro s2) (all_¥_intro s6);
 in
 	check_is_z_conv_result "z_binding_eq_conv" 
@@ -1670,15 +1712,29 @@ let	val (b1,b2) = dest_z_eq tm;
 	val (bcons,bproj) = get_binding_info (type_of b1);
 	val ty_insts = type_match (type_of b1) (type_of(fst(dest_µ(concl spec))));
 	val bproj' = map (inst[] ty_insts) bproj;
-	val s1 = asm_rule tm;
-	val s1s = map (fn x => app_fun_rule  x s1) bproj';
-	val s2 = list_±_intro s1s;
-	val s3s = strip_±_rule(asm_rule(list_mk_± (map concl s1s)));
-	val s4 = fold (fn (x,y) =>  mk_app_rule y x) (rev s3s)
-		(refl_conv (inst [] ty_insts bcons));
+	val bcons' = inst [] ty_insts bcons;
+	val (s2, s4) = case bproj' of
+		_::_	=>
+		let
+			val s1 = asm_rule tm;
+			val s1s = map (fn x => app_fun_rule x s1) bproj';
+			val s2 = list_±_intro s1s;
+			val s3s = strip_±_rule(asm_rule(concl s2));
+			val s4 = fold (fn (x,y) => mk_app_rule y x)
+				(rev s3s) (refl_conv bcons');
+		in
+			(s2, s4)
+		end
+	|	[]	=>
+		let
+			val s2 = asm_intro tm t_thm;
+			val s4 = asm_intro mk_z_true (refl_conv bcons');
+		in
+			(s2, s4)
+		end;
 	val s5 = all_µ_intro(hd(rev(strip_±_rule(all_µ_elim spec))));
-	val s5a = simple_eq_match_conv1 s5;
-	val s6 = conv_rule(LEFT_C s5a THEN_C RIGHT_C s5a) s4;
+	val s6 = conv_rule(
+		LEFT_RIGHT_C (fn _ => µ_elim b1 s5, fn _ => µ_elim b2 s5)) s4;
 	val s7 = §_intro (all_¥_intro s2) (all_¥_intro s6);
 in
 (check_is_z_conv_result "z_binding_eq_conv1" 
@@ -1688,8 +1744,9 @@ in
 let	val b1args = map snd(dest_z_binding b1);
 	val proj_thms = rev(tl(rev
 		(strip_±_rule(list_µ_elim (b1 :: b1args)(inst_type_rule ty_insts spec)))));
-	val s8 = conv_rule (RIGHT_C(LIST_OP_C
-		(map (fn thm => LEFT_C (fn _ => thm)) proj_thms))) s7;
+	val s8 = case map (fn thm => LEFT_C (fn _ => thm)) proj_thms of
+		[]	=> s7
+	|	convs	=> conv_rule (RIGHT_C(LIST_OP_C convs)) s7;
 in
 	(eq_trans_rule (refl_conv tm) s8)
 end)
@@ -1697,23 +1754,26 @@ end)
 let	val b2args = map snd(dest_z_binding b2);
 	val proj_thms = rev(tl(rev
 		(strip_±_rule(list_µ_elim (b2 :: b2args)(inst_type_rule ty_insts spec)))));
-	val s8 = conv_rule (RIGHT_C(LIST_OP_C
-		(map (fn thm => RIGHT_C (fn _ => thm)) proj_thms))) s7;
+	val s8 = case map (fn thm => RIGHT_C (fn _ => thm)) proj_thms of
+		[]	=> s7
+	|	convs	=> conv_rule (RIGHT_C(LIST_OP_C convs)) s7;
 in
 	(eq_trans_rule (refl_conv tm) s8)
 end)
 | (true, true) => (
-let	val b1args = map snd(dest_z_binding b1);
+let	val spec' = inst_type_rule ty_insts spec;
+	val b1args = map snd(dest_z_binding b1);
 	val proj_thms1 = rev(tl(rev
-		(strip_±_rule(list_µ_elim (b1 :: b1args)(inst_type_rule ty_insts spec)))));
+		(strip_±_rule(list_µ_elim (b1 :: b1args) spec'))));
 	val b2args = map snd(dest_z_binding b2);
 	val proj_thms2 = rev(tl(rev
-		(strip_±_rule(list_µ_elim (b2 :: b2args)(inst_type_rule ty_insts spec)))));
-	val s8 = conv_rule (RIGHT_C(LIST_OP_C
-		(map (fn (thm1,thm2) => 
-		LEFT_C (fn _ => thm1) THEN_C
-		RIGHT_C (fn _ => thm2)) 
-		(combine proj_thms1 proj_thms2)))) s7;
+		(strip_±_rule(list_µ_elim (b2 :: b2args) spec'))));
+	val s8 = case
+		map (fn (thm1, thm2) => LEFT_RIGHT_C (fn _ => thm1, fn _ => thm2)) 
+			(combine proj_thms1 proj_thms2)
+	of
+		[]	=> s7
+	|	convs	=> conv_rule (RIGHT_C(LIST_OP_C convs)) s7;
 in
 	(eq_trans_rule (refl_conv tm) s8)
 end)
@@ -1731,11 +1791,17 @@ list_divert complaint "z_binding_eq_conv1"
 z_binding_eq_conv1 Ò(x ¶ 1, y ¶ 2, z ¶ 3) = (y ¶ 2, x ¶ 1, z ¶ 3)Æ;
 =TEX
 =SML
+local
+val z_empty_schema_type = mk_z_schema_type [];
+in
 val €z_binding_eq_conv2› : CONV = (fn tm => (
 let	val (b1,b2) = dest_z_eq tm;
-	val dummy = if is_z_binding b1 andalso is_z_binding b2
-		then ()
-		else term_fail "z_binding_eq_conv2" 42021 [tm];
+	val (b1args, b2args) = case (dest_z_term b1, dest_z_term b2) of
+		(ZBinding xs, ZBinding ys)	=> (map snd xs, map snd ys)
+	|	_				=>
+			if type_of b1 = z_empty_schema_type
+			then ([], [])
+			else term_fail "z_binding_eq_conv2" 42021 [tm];
 	val aconst = const_of_binding_type (type_of b1);
 	val spec = binding_gen_semantic_const aconst
 		handle (Fail _) => 
@@ -1744,27 +1810,39 @@ let	val (b1,b2) = dest_z_eq tm;
 	val (bcons,bproj) = get_binding_info (type_of b1);
 	val ty_insts = type_match (type_of b1) (type_of(fst(dest_µ(concl spec))));
 	val bproj' = map (inst[] ty_insts) bproj;
-	val s1 = asm_rule tm;
-	val s1s = map (fn x => app_fun_rule x s1) bproj';
-	val s2 = list_±_intro s1s;
-	val s3s = strip_±_rule(asm_rule(list_mk_± (map concl s1s)));
-	val s4 = fold (fn (x,y) =>  mk_app_rule y x) (rev s3s)
-		(refl_conv (inst [] ty_insts bcons));
+	val bcons' = inst [] ty_insts bcons;
+	val (s2, s4) = case bproj' of
+		_::_	=>
+		let
+			val s1 = asm_rule tm;
+			val s1s = map (fn x => app_fun_rule x s1) bproj';
+			val s2 = list_±_intro s1s;
+			val s3s = strip_±_rule(asm_rule(concl s2));
+			val s4 = fold (fn (x,y) => mk_app_rule y x)
+				(rev s3s) (refl_conv bcons');
+		in
+			(s2, s4)
+		end
+	|	[]	=>
+		let
+			val s2 = asm_intro tm t_thm;
+			val s4 = asm_intro mk_z_true (refl_conv bcons');
+		in
+			(s2, s4)
+		end;
 	val s5 = all_µ_intro(hd(rev(strip_±_rule(all_µ_elim spec))));
-	val s6 = conv_rule(LEFT_C (simple_eq_match_conv1 s5)
-		THEN_C RIGHT_C (simple_eq_match_conv1 s5)) s4;
+	val s6 = conv_rule(
+		LEFT_RIGHT_C (fn _ => µ_elim b1 s5, fn _ => µ_elim b2 s5)) s4;
 	val s7 = §_intro (all_¥_intro s2) (all_¥_intro s6);
-	val b1args = map snd(dest_z_binding b1);
-	val proj_thms1 = rev(tl(rev
-		(strip_±_rule(list_µ_elim (b1 :: b1args)(inst_type_rule ty_insts spec)))));
-	val b2args = map snd(dest_z_binding b2);
-	val proj_thms2 = rev(tl(rev
-		(strip_±_rule(list_µ_elim (b2 :: b2args)(inst_type_rule ty_insts spec)))));
-	val s8 = conv_rule (RIGHT_C(LIST_OP_C
-		(map (fn (thm1,thm2) => 
-		LEFT_C (fn _ => thm1) THEN_C
-		RIGHT_C (fn _ => thm2)) 
-		(combine proj_thms1 proj_thms2)))) s7;
+	val spec' = inst_type_rule ty_insts spec;
+	val proj_thms1 = rev(tl(rev(strip_±_rule(list_µ_elim (b1 :: b1args) spec'))));
+	val proj_thms2 = rev(tl(rev(strip_±_rule(list_µ_elim (b2 :: b2args) spec'))));
+	val s8 = case
+		map (fn (thm1,thm2) => LEFT_RIGHT_C (fn _ => thm1, fn _ => thm2)) 
+			(combine proj_thms1 proj_thms2)
+	of
+		[]	=> s7
+	|	convs	=> conv_rule (RIGHT_C(LIST_OP_C convs)) s7;
 in
 	check_is_z_conv_result "z_binding_eq_conv2" 
 	(eq_trans_rule (refl_conv tm) s8)
@@ -1776,8 +1854,10 @@ list_divert complaint "z_binding_eq_conv2"
 	("get_spec", 42021, [fn () => string_of_term tm]),
 	("eq_trans_rule", 43000, [fn () => string_of_term tm])])
 ;
+end (* of local ... in ... *);
 =IGN
 z_binding_eq_conv2 Ò(x ¶ z,x1 ¶ z1) = (x ¶ y,x1 ¶ y1)Æ;
+z_binding_eq_conv2 Òx ∫ [] = yÆ;
 =TEX
 =SML
 val  €z_selâs_conv› : CONV = (fn tm => (
@@ -1853,6 +1933,23 @@ local
 		pc_rule1 "hol1" prove_rule[]¨µ t ∑ (∂ x ∑ t) § tÆ,
 		taut_rule ¨µ x ∑ x ± T § xÆ,
 		taut_rule ¨µ x ∑ T ± x § xÆ];
+	val cnv3 = ALL_SIMPLE_∂_C (ALL_±_C z_schema_pred_conv1);
+
+	val z_tuple_eq_conv =
+		(RIGHT_C (COND_C is_z_tuple id_conv z_selât_intro_conv)) THEN_C
+			z_tuple_lang_eq_conv;
+	fun is_z_tuple_eq tm = is_z_tuple (fst (dest_eq tm)) handle Fail _ => false;
+	fun is_z_binding_eq tm = is_z_binding (fst (dest_eq tm)) handle Fail _ => false;
+	val cnv4 = TRY_C (
+		LEFT_C (
+			simple_eq_match_conv1 z' _def
+				ORELSE_C RANDS_C (TRY_C (simple_eq_match_conv1 z' _def))
+		)
+	) THEN_C (
+		COND_C is_z_tuple_eq z_tuple_eq_conv id_conv
+	) THEN_C (
+		ALL_±_C (COND_C is_z_binding_eq z_binding_eq_conv1 id_conv)
+	);
 in
 val €z_ç_seta_conv1› : CONV = (fn tm =>
 let	val ciz = set_check_is_z false;
@@ -1863,24 +1960,28 @@ let	val ciz = set_check_is_z false;
 	val (d,p,v_eq_t) = dest_z_∂ rhs;
 	val (v,t) = dest_eq v_eq_t;
 	val res = (
-	if not (is_z_tuple v orelse is_var v) 
+	if
+		case dest_z_term v of
+			ZTuple _	=> false
+		|	ZBinding _	=> false
+		|	Z  _		=> false
+		|	ZLVar _		=> false
+		|	_		=> true
 	then s1
 	else ((
-let	val s2 = (z_∂_elim_conv THEN_TRY_C 
-		ALL_SIMPLE_∂_C (RIGHT_C (RIGHT_C 
-		((RIGHT_C (COND_C is_z_tuple id_conv z_selât_intro_conv))
-		THEN_C z_tuple_lang_eq_conv)))) rhs;
+let	val s2 = (z_∂_elim_conv THEN_TRY_C
+		ALL_SIMPLE_∂_C (RIGHT_C (RIGHT_C cnv4))) rhs;
 	val s3 = conv_rule (RIGHT_C(TRY_C cnv1 THEN_TRY_C cnv2
-			THEN_C REPEAT_C 
-			(LAST_SIMPLE_∂_C simple_∂_equation_conv))) s2;
+			THEN_C REPEAT_C (LAST_SIMPLE_∂_C simple_∂_equation_conv)
+			THEN_TRY_C cnv3)) s2;
 	val s4 = eq_trans_rule s1 s3;
 in
 	if is_∂(snd(dest_eq(concl s4)))
 	then s1
 	else s4
 end
-)
-handle (Fail _) => s1));
+	) handle (Fail _) => s1)
+	);
 	val _ = set_check_is_z ciz;
 in
 	check_is_z_conv_result "z_ç_seta_conv1" res
@@ -2239,11 +2340,11 @@ val _ = commit_pc "'z_tuples_lang";
 =SML
 val _ = delete_pc "'z_bindings" handle Fail _ => ();
 val _ = new_pc "'z_bindings";
-val _ = set_rw_eqn_cxt [(¨f a = g bÆ,z_binding_eq_conv2),
+val _ = set_rw_eqn_cxt [(¨f = gÆ,z_binding_eq_conv2),
 	(¨f(g x)Æ,z_selâs_conv)
 	]"'z_bindings";
 
-val pos = [(¨f a = g bÆ,z_binding_eq_conv2),
+val pos = [(¨f = gÆ,z_binding_eq_conv2),
 	(¨f(g x):BOOLÆ,z_selâs_conv),
 	(Òy ç ¨f(g x)ÆÆ,ç_C z_selâs_conv)];
 val neg = map (mk_≥ ** RAND_C) pos;
