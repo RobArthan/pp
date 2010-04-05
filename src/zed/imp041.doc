@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2010/04/01 17:18:25 $ $Revision: 1.57 $ $RCSfile: imp041.doc,v $
+% %Z% $Date: 2010/04/05 17:06:00 $ $Revision: 1.58 $ $RCSfile: imp041.doc,v $
 
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
@@ -19,10 +19,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Language Predicates}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP041}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.57 $%
+\def\SCCSversion{$Revision: 1.58 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2010/04/01 17:18:25 $%
+\TPPdate{\FormatDate{$Date: 2010/04/05 17:06:00 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -150,6 +150,7 @@ list_simple_¶_tac
 \item[Issue 1.56] Eliminated non-exhaustive match and made the
 handling of tthe flag {\em check\_is\_z} more efficient.
 \item[Issue 1.57] Support for empty schemas.  Improved $z\_\_u\_conv$ to work for schema declarations in the declarative part of set abstractions and horizontal schemas.
+\item[Issue 1.58] Fixed $z\_\_u\_conv$ ($seta\_u\_conv$) to work for set abstractions with declaration variables not in Z~signature order.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1853,13 +1854,13 @@ end;
 local
 	fun wit_thms (a as ((tm, _), _)) =
 	let
-		fun aux_tuple_binding (tm_x, (ws, ots)) =
-		let	val (ws', t') = tuple_binding_wit_thm (tm_x, ws);
-		in	(ws', Value t'::ots)
+		fun aux_tuple_binding (tm_x, (vws, ots)) =
+		let	val (vws', t') = tuple_binding_wit_thm (tm_x, vws);
+		in	(vws', Value t'::ots)
 		end;
 
-		fun aux_other ((_, x), (ws, ots)) =
-			(x::ws, if is_nil ots then ots else Nil::ots);
+		fun aux_var (tm_x, (vws, ots)) =
+			(tm_x::vws, if is_nil ots then ots else Nil::ots);
 	in
 		case
 			#1 (dest_z_name1 (#1 (dest_const (#1 (strip_app tm)))))
@@ -1867,10 +1868,10 @@ local
 		of
 			"Z'Mk_T"	=> aux_tuple_binding a
 		|	"Z'Mk_S"	=> aux_tuple_binding a
-		|	_		=> aux_other a
+		|	_		=> aux_var a
 	end
 
-	and tuple_binding_wit_thm ((tm, x), ws) =
+	and tuple_binding_wit_thm ((tm, x), vws) =
 	let
 		val (hdtm, tms) = strip_app tm;
 		val spec1 = case tms of
@@ -1880,7 +1881,7 @@ local
 					all_µ_elim (µ_elim x (get_spec hdtm))
 				);
 		val xtms = #2 (strip_app (#1 (dest_eq (concl spec1))));
-		val (ws', ots) = foldl wit_thms (ws, []) (combine tms xtms);
+		val (vws', ots) = foldl wit_thms (vws, []) (combine tms xtms);
 		val t' = conv_rule (
 			LEFT_C (LIST_RAND_C (
 				map (
@@ -1890,7 +1891,7 @@ local
 			))
 		) spec1;
 	in
-		(ws', t')
+		(vws', t')
 	end;
 
 	fun wit_thm (tm_x as (tm, x)) =
@@ -1900,7 +1901,7 @@ local
 	of
 		"Z'Mk_T"	=> tuple_binding_wit_thm (tm_x, [])
 	|	"Z'Mk_S"	=> tuple_binding_wit_thm (tm_x, [])
-	|	_		=> ([x], refl_conv x);
+	|	_		=> ([tm_x], refl_conv x);
 =IGN
 wit_thm (dest_eq ña = x®);
 wit_thm (dest_eq ñ() = x®);
@@ -1917,12 +1918,14 @@ wit_thm (dest_eq ñ(a1, a2, a3, (), (d ¦ a4, e ¦ a5, f ¦ a6), (g ¦ a7)) = x®);
 	fun cnv5 tm =
 	let
 		val (vs, body) = strip_¶ tm;
-		val (ws, t1) = wit_thm (dest_eq body);
-		val t2 = list_simple_¶_intro (rev ws) tm t1;
+		val (vws, t1) = wit_thm (dest_eq body);
+		val ws = map (lassoc3 vws) vs;
+		val t2 = list_simple_¶_intro ws tm t1;
 	in	¤_t_intro t2
 	end;
 =IGN
 cnv5 ¬¶ a1 a2 a3 a4 a5 a6 a7· ñ(a1, a2, a3, (), (d ¦ a4, e ¦ a5, f ¦ a6), (g ¦ a7))® = x®;
+cnv5 ¬¶ a1 a2 a3 a4 a5 a6 a7· ñ(a3, a4, a1, (), (d ¦ a2, e ¦ a6, f ¦ a7), (g ¦ a5))® = x®;
 cnv5 ñ((), (d ¦ (), e ¦ (), f ¦ ()), (g ¦ ())) = x®;
 
 =SML
@@ -1953,6 +1956,7 @@ end);
 seta_u_conv ñ{ | true}®;
 seta_u_conv ñ{a : ƒ | true}®;
 seta_u_conv ñ{a, b : ƒ; c : ƒ}®;
+seta_u_conv ñ{c, b : ƒ; a : ƒ}®;
 seta_u_conv ñ{ƒ º ð [] | true}®;
 seta_u_conv ñ{ƒ º ð [d : ƒ] | true}®;
 seta_u_conv ñ{a ,b : ƒ; c : ƒ; ƒ º ð []; ƒ º ð [d, e : ƒ]; ƒ º ð []}®;
