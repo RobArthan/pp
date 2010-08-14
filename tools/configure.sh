@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.49 2009/08/26 16:52:05 rda Exp rda $
+# $Id: configure.sh,v 1.50 2009/09/09 16:39:57 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -127,6 +127,10 @@ check_bin(){
 LC_ALL=C
 export LC_ALL
 #
+# Find the OS for future reference
+#
+OS=`{ uname -s || echo unknown; } | dd conv=lcase 2>/dev/null`
+#
 # Find a target directory
 #
 if	[ "${PPTARGETDIR:-}" = "" ]
@@ -205,6 +209,15 @@ do	if	eval [  \$$f = y  ]
 	fi
 done
 #
+# OS-specific checks on requested targets
+#
+if	[ "$OS" = cygwin ]
+then
+	if	[ $xpp = y ]
+	then	warn "xpp has not been tested on Cygwin"
+	fi
+fi
+#
 # Find an ML Compiler, if we need one
 #
 if	[ "$dev" = y -o "$hol" = y -o "$zed" = y -o "$daz" = y -o "$qcz" = y ]
@@ -251,7 +264,7 @@ then
 		if	[ ! -f "$PPPOLYHOME"/lib/libpolymain.a ]
 		then	give_up "The file \"$PPPOLYHOME/lib/libpolymain.a\" does not exist"
 		fi
-		if	uname -a | grep -i darwin >/dev/null
+		if	[ "$OS" = darwin ]
 		then	POLYLINKFLAGS="${PPPOLYLINKFLAGS:--segprot POLY rwx rwx}"
 		else	POLYLINKFLAGS="${PPPOLYLINKFLAGS:-}"
 		fi
