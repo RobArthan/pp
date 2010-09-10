@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.50 2009/09/09 16:39:57 rda Exp rda $
+# $Id: configure.sh,v 1.51 2010/08/14 09:54:17 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -428,6 +428,7 @@ out 'BSTINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BSTINPUTS:"'
 out 'export LC_ALL PPCACHESIZE PPCOMPILER PPMOTIFLINKING PPTARGETDIR'
 out 'export PPHOME PATH PPDATABASEPATH PPETCPATH PPPOLYHOME'
 out 'export POLYLINKFLAGS TEXINPUTS BIBINPUTS BSTINPUTS USERCFLAGS USERCLIBS'
+out 'unset PPVER'
 out 'give_up(){'
 out '	echo "install: installation failed; see $1 for more details"'
 out '	exit 1'
