@@ -1,0 +1,316 @@
+=IGN
+********************************************************************************
+imp121.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+\documentclass[a4paper,12pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+\makeindex
+
+\def\Title{ Theorem Finder: Implementation }
+
+\def\Abstract{\begin{center}
+{\bf Abstract}\par\parbox{0.7\hsize}
+{\small This document gives the implementation of tools for querying the theory hierarchy to find theorems satisfying specified conditions.}
+\end{center}}
+
+\def\Reference{LEMMA1/HOL/IMP121}
+
+\def\Author{R.D. Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 118 958 4409}
+
+\def\Fax{+44 118 956 1920}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+\begin{centering}
+
+
+
+\end{centering}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{$Revision: 1.2 $
+}
+\def\Date{\FormatDate{$Date: 2009/09/13 13:52:59 $
+}}
+
+%%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+%%%%% STANDARD RED-TAPE SECTIONS (MAY WANT TO INTERLEAVE SOME \newpage COMMANDS IN THESE)
+
+%%%%% CONTENTS:
+
+\subsection{Contents}
+
+\tableofcontents
+
+%%%%% REFERENCES:
+
+\newpage
+\subsection{References}
+
+\bibliographystyle{fmu}
+
+%%%%% CHANGE THE FOLLOWING AS NECESSARY (E.G., TO PICK UP daz.bib):
+{\raggedright
+\bibliography{fmu}
+}
+%%%%% CHANGES HISTORY:
+\subsection{Changes History}
+\begin{description}
+\item[Issue 1.1] First draft.
+\end{description}
+
+%%%%%  CHANGES FORECAST:
+
+\subsection{Changes Forecast}
+
+None.
+
+%%%%% DISTRIBUTION LIST
+
+\subsection{Distribution}
+
+Lemma 1 build system.
+
+\newpage
+
+\section{Introduction}xpp 
+\subsection{Scope}
+This document gives the implementation of tools for querying the theory hierarchy to find theorems satisfying specified conditions.
+
+\subsection{Purpose and Background}
+See \cite{LEMMA1/HOL/DTD121}.
+
+
+\section{THE STRUCTURE}
+
+=TEX
+=SML
+structure €TheoremFinder› : TheoremFinder = struct
+datatype €THM_TYPE› = €TTAxiom› | €TTDefn› | €TTSaved›;
+
+type €THM_INFO› = {
+	theory		: string,
+	names		: string list,
+	thm_type	: THM_TYPE,
+	thm		: THM};
+=TEX
+=SML
+fun €find_thm_in_theory›
+	(test : THM_INFO -> bool)
+	("-" : string) : THM_INFO list = (
+	find_thm_in_theory test (get_current_theory_name())
+) | find_thm_in_theory test thy = (
+	let	fun aux ty acc [] = acc
+		|   aux ty acc ((ns, th) :: more) = (
+			let	val info = {
+					theory = thy,
+					names = ns,
+					thm_type = ty,
+					thm = th};
+			in	if	test info
+				then	aux ty (info :: acc) more
+				else	aux ty acc more
+			end
+		);
+		val list1 = aux TTSaved [] (get_thms
+thy);
+		val list2 = aux TTDefn list1 (get_defns thy);
+		val list3 = aux TTAxiom list2 (get_axioms thy);
+	in	list3
+	end
+);
+=TEX
+=SML
+fun €is_substring› (sub : string) (str : string) : bool = (
+	let	val sublen = size sub;
+		val strlen = size str;
+		fun aux i = (
+			i + sublen <= strlen andalso
+			(sub = substring(str, i, sublen) orelse aux (i+1))
+		);
+	in	aux 0
+	end
+);
+=TEX
+The following tests for subterms modulo $\alpha$-equivalence.
+=SML
+fun €is_subterm› (subtm : TERM) (tm : TERM) : bool = (
+	subtm ~=$ tm orelse
+	(case dest_simple_term tm of
+		App(f, x) => is_subterm subtm f orelse is_subterm subtm x
+	|	SimpleÃ (_, b) => is_subterm subtm b
+	|	_ => false)
+);
+=TEX
+The following tests for a subterm matching a pattern.
+=SML
+fun €is_submatch› (pattm : TERM) (tm : TERM) : bool = (
+	(term_match tm pattm; true)
+	handle Fail _ =>
+	(case dest_simple_term tm of
+		App(f, x) => is_submatch pattm f orelse is_submatch pattm x
+	|	SimpleÃ (_, b) => is_submatch pattm b
+	|	_ => false)
+);
+=TEX
+=SML
+datatype 'a €TEST› =
+	€TFun› of 'a -> bool
+|	€TAll› of 'a TEST list
+|	€TAny› of 'a TEST list
+|	€TNone› of 'a TEST list;
+
+type €THM_INFO_TEST› = THM_INFO TEST;
+=TEX
+=SML
+fun €mk_test› (test : 'a TEST) (x : 'a) : bool = (
+	case test of
+		TFun t => t x
+	|	TAll [] => true
+	|	TAll (t::ts) => mk_test t x andalso mk_test (TAll ts) x
+	|	TAny [] => false
+	|	TAny (t::ts) => mk_test t x orelse
+ mk_test (TAny ts) x
+	|	TNone [] => true
+	|	TNone (t::ts) => not(mk_test t x) andalso
+ mk_test (TNone ts) x
+);
+=TEX
+=SML
+fun €gen_find_thm_in_theories› (test : THM_INFO_TEST) 
+	(thys : string list) : THM_INFO list = (
+	flat (map (find_thm_in_theory (mk_test test)) thys)
+);
+=TEX
+=SML
+fun €gen_find_thm› (test : THM_INFO_TEST) : THM_INFO list = (
+	gen_find_thm_in_theories test (get_ancestors "-")
+);
+=TEX
+=SML
+fun €ti_substring› (sub : string) ({names, ...} : THM_INFO) : bool = (
+	any names (is_substring sub)
+);
+=TEX
+=SML
+fun €ti_subterm› (subtm : TERM) ({thm, ...} : THM_INFO) : bool = (
+	is_subterm subtm (concl thm)
+);
+=TEX
+=SML
+fun €ti_submatch› (subtm : TERM) ({thm, ...} : THM_INFO) : bool = (
+	is_submatch subtm (concl thm)
+);
+=TEX
+=SML
+fun €ti_theory› (thy : string) ({theory, ...} : THM_INFO) : bool = (
+	thy = theory
+);
+=TEX
+=SML
+fun €ti_thm_type› (ty : THM_TYPE) ({thm_type, ...} : THM_INFO) : bool = (
+	ty = thm_type
+);
+=TEX
+=SML
+fun €any_substring_tt› (ss : string list) : THM_INFO_TEST = (
+	TAny (map (TFun o ti_substring) ss)
+);
+=TEX
+=SML
+fun €all_substring_tt› (ss : string list) : THM_INFO_TEST = (
+	TAll (map (TFun o ti_substring) ss)
+);
+=TEX
+=SML
+fun €no_substring_tt› (ss : string list) : THM_INFO_TEST = (
+	TNone (map (TFun o ti_substring) ss)
+);
+=TEX
+=SML
+fun €any_subterm_tt› (ts : TERM list) : THM_INFO_TEST = (
+	TAny (map (TFun o ti_subterm) ts)
+);
+=TEX
+=SML
+fun €all_subterm_tt› (ts : TERM list) : THM_INFO_TEST = (
+	TAll (map (TFun o ti_subterm) ts)
+);
+=TEX
+=SML
+fun €no_subterm_tt› (ts : TERM list) : THM_INFO_TEST = (
+	TNone (map (TFun o ti_subterm) ts)
+);
+=TEX
+=SML
+fun €any_submatch_tt› (ts : TERM list) : THM_INFO_TEST = (
+	TAny (map (TFun o ti_submatch) ts)
+);
+=TEX
+=SML
+fun €all_submatch_tt› (ts : TERM list) : THM_INFO_TEST = (
+	TAll (map (TFun o ti_submatch) ts)
+);
+=TEX
+=SML
+fun €no_submatch_tt› (ts : TERM list) : THM_INFO_TEST = (
+	TNone (map (TFun o ti_submatch) ts)
+);
+=TEX
+=SML
+fun €theories_tt› (ts : string list) : THM_INFO_TEST = (
+	TAny (map (TFun o ti_theory) ts)
+);
+=TEX
+=SML
+fun €thm_type_tt› (thm_type : THM_TYPE) : THM_INFO_TEST = (
+	TFun(ti_thm_type thm_type)
+);
+=TEX
+=SML
+fun €find_thm› (pats : TERM list) : THM_INFO list = (
+	gen_find_thm (all_submatch_tt pats)
+);
+end (* of structure TheoremFinder *);
+open TheoremFinder;
+=TEX
+
+
+=TEX
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
+
+
+
+
+
