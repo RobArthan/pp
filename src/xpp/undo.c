@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.25 2009/09/06 13:20:10 rda Exp rda $
+ * undo.c,v 2.26 2009/09/06 14:50:50 rda Exp
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -710,13 +710,14 @@ XtPointer add_undo(
 	return (XtPointer) ub;
 }
 
-
-
-
 /* **** **** **** **** **** **** **** **** **** **** **** **** **** *
- * Reinitialise the undo buffer.  NB initialisation of the `last'   *
- * component almost always has to be reassigned.  Following gives   *
- * an undo which would not change the text.                         *
+ * Reinitialise the undo buffer so that a new undo entry can be entered.
+ * If we are undoing or redoing, we can overwrite the active node, since
+ * the information lost from the undo buffer will be put into the text
+ * widget; otherwise, we add a new node to the list.
+ * NB the initialisation of the `last' component sets first and last
+ * to the start position from cbs and the old_text to NULL and moved away
+ * to false (this gives an undo that will do nothing).
  * **** **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean reinit_undo_buffer (
 	UndoBuffer	*ub,
@@ -757,6 +758,10 @@ static Boolean reinit_undo_buffer (
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor typed input:
+ *
+ * An undoable action replaces one substring of the text with
+ * another. We want to avoid having an undo node for every character
+ * typed or deleted so we treat those cases specially.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean monitor_typing(
 	Widget		text_w,
@@ -771,60 +776,41 @@ static Boolean monitor_typing(
 	   cbs->endPos == cbs->startPos + 1 &&
 	   (cbs->endPos == lst || cbs->startPos == lst) &&
 	   in_business(ub)) {
-		/* deleting single character at end of current typing thread */
-		if(cbs->endPos == lst) {
-			if(lst > first(ub)) {
-				/* deleting last char of current thread */
-				setLast(ub, lst - 1);
-			} else {
-				/* deleting char before start of current thread */
-				char buf[2];
-				if(XmTextGetSubstring(ub->text_w,
-				                      cbs->startPos,
-				                      1,
-				                      2,
-				                      buf) != XmCOPY_SUCCEEDED) {
-					/* I havn't figured out why this code is here as *
-					 * we'll only be at this point if the above call *
-					 * couldn't copy the text buffer, so we're not   *
-					 * going to be able to undo it since we don't    *
-					 * know what to undo it to.        PG 2002 05 13 */
-					if(!reinit_undo_buffer(ub, cbs, False, noMA)) {
-						return False;
-					}
-				} else {
-					setUndo(ub, True);
-					setMoved_away(ub, False);
-					setFirst(ub,      cbs->startPos);
-					setLast(ub,       cbs->startPos);
-					if(!prefix_old_text(ub, buf[0], noMA)) {
-						return False;
-					}
-				}
+		/* the user is deleting single character adjacent to the end of the current thread */
+		char buf[2];
+		if(lst > first(ub)) {
+			/* start a new thread if there are any typed characters to remember */
+			if(!reinit_undo_buffer(ub, cbs, True, noMA)) {
+				return False;
 			}
-		} else {	/* deleting char after start of current thread */
-			char buf[2];
-			if(XmTextGetSubstring(ub->text_w,
-			                      cbs->startPos,
-			                      1,
-			                      2,
-			                      buf) != XmCOPY_SUCCEEDED) {
-				/* See the comment below the call to *
-				 * XmTextGetSubstring above this one */
-				if(!reinit_undo_buffer(ub, cbs, False, noMA)) {
+		}
+		if(XmTextGetSubstring(ub->text_w,
+		                      cbs->startPos,
+		                      1,
+		                      2,
+		                      buf) != XmCOPY_SUCCEEDED) {
+			/* Motif must have run out of memory */
+			*noMA = noMemory(ub);
+			return False;
+		}
+		setUndo(ub, True);
+		setMoved_away(ub, False);
+		if(cbs->endPos == lst) { /* deleting to left of end of thread */
+			/* adjust first and last to allow for deletion */
+			setFirst(ub, cbs->startPos);
+			setLast(ub, cbs->startPos);
+			if(!prefix_old_text(ub, buf[0], noMA)) {
 					return False;
-				}
-			} else {
-				setUndo(ub, True);
-				setMoved_away(ub, False);
-				setLast(ub,       cbs->startPos);
-				if(!affix_old_text(ub, buf[0], noMA)) {
-						return False;
-				}
+			}
+		} else { /* deleting to right of end of thread */
+			if(!affix_old_text(ub, buf[0], noMA)) {
+					return False;
 			}
 		}
 	} else if(cbs->startPos < cbs->endPos) {
-		/* deleted something else */
+		/* deleted or overtyped one character not adjacent to end of thread */
+		/* or deleted or overtyped more than one character */
+		/* (possibly in undo/redo) */
 		len = cbs->endPos - cbs->startPos;
 
 		if(!reinit_undo_buffer(ub, cbs, True, noMA)) {
@@ -845,9 +831,8 @@ static Boolean monitor_typing(
 			setFirst(ub,      cbs->startPos);
 			setLast(ub,       cbs->startPos + cbs->text->length);	
 		} else {
-			if(!ub->undoing) {
-				setUndo(ub, False);
-			}
+			/* Our buffer was big enough, so Motif must have run out of memory */
+			*noMA = noMemory(ub);
 		}
 	} else if(ub->undoing && cbs->startPos == cbs->endPos) {
 		/* undoing a delete */
