@@ -37,16 +37,13 @@ static char *read_only_warning = "The read-only option is turned on. "
 				 "and edit the text?";
 
 /* The following is used to implement undo/redo in the edit menu */
-static Cardinal next_debug_no = 0;
 typedef struct undo_node {
-	Cardinal debug_no;      /* only for debugging */
-	Boolean in_business;    /* true if first & last are valid */
-	Boolean changes_saved;  /* true if changes have been saved */
-	Boolean moved_away;     /* true if the change is complete */
-	Cardinal first,         /* position in text of chars to */
-	         last;          /* be replaced by an undo */
-	char *old_text;         /* deleted characters to put in */
-	Cardinal old_text_size; /* current amount of space in the old_text buffer */
+	Boolean changes_saved;   /* true if changes have been saved */
+	Boolean change_complete; /* true if the change is complete */
+	Cardinal first,          /* position in text of chars to */
+	         last;           /* be replaced by an undo */
+	char *old_text;          /* deleted characters to put in */
+	Cardinal old_text_size;  /* current amount of space in the old_text buffer */
     Boolean was_null;
 	struct undo_node *next,
 	                 *prev;
@@ -305,42 +302,26 @@ static Boolean was_null(UndoBuffer *ub)
 	}
 	return ub->active->was_null;
 }
-static void setWas_null(UndoBuffer *ub, Boolean value)
+static void set_was_null(UndoBuffer *ub, Boolean value)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
 	}
 	ub->active->was_null = value;
 }
-
-static Boolean moved_away(UndoBuffer *ub)
+static Boolean change_complete(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return True;
 	}
-	return ub->active->moved_away;
+	return ub->active->change_complete;
 }
-static void setMoved_away(UndoBuffer *ub, Boolean value)
+static void set_change_complete(UndoBuffer *ub, Boolean value)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
 	}
-	ub->active->moved_away = value;
-}
-
-static Boolean in_business(UndoBuffer *ub)
-{
-	if(ub->active == (UndoNode *) NULL) {
-		return False;
-	}
-	return ub->active->in_business;
-}
-static void setIn_business(UndoBuffer *ub, Boolean value)
-{
-	if(ub->active == (UndoNode *) NULL) {
-		return;
-	}
-	ub->active->in_business = value;
+	ub->active->change_complete = value;
 }
 static Boolean changes_saved(UndoBuffer *ub)
 {
@@ -364,7 +345,7 @@ static Boolean in_sync(UndoBuffer *ub)
 	}
 	return True;
 }
-static void setChanges_saved(UndoBuffer *ub, Boolean value)
+static void set_changes_saved(UndoBuffer *ub, Boolean value)
 {
 	UndoNode *ptr;
 
@@ -406,7 +387,7 @@ static Cardinal first(UndoBuffer *ub)
 	}
 	return ub->active->first;
 }
-static void setFirst(UndoBuffer *ub, Cardinal value)
+static void set_first(UndoBuffer *ub, Cardinal value)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -421,7 +402,7 @@ static Cardinal last(UndoBuffer *ub)
 	}
 	return ub->active->last;
 }
-static void setLast(UndoBuffer *ub, Cardinal value)	
+static void set_last(UndoBuffer *ub, Cardinal value)	
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -440,8 +421,8 @@ static void low_memory_warning(UndoBuffer *ub) {
 	memory_warning_dialog(ub->text_w, True);
 }
 
-static void setUndo(UndoBuffer *ub, Boolean state);
-static void setRedo(UndoBuffer *ub, Boolean state);
+static void set_undo(UndoBuffer *ub, Boolean state);
+static void set_redo(UndoBuffer *ub, Boolean state);
 /* Called if we've run out of memory (i.e. it's serious) */
 /* The return value always false at present. (Could be response from user) */
 static Boolean noMemory(UndoBuffer *ub) {
@@ -494,17 +475,15 @@ static Boolean newUndoNode(UndoBuffer *ub, Boolean *answer)
 	if(!new) {
 		return False;
 	}
-	new->debug_no      = ++next_debug_no;
-	new->moved_away    = True;
-	new->first         = 0;
-	new->last          = 0;
-	new->in_business   = False;
-	new->changes_saved = False;
-	new->old_text       = (char *) NULL;
-	new->old_text_size   = 0;
-	new->was_null      = False;
-	new->next          = (UndoNode *) NULL;
-	new->prev          = (UndoNode *) NULL;
+	new->change_complete    = True;
+	new->first              = 0;
+	new->last               = 0;
+	new->changes_saved      = False;
+	new->old_text           = (char *) NULL;
+	new->old_text_size      = 0;
+	new->was_null           = False;
+	new->next               = (UndoNode *) NULL;
+	new->prev               = (UndoNode *) NULL;
 
 	/* now add the new node to the chain */
 	if(ub->root == (UndoNode *) NULL) {
@@ -557,7 +536,7 @@ static void retrack(UndoBuffer *ub)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Utility functions to set the sensitivity of the buttons
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void setUndo(UndoBuffer *ub, Boolean state)
+static void set_undo(UndoBuffer *ub, Boolean state)
 {
 	Widget *wp;
 	if(ub->can_undo != state) {
@@ -573,7 +552,7 @@ static void setUndo(UndoBuffer *ub, Boolean state)
 }
 
 
-static void setRedo(UndoBuffer *ub, Boolean state)
+static void set_redo(UndoBuffer *ub, Boolean state)
 {
 	Widget *wp;
 	if(ub->can_redo != state) {
@@ -590,15 +569,15 @@ static void setRedo(UndoBuffer *ub, Boolean state)
 
 
 /* set the menu buttons properly according to the undoNodes */
-static void setUndoRedo(UndoBuffer *ub)
+static void set_undoRedo(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
-		setUndo(ub, False);
-		setRedo(ub, ub->root != (UndoNode *) NULL);
+		set_undo(ub, False);
+		set_redo(ub, ub->root != (UndoNode *) NULL);
 		return;
 	}
-	setUndo(ub, True);
-	setRedo(ub, ub->active->next != (UndoNode *) NULL);
+	set_undo(ub, True);
+	set_redo(ub, ub->active->next != (UndoNode *) NULL);
 }
 
 
@@ -614,8 +593,8 @@ void clear_undo(XtPointer xtp)
 	/* force undo/redo to be False */
 	ub->can_undo = True;
 	ub->can_redo = True;
-	setUndo(ub, False);
-	setRedo(ub, False);
+	set_undo(ub, False);
+	set_redo(ub, False);
 
 	freeUndoNodes(ub, ub->root);
 	ub->root   = (UndoNode *) NULL;
@@ -646,8 +625,8 @@ void pause_undo(XtPointer xtp)
 {
 	UndoBuffer *ub = xtp;
 	ub->enabled = False;
-	setUndo(ub, False);
-	setRedo(ub, False);
+	set_undo(ub, False);
+	set_redo(ub, False);
 }
 
 /* Only needed if an open failed, otherwise clear_undo gets called */
@@ -655,21 +634,20 @@ void unpause_undo(XtPointer xtp)
 {
 	UndoBuffer *ub = xtp;
 	ub->enabled = True;
-	setUndoRedo(ub);
+	set_undoRedo(ub);
 }
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * notify_save: set the changes_saved flag to provoke a warning
- * if the user asks to undo; also set the moved_away to tell
- * undo_modify_cb to stop accumulating changes and set the
- * and update the menus accordingly.
+ * if the user asks to undo; also set the change_complete flag to tell
+ * undo_modify_cb that the current thread of typing is complete.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void notify_save(XtPointer xtp)
 {
 	UndoBuffer *ub = xtp;
-	setChanges_saved(ub, True);
-	setMoved_away(ub,    True);
+	set_changes_saved(ub, True);
+	set_change_complete(ub, True);
 }
 
 
@@ -726,8 +704,8 @@ static Boolean reinit_undo_buffer (
 	Boolean *answer)
 {
 	if(!ub->undoing) {
-		setUndo(ub, cu);
-		setRedo(ub, False);
+		set_undo(ub, cu);
+		set_redo(ub, False);
 	}
 
 	if(!ub->undoing || ub->active == (UndoNode *) NULL) {
@@ -735,10 +713,9 @@ static Boolean reinit_undo_buffer (
 			return False;
 		}
 	}
-	setMoved_away(ub,  False);
-	setFirst(ub,       cbs->startPos);
-	setLast(ub,        cbs->startPos);
-	setIn_business(ub, True);
+	set_change_complete(ub, False);
+	set_first(ub, cbs->startPos);
+	set_last(ub, cbs->startPos);
 	return True;
 }
 
@@ -774,8 +751,7 @@ static Boolean monitor_typing(
 	if(!cbs->text->length &&
 	   !ub->undoing &&
 	   cbs->endPos == cbs->startPos + 1 &&
-	   (cbs->endPos == lst || cbs->startPos == lst) &&
-	   in_business(ub)) {
+	   (cbs->endPos == lst || cbs->startPos == lst)) {
 		/* the user is deleting single character adjacent to the end of the current thread */
 		char buf[2];
 		if(lst > first(ub)) {
@@ -793,12 +769,12 @@ static Boolean monitor_typing(
 			*noMA = noMemory(ub);
 			return False;
 		}
-		setUndo(ub, True);
-		setMoved_away(ub, False);
+		set_undo(ub, True);
+		set_change_complete(ub, False);
 		if(cbs->endPos == lst) { /* deleting to left of end of thread */
 			/* adjust first and last to allow for deletion */
-			setFirst(ub, cbs->startPos);
-			setLast(ub, cbs->startPos);
+			set_first(ub, cbs->startPos);
+			set_last(ub, cbs->startPos);
 			if(!prefix_old_text(ub, buf[0], noMA)) {
 					return False;
 			}
@@ -827,9 +803,9 @@ static Boolean monitor_typing(
 			char *ptr = old_text(ub)+len;
 			*ptr = '\0';
 
-			setMoved_away(ub, False);
-			setFirst(ub,      cbs->startPos);
-			setLast(ub,       cbs->startPos + cbs->text->length);	
+			set_change_complete(ub, False);
+			set_first(ub,      cbs->startPos);
+			set_last(ub,       cbs->startPos + cbs->text->length);	
 		} else {
 			/* Our buffer was big enough, so Motif must have run out of memory */
 			*noMA = noMemory(ub);
@@ -839,27 +815,33 @@ static Boolean monitor_typing(
 		if(!reinit_undo_buffer(ub, cbs, False, noMA)) {
 			return False;
 		}
-		setMoved_away(ub, False);
-		setFirst(ub,      cbs->startPos);
-		setLast(ub,       cbs->startPos + cbs->text->length);	
+		set_change_complete(ub, False);
+		set_first(ub,      cbs->startPos);
+		set_last(ub,       cbs->startPos + cbs->text->length);	
 		clear_old_text(ub);
-	} else if(	moved_away(ub)	/* save or undo since last typing */
+	} else if(change_complete(ub)	/* open, save or undo since last change */
 	||	lst != cbs->startPos /* started typing somewhere new */
-	||	cbs->text->length > 1) { /* multi-character insert: i.e., paste */
+	||	cbs->text->length > 1) { /* multi-character insert: e.g., paste */
 		if(!reinit_undo_buffer(ub, cbs, True, noMA)) {
 			return False;
 		}
-		setLast(ub, cbs->startPos + cbs->text->length);
+		set_last(ub, cbs->startPos + cbs->text->length);
 	} else {
-		/* just carried on typing */
-		setLast(ub, lst + cbs->text->length);
+		/* In this branch, we must have: */
+		/* cbs.endPos == cbs.startPos == last && */
+		/* !change_complete(ub) && (so not very first change) */
+		/* cbs->text->length <= 1 */
+		/* If cbs->text->length == 1, just carried on typing */
+		/* If cbs->text->length == 0, Motif notified no change */
+		/* In either case the following will do: */
+		set_last(ub, lst + cbs->text->length);
 	}
 
 	if(ub->menu_ws && !ub->undoing) {
 		/* If this isn't the call invoked by the *
 		 * the XmReplace in undo_cb turn Undo on */
-		setUndo(ub, True);
-		setRedo(ub, False);
+		set_undo(ub, True);
+		set_redo(ub, False);
 	}
 
 	return True;
@@ -946,7 +928,7 @@ void undo_modify_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Do an undo/redo. Caller's responsibility to check that the data
  * structures will allow the operation.
- * We must set the moved_away field to indicate that
+ * We must set the change_complete field to indicate that
  * undo_modify_cb is to stop accumulating changes.
  * Any text inserted by the undo is selected and the insertion
  * position is set to the end of the undo point. The beginning
@@ -966,10 +948,10 @@ static Boolean undo_redo(
 		return False;
 	}
 	ub->undoing = True;
-	setMoved_away(ub, True);
+	set_change_complete(ub, True);
 	len = strlen(old_text(ub));
 	if(amUndoing) {
-		setWas_null(ub, len == 0);
+		set_was_null(ub, len == 0);
 	}
 	fst = first(ub);
 	lst = last(ub);
@@ -999,7 +981,7 @@ void undo(XtPointer undo_ptr)
 
 	if(undo_redo(ub, True)) {
     		backtrack(ub);
-		setUndoRedo(ub);
+		set_undoRedo(ub);
 	}
 	if(in_sync(ub)) {
 		show_unmodified();
@@ -1016,7 +998,7 @@ void redo(XtPointer undo_ptr)
 
 	retrack(ub);
 	if(undo_redo(ub, False)) {
-		setUndoRedo(ub);
+		set_undoRedo(ub);
 	} else {
 		backtrack(ub);
 	}
