@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.51 2010/08/14 09:54:17 rda Exp rda $
+# $Id: configure.sh,v 1.52 2010/09/10 16:48:21 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -129,7 +129,18 @@ export LC_ALL
 #
 # Find the OS for future reference
 #
-OS=`{ uname -s || echo unknown; } | dd conv=lcase 2>/dev/null`
+find_os(){
+	S=`{ uname -s || echo unknown; } | dd conv=lcase 2>/dev/null`
+	case $S in
+		cygwin*)
+			echo "cygwin" ;;
+		SunOS)
+			echo "solaris" ;;
+		*)
+			echo $S ;;
+	esac
+}
+OS=`find_os`
 #
 # Find a target directory
 #
@@ -162,14 +173,21 @@ then	give_up 'the target directory must be an absolute path name (i.e., begin wi
 fi
 echo "Using $PPTARGETDIR as the installation target directory"
 #
-# Check for user-defined target list:
+# Calculate target list:
 #
 SUPPORTEDTARGETS="dev pptex xpp hol zed daz qcz"
+case $OS in
+	cygwin)
+		DEFAULTTARGETS="pptex hol zed daz qcz" ;;
+	*)
+		DEFAULTTARGETS="pptex xpp hol zed daz qcz" ;;
+esac
 if	[ "${PPTARGETS:-}" = "" ]
-then	PPTARGETS="pptex xpp hol zed daz qcz"
+then	
+	PPTARGETS=$DEFAULTTARGETS
 	USERDEFINEDTARGETS=n
 elif	[ "${PPTARGETS:-}" = "all" ]
-then	PPTARGETS=$SUPPORTEDTARGETS
+then	PPTARGETS="dev $DEFAULTTARGETS"
 	USERDEFINEDTARGETS=n
 else	USERDEFINEDTARGETS=y
 	for f in $PPTARGETS
