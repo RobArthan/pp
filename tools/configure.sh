@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.52 2010/09/10 16:48:21 rda Exp rda $
+# $Id: configure.sh,v 1.53 2011/01/29 16:42:17 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -134,7 +134,7 @@ find_os(){
 	case $S in
 		cygwin*)
 			echo "cygwin" ;;
-		SunOS)
+		sunos)
 			echo "solaris" ;;
 		*)
 			echo $S ;;
