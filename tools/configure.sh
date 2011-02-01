@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.53 2011/01/29 16:42:17 rda Exp rda $
+# $Id: configure.sh,v 1.54 2011/01/30 17:28:03 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -346,7 +346,7 @@ then	if	[ "${PPMOTIFLINKING:-}" != "" ]
 	elif	[ -d /sw/include/Xm ]
 	then	PPMOTIFHOME=/sw
 	fi
-	if	[ "${PPMOTIFHOME:-}" == "" ]
+	if	[ "${PPMOTIFHOME:-}" = "" ]
 	then	warn 'Motif installation not found'
 	fi
 fi
