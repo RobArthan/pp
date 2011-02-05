@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp007.doc   %Z% $Date: 2005/12/16 10:34:27 $ $Revision: 1.49 $ $RCSfile: imp007.doc,v $
+% imp007.doc   %Z% $Date: 2010/11/17 17:43:53 $ $Revision: 1.50 $ $RCSfile: imp007.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Derived Rules of Inference}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the Derived Rules of Inference}
 \TPPref{DS/FMU/IED/IMP007}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.49 $
+\def\SCCSversion{$Revision: 1.50 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $ %
+\TPPdate{\FormatDate{$Date: 2010/11/17 17:43:53 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -178,6 +178,7 @@ Correct $subst\_conv$.
 \item[Issue 1.48] Interfaces to the kernel inference rules are now in the kernel interface module.
 \item[Issue 1.49] The prefix for private interfaces is now $pp'$ rather than $icl'$.
 \item[Issue 1.50] Added conversions for higher-order matching.
+\item[Issue 1.51] Added {simple\_´\_match\_mp\_rule2}.
 \end{description}
 \subsection{Changes Forecast}
 The conversions 
@@ -2518,15 +2519,6 @@ handle (Fail _) => fail caller 7044 [fn () => string_of_term match_against,
 );
 end;
 =TEX
-The following associative look-up is used in the variant versions
-of the matching rules which do not specialise free variables.
-=SML
-fun lrassoc1 ((x, y) :: rest : (TERM * TERM) list) (what : TERM) : TERM = (
-	if y =$ what
-	then x
-	else lrassoc1 rest what
-) | lrassoc1 [] what = what;
-=TEX
 Now we use the above in the various forms of matching.
 =SML
 local
@@ -2560,13 +2552,13 @@ in
 (fn (thm2 : THM) =>
 let	val tm = concl thm2;
 in let	val (tym,tmm) = term_match tm t1;
-	val s2 = case tym of
-		[] => thm1
-		| _ => inst_type_rule tym thm1;
+	val (s2, inst_fun)  = case tym of
+		[] => (thm1, fn tm => tm)
+		| _ => (inst_type_rule tym thm1, inst [] tym);
 	fun aux1 (qv :: rest) : TERM list = (
-	let	val qv' = inst [] tym qv;
+	let	val qv' = inst_fun qv;
 	in
-		(lrassoc1 tmm qv') :: aux1 rest 
+		(rassoc1 tmm qv') :: aux1 rest 
 	end
 	) | aux1 [] = [];
 
@@ -2582,6 +2574,75 @@ handle complaint =>
 divert complaint "dest_´" "simple_´_match_mp_rule1" 7045 
 	[fn () => string_of_thm thm1]
 );
+=TEX
+The following is complicated by the desire not to calculate free variable
+sets more than is necessary. The case where the theorems have large
+number of assumptions with lots of free variables is likely to be common
+(in tactic proofs) as is the case where all the bound variables do appear
+free in $t1$ (after type instantiation) but do not appear in the results
+of the term matching because the variable is matched to itself. Thus we
+should avoid calculating the free variables of the assumptions unless
+we know we need them.
+=SML
+
+fun Ûsimple_´_match_mp_rule2Ý (thm1 : THM) : THM -> THM = (
+let	val (qvs,body) = strip_µ (concl thm1);
+	val (t1,_) = dest_´ body;
+in
+(fn (thm2 : THM) =>
+let	val tm = concl thm2;
+in let	val (tym,tmm) = term_match tm t1;
+	val (s2, inst_fun)  = case tym of
+		[] => (thm1, fn tm => tm)
+		| _ => (inst_type_rule tym thm1, inst [] tym);
+	type CAPTURE_DATA = {avoid : TERM list OPT, t1_frees : TERM list OPT};
+	fun is_free_in_t1 (v, {avoid, t1_frees as Nil}) : bool * CAPTURE_DATA = (
+		let	val vs = map inst_fun (frees t1);
+		in	(v mem vs, {avoid = avoid, t1_frees = Value vs})
+		end
+	) | is_free_in_t1 (v, cd as {t1_frees as Value vs, ...}) = (
+			(v mem vs, cd)
+	);
+	fun rename_bv (v, {avoid as Nil, t1_frees as Value t1_fvs}) : TERM * CAPTURE_DATA = (
+		let	val vs = t1_fvs term_union
+				list_term_union (map frees (asms thm1)) term_union
+				list_term_union (map frees (asms thm2));
+			val v' = variant vs v;
+		in	(v', {avoid = Value (v' :: vs), t1_frees = t1_frees})
+		end
+	) | rename_bv (v, {avoid as Value vs, t1_frees}) = (
+		let	val v' = variant vs v;
+		in	(v', {avoid = Value (v' :: vs), t1_frees = t1_frees})
+		end
+	) | rename_bv (v, {avoid, t1_frees as Nil}) = (
+		rename_bv(v, {avoid = avoid, t1_frees = Value (map inst_fun (frees t1))})
+	);
+	fun aux1 (acc : TERM list) (cd : CAPTURE_DATA) (qv :: rest) : TERM list = (
+	let	val qv' = inst_fun qv;
+		val (tm, cd') = (rassoc3 tmm qv', cd)
+		handle Fail _ =>
+		let	val (free_in_t1, cd') = is_free_in_t1 (qv', cd);
+		in	if	free_in_t1
+			then	(qv', cd')
+			else	rename_bv (qv', cd')
+		end;		
+	in	aux1 (tm :: acc) cd' rest 
+	end
+	) | aux1 acc _ [] = rev acc;
+	val init_cd = {avoid = Nil, t1_frees = Nil};
+	val s3 = list_simple_µ_elim (aux1 [] init_cd qvs) s2;
+	val s4 = ´_elim s3 thm2;
+in
+	s4
+end
+handle (Fail _) => term_fail "simple_´_match_mp_rule2" 7044 [tm, t1]
+end)
+end
+handle complaint =>
+divert complaint "dest_´" "simple_´_match_mp_rule2" 7045 
+	[fn () => string_of_thm thm1]
+);
+
 =TEX
 =SML
 local
@@ -2621,7 +2682,7 @@ in let	val (tym,tmm) = term_match tm t1;
 	fun aux1 (qv :: rest) : TERM list = (
 	let	val qv' = inst [] tym qv;
 	in
-		(lrassoc1 tmm qv') :: aux1 rest 
+		(rassoc1 tmm qv') :: aux1 rest 
 	end
 	) | aux1 [] = [];
 
@@ -2679,7 +2740,7 @@ let	val (tym,tmm) = term_match tm t1;
 	fun aux1 (qv :: rest) : TERM list = (
 	let	val qv' = inst [] tym qv;
 	in
-		(lrassoc1 tmm qv') :: aux1 rest 
+		(rassoc1 tmm qv') :: aux1 rest 
 	end
 	) | aux1 [] = [];
 
