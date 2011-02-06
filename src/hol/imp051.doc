@@ -15,10 +15,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPproject{FST PROJECT}  %% Mandatory field
 \TPPtitle{Implementation of Proof Contexts}
 \TPPref{DS/FMU/IED/IMP051}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.34 $
+\def\SCCSversion{$Revision: 1.35 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/14 15:11:49 $ %
+\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -106,6 +106,7 @@ $force\_delete\_theory$ (and trial runs for it).
 \item[Issue 1.33] Stopped it calling kernel inference rules directly.
 \item[Issue 1.34] Allowed for kernel interface and symbol table reform.
 \item[Issue 1.35] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.36] Added matching modus ponens field and facilities for extending the current proof context.
 \end{description}
 \subsection{Changes Forecast}
 As detailed design.
@@ -221,6 +222,7 @@ type €PROOF_CONTEXT› = {
 	∂_vs_thms: (string * (TERM list * THM))list,
 	pr_tac : THM list -> TACTIC,
 	pr_conv : THM list -> CONV,
+	mmp_rule : (THM -> THM -> THM) OPT,
 =TEX
 Now the evaluated parts:
 =SML
@@ -233,7 +235,7 @@ Now the evaluated parts:
 	∂_ad_cd_thms:  (TERM list * int list * TYPE * (TERM list)list * THM) list,
 	∂_ad_vs_thms:  (string * (TERM list * THM))list,
 =TEX
-And finally the commital data
+And finally the committal data
 =SML
 	names : string list,
 	theoryname : string,
@@ -257,6 +259,7 @@ fun €empty_pc› (committed : bool)(names : string list): PROOF_CONTEXT = {
 	∂_vs_thms = [],
 	pr_tac = (fn _ => fail_tac),
 	pr_conv = (fn _ => fail_conv),
+	mmp_rule = Nil,
 =TEX
 Now the evaluated parts:
 =SML
@@ -276,6 +279,37 @@ And finally the commital data
 	a_valid_thm = refl_conv (mk_var("a",BOOL)),
 	committed = committed
 	};
+=TEX
+=SML
+fun €change_names› (new_names : string list)
+	({
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, 
+	nd_entries=nd_entries,nd_nets=nd_nets,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
+	rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed} : PROOF_CONTEXT)
+	: PROOF_CONTEXT = (
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, 
+	nd_entries=nd_entries,nd_nets=nd_nets,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
+	rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = new_names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+);
 =TEX
 Now the initial proof context (local only):
 =SML
@@ -390,6 +424,7 @@ local
 	val ad_∂_ad_vs_thms = ref (#∂_ad_vs_thms initial_pc);
 	val ad_pr_tac = ref (#pr_tac initial_pc);
 	val ad_pr_conv = ref (#pr_conv initial_pc);
+	val ad_mmp_rule = ref (#mmp_rule initial_pc);
 	val ad_valid_thm = ref (#a_valid_thm initial_pc);
 	val ad_theoryname = ref (#theoryname initial_pc);
 in
@@ -408,6 +443,7 @@ fun set_current_pc pc = (
 	ad_∂_ad_vs_thms := (#∂_ad_vs_thms pc);
 	ad_pr_tac := (#pr_tac pc);
 	ad_pr_conv := (#pr_conv pc);
+	ad_mmp_rule := (#mmp_rule pc);
 	ad_valid_thm := (#a_valid_thm pc);
 	ad_theoryname := (#theoryname pc);
 	()
@@ -460,6 +496,10 @@ fun €current_ad_pr_conv› () (thms : THM list): CONV
 	if valid_thm (!ad_valid_thm) 
 	then (!ad_pr_conv) thms
 	else fail "current_ad_pr_conv" 51021 [fn () => (!ad_theoryname)];
+fun €current_ad_mmp_rule› (): (THM -> THM -> THM) OPT = 
+	if valid_thm (!ad_valid_thm) 
+	then (!ad_mmp_rule)
+	else fail "current_ad_mmp_rule" 51021 [fn () => (!ad_theoryname)];
 
 fun €get_current_pc› () : (string list * string) = (
 	if valid_thm (#a_valid_thm (!current_pc))
@@ -602,6 +642,7 @@ fun €evaluate_proof_context› (
 	nd_entries=nd_entries,nd_nets=nd_nets,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, pr_tac = pr_tac, pr_conv = pr_conv,
+	mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -620,6 +661,7 @@ fun €evaluate_proof_context› (
 	∂_vs_thms = ∂_vs_thms,
 	pr_tac = pr_tac, 
 	pr_conv = pr_conv,
+	mmp_rule = mmp_rule,
 	rw_net = (!eval_ad_rw_net) (flat(map fst rw_eqn_cxt)),
 	rw_canon = (!eval_ad_rw_canon) (flat(map fst rw_canons)),
 	st_conv = (!eval_ad_st_conv) (flat(map fst st_eqn_cxt)),
@@ -650,7 +692,7 @@ change_pc "set_rw_eqn_cxt" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -664,7 +706,7 @@ change_pc "set_rw_eqn_cxt" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,	
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -688,7 +730,7 @@ change_pc "add_rw_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -707,7 +749,7 @@ change_pc "add_rw_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -730,7 +772,7 @@ change_pc "set_rw_canons" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -744,7 +786,7 @@ change_pc "set_rw_canons" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -767,7 +809,7 @@ change_pc "set_st_eqn_cxt" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -781,7 +823,7 @@ change_pc "set_st_eqn_cxt" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -805,7 +847,7 @@ change_pc "add_st_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -825,7 +867,7 @@ change_pc "add_st_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -848,7 +890,7 @@ change_pc "set_sc_eqn_cxt" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -862,7 +904,7 @@ change_pc "set_sc_eqn_cxt" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -884,7 +926,7 @@ change_pc "add_sc_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -904,7 +946,7 @@ change_pc "add_sc_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -929,7 +971,7 @@ change_pc "set_nd_entry" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -947,7 +989,7 @@ change_pc "set_nd_entry" key
 		roverwrite1 nd_entries ((roverwrite1 old_field  (entry,dict_key)), key)
 		end),
 	nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -981,7 +1023,7 @@ change_pc "set_cs_∂_convs" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -995,7 +1037,7 @@ change_pc "set_cs_∂_convs" key
 	cs_∂_convs = roverwrite1 cs_∂_convs (rls,key), ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1018,7 +1060,7 @@ change_pc "set_∂_cd_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1032,7 +1074,7 @@ change_pc "set_∂_cd_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = cd,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1054,7 +1096,7 @@ change_pc "add_∂_cd_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1071,7 +1113,7 @@ change_pc "add_∂_cd_thms" key
 	∂_cd_thms = thm_union thms ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1100,7 +1142,7 @@ change_pc "set_∂_vs_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1114,7 +1156,7 @@ change_pc "set_∂_vs_thms" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = union_bits ∂_vs_thms vs, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1138,7 +1180,7 @@ change_pc "set_pr_tac" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1152,7 +1194,7 @@ change_pc "set_pr_tac" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = tac,
+	pr_conv = pr_conv, pr_tac = tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1175,7 +1217,7 @@ change_pc "set_pr_conv" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1189,7 +1231,7 @@ change_pc "set_pr_conv" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = conv, pr_tac = pr_tac,
+	pr_conv = conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1201,19 +1243,19 @@ fun €get_pr_conv› (key:string) : THM list -> CONV = (
 	#pr_conv (get_pc "get_pr_conv" key)
 );
 =TEX
-
-\subsection{Functions upon Proof Contexts}
+=TEX
+\subsubsection{Forward Chaining: Matching Modus Ponens Rule}
 =SML
-fun €commit_pc› (key:string) : unit =  (
-change_pc "commit_pc" key 
-((fn 
+fun €set_mmp_rule› (opt_rule : (THM -> THM -> THM) OPT) (key:string) : unit =  (
+change_pc "set_mmp_rule" key 
+(fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1227,7 +1269,45 @@ change_pc "commit_pc" key
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = opt_rule,
+	rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed})
+);
+fun €get_mmp_rule› (key:string) : (THM -> THM -> THM) OPT = (
+	#mmp_rule (get_pc "get_mmp_rule" key)
+);
+
+=TEX
+\subsection{Functions upon Proof Contexts}
+=SML
+fun €commit_pc› (key:string) : unit =  (
+change_pc "commit_pc" key 
+((fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, 
+	nd_entries=nd_entries,nd_nets=nd_nets,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
+	rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, 
+	nd_entries=nd_entries,nd_nets=nd_nets,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1252,13 +1332,14 @@ in
 fun €local_merge_pc› (caller:string) (test_committed:bool) 
 	(opr_conv : THM list -> CONV)
 	(opr_tac : THM list -> TACTIC)
+	(ommp_rule : (THM -> THM -> THM) OPT)
 	(({
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1269,7 +1350,7 @@ fun €local_merge_pc› (caller:string) (test_committed:bool)
 	rw_eqn_cxt = rw_eqn_cxt1, rw_canons = rw_canons1,
 	st_eqn_cxt = st_eqn_cxt1, sc_eqn_cxt = sc_eqn_cxt1,
 	cs_∂_convs = cs_∂_convs1, ∂_cd_thms = ∂_cd_thms1,
-	∂_vs_thms = ∂_vs_thms1, pr_conv = pr_conv1,
+	∂_vs_thms = ∂_vs_thms1, pr_conv = pr_conv1, mmp_rule = mmp_rule1,
 	nd_entries=nd_entries1,nd_nets=nd_nets1,
 	pr_tac = pr_tac1, rw_net = rw_net1,
 	rw_canon = rw_canon1, st_conv = st_conv1,
@@ -1292,6 +1373,7 @@ fun €local_merge_pc› (caller:string) (test_committed:bool)
 	∂_vs_thms = union_bits ∂_vs_thms ∂_vs_thms1,
 	pr_tac = opr_tac,
 	pr_conv = opr_conv,
+	mmp_rule = ommp_rule,
 	rw_net = rw_net1,
 	rw_canon = rw_canon1,
 	st_conv = st_conv1,
@@ -1317,7 +1399,8 @@ in
 	change_pc "merge_pcs" key 
 	(fn pc => fold (local_merge_pc "merge_pcs" true
 		(#pr_conv opc)
-		(#pr_tac opc)) pcs pc)
+		(#pr_tac opc)
+		(#mmp_rule opc)) pcs pc)
 end);
 =TEX
 The following empties all but selected fields of proof contexts.
@@ -1325,7 +1408,8 @@ This is used directly in $delete\-\_pc\-\_fields$,
 and indirectly in merging proof context fields.
 =SML
 val valid_fields = ["rw_eqn_cxt","rw_canons","st_eqn_cxt",
-	"sc_eqn_cxt","cs_∂_convs","∂_cd_thms","∂_vs_thms","pr_tac","pr_conv","nd_entries"];
+	"sc_eqn_cxt","cs_∂_convs","∂_cd_thms","∂_vs_thms",
+	"pr_tac","pr_conv", "mmp_rule", "nd_entries"];
 =TEX
 =SML
 fun €prune_pc› (caller : string) (fields : string list) ({
@@ -1334,7 +1418,7 @@ fun €prune_pc› (caller : string) (fields : string list) ({
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
@@ -1355,7 +1439,8 @@ fun €prune_pc› (caller : string) (fields : string list) ({
 	∂_vs_thms = if "∂_vs_thms" mem fields then ∂_vs_thms else [],
 	nd_entries = if "nd_entries" mem fields then nd_entries else [],
 	pr_conv = if "pr_conv" mem fields then pr_conv else (fn _ => fail_conv), 
-	pr_tac = if "pr_tac" mem fields then pr_tac else (fn _ => fail_tac), 
+	pr_tac = if "pr_tac" mem fields then pr_tac else (fn _ => fail_tac),
+	mmp_rule = if "mmp_rule" mem fields then mmp_rule else Nil,
 	rw_net = rw_net,
 	rw_canon = rw_canon,
 	st_conv = st_conv,
@@ -1389,13 +1474,16 @@ let	val pcs = map get_stuff lst;
 		not("pr_tac" mem fs))) of
 		[] => key
 		| lst1 => (#context (hd(rev lst1)));
+	val lastmr = case (lst drop (fn {fields=fs,...} =>
+		not("mmp_rule" mem fs))) of
+		[] => key
+		| lst1 => (#context (hd(rev lst1)));
 	val opc = #pr_conv (get_pc "merge_pc_fields" lastpc);
 	val opt = #pr_tac (get_pc "merge_pc_fields" lastpt);
-
-
+	val omr = #mmp_rule (get_pc "merge_pc_fields" lastmr);
 in
 	change_pc "merge_pc_fields" key 
-	(fn pc => fold (local_merge_pc "merge_pc_fields" true opc opt) pcs pc)
+	(fn pc => fold (local_merge_pc "merge_pc_fields" true opc opt omr) pcs pc)
 end);
 end;
 =TEX
@@ -1456,11 +1544,13 @@ end);
 fun €push_merge_pcs› ([]: string list): unit = fail "push_merge_pcs" 51020 []
 | push_merge_pcs keys = (
 let	val pc = empty_pc false keys;
-	val opc = (#pr_conv (get_pc "push_merge_pcs" (hd(rev keys))));
-	val opt = (#pr_tac (get_pc "push_merge_pcs" (hd(rev keys))));
-
-	val fullpc = fold (local_merge_pc "push_merge_pcs" false opc opt) 
-		(map (get_pc "push_merge_pcs") keys) pc;
+	val pcs = map (get_pc "push_merge_pcs") keys;
+	val last_pc = hd(rev pcs);
+	val opc = #pr_conv last_pc;
+	val opt = #pr_tac last_pc;
+	val omr = #mmp_rule last_pc;
+	val fullpc = fold (local_merge_pc "push_merge_pcs" false opc opt omr) 
+		pcs pc;
 	val epc = evaluate_proof_context fullpc;
 in
 	(push_pc_stack (lget_current_pc());
@@ -1468,14 +1558,78 @@ in
 end);
 =TEX
 =SML
+fun €push_extend_pcs› ([]: string list): unit = fail "push_extend_pcs" 51020 []
+| push_extend_pcs keys = (
+let	val pc = change_names keys (lget_current_pc());
+	val pcs = map (get_pc "push_extend_pcs") keys;
+	val last_pc = hd(rev pcs);
+	val opc = #pr_conv last_pc;
+	val opt = #pr_tac last_pc;
+	val omr = #mmp_rule last_pc;
+	val fullpc = fold (local_merge_pc "push_extend_pcs" false opc opt omr) 
+		pcs pc;
+	val epc = evaluate_proof_context fullpc;
+in
+	(push_pc_stack (lget_current_pc());
+	set_current_pc epc)
+end);
+=TEX
+=SML
+fun €push_extend_pc› (key : string) : unit = (
+	push_extend_pcs [key]
+	handle ex => pass_on ex "push_extend_pcs" "push_extend_pc"
+);
+=TEX
+=SML
+fun €set_merge_pcs› ([]: string list): unit = fail "set_merge_pcs" 51020 []
+| set_merge_pcs keys = (
+let	val pc = empty_pc false keys;
+	val pcs = map (get_pc "set_merge_pcs") keys;
+	val last_pc = hd(rev pcs);
+	val opc = #pr_conv last_pc;
+	val opt = #pr_tac last_pc;
+	val omr = #mmp_rule last_pc;
+	val fullpc = fold (local_merge_pc "set_merge_pcs" false opc opt omr) 
+		pcs pc;
+	val epc = evaluate_proof_context fullpc;
+in
+	set_current_pc epc
+end);
+=TEX
+=SML
+fun €set_extend_pcs› ([]: string list): unit = fail "set_merge_pcs" 51020 []
+| set_extend_pcs keys = (
+let	val pc = change_names keys (lget_current_pc());
+	val pcs = map (get_pc "set_extend_pcs") keys;
+	val last_pc = hd(rev pcs);
+	val opc = #pr_conv last_pc;
+	val opt = #pr_tac last_pc;
+	val omr = #mmp_rule last_pc;
+	val fullpc = fold (local_merge_pc "set_extend_pcs" false opc opt omr) 
+		pcs pc;
+	val epc = evaluate_proof_context fullpc;
+in
+	set_current_pc epc
+end);
+=TEX
+=SML
+fun €set_extend_pc› (key : string) : unit = (
+	set_extend_pcs [key]
+	handle ex => pass_on ex "set_extend_pcs" "set_extend_pc"
+);
+=TEX
+=SML
 fun €pending_push_merge_pcs› ([]: string list): unit -> unit = 
 	fail "pending_push_merge_pcs" 51020 []
 | pending_push_merge_pcs keys = (
 let	val pc = empty_pc false keys;
-	val opc = (#pr_conv (get_pc "pending_push_merge_pcs" (hd(rev keys))));
-	val opt = (#pr_tac (get_pc "pending_push_merge_pcs" (hd(rev keys))));
-	val fullpc = fold (local_merge_pc "pending_push_merge_pcs" false opc opt) 
-		(map (get_pc "pending_push_merge_pcs") keys) pc;
+	val pcs = map (get_pc "pending_push_merge_pcs") keys;
+	val last_pc = hd(rev pcs);
+	val opc = #pr_conv last_pc;
+	val opt = #pr_tac last_pc;
+	val omr = #mmp_rule last_pc;
+	val fullpc = fold (local_merge_pc "pending_push_merge_pcs" false opc opt omr) 
+		pcs pc;
 	val epc = evaluate_proof_context fullpc;
 in
 	(fn () =>
@@ -1489,27 +1643,47 @@ in
 end);
 =TEX
 =SML
-fun €set_merge_pcs› ([]: string list): unit = fail "set_merge_pcs" 51020 []
-| set_merge_pcs keys = (
-let	val pc = empty_pc false keys;
-	val opc = (#pr_conv (get_pc "set_merge_pcs" (hd(rev keys))));
-	val opt = (#pr_tac (get_pc "set_merge_pcs" (hd(rev keys))));
-	val fullpc = fold (local_merge_pc "set_merge_pcs" false opc opt) 
-		(map (get_pc "set_merge_pcs") keys) pc;
+fun €pending_push_extend_pcs› ([]: string list): unit -> unit = 
+	fail "pending_push_extend_pcs" 51020 []
+| pending_push_extend_pcs keys = (
+let	val pc = change_names keys (lget_current_pc());
+	val pcs = map (get_pc "pending_push_extend_pcs") keys;
+	val last_pc = hd(rev pcs);
+	val opc = #pr_conv last_pc;
+	val opt = #pr_tac last_pc;
+	val omr = #mmp_rule last_pc;
+	val fullpc = fold (local_merge_pc "pending_push_extend_pcs" false opc opt omr) 
+		pcs pc;
 	val epc = evaluate_proof_context fullpc;
 in
-	set_current_pc epc
+	(fn () =>
+	((if valid_thm (#a_valid_thm fullpc)
+	then ()
+	else fail "pending_push_merge_pcs" 51014 [
+		(fn () => format_list (Combinators.I) (#names fullpc) ","),
+		(fn () => (#theoryname fullpc))]);
+	push_pc_stack (lget_current_pc());
+	set_current_pc epc))
 end);
+=TEX
+=SML
+fun €pending_push_extend_pc› (key : string) : unit -> unit = (
+	pending_push_extend_pcs [key]
+	handle ex => pass_on ex "pending_push_extend_pcs" "pending_push_extend_pc"
+);
 =TEX
 \section{USING THE PROOF CONTEXTS}
 =SML
-fun €PC_T› (key : string) (tac: TACTIC): TACTIC = (fn gl => 
-let	val ppc = pending_push_pc key 
+fun €GEN_PC_T›
+	(caller : string) (callee : string)
+	(pending_push : string -> unit -> unit)
+	(key : string) (tac: TACTIC): TACTIC = (fn gl => 
+let	val ppc = pending_push key 
 		handle complaint => 
-		pass_on complaint "pending_push_pc" "PC_T";
+		pass_on complaint callee caller;
 	val dummy = ppc()
 		 handle complaint => 
-		pass_on complaint "pending_push_pc" "PC_T";
+		pass_on complaint callee caller;
 	val (sgs,prf) = (tac gl
 		handle complaint =>
 		(pop_pc();
@@ -1518,7 +1692,7 @@ let	val ppc = pending_push_pc key
 	val prf' = (fn x => 
 		let val p1 = ppc()
 			handle complaint => 
-			pass_on complaint "pending_push_pc" "PC_T";
+			pass_on complaint callee caller;
 		val p2 = prf x
 			handle complaint =>
 			(pop_pc();
@@ -1528,17 +1702,26 @@ let	val ppc = pending_push_pc key
 			p2)
 		end);
 in
-	(sgs,prf')
+	(sgs, prf')
 end);
 =TEX
 =SML
-fun €MERGE_PCS_T› (keys : string list) (tac: TACTIC): TACTIC = (fn gl => 
-let	val ppc = pending_push_merge_pcs keys
+val €PC_T› : string -> TACTIC -> TACTIC =
+	GEN_PC_T "PC_T" "pending_push_pc" pending_push_pc;
+val €EXTEND_PC_T› : string -> TACTIC -> TACTIC =
+	GEN_PC_T "EXTEND_PC_T" "pending_push_extend_pc" pending_push_extend_pc;
+=TEX
+=SML
+fun €GEN_PCS_T›
+	(caller : string) (callee : string)
+	(pending_push : string list -> unit -> unit)
+	(keys : string list) (tac: TACTIC): TACTIC = (fn gl => 
+let	val ppc = pending_push keys
 		handle complaint => 
-		pass_on complaint "pending_push_merge_pcs" "MERGE_PCS_T";
+		pass_on complaint callee caller;
 	val dummy = ppc()
 		 handle complaint => 
-		pass_on complaint "pending_push_merge_pcs" "MERGE_PCS_T";
+		pass_on complaint callee caller;
 	val (sgs,prf) = (tac gl
 		handle complaint =>
 		(pop_pc();
@@ -1547,7 +1730,7 @@ let	val ppc = pending_push_merge_pcs keys
 	val prf' = (fn x => 
 		let val p1 = ppc()
 			handle complaint => 
-			pass_on complaint "pending_push_merge_pcs" "MERGE_PCS_T";
+			pass_on complaint callee caller;
 		val p2 = prf x
 			handle complaint =>
 			(pop_pc();
@@ -1561,13 +1744,22 @@ in
 end);
 =TEX
 =SML
-fun €PC_T1› (key : string) (tac: 'a -> TACTIC) (arg : 'a):  TACTIC = (fn gl => 
-let	val ppc = pending_push_pc key 
+val €MERGE_PCS_T› : string list -> TACTIC -> TACTIC =
+	GEN_PCS_T "MERGE_PCS_T" "pending_push_merge_pcs" pending_push_merge_pcs;
+val €EXTEND_PCS_T› : string list -> TACTIC -> TACTIC =
+	GEN_PCS_T "EXTEND_PCS_T" "pending_push_extend_pcs" pending_push_extend_pcs;
+=TEX
+=SML
+fun €GEN_PC_T1›
+	(caller : string) (callee : string)
+	(pending_push : string -> unit -> unit)
+	(key : string) (tac: 'a -> TACTIC) (arg : 'a):  TACTIC = (fn gl => 
+let	val ppc = pending_push key 
 		handle complaint => 
-		pass_on complaint "pending_push_pc" "PC_T1";
+		pass_on complaint callee caller;
 	val dummy = ppc()
 		 handle complaint => 
-		pass_on complaint "pending_push_pc" "PC_T1";
+		pass_on complaint callee caller;
 	val (sgs,prf) = (tac arg gl 
 		handle complaint =>
 		(pop_pc();
@@ -1576,7 +1768,7 @@ let	val ppc = pending_push_pc key
 	val prf' = (fn x => 
 		let val p1 = ppc()
 			handle complaint => 
-			pass_on complaint "pending_push_pc" "PC_T1";
+			pass_on complaint callee caller;
 		val p2 = prf x
 			handle complaint =>
 			(pop_pc();
@@ -1590,13 +1782,22 @@ in
 end);
 =TEX
 =SML
-fun €MERGE_PCS_T1› (keys : string list) (tac: 'a -> TACTIC) (arg : 'a):  TACTIC = (fn gl => 
-let	val ppc = pending_push_merge_pcs keys
+val €PC_T1› : string -> ('a -> TACTIC) -> ('a -> TACTIC) = fn key => fn tac =>
+	GEN_PC_T1 "PC_T1" "pending_push_pc" pending_push_pc key tac;
+val €EXTEND_PC_T1› : string -> ('a -> TACTIC) -> ('a -> TACTIC) = fn key => fn tac =>
+	GEN_PC_T1 "EXTEND_PC_T1" "pending_push_extend_pc" pending_push_extend_pc key tac;
+=TEX
+=SML
+fun €GEN_PCS_T1›
+	(caller : string) (callee : string)
+	(pending_push : string list -> unit -> unit)
+	(keys : string list) (tac: 'a -> TACTIC) (arg : 'a):  TACTIC = (fn gl => 
+let	val ppc = pending_push keys
 		handle complaint => 
-		pass_on complaint "pending_push_merge_pcs" "MERGE_PCS_T1";
+		pass_on complaint callee caller;
 	val dummy = ppc()
 		 handle complaint => 
-		pass_on complaint "pending_push_merge_pcs" "MERGE_PCS_T1";
+		pass_on complaint callee caller;
 	val (sgs,prf) = (tac arg gl 
 		handle complaint =>
 		(pop_pc();
@@ -1605,7 +1806,7 @@ let	val ppc = pending_push_merge_pcs keys
 	val prf' = (fn x => 
 		let val p1 = ppc()
 			handle complaint => 
-			pass_on complaint "pending_push_merge_pcs" "MERGE_PCS_T1";
+			pass_on complaint callee caller;
 		val p2 = prf x
 			handle complaint =>
 			(pop_pc();
@@ -1619,8 +1820,18 @@ in
 end);
 =TEX
 =SML
-fun €PC_C› (key : string) (conv: CONV) :  CONV = (fn tm => 
-let	val dummy = push_pc key handle complaint => pass_on complaint "push_pc" "PC_C";
+val €MERGE_PCS_T1› : string list -> ('a -> TACTIC) -> ('a -> TACTIC) = fn keys => fn tac =>
+	GEN_PCS_T1 "MERGE_PCS_T1" "pending_push_merge_pcs" pending_push_merge_pcs keys tac;
+val €EXTEND_PCS_T1› : string list -> ('a -> TACTIC) -> ('a -> TACTIC) = fn keys => fn tac => 
+	GEN_PCS_T1 "EXTEND_PCS_T1" "pending_push_extend_pcs" pending_push_extend_pcs keys tac;
+=TEX
+=SML
+fun €GEN_PC_C›
+	(caller : string) (callee : string)
+	(push : string -> unit)
+	(key : string) (conv: CONV) :  CONV = (fn tm => 
+let	val dummy = push key
+		handle complaint => pass_on complaint callee caller;
 	val res = (conv tm
 		handle complaint =>
 		(pop_pc();
@@ -1631,10 +1842,19 @@ in
 end);
 =TEX
 =SML
-fun €MERGE_PCS_C› (keys : string list) (conv: CONV) :  CONV = (fn tm => 
-let	val dummy = push_merge_pcs keys 
+val €PC_C› : string -> CONV -> CONV =
+	GEN_PC_C "PC_C" "push_pc" push_pc;
+val €EXTEND_PC_C› : string -> CONV -> CONV =
+	GEN_PC_C "EXTEND_PC_C" "push_extend_pc" push_extend_pc;
+=TEX
+=SML
+fun €GEN_PCS_C›
+	(caller : string) (callee : string)
+	(push : string list -> unit)
+	(keys : string list) (conv: CONV) :  CONV = (fn tm => 
+let	val dummy = push keys 
 	handle complaint => 
-	pass_on complaint "push_merge_pcs" "MERGE_PCS_C";
+	pass_on complaint callee caller;
 	val res = (conv tm
 		handle complaint =>
 		(pop_pc();
@@ -1645,9 +1865,18 @@ in
 end);
 =TEX
 =SML
-fun €PC_C1› (key : string) (conv: 'a -> CONV) (arg : 'a):  CONV = (fn tm => 
-let	val dummy = push_pc key handle complaint => 
-		pass_on complaint "push_pc" "PC_C1";
+val €MERGE_PCS_C› : string list -> CONV -> CONV =
+	GEN_PCS_C "MERGE_PCS_C" "push_merge_pcs" push_merge_pcs;
+val €EXTEND_PCS_C› : string list -> CONV -> CONV =
+	GEN_PCS_C "EXTEND_PCS_C" "push_extend_pcs" push_extend_pcs;
+=TEX
+=SML
+fun €GEN_PC_C1›
+	(caller : string) (callee : string)
+	(push : string -> unit)
+	(key : string) (conv: 'a -> CONV) (arg : 'a):  CONV = (fn tm => 
+let	val dummy = push key handle complaint => 
+		pass_on complaint callee caller;
 	val res = (conv arg tm
 		handle complaint =>
 		(pop_pc();
@@ -1658,9 +1887,18 @@ in
 end);
 =TEX
 =SML
-fun €MERGE_PCS_C1› (keys : string list) (conv: 'a -> CONV) (arg : 'a):  CONV = (fn tm => 
-let	val dummy = push_merge_pcs keys handle complaint => 
-		pass_on complaint "push_merge_pcs" "MERGE_PCS_C1";
+val €PC_C1› : string -> ('a -> CONV) -> ('a -> CONV) = fn key => fn conv =>
+	GEN_PC_C1 "PC_C1" "push_pc" push_pc key conv;
+val €EXTEND_PC_C1› : string -> ('a -> CONV) -> ('a -> CONV) = fn key => fn conv =>
+	GEN_PC_C1 "EXTEND_PC_C1" "push_extend_pc" push_extend_pc key conv;
+=TEX
+=SML
+fun €GEN_PCS_C1›
+	(caller : string) (callee : string)
+	(push : string list -> unit)
+	(keys : string list) (conv: 'a -> CONV) (arg : 'a):  CONV = (fn tm => 
+let	val dummy = push keys handle complaint => 
+		pass_on complaint callee caller;
 	val res = (conv arg tm
 		handle complaint =>
 		(pop_pc();
@@ -1671,9 +1909,18 @@ in
 end);
 =TEX
 =SML
-fun €pc_rule› (key : string) (rule: 'a -> THM) (x : 'a) : THM = ( 
-let	val dummy = push_pc key handle complaint => 
-		pass_on complaint "push_pc" "pc_rule";
+val €MERGE_PCS_C1› : string list -> ('a -> CONV) -> ('a -> CONV) = fn keys => fn conv =>
+	GEN_PCS_C1 "MERGE_PCS_C1" "push_merge_pcs" push_merge_pcs keys conv;
+val €EXTEND_PCS_C1› : string list -> ('a -> CONV) -> ('a -> CONV) = fn keys => fn conv =>
+	GEN_PCS_C1 "EXTEND_PCS_C1" "push_extend_pcs" push_extend_pcs keys conv;
+=TEX
+=SML
+fun €gen_pc_rule›
+	(caller : string) (callee : string)
+	(push : string -> unit)
+	(key : string) (rule: 'a -> THM) (x : 'a) : THM = ( 
+let	val dummy = push key handle complaint => 
+		pass_on complaint callee caller;
 	val res = (rule x
 		handle complaint =>
 		(pop_pc();
@@ -1684,9 +1931,18 @@ in
 end);
 =TEX
 =SML
-fun €merge_pcs_rule› (keys : string list) (rule: 'a -> THM) (x : 'a) : THM = ( 
-let	val dummy = push_merge_pcs keys handle complaint => 
-		pass_on complaint "push_merge_pcs" "merge_pcs_rule";
+val €pc_rule› : string -> ('a -> THM) -> ('a -> THM) = fn key => fn r =>
+	gen_pc_rule "pc_rule" "push_pc" push_pc key r;
+val €extend_pc_rule› : string -> ('a -> THM) -> ('a -> THM) = fn key => fn r =>
+	gen_pc_rule "extend_pc_rule" "push_extend_pc" push_extend_pc key r;
+=TEX
+=SML
+fun €gen_pcs_rule›
+	(caller : string) (callee : string)
+	(push : string list -> unit)
+	(keys : string list) (rule: 'a -> THM) (x : 'a) : THM = ( 
+let	val dummy = push keys handle complaint => 
+		pass_on complaint callee caller;
 	val res = (rule x
 		handle complaint =>
 		(pop_pc();
@@ -1697,11 +1953,20 @@ in
 end);
 =TEX
 =SML
-fun €pc_rule1› (key : string) (rule: 'a -> 'b -> THM) 
+val €merge_pcs_rule› : string list -> ('a -> THM) -> ('a -> THM) = fn keys => fn r =>
+	gen_pcs_rule "merge_pcs_rule" "push_merge_pcs" push_merge_pcs keys r;
+val €extend_pcs_rule› : string list -> ('a -> THM) -> ('a -> THM) = fn keys => fn r =>
+	gen_pcs_rule "extend_pcs_rule" "push_extend_pcs" push_extend_pcs keys r;
+=TEX
+=SML
+fun €gen_pc_rule1›
+	(caller : string) (callee : string)
+	(push : string -> unit)
+	(key : string) (rule: 'a -> 'b -> THM) 
 	(arg1 : 'a) (arg2 : 'b) : THM = (
-let	val dummy = push_pc key 
+let	val dummy = push key 
 		handle complaint => 
-		pass_on complaint "push_pc" "pc_rule1";
+		pass_on complaint callee caller;
 	val res = (rule arg1 arg2
 		handle complaint =>
 		(pop_pc();
@@ -1712,11 +1977,20 @@ in
 end);
 =TEX
 =SML
-fun €merge_pcs_rule1› (keys : string list) (rule: 'a -> 'b -> THM) 
+val €pc_rule1› : string -> ('a -> 'b -> THM) -> ('a -> 'b -> THM) = fn key => fn r =>
+	gen_pc_rule1 "pc_rule1" "push_pc" push_pc key r;
+val €extend_pc_rule1› : string -> ('a -> 'b -> THM) -> ('a -> 'b -> THM) = fn key => fn r =>
+	gen_pc_rule1 "extend_pc_rule1" "push_extend_pc" push_extend_pc key r;
+=TEX
+=SML
+fun €gen_pcs_rule1›
+	(caller : string) (callee : string)
+	(push : string list -> unit)
+	(keys : string list) (rule: 'a -> 'b -> THM) 
 	(arg1 : 'a) (arg2 : 'b) : THM = (
-let	val dummy = push_merge_pcs keys
+let	val dummy = push keys
 		handle complaint => 
-		pass_on complaint "push_merge_pcs" "merge_pcs_rule1";
+		pass_on complaint callee caller;
 	val res = (rule arg1 arg2
 		handle complaint =>
 		(pop_pc();
@@ -1725,6 +1999,14 @@ let	val dummy = push_merge_pcs keys
 in
 	res
 end);
+=TEX
+=SML
+val €merge_pcs_rule1› : string list -> ('a -> 'b -> THM) -> ('a -> 'b -> THM) =
+	fn keys => fn r =>
+	gen_pcs_rule1 "merge_pcs_rule1" "push_merge_pcs" push_merge_pcs keys r;
+val €extend_pcs_rule1› : string list -> ('a -> 'b -> THM) -> ('a -> 'b -> THM) =
+	fn keys => fn r =>
+	gen_pcs_rule1 "extend_pcs_rule1" "push_extend_pcs" push_extend_pcs keys r;
 =TEX
 =SML
 fun €asm_prove_tac› (thms: THM list) :  TACTIC = (

@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Proof Contexts}  %% Mandatory field
 \def\TPPheadtitle{Proof Contexts}
 \TPPref{DS/FMU/IED/DTD051}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.39 $
+\def\SCCSversion{$Revision: 1.40 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $ %
+\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -129,6 +129,7 @@ Correction for SML'97.
 \item[Issue 1.38] Copyright and banner updates for open source release.
 \item[Issue 1.39] PPHol-specific updates for open source release
 \item[Issue 1.40] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.41] Added matching modus ponens field and facilities for extending the current proof context.
 \end{description}
 \subsection{Changes Forecast}
 The designer of this document needs to know which functions it may
@@ -219,10 +220,13 @@ ad & application data \\
 net & discrimination net \\
 eqn$\_$cxt & equational context \\
 nd & dictionary of discrimination nets (and sources)\\
-canon(s) & theorem canonicalisation \\ \hline
+canon(s) & theorem canonicalisation \\
+mmp & matching mp rule \\ \hline
 \end{tabular}
-
 \end{centering}
+
+~\\
+
 =ENDDOC
 \section{EQUATIONAL CONTEXTS}
 =DOC
@@ -348,13 +352,14 @@ committed contexts are evaluated at the point of committal
 by the evaluation functions current at the time of committal
 (saving the cost of multiple evaluations upon multiple pushes).
 \subsection{Summary of Tools Supported and Provided}
-Four sets of tools have context-sensitive  behaviour supported
+The following sets of tools have context-sensitive  behaviour supported
 by proof contexts:
 =GFT
 rewrite_tac and its cousins
 strip_tac and its cousins
 basic_prove_¶_conv and its users
-prove_tac, prove_conv, prove_rule 
+prove_tac, prove_conv, prove_rule
+forward_chain_rule and its associated tactics
 =TEX
 There is a further dictionary of discrimination nets, each dictionary entry holding a discrimination net of
 items of type
@@ -375,6 +380,7 @@ set_¶_vs_thms		get_¶_vs_thms
 set_pr_tac		get_pr_tac
 set_pr_conv		get_pr_conv
 set_nd_entry		get_nd_entry
+set_mmp_rule		get_mmp_rule
 =TEX
 In naming the interface functions we use the convention:
 =GFT
@@ -384,9 +390,9 @@ The proof tools in the above are: $rw$ for rewriting,
 $st$ for stripping theorems, $sg$ for stripping goals,
 $cs$ for constant specifications,
 $pr$ for $prove\_tac$ and cousins,
-and $¶$ for the existence prover $prove\-\_¶\-\_conv$.
-The net dictionary, $nd$, can be used for further proof tools,
-either ICL or user-supplied.
+$¶$ for the existence prover $prove\-\_¶\-\_conv$
+$mmp$ for forward chaining and any other tools that might need a matching modus ponens rule.
+The net dictionary, $nd$, can be used for further proof tools.
 
 $set$ and $get$ functions overwrite or access the database respectively.
 $add$ functions add unprocessed theorems
@@ -404,7 +410,7 @@ pp'set_eval_ad_¶_vs_thms		current_ad_¶_vs_thms
 pp'set_eval_ad_nd_net		current_ad_nd_net
 current_ad_pr_tac
 current_ad_pr_conv
-
+current_ad_mmp_rule
 =TEX
 In naming the applications data interface functions we use the convention:
 =GFT
@@ -539,8 +545,9 @@ The head of the list of proof contexts to merge into $tokey$
 will be merged in last.
 The head of the list of proof contexts to merge into $tokey$
 will be merged in last.
-The $pr\_conv$ and $pr\_tac$ fields will take the value of the
-last of the list of proof contexts, rather than being a merge.
+Each of the $pr\_conv$, $pr\_tac$  and $mmp_rule$ fields
+will take the value from the last proof context whose
+list of field names includes that field.
 
 Failure to extract any proof context for merging will result in the
 proof context $tokey$ being unchanged.
@@ -549,7 +556,7 @@ Valid field names are:
 =GFT
 "rw_eqn_cxt","rw_canons","st_eqn_cxt","sc_eqn_cxt",
 "cs_¶_convs","¶_cd_thms","¶_vs_thms","pr_tac","pr_conv",
-"nd_entries"
+"nd_entries", "mmp_rule"
 =TEX
 =SEEALSO
 $delete\_pc\_fields$ and $merge\_pcs$, which used together in a particular order can give the same functionality as this function.
@@ -575,7 +582,7 @@ Valid field names are:
 =GFT
 "rw_eqn_cxt","rw_canons","st_eqn_cxt","sc_eqn_cxt",
 "cs_¶_convs","¶_cd_thms","¶_vs_thms","pr_tac","pr_conv",
-"nd_entries"
+"nd_entries", "mmp_rule"
 =TEX
 =FAILURE
 51010	There is no proof context with key ?0
@@ -961,8 +968,7 @@ argument.
 val Ûcurrent_ad_pr_tacÝ : unit -> THM list -> TACTIC;
 =DESCRIBE
 This function returns the application data of the current proof context
-to the
-proof contexts for
+for
 $prove\_tac$.
 =SEEALSO
 $set\_pr\_tac$ for user data.
@@ -1000,6 +1006,35 @@ proof contexts for
 $prove\_conv$.
 =SEEALSO
 $set\_pr\_conv$ for user data.
+=FAILURE
+51021	The current proof context was created in theory ?0 at a 
+	point now either not in scope, deleted or modified
+=ENDDOC
+=DOC
+val Ûset_mmp_ruleÝ : (THM -> THM -> THM) OPT -> string -> unit;
+val Ûget_mmp_ruleÝ : string -> (THM -> THM -> THM) OPT;
+=DESCRIBE
+These functions provide the interface to the
+proof contexts for the matching modus ponens rule as used by tools such
+as $forward\_chain\_rule$.
+Note that setting overwrites all previous data in this field,
+including from merged in proof contexts,
+and merged proof contexts will take their value for this field from the last proof context merged in.
+
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+51016	Proof context ?0 has been committed
+=ENDDOC
+=DOC
+val Ûcurrent_ad_mmp_ruleÝ : unit -> (THM -> THM -> THM) OPT;
+=DESCRIBE
+This function returns the application data of the current proof context
+for the matching modus ponens rule as used by tools such
+as $forward\_chain\_rule$.
+=SEEALSO
+$set\_mmp\_rule$ for user data.
 =FAILURE
 51021	The current proof context was created in theory ?0 at a 
 	point now either not in scope, deleted or modified
@@ -1068,12 +1103,17 @@ $pending\_push\_pc$, $pop\_pc$, $push\_merge\_pcs$, $set\_merge\_pcs$
 =ENDDOC
 =DOC
 val Ûpending_push_pcÝ : string -> unit -> unit;
+val Ûpending_push_extend_pcÝ : string -> unit -> unit;
 =DESCRIBE
 $pending\_push\_pc$ takes a snapshot of the named
 proof context, and returns a function that, when applied
 to $():unit$
 stacks the previous ``current'' proof context, and
 sets the current proof context of the system to this snapshot.
+
+$pending\_push\_extend\_pc$ takes a snapshot of the result of merging the
+named proof context with the current proof context and then behaves just
+like $pending\_push\_merge\_pc$.
 
 The proof context must be in scope both at the time of the snapshot,
 and at the time of pushing on the stack.
@@ -1107,7 +1147,60 @@ last of the list of proof contexts, rather than being a merge.
 
 The current proof context is accessed by the functions prefixed $current\_ad\_$, and by $get\-\_current\-\_pc$.
 =SEEALSO
-$pop\_pc$, $push\_pc$, $set\_pc$, $pending\_push\_merge\_pcs$
+$pop\_pc$, $push\_pc$, $set\_pc$
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+51020	Must be at least one key in list
+=ENDDOC
+=DOC
+val Ûpush_extend_pcÝ : string -> unit;
+val Ûset_extend_pcÝ : string -> unit;
+=DESCRIBE
+$push\_extend\_pc$ stacks the previous ``current'' proof context, and
+and then merges the proof 
+context with the given key into the current proof context.
+$set\_extend\_pcs$ merges the proof
+context with the given key into the current proof context
+without changing the stack.
+
+Merged proof contexts upon the stack will have $current\-\_ad\-\_names$ giving the list of names of the constituent proof contexts.
+The proof context used need not have been committed.
+
+The $pr\_conv$, $pr\_tac$ and $mpp\_rule$ fields will take the value from the named proof context.
+
+The current proof context is accessed by the functions prefixed $current\_ad\_$, and by $get\-\_current\-\_pc$.
+=SEEALSO
+$pop\_pc$, $push\_pc$, $set\_pc$
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+51020	Must be at least one key in list
+=ENDDOC
+=DOC
+val Ûpush_extend_pcsÝ : string list -> unit;
+val Ûset_extend_pcsÝ : string list -> unit;
+=DESCRIBE
+$push\_extend\_pcs$ stacks the previous ``current'' proof context, and
+and then merges the proof 
+contexts with the given keys into the current proof context.
+$set\_extend\_pcs$ merges the proof
+contexts with the given keys into the previous current proof context
+without changing the stack.
+
+Merged proof contexts upon the stack will have $current\-\_ad\-\_names$ giving the list of names of the constituent proof contexts, singleton contexts will have singleton lists.
+The proof contexts used need not have been committed.
+
+The head of the list of proof contexts to merge into $tokey$
+will be merged in last.
+Note that the $pr\_conv$, $pr\_tac$ and $mpp\_rule$ fields will take the value of the
+last of the list of proof contexts.
+
+The current proof context is accessed by the functions prefixed $current\_ad\_$, and by $get\-\_current\-\_pc$.
+=SEEALSO
+$pop\_pc$, $push\_merge_pcs$, $set\_merge_pcs$
 =FAILURE
 51010	There is no proof context with key ?0
 51014	Proof context ?0 was created in theory ?1 at a 
@@ -1116,12 +1209,17 @@ $pop\_pc$, $push\_pc$, $set\_pc$, $pending\_push\_merge\_pcs$
 =ENDDOC
 =DOC
 val Ûpending_push_merge_pcsÝ : string list -> unit -> unit;
+val Ûpending_push_extend_pcsÝ : string list -> unit -> unit;
 =DESCRIBE
 $pending\_push\_merge\_pcs$ takes a snapshot of the result of merging the
 named proof contexts, and returns a function that, when
 applied to $()$
 stacks the previous proof context, and
 and sets the current proof context of the system to this snapshot.
+
+$pending\_push\_extend\_pcs$ takes a snapshot of the result of merging the
+named proof contexts with the current proof context and then behaves just
+like $pending\_push\_merge\_pcs$.
 
 Merged proof contexts upon the stack will have $current\-\_ad\-\_names$ giving the list of names of the constituent proof contexts, singleton contexts will have singleton lists.
 The proof contexts used need not have been committed.
@@ -1200,10 +1298,15 @@ child databases, and in conjunction with $pending\-\_reset\-\_pc\-\_database$, a
 =DOC
 (* proof context key "ÛinitialÝ" *)
 =DESCRIBE
-This is the ``empty'' proof context, formed with empty lists.
-It thus has no default rewriting or stripping theorems,
-no default rewriting canonicalisation, and its automated existence
-prover fails on any input.
+This is the initial proof context, formed with empty lists and other default values.
+It thus has no default rewriting or stripping theorems.
+The rewriting canonicalisation is the identity.
+The automated existence prover fails on any input.
+The matching modus ponens rule is
+=INLINEFT
+Nil
+=TEX
+.
 =ENDDOC
 \section{USING THE PROOF CONTEXTS}
 =DOC
@@ -1232,6 +1335,33 @@ and as the errors of the tactic.
 The previous proof context is restored, even if the tactic application or proof fails.
 =ENDDOC
 =DOC
+val ÛEXTEND_PC_TÝ : string -> TACTIC -> TACTIC;
+val ÛEXTEND_PCS_TÝ : string list -> TACTIC -> TACTIC;
+=DESCRIBE
+=INLINEFT
+EXTEND_PC_T context tac
+=TEX
+{} will apply tactic $tac$ to a goal, and evaluate its proof, in the proof context obtained by merging the proof context with key $context$
+into the current proof context.
+The named context is used as it is at the point of applying the tactic to a goal.
+The $pr\_tac$, $pr\_conv$ and $mpp\_rule$ fields are taken from the named proof context.
+This is done via pushing and popping on the proof context stack.
+
+$EXTEND\_PCS_T\_T$ takes a list of proof contexts instead, merged
+as if by, e.g. $push\_extend\_pcs$
+
+Note that when using this functions that the standard rewriting functions (obvious candidates for this function) access the current
+proof context at the point of being given their theorem list
+argument: see $EXTEND\_PC\_T1$ for a method of avoiding this.
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the tactic.
+The previous proof context is restored, even if the tactic application or proof fails.
+=ENDDOC
+=DOC
 val ÛPC_CÝ : string -> CONV -> CONV;
 val ÛMERGE_PCS_CÝ : string list -> CONV -> CONV;
 =DESCRIBE
@@ -1245,9 +1375,36 @@ This is done via pushing and popping on the proof context stack.
 $MERGE\_PCS\_C$ takes a list of proof contexts instead, merged
 as if by, e.g. $push\_merge\_pcs$
 
-Note that when using this functions that the standard rewriting functions (obvious candidates for this function) access the current
+Note that when using this functions that the standard rewriting conversions (obvious candidates for this function) access the current
 proof context at the point of being given their theorem list
 argument: see $PC\_C1$ for a method of avoiding this.
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the conversion.
+The previous proof context is restored, even if the conversion fails.
+=ENDDOC
+=DOC
+val ÛEXTEND_PC_CÝ : string -> CONV -> CONV;
+val ÛEXTEND_PCS_CÝ : string list -> CONV -> CONV;
+=DESCRIBE
+=INLINEFT
+EXTEND_PC_C context conv
+=TEX
+{} will apply conversion $conv$ to a term  in the proof context obtained by merging the proof context with key $context$
+into the current proof context.
+The named context is used as it is at the point of applying the conversion to a term.
+The $pr\_tac$, $pr\_conv$ and $mpp\_rule$ fields are taken from the named proof context.
+This is done via pushing and popping on the proof context stack.
+
+$EXTEND\_PCS\_C$ takes a list of proof contexts instead, merged
+as if by, e.g. $push\_extend\_pcs$
+
+Note that when using this functions that the standard rewriting functions (obvious candidates for this function) access the current
+proof context at the point of being given their theorem list
+argument: see $EXTEND\_PC\_C1$ for a method of avoiding this.
 =FAILURE
 51010	There is no proof context with key ?0
 51014	Proof context ?0 was created in theory ?1 at a 
@@ -1282,6 +1439,32 @@ and as the errors of the rule.
 The previous proof context is restored, even if the rule fails.
 =ENDDOC
 =DOC
+val Ûextend_pc_ruleÝ : string -> ('a -> THM) -> ('a -> THM);
+val Ûextend_pcs_ruleÝ : string list -> ('a -> THM) -> ('a -> THM);
+=DESCRIBE
+=INLINEFT
+extend pc_rule context rule
+=TEX
+{} will apply rule $rule$ to its argument in the proof context obtained by merging the proof context with key $context$ into the current proof context.
+The named context is used as it is at the point of applying the rule to the argument.
+The $pr\_tac$, $pr\_conv$ and $mpp\_rule$ fields are taken from the named proof context.
+This is done via pushing and popping on the proof context stack.
+
+$extend\_pcs_rule$ takes a list of proof contexts instead, merged
+as if by, e.g. $extend\_merge\_pcs$
+
+Note that when using this functions that the standard rewriting functions (obvious candidates for this function) access the current
+proof context at the point of being given their theorem list
+argument: see $extend_pc\_rule1$ for a method of avoiding this.
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the rule.
+The previous proof context is restored, even if the rule fails.
+=ENDDOC
+=DOC
 val ÛPC_T1Ý : string -> ('a -> TACTIC) -> 'a -> TACTIC;
 val ÛMERGE_PCS_T1Ý : string list -> ('a -> TACTIC) -> 'a -> TACTIC;
 =DESCRIBE
@@ -1294,6 +1477,30 @@ This is done via pushing and popping on the proof context stack.
 
 $MERGE\_PCS\_T1$ takes a list of proof contexts instead, merged
 as if by, e.g. $push\_merge\_pcs$.
+=SEEALSO
+$PC\_T$
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the tactic.
+The previous proof context is restored, even if the tactic application or proof fails.
+=ENDDOC
+=DOC
+val ÛEXTEND_PC_T1Ý : string -> ('a -> TACTIC) -> 'a -> TACTIC;
+val ÛEXTEND_PCS_T1Ý : string list -> ('a -> TACTIC) -> 'a -> TACTIC;
+=DESCRIBE
+=INLINEFT
+EXTEND_PC_T1 context tac arg
+=TEX
+{} will apply tactic $tac$ $arg$ to a goal, and evaluate the proof, in the proof context obtained by merging the proof context with key $context$ into the current proof context.
+The named context is used as it is at the point of applying the rule to the argument.
+The $pr\_tac$, $pr\_conv$ and $mpp\_rule$ fields are taken from the named proof context.
+This is done via pushing and popping on the proof context stack.
+
+$EXTEND\_PCS\_T1$ takes a list of proof contexts instead, merged
+as if by, e.g. $push\_extend\_pcs$.
 =SEEALSO
 $PC\_T$
 =FAILURE
@@ -1328,6 +1535,30 @@ and as the errors of the conversion.
 The previous proof context is restored, even if the conversion fails.
 =ENDDOC
 =DOC
+val ÛEXTEND_PC_C1Ý : string -> ('a -> CONV) -> 'a -> CONV;
+val ÛEXTEND_PCS_C1Ý : string list -> ('a -> CONV) -> 'a -> CONV;
+=DESCRIBE
+=INLINEFT
+EXTEND_PC_C context conv arg
+=TEX
+{} will apply conversion $conv$ $arg$ in the proof context obtained by merging the proof context with key $context$ into the current proof context.
+The named context is used as it is at the point of applying the rule to the argument.
+The $pr\_tac$, $pr\_conv$ and $mpp\_rule$ fields are taken from the named proof context.
+This is done via pushing and popping on the proof context stack.
+
+$EXTEND\_PCS\_C1$ takes a list of proof contexts instead, merged
+as if by, e.g. $push\_extend\_pcs$.
+=SEEALSO
+$PC\_C$
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the conversion.
+The previous proof context is restored, even if the conversion fails.
+=ENDDOC
+=DOC
 val Ûpc_rule1Ý : string -> ('a -> 'b -> THM) -> 'a -> 'b -> THM;
 val Ûmerge_pcs_rule1Ý : string list -> ('a -> 'b -> THM) -> 'a -> 'b -> THM;
 =DESCRIBE
@@ -1340,6 +1571,30 @@ This is done via pushing and popping on the proof context stack.
 
 $merge\_pcs\_rule1$ takes a list of proof contexts instead, merged
 as if by, e.g. $push\_merge\_pcs$.
+=SEEALSO
+$pc\_rule$
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the rule.
+The previous proof context is restored, even if the rule fails.
+=ENDDOC
+=DOC
+val Ûextend_pc_rule1Ý : string -> ('a -> 'b -> THM) -> 'a -> 'b -> THM;
+val Ûextend_pcs_rule1Ý : string list -> ('a -> 'b -> THM) -> 'a -> 'b -> THM;
+=DESCRIBE
+=INLINEFT
+extend_pc_rule1 context rule arg1 arg2
+=TEX
+{} will apply rule $rule$ $arg1$ to $arg2$ in the proof context obtained by merging the proof context with key $context$ into the current proof context.
+The named context is used as it is at the point of applying the rule to the argument.
+The $pr\_tac$, $pr\_conv$ and $mpp\_rule$ fields are taken from the named proof context.
+This is done via pushing and popping on the proof context stack.
+
+$extend\_pcs\_rule1$ takes a list of proof contexts instead, merged
+as if by, e.g. $push\_extend\_pcs$.
 =SEEALSO
 $pc\_rule$
 =FAILURE
