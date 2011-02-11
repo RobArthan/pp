@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp007.doc   %Z% $Date: 2010/11/17 17:43:53 $ $Revision: 1.50 $ $RCSfile: imp007.doc,v $
+% imp007.doc   %Z% $Date: 2011/02/05 16:52:13 $ $Revision: 1.51 $ $RCSfile: imp007.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Derived Rules of Inference}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the Derived Rules of Inference}
 \TPPref{DS/FMU/IED/IMP007}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.50 $
+\def\SCCSversion{$Revision: 1.51 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2010/11/17 17:43:53 $ %
+\TPPdate{\FormatDate{$Date: 2011/02/05 16:52:13 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -178,7 +178,7 @@ Correct $subst\_conv$.
 \item[Issue 1.48] Interfaces to the kernel inference rules are now in the kernel interface module.
 \item[Issue 1.49] The prefix for private interfaces is now $pp'$ rather than $icl'$.
 \item[Issue 1.50] Added conversions for higher-order matching.
-\item[Issue 1.51] Added {simple\_´\_match\_mp\_rule2}.
+\item[Issue 1.51, 1.52] Added {simple\_´\_match\_mp\_rule2}.
 \end{description}
 \subsection{Changes Forecast}
 The conversions 
@@ -2575,49 +2575,92 @@ divert complaint "dest_´" "simple_´_match_mp_rule1" 7045
 	[fn () => string_of_thm thm1]
 );
 =TEX
-The following is complicated by the desire not to calculate free variable
-sets more than is necessary. The case where the theorems have large
+The following is complicated by the desire not to calculate type variable sets
+and free variable sets more than is necessary.
+The case where the theorems have large
 number of assumptions with lots of free variables is likely to be common
 (in tactic proofs) as is the case where all the bound variables do appear
 free in $t1$ (after type instantiation) but do not appear in the results
 of the term matching because the variable is matched to itself. Thus we
 should avoid calculating the free variables of the assumptions unless
 we know we need them.
+
+Note that type variables that only occur in the bound variables of
+the major premiss are irrelevant.
 =SML
 
 fun Ûsimple_´_match_mp_rule2Ý (thm1 : THM) : THM -> THM = (
 let	val (qvs,body) = strip_µ (concl thm1);
-	val (t1,_) = dest_´ body;
+	val (t1, t2) = dest_´ body;
 in
 (fn (thm2 : THM) =>
 let	val tm = concl thm2;
-in let	val (tym,tmm) = term_match tm t1;
-	val (s2, inst_fun)  = case tym of
+in let	val (tym, tmm) = term_match tm t1;
+	type TYPE_CAPTURE_DATA = {avoid : string list OPT, fixed_tyvs : string list OPT};
+	val body_tyvs = term_tyvars body;
+	fun is_fixed_tyv (tyv, {avoid, fixed_tyvs as Nil}) : bool * TYPE_CAPTURE_DATA = (
+		let	val tyvs = term_tyvars t1 cup
+				list_cup (map term_tyvars (asms thm1));
+		in	(tyv mem tyvs, {avoid = avoid, fixed_tyvs = Value tyvs})
+		end
+	) | is_fixed_tyv (tyv, cd as {avoid, fixed_tyvs as Value tyvs}) = (
+		(tyv mem tyvs, cd)
+	);
+	fun rename_tyv (tyv, {avoid as Nil, fixed_tyvs as Value tyvs}) : string * TYPE_CAPTURE_DATA = (
+		let	val av = tyvs cup
+				list_cup (map term_tyvars (asms thm2));
+			val tyv' = string_variant av tyv;
+		in	(tyv', {avoid = Value (tyv' :: av), fixed_tyvs = fixed_tyvs})
+		end
+	) | rename_tyv (tyv, {avoid as Value av, fixed_tyvs}) = (
+		let	val tyv' = string_variant av tyv;
+		in	(tyv', {avoid = Value (tyv' :: av), fixed_tyvs = fixed_tyvs})
+		end
+	) | rename_tyv (tyv, {avoid, fixed_tyvs as Nil}) = (
+		rename_tyv (tyv, {avoid = avoid, fixed_tyvs = Value (term_tyvars t1)})
+	);
+	fun make_inst (acc : (TYPE * TYPE) list) (cd : TYPE_CAPTURE_DATA) (tyv :: rest) = (
+	let	val ty = mk_vartype tyv;
+		val (acc', cd') = ((rassoc3 tym ty, ty)::acc, cd)
+		handle Fail _ =>
+		let	val (fixed, cd') = is_fixed_tyv (tyv, cd);
+		in	if	fixed
+			then	(acc, cd')
+			else	let	val (tyv', cd'') = rename_tyv (tyv, cd');
+				in	((mk_vartype tyv', ty)::acc, cd'')
+				end
+		end;		
+	in	make_inst acc' cd' rest 
+	end
+	) | make_inst acc _ [] = acc;
+	val init_type_cd = {avoid = Nil, fixed_tyvs = Nil};
+	val tym' = make_inst [] init_type_cd (term_tyvars t2);
+	val (s2, inst_fun)  = case tym' of
 		[] => (thm1, fn tm => tm)
-		| _ => (inst_type_rule tym thm1, inst [] tym);
-	type CAPTURE_DATA = {avoid : TERM list OPT, t1_frees : TERM list OPT};
-	fun is_free_in_t1 (v, {avoid, t1_frees as Nil}) : bool * CAPTURE_DATA = (
+		| _ => (inst_type_rule tym' thm1, inst [] tym');
+	type TERM_CAPTURE_DATA = {avoid : TERM list OPT, t1_frees : TERM list OPT};
+	fun is_free_in_t1 (v, {avoid, t1_frees as Nil}) : bool * TERM_CAPTURE_DATA = (
 		let	val vs = map inst_fun (frees t1);
 		in	(v mem vs, {avoid = avoid, t1_frees = Value vs})
 		end
 	) | is_free_in_t1 (v, cd as {t1_frees as Value vs, ...}) = (
 			(v mem vs, cd)
 	);
-	fun rename_bv (v, {avoid as Nil, t1_frees as Value t1_fvs}) : TERM * CAPTURE_DATA = (
-		let	val vs = t1_fvs term_union
+	fun rename_bv (v, {avoid as Nil, t1_frees as Value t1_fvs}) : TERM * TERM_CAPTURE_DATA = (
+		let	val av = t1_fvs term_union
 				list_term_union (map frees (asms thm1)) term_union
 				list_term_union (map frees (asms thm2));
-			val v' = variant vs v;
-		in	(v', {avoid = Value (v' :: vs), t1_frees = t1_frees})
+			val v' = variant av v;
+		in	(v', {avoid = Value (v' :: av), t1_frees = t1_frees})
 		end
-	) | rename_bv (v, {avoid as Value vs, t1_frees}) = (
-		let	val v' = variant vs v;
-		in	(v', {avoid = Value (v' :: vs), t1_frees = t1_frees})
+	) | rename_bv (v, {avoid as Value av, t1_frees}) = (
+		let	val v' = variant av v;
+		in	(v', {avoid = Value (v' :: av), t1_frees = t1_frees})
 		end
 	) | rename_bv (v, {avoid, t1_frees as Nil}) = (
 		rename_bv(v, {avoid = avoid, t1_frees = Value (map inst_fun (frees t1))})
 	);
-	fun aux1 (acc : TERM list) (cd : CAPTURE_DATA) (qv :: rest) : TERM list = (
+	fun make_subs (acc : TERM list) (cd : TERM_CAPTURE_DATA) (qv :: rest) : TERM list = (
 	let	val qv' = inst_fun qv;
 		val (tm, cd') = (rassoc3 tmm qv', cd)
 		handle Fail _ =>
@@ -2626,11 +2669,11 @@ in let	val (tym,tmm) = term_match tm t1;
 			then	(qv', cd')
 			else	rename_bv (qv', cd')
 		end;		
-	in	aux1 (tm :: acc) cd' rest 
+	in	make_subs (tm :: acc) cd' rest 
 	end
-	) | aux1 acc _ [] = rev acc;
-	val init_cd = {avoid = Nil, t1_frees = Nil};
-	val s3 = list_simple_µ_elim (aux1 [] init_cd qvs) s2;
+	) | make_subs acc _ [] = rev acc;
+	val init_term_cd = {avoid = Nil, t1_frees = Nil};
+	val s3 = list_simple_µ_elim (make_subs [] init_term_cd qvs) s2;
 	val s4 = ´_elim s3 thm2;
 in
 	s4
