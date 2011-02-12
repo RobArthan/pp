@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * undo.c,v 2.26 2009/09/06 14:50:50 rda Exp
+ * $Id$
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface

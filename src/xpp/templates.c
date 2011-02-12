@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * templates.c,v 2.32 2009/06/20 14:35:30 rda Exp 
+ * $Id$
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *

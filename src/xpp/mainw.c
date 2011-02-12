@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * mainw.c,v 2.104 2008/07/24 11:44:14 rda Exp
+ * $Id$
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface

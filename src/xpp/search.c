@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * search.c,v 2.71 2009/06/30 17:10:49 rda Exp 
+ * $Id$
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *

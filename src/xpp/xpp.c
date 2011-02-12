@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * xpp.c,v 2.37 2008/02/10 16:33:32 rda Exp
+ * $Id$§
  *
  * xpp.c -  main for the X/Motif ProofPower
  *

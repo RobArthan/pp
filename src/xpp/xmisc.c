@@ -1,7 +1,6 @@
 
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * xmisc.c,v 2.36 2008/08/02 09:13:28 rda Exp
+ * $Id$
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface

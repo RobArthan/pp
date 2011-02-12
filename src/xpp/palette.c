@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * palette.c,v 2.32 2009/06/20 14:35:30 rda Exp 
+ * $Id$
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *

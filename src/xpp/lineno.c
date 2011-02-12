@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * lineno.c,v 1.13 2009/06/20 14:35:30 rda Exp 
+ * $Id$
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *

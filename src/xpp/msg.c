@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2009/09/06 13:20:10 $ $Revision: 2.56 $ $RCSfile: msg.c,v $
+ * $Id$
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
