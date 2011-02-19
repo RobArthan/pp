@@ -15,10 +15,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPproject{FST PROJECT}  %% Mandatory field
 \TPPtitle{Implementation of Proof Contexts}
 \TPPref{DS/FMU/IED/IMP051}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.35 $
+\def\SCCSversion{$Revision: 1.37 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $ %
+\TPPdate{\FormatDate{$Date: 2011/02/19 16:22:03 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -107,6 +107,9 @@ $force\_delete\_theory$ (and trial runs for it).
 \item[Issue 1.34] Allowed for kernel interface and symbol table reform.
 \item[Issue 1.35] The prefix for private interfaces is now $pp'$ rather than $icl'$.
 \item[Issue 1.36] Added matching modus ponens field and facilities for extending the current proof context.
+\item[Issue 1.37] $pr\_conv$ and $pr\_tac$ are now optional
+fields and these and $mmp\_rule$ are now handled uniformly when proof contexts
+are merged, by taking the merge of a list of optional values to be the last non-nil value. Rationalised merging and extending operations to exploit this.
 \end{description}
 \subsection{Changes Forecast}
 As detailed design.
@@ -181,7 +184,7 @@ type ÛEQN_CXTÝ = (TERM * CONV) list;
 =TEX
 In the following, if $simple\_eq\_match\_conv1$
 is successfully applied, then the term destruction
-but be successful.
+must be successful.
 =SML
 fun Ûthm_eqn_cxtÝ (thm : THM) : (TERM * CONV) = (
 let	val cnv =  simple_eq_match_conv1 thm
@@ -220,12 +223,14 @@ type ÛPROOF_CONTEXTÝ = {
 	cs_¶_convs: (CONV list * string) list,
 	¶_cd_thms: THM list,
 	¶_vs_thms: (string * (TERM list * THM))list,
-	pr_tac : THM list -> TACTIC,
-	pr_conv : THM list -> CONV,
+	pr_tac : (THM list -> TACTIC) OPT,
+	pr_conv : (THM list -> CONV) OPT,
 	mmp_rule : (THM -> THM -> THM) OPT,
+(*
 =TEX
 Now the evaluated parts:
 =SML
+*)
 	rw_net: CONV NET,
 	rw_canon: THM -> THM list,	(* CANON *)
 	st_conv: CONV,
@@ -234,9 +239,11 @@ Now the evaluated parts:
 	cs_¶_conv: TERM -> THM,
 	¶_ad_cd_thms:  (TERM list * int list * TYPE * (TERM list)list * THM) list,
 	¶_ad_vs_thms:  (string * (TERM list * THM))list,
+(*
 =TEX
 And finally the committal data
 =SML
+*)
 	names : string list,
 	theoryname : string,
 	a_valid_thm : THM,
@@ -257,12 +264,14 @@ fun Ûempty_pcÝ (committed : bool)(names : string list): PROOF_CONTEXT = {
 	cs_¶_convs = [],
 	¶_cd_thms = [],
 	¶_vs_thms = [],
-	pr_tac = (fn _ => fail_tac),
-	pr_conv = (fn _ => fail_conv),
+	pr_tac = Nil,
+	pr_conv = Nil,
 	mmp_rule = Nil,
+(*
 =TEX
 Now the evaluated parts:
 =SML
+*)
 	rw_net = empty_net,
 	rw_canon = (fn thm => [thm]),	(* CANON *)
 	st_conv = fail_conv,
@@ -271,9 +280,11 @@ Now the evaluated parts:
 	cs_¶_conv = (fn _ => fail "pp'set_eval_ad_cs_¶_convs" 51015 []),
 	¶_ad_cd_thms = [],
 	¶_ad_vs_thms = [],
+(*
 =TEX
-And finally the commital data
+And finally the committal data
 =SML
+*)
 	names = names,
 	theoryname = get_current_theory_name(),
 	a_valid_thm = refl_conv (mk_var("a",BOOL)),
@@ -313,7 +324,7 @@ fun Ûchange_namesÝ (new_names : string list)
 =TEX
 Now the initial proof context (local only):
 =SML
-val Ûinitial_pcÝ = empty_pc true ["initial"];
+val Ûinitial_pcÝ : PROOF_CONTEXT = empty_pc true ["initial"];
 =TEX
 \subsection{Database of Proof Contexts}
 Unsurprisingly, this is a simple dictionary, stored in an assignable variable.
@@ -322,16 +333,22 @@ local
 	val pc_db : (PROOF_CONTEXT S_DICT) ref = ref (
 		s_enter "initial" initial_pc initial_s_dict);
 in
+(*
 =TEX
+The pending resetter stores the current state and returns a function that
+will return the database to that state.
 =SML
+*)
 fun Ûpending_reset_pc_databaseÝ () : unit -> unit = (
 let val temp_db = (!pc_db)
 in
     (fn () => pc_db := temp_db)
 end);
+(*
 =TEX
 Local declarations:
 =SML
+*)
 fun Ûget_pcÝ (caller: string) (key : string) : PROOF_CONTEXT = (
 	case s_lookup key (!pc_db) of
 	Value (pc as {a_valid_thm = a_valid_thm,theoryname=theoryname,...}) => (
@@ -358,9 +375,11 @@ in
 	(pc_db := s_enter key (pcf opc) (!pc_db);
 	())
 end);
+(*
 =TEX
 Seen in signature:
 =SML
+*)
 local
 	fun detail (key,({theoryname = theoryname,
 		a_valid_thm = a_valid_thm, ...}:PROOF_CONTEXT)) = (
@@ -373,9 +392,11 @@ fun Ûget_pcsÝ () : (string * string)list = (
 	map detail (!pc_db)
 );
 end;
+(*
 =TEX
 Seen in signature:
 =SML
+*)
 fun Ûdelete_pcÝ (key : string) :unit = (
 	if key = "initial"
 	then fail "delete_pc" 51012 []
@@ -386,14 +407,19 @@ fun Ûdelete_pcÝ (key : string) :unit = (
 		()
 	) | Nil => fail "delete_pc" 51010 [fn () => key])
 );
+(*
 =TEX
+Seen in signature:
 =SML
+*)
 fun Ûnew_pcÝ (new: string) : unit = (
 	extend_pc "new_pc" new (empty_pc false [new])
 );
+(*
 =TEX
 End of database functions
 =SML
+*)
 end;
 =TEX
 \subsection{Proof Context Stack}
@@ -409,97 +435,77 @@ fun pop_pc_stack caller = (
 	[] => fail caller 51001 []
 	| (a :: x) => (pc_stack := x; a)
 );
+(*
 =TEX
 \subsection{Current Proof Context}
 =SML
+*)
 local
 	val current_pc : PROOF_CONTEXT ref = ref initial_pc;
-	val ad_rw_net = ref (#rw_net initial_pc);
-	val ad_rw_canon = ref (#rw_canon initial_pc);
-	val ad_st_conv = ref (#st_conv initial_pc);
-	val ad_sc_conv = ref (#sc_conv initial_pc);
-	val ad_nd_nets = ref (#nd_nets initial_pc);
-	val ad_cs_¶_convs = ref (#cs_¶_conv initial_pc);
-	val ad_¶_ad_cd_thms = ref (#¶_ad_cd_thms initial_pc);
-	val ad_¶_ad_vs_thms = ref (#¶_ad_vs_thms initial_pc);
-	val ad_pr_tac = ref (#pr_tac initial_pc);
-	val ad_pr_conv = ref (#pr_conv initial_pc);
-	val ad_mmp_rule = ref (#mmp_rule initial_pc);
-	val ad_valid_thm = ref (#a_valid_thm initial_pc);
-	val ad_theoryname = ref (#theoryname initial_pc);
 in
+(*
 =TEX
 Set the current proof context:
 =SML
-fun set_current_pc pc = (
+*)
+fun set_current_pc (pc : PROOF_CONTEXT) : unit = (
 	current_pc := pc;
-	ad_rw_net := (#rw_net pc);
-	ad_rw_canon := (#rw_canon pc);
-	ad_st_conv := (#st_conv pc);
-	ad_sc_conv := (#sc_conv pc);
-	ad_nd_nets := (#nd_nets pc);
-	ad_cs_¶_convs := (#cs_¶_conv pc);
-	ad_¶_ad_cd_thms := (#¶_ad_cd_thms pc);
-	ad_¶_ad_vs_thms := (#¶_ad_vs_thms pc);
-	ad_pr_tac := (#pr_tac pc);
-	ad_pr_conv := (#pr_conv pc);
-	ad_mmp_rule := (#mmp_rule pc);
-	ad_valid_thm := (#a_valid_thm pc);
-	ad_theoryname := (#theoryname pc);
 	()
 );
+(*
 =TEX
 Access the current proof context:
 =SML
+*)
 fun Ûcurrent_ad_rw_netÝ ():CONV NET = 
-	if valid_thm (!ad_valid_thm) 
-	then (!ad_rw_net)
-	else fail "current_ad_rw_net" 51021 [fn () => (!ad_theoryname)];
-fun Ûcurrent_ad_rw_canonÝ () (thm :THM) : THM list = 
-	if valid_thm (!ad_valid_thm) 
-	then (!ad_rw_canon) thm
-	else fail "current_ad_rw_canon" 51021 [fn () => (!ad_theoryname)];
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#rw_net (!current_pc))
+	else fail "current_ad_rw_net" 51021 [fn () => (#theoryname (!current_pc))];
+fun Ûcurrent_ad_rw_canonÝ () : THM -> THM list = 
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#rw_canon (!current_pc))
+	else fail "current_ad_rw_canon" 51021 [fn () => (#theoryname (!current_pc))];
 fun Ûcurrent_ad_st_convÝ ():CONV = 
-	if valid_thm (!ad_valid_thm) 
-	then (!ad_st_conv)
-	else fail "current_ad_st_conv" 51021 [fn () => (!ad_theoryname)];
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#st_conv (!current_pc))
+	else fail "current_ad_st_conv" 51021 [fn () => (#theoryname (!current_pc))];
 fun Ûcurrent_ad_nd_netÝ (dict_key:string):(TERM -> THM) NET = 
-	if valid_thm (!ad_valid_thm) 
-	then (rassoc4 (!ad_nd_nets) empty_net dict_key)
-	else fail "current_ad_nd_net" 51021 [fn () => (!ad_theoryname)];
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (rassoc4 (#nd_nets (!current_pc)) empty_net dict_key)
+	else fail "current_ad_nd_net" 51021 [fn () => (#theoryname (!current_pc))];
 fun Ûcurrent_ad_sc_convÝ ():CONV = 
-	if valid_thm (!ad_valid_thm) 
-	then (!ad_sc_conv)
-	else fail "current_ad_sc_conv" 51021 [fn () => (!ad_theoryname)];
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#sc_conv (!current_pc))
+	else fail "current_ad_sc_conv" 51021 [fn () => (#theoryname (!current_pc))];
 fun Ûcurrent_ad_cs_¶_convÝ ():CONV = 
-	if valid_thm (!ad_valid_thm) 
-	then (!ad_cs_¶_convs)
-	else fail "current_ad_cs_¶_conv" 51021 [fn () => (!ad_theoryname)];
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#cs_¶_conv (!current_pc))
+	else fail "current_ad_cs_¶_conv" 51021 [fn () => (#theoryname (!current_pc))];
 fun Ûcurrent_ad_¶_cd_thmsÝ ()
 	: (TERM list * int list * TYPE * (TERM list)list * THM) list
 	= 
-	if valid_thm (!ad_valid_thm) 
-	then (!ad_¶_ad_cd_thms)
-	else fail "current_ad_¶_cd_thms" 51021 [fn () => (!ad_theoryname)];
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#¶_ad_cd_thms (!current_pc))
+	else fail "current_ad_¶_cd_thms" 51021 [fn () => (#theoryname (!current_pc))];
 fun Ûcurrent_ad_¶_vs_thmsÝ ():(string * (TERM list * THM)) list 
 	= 
-	if valid_thm (!ad_valid_thm) 
-	then (!ad_¶_ad_vs_thms)
-	else fail "current_ad_¶_vs_thms" 51021 [fn () => (!ad_theoryname)];
-fun Ûcurrent_ad_pr_tacÝ () (thms : THM list) : TACTIC
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#¶_ad_vs_thms (!current_pc))
+	else fail "current_ad_¶_vs_thms" 51021 [fn () => (#theoryname (!current_pc))];
+fun Ûcurrent_ad_pr_tacÝ () : (THM list -> TACTIC) OPT
 	= 
-	if valid_thm (!ad_valid_thm) 
-	then (!ad_pr_tac) thms
-	else fail "current_ad_pr_tac" 51021 [fn () => (!ad_theoryname)];
-fun Ûcurrent_ad_pr_convÝ () (thms : THM list): CONV 
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#pr_tac (!current_pc))
+	else fail "current_ad_pr_tac" 51021 [fn () => (#theoryname (!current_pc))];
+fun Ûcurrent_ad_pr_convÝ () : (THM list -> CONV) OPT
 	= 
-	if valid_thm (!ad_valid_thm) 
-	then (!ad_pr_conv) thms
-	else fail "current_ad_pr_conv" 51021 [fn () => (!ad_theoryname)];
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#pr_conv (!current_pc))
+	else fail "current_ad_pr_conv" 51021 [fn () => (#theoryname (!current_pc))];
 fun Ûcurrent_ad_mmp_ruleÝ (): (THM -> THM -> THM) OPT = 
-	if valid_thm (!ad_valid_thm) 
-	then (!ad_mmp_rule)
-	else fail "current_ad_mmp_rule" 51021 [fn () => (!ad_theoryname)];
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#mmp_rule (!current_pc))
+	else fail "current_ad_mmp_rule" 51021 [fn () => (#theoryname (!current_pc))];
 
 fun Ûget_current_pcÝ () : (string list * string) = (
 	if valid_thm (#a_valid_thm (!current_pc))
@@ -508,19 +514,26 @@ fun Ûget_current_pcÝ () : (string list * string) = (
 );
 
 fun Ûlget_current_pcÝ () = (!current_pc);
+(*
 =TEX
 =SML
+*)
 fun Ûpending_reset_pc_stackÝ () : unit -> unit = (
 let	val temp_stack = (!pc_stack);
 	val temp_current_pc = (!current_pc);
 in
 	(fn () => (pc_stack := temp_stack; set_current_pc temp_current_pc))
 end);
+(*
 =TEX
 End of current proof context stuff:
 =SML
-end; (* current prof context *)
+*)
+end; (* current proof context *)
+(*
+=TEX
 =SML
+*)
 local
 	fun detail (({theoryname = theoryname,
 		a_valid_thm = a_valid_thm, names = names, ...}:PROOF_CONTEXT)) = (
@@ -607,9 +620,11 @@ fun Ûpp'set_eval_ad_¶_vs_thmsÝ (f:((string * (TERM list * THM)) list ->
 fun Ûpp'set_eval_ad_nd_netÝ (f:(string -> (TERM * (TERM ->  THM)) list ->
 		(TERM ->  THM) NET)) =
 	(eval_ad_nd_net := f; ());
+(*
 =TEX
 Now a method of saving all the evaluators:
 =SML
+*)
 fun Ûpending_reset_pc_evaluatorsÝ () : unit -> unit =(
 let	val e1 = (!eval_ad_rw_net);
 	val e2 = (!eval_ad_rw_canon);
@@ -632,9 +647,11 @@ in
 	()
 	)
 end);
+(*
 =TEX
 Now the method of evaluating a proof context:
 =SML
+*)
 fun Ûevaluate_proof_contextÝ (
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
@@ -674,9 +691,11 @@ fun Ûevaluate_proof_contextÝ (
 	theoryname = theoryname,
 	a_valid_thm = a_valid_thm,
 	committed = committed};
+(*
 =TEX
 End of evaluating things.
 =SML
+*)
 end;
 =TEX
 \section{OTHER FUNCTIONS}
@@ -1194,7 +1213,7 @@ change_pc "set_pr_tac" key
 	cs_¶_convs = cs_¶_convs, ¶_cd_thms = ¶_cd_thms,
 	¶_vs_thms = ¶_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = tac, mmp_rule = mmp_rule,
+	pr_conv = pr_conv, pr_tac = Value tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_¶_conv = cs_¶_conv,
@@ -1202,8 +1221,13 @@ change_pc "set_pr_tac" key
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
+fun Ûget_pr_tac1Ý (key:string) : (THM list -> TACTIC) OPT = (
+	#pr_tac (get_pc "get_pr_tac1" key)
+);
 fun Ûget_pr_tacÝ (key:string) : THM list -> TACTIC = (
-	#pr_tac (get_pc "get_pr_tac" key)
+	(case #pr_tac (get_pc "get_pr_tac" key) of
+		Value tac => tac
+	|	Nil => fn _ => fail_tac)
 );
 =TEX
 \subsubsection{Automatic Proof: Conversions}
@@ -1231,7 +1255,7 @@ change_pc "set_pr_conv" key
 	cs_¶_convs = cs_¶_convs, ¶_cd_thms = ¶_cd_thms,
 	¶_vs_thms = ¶_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
+	pr_conv = Value conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_¶_conv = cs_¶_conv,
@@ -1239,14 +1263,19 @@ change_pc "set_pr_conv" key
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
+fun Ûget_pr_conv1Ý (key:string) : (THM list -> CONV) OPT = (
+	#pr_conv (get_pc "get_pr_conv1" key)
+);
 fun Ûget_pr_convÝ (key:string) : THM list -> CONV = (
-	#pr_conv (get_pc "get_pr_conv" key)
+	case #pr_conv (get_pc "get_pr_conv" key) of
+		Value conv => conv
+	|	Nil => fn _ => fail_conv
 );
 =TEX
 =TEX
 \subsubsection{Forward Chaining: Matching Modus Ponens Rule}
 =SML
-fun Ûset_mmp_ruleÝ (opt_rule : (THM -> THM -> THM) OPT) (key:string) : unit =  (
+fun Ûset_mmp_ruleÝ (rule : THM -> THM -> THM) (key:string) : unit =  (
 change_pc "set_mmp_rule" key 
 (fn 
 	{
@@ -1269,7 +1298,7 @@ change_pc "set_mmp_rule" key
 	cs_¶_convs = cs_¶_convs, ¶_cd_thms = ¶_cd_thms,
 	¶_vs_thms = ¶_vs_thms, 
 	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = opt_rule,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = Value rule,
 	rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
 	sc_conv = sc_conv, cs_¶_conv = cs_¶_conv,
@@ -1280,7 +1309,6 @@ change_pc "set_mmp_rule" key
 fun Ûget_mmp_ruleÝ (key:string) : (THM -> THM -> THM) OPT = (
 	#mmp_rule (get_pc "get_mmp_rule" key)
 );
-
 =TEX
 \subsection{Functions upon Proof Contexts}
 =SML
@@ -1326,13 +1354,14 @@ fun list_eq (a :: x) (b :: y) = a =$ b andalso list_eq x y
 | list_eq [] [] = true
 | list_eq _ _ = false;
 
-val union_bits = union (fn ((str1,(tml1,thm1)) ,(str2,(tml2,thm2))) =>
+val union_bits = union (fn ((str1 : string,(tml1,thm1)) ,(str2,(tml2,thm2))) =>
 	str1 = str2 andalso (list_eq tml1 tml2) andalso (thm1 =|- thm2));
+
+fun merge_opt _ (y as Value _) = y
+|   merge_opt x Nil = x;
+
 in
 fun Ûlocal_merge_pcÝ (caller:string) (test_committed:bool) 
-	(opr_conv : THM list -> CONV)
-	(opr_tac : THM list -> TACTIC)
-	(ommp_rule : (THM -> THM -> THM) OPT)
 	(({
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
@@ -1350,9 +1379,10 @@ fun Ûlocal_merge_pcÝ (caller:string) (test_committed:bool)
 	rw_eqn_cxt = rw_eqn_cxt1, rw_canons = rw_canons1,
 	st_eqn_cxt = st_eqn_cxt1, sc_eqn_cxt = sc_eqn_cxt1,
 	cs_¶_convs = cs_¶_convs1, ¶_cd_thms = ¶_cd_thms1,
-	¶_vs_thms = ¶_vs_thms1, pr_conv = pr_conv1, mmp_rule = mmp_rule1,
+	¶_vs_thms = ¶_vs_thms1,
 	nd_entries=nd_entries1,nd_nets=nd_nets1,
-	pr_tac = pr_tac1, rw_net = rw_net1,
+	pr_conv = pr_conv1, pr_tac = pr_tac1, mmp_rule = mmp_rule1,
+	rw_net = rw_net1,
 	rw_canon = rw_canon1, st_conv = st_conv1,
 	sc_conv = sc_conv1, cs_¶_conv = cs_¶_conv1,
 	¶_ad_cd_thms = ¶_ad_cd_thms1, ¶_ad_vs_thms  = ¶_ad_vs_thms1,
@@ -1371,9 +1401,9 @@ fun Ûlocal_merge_pcÝ (caller:string) (test_committed:bool)
 	nd_entries = list_roverwrite1 nd_entries nd_entries1,
 	¶_cd_thms = thm_union ¶_cd_thms ¶_cd_thms1,
 	¶_vs_thms = union_bits ¶_vs_thms ¶_vs_thms1,
-	pr_tac = opr_tac,
-	pr_conv = opr_conv,
-	mmp_rule = ommp_rule,
+	pr_tac = merge_opt pr_tac pr_tac1,
+	pr_conv = merge_opt pr_conv pr_conv1,
+	mmp_rule = merge_opt mmp_rule mmp_rule1,
 	rw_net = rw_net1,
 	rw_canon = rw_canon1,
 	st_conv = st_conv1,
@@ -1382,7 +1412,7 @@ fun Ûlocal_merge_pcÝ (caller:string) (test_committed:bool)
 	¶_ad_cd_thms = ¶_ad_cd_thms1,
 	¶_ad_vs_thms  = ¶_ad_vs_thms1,
 	nd_nets = nd_nets1,
-	names = names1,
+	names = names @ names1,
 	theoryname = theoryname1,
 	a_valid_thm = a_valid_thm1,
 	committed = false}
@@ -1392,15 +1422,9 @@ end;
 =SML
 fun Ûmerge_pcsÝ (keys:string list) (key : string) : unit = (
 let	val pcs = map (get_pc "merge_pcs") keys;
-	val opc = case pcs of
-		[] => get_pc "merge_pcs" key
-		| _ => hd(rev pcs);
 in
 	change_pc "merge_pcs" key 
-	(fn pc => fold (local_merge_pc "merge_pcs" true
-		(#pr_conv opc)
-		(#pr_tac opc)
-		(#mmp_rule opc)) pcs pc)
+	(fn pc => fold (local_merge_pc "merge_pcs" true) pcs pc)
 end);
 =TEX
 The following empties all but selected fields of proof contexts.
@@ -1438,8 +1462,8 @@ fun Ûprune_pcÝ (caller : string) (fields : string list) ({
 	¶_cd_thms = if "¶_cd_thms" mem fields then ¶_cd_thms else [],
 	¶_vs_thms = if "¶_vs_thms" mem fields then ¶_vs_thms else [],
 	nd_entries = if "nd_entries" mem fields then nd_entries else [],
-	pr_conv = if "pr_conv" mem fields then pr_conv else (fn _ => fail_conv), 
-	pr_tac = if "pr_tac" mem fields then pr_tac else (fn _ => fail_tac),
+	pr_conv = if "pr_conv" mem fields then pr_conv else Nil, 
+	pr_tac = if "pr_tac" mem fields then pr_tac else Nil,
 	mmp_rule = if "mmp_rule" mem fields then mmp_rule else Nil,
 	rw_net = rw_net,
 	rw_canon = rw_canon,
@@ -1466,24 +1490,9 @@ in
 fun Ûmerge_pc_fieldsÝ (lst : {context:string,fields:string list}list) 
 	(key :string) : unit = (
 let	val pcs = map get_stuff lst;
-	val lastpc = case (lst drop (fn {fields=fs,...} =>
-		not("pr_conv" mem fs))) of
-		[] => key
-		| lst1 => (#context (hd(rev lst1)));
-	val lastpt = case (lst drop (fn {fields=fs,...} =>
-		not("pr_tac" mem fs))) of
-		[] => key
-		| lst1 => (#context (hd(rev lst1)));
-	val lastmr = case (lst drop (fn {fields=fs,...} =>
-		not("mmp_rule" mem fs))) of
-		[] => key
-		| lst1 => (#context (hd(rev lst1)));
-	val opc = #pr_conv (get_pc "merge_pc_fields" lastpc);
-	val opt = #pr_tac (get_pc "merge_pc_fields" lastpt);
-	val omr = #mmp_rule (get_pc "merge_pc_fields" lastmr);
 in
 	change_pc "merge_pc_fields" key 
-	(fn pc => fold (local_merge_pc "merge_pc_fields" true opc opt omr) pcs pc)
+	(fn pc => fold (local_merge_pc "merge_pc_fields" true) pcs pc)
 end);
 end;
 =TEX
@@ -1543,31 +1552,21 @@ end);
 =SML
 fun Ûpush_merge_pcsÝ ([]: string list): unit = fail "push_merge_pcs" 51020 []
 | push_merge_pcs keys = (
-let	val pc = empty_pc false keys;
-	val pcs = map (get_pc "push_merge_pcs") keys;
-	val last_pc = hd(rev pcs);
-	val opc = #pr_conv last_pc;
-	val opt = #pr_tac last_pc;
-	val omr = #mmp_rule last_pc;
-	val fullpc = fold (local_merge_pc "push_merge_pcs" false opc opt omr) 
-		pcs pc;
+let	val pcs = map (get_pc "push_merge_pcs") keys;
+	val fullpc = fold (local_merge_pc "push_merge_pcs" false)
+		pcs (empty_pc false []);
 	val epc = evaluate_proof_context fullpc;
-in
-	(push_pc_stack (lget_current_pc());
+in	(push_pc_stack (lget_current_pc());
 	set_current_pc epc)
 end);
 =TEX
 =SML
 fun Ûpush_extend_pcsÝ ([]: string list): unit = fail "push_extend_pcs" 51020 []
 | push_extend_pcs keys = (
-let	val pc = change_names keys (lget_current_pc());
-	val pcs = map (get_pc "push_extend_pcs") keys;
-	val last_pc = hd(rev pcs);
-	val opc = #pr_conv last_pc;
-	val opt = #pr_tac last_pc;
-	val omr = #mmp_rule last_pc;
-	val fullpc = fold (local_merge_pc "push_extend_pcs" false opc opt omr) 
-		pcs pc;
+let	val cur_pc = lget_current_pc();
+	val pcs = cur_pc :: map (get_pc "push_extend_pcs") keys;
+	val fullpc = fold (local_merge_pc "push_extend_pcs" false)
+		pcs (empty_pc false []);
 	val epc = evaluate_proof_context fullpc;
 in
 	(push_pc_stack (lget_current_pc());
@@ -1583,14 +1582,9 @@ fun Ûpush_extend_pcÝ (key : string) : unit = (
 =SML
 fun Ûset_merge_pcsÝ ([]: string list): unit = fail "set_merge_pcs" 51020 []
 | set_merge_pcs keys = (
-let	val pc = empty_pc false keys;
-	val pcs = map (get_pc "set_merge_pcs") keys;
-	val last_pc = hd(rev pcs);
-	val opc = #pr_conv last_pc;
-	val opt = #pr_tac last_pc;
-	val omr = #mmp_rule last_pc;
-	val fullpc = fold (local_merge_pc "set_merge_pcs" false opc opt omr) 
-		pcs pc;
+let	val pcs = map (get_pc "set_merge_pcs") keys;
+	val fullpc = fold (local_merge_pc "set_merge_pcs" false) 
+		pcs (empty_pc false []);
 	val epc = evaluate_proof_context fullpc;
 in
 	set_current_pc epc
@@ -1599,14 +1593,10 @@ end);
 =SML
 fun Ûset_extend_pcsÝ ([]: string list): unit = fail "set_merge_pcs" 51020 []
 | set_extend_pcs keys = (
-let	val pc = change_names keys (lget_current_pc());
-	val pcs = map (get_pc "set_extend_pcs") keys;
-	val last_pc = hd(rev pcs);
-	val opc = #pr_conv last_pc;
-	val opt = #pr_tac last_pc;
-	val omr = #mmp_rule last_pc;
-	val fullpc = fold (local_merge_pc "set_extend_pcs" false opc opt omr) 
-		pcs pc;
+let	val cur_pc = lget_current_pc();
+	val pcs = cur_pc :: map (get_pc "set_extend_pcs") keys;
+	val fullpc = fold (local_merge_pc "set_extend_pcs" false)
+		pcs (empty_pc false []);
 	val epc = evaluate_proof_context fullpc;
 in
 	set_current_pc epc
@@ -1622,14 +1612,9 @@ fun Ûset_extend_pcÝ (key : string) : unit = (
 fun Ûpending_push_merge_pcsÝ ([]: string list): unit -> unit = 
 	fail "pending_push_merge_pcs" 51020 []
 | pending_push_merge_pcs keys = (
-let	val pc = empty_pc false keys;
-	val pcs = map (get_pc "pending_push_merge_pcs") keys;
-	val last_pc = hd(rev pcs);
-	val opc = #pr_conv last_pc;
-	val opt = #pr_tac last_pc;
-	val omr = #mmp_rule last_pc;
-	val fullpc = fold (local_merge_pc "pending_push_merge_pcs" false opc opt omr) 
-		pcs pc;
+let	val pcs = map (get_pc "pending_push_merge_pcs") keys;
+	val fullpc = fold (local_merge_pc "pending_push_merge_pcs" false)
+		pcs (empty_pc false []);
 	val epc = evaluate_proof_context fullpc;
 in
 	(fn () =>
@@ -1646,14 +1631,10 @@ end);
 fun Ûpending_push_extend_pcsÝ ([]: string list): unit -> unit = 
 	fail "pending_push_extend_pcs" 51020 []
 | pending_push_extend_pcs keys = (
-let	val pc = change_names keys (lget_current_pc());
-	val pcs = map (get_pc "pending_push_extend_pcs") keys;
-	val last_pc = hd(rev pcs);
-	val opc = #pr_conv last_pc;
-	val opt = #pr_tac last_pc;
-	val omr = #mmp_rule last_pc;
-	val fullpc = fold (local_merge_pc "pending_push_extend_pcs" false opc opt omr) 
-		pcs pc;
+let	val cur_pc = lget_current_pc();
+	val pcs = cur_pc :: map (get_pc "pending_push_extend_pcs") keys;
+	val fullpc = fold (local_merge_pc "pending_push_extend_pcs" false)
+		pcs (empty_pc false []);
 	val epc = evaluate_proof_context fullpc;
 in
 	(fn () =>
@@ -2009,22 +1990,25 @@ val Ûextend_pcs_rule1Ý : string list -> ('a -> 'b -> THM) -> ('a -> 'b -> THM) =
 	gen_pcs_rule1 "extend_pcs_rule1" "push_extend_pcs" push_extend_pcs keys r;
 =TEX
 =SML
+fun nil_to_default (Value x) _ = x
+|   nil_to_default Nil y = y;
+
 fun Ûasm_prove_tacÝ (thms: THM list) :  TACTIC = (
-	current_ad_pr_tac () thms
+	nil_to_default (current_ad_pr_tac ()) (fn _ => fail_tac) thms
 	handle complaint => 
 	pass_on complaint "current_ad_pr_tac" "asm_prove_tac"
 );
 =TEX
 =SML
 fun Ûprove_convÝ (thms: THM list) :  CONV = (
-	current_ad_pr_conv () thms
+	nil_to_default (current_ad_pr_conv ()) (fn _ => fail_conv) thms
 	handle complaint => 
 	pass_on complaint "current_ad_pr_conv" "prove_conv"
 );
 =TEX
 =SML
 fun Ûprove_ruleÝ (thms: THM list) : TERM -> THM = (
-let	val res1 = current_ad_pr_conv () thms
+let	val res1 = nil_to_default (current_ad_pr_conv ()) (fn _ => fail_conv) thms
 		handle complaint => 
 		pass_on complaint "current_ad_pr_conv" "prove_rule";
 in

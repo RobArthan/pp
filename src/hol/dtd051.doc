@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Proof Contexts}  %% Mandatory field
 \def\TPPheadtitle{Proof Contexts}
 \TPPref{DS/FMU/IED/DTD051}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.40 $
+\def\SCCSversion{$Revision: 1.42 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $ %
+\TPPdate{\FormatDate{$Date: 2011/02/19 16:22:03 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -130,6 +130,9 @@ Correction for SML'97.
 \item[Issue 1.39] PPHol-specific updates for open source release
 \item[Issue 1.40] The prefix for private interfaces is now $pp'$ rather than $icl'$.
 \item[Issue 1.41] Added matching modus ponens field and facilities for extending the current proof context.
+\item[Issue 1.42] $pr\_conv$ and $pr\_tac$ are now optional
+fields and these and $mmp\_rule$ are now handled uniformly when proof contexts
+are merged, by taking the merge of a list of optional values to be the last non-nil value.
 \end{description}
 \subsection{Changes Forecast}
 The designer of this document needs to know which functions it may
@@ -382,6 +385,7 @@ set_pr_conv		get_pr_conv
 set_nd_entry		get_nd_entry
 set_mmp_rule		get_mmp_rule
 =TEX
+
 In naming the interface functions we use the convention:
 =GFT
 <set|get|add>_<proof tool>_<modifier>
@@ -412,6 +416,7 @@ current_ad_pr_tac
 current_ad_pr_conv
 current_ad_mmp_rule
 =TEX
+
 In naming the applications data interface functions we use the convention:
 =GFT
 <pp'set_eval|current>_ad_<proof tool>_<modifier>
@@ -516,10 +521,8 @@ discarding duplicates.
 For each field that has subfields the lists of subfields from each proof context are appended, discarding
 subfields with duplicate keys,
 and if a field is not divided into subfields, then the proof contexts fields are appended, discarding duplicates.
-The head of the list of proof contexts to merge into $tokey$
-will be merged in last.
-The $pr\_conv$ and $pr\_tac$ fields will take the value of the
-last of the list of proof contexts, rather than being a merge.
+The $pr\_conv$, $pr\_tac$ and $mmp\_rule$ fields take the value of the
+last proof context in the list that has the field set.
 
 Failure to extract any proof context for merging will result in the
 proof context $tokey$ being unchanged.
@@ -541,13 +544,9 @@ discarding duplicates.
 Merging for each field that has subfields the lists of subfields is appending the proof contexts fields, discarding
 subfields with duplicate keys,
 and if a field is not divided into subfields, then the proof contexts fields are appended, discarding duplicates.
-The head of the list of proof contexts to merge into $tokey$
-will be merged in last.
-The head of the list of proof contexts to merge into $tokey$
-will be merged in last.
 Each of the $pr\_conv$, $pr\_tac$  and $mmp_rule$ fields
-will take the value from the last proof context whose
-list of field names includes that field.
+take the value from the last proof context whose
+list of field names includes that field and which has the field set.
 
 Failure to extract any proof context for merging will result in the
 proof context $tokey$ being unchanged.
@@ -939,13 +938,16 @@ $set\_¶\_vs\_thms$ for user data.
 =DOC
 val Ûset_pr_tacÝ : (THM list -> TACTIC) -> string -> unit;
 val Ûget_pr_tacÝ : string -> (THM list -> TACTIC);
+val Ûget_pr_tac1Ý : string -> (THM list -> TACTIC) OPT;
 =DESCRIBE
 These functions provide the interface to the
 proof contexts for
 $prove\_tac$.
 Note that setting overwrites all previous data in this field,
-including from merged in proof contexts,
-and merged proof contexts will take their value for this field from the last proof context merged in.
+including from merged in proof contexts. If the field has not been set,
+$get\_pr\_tac$ returns a function mapping any list of
+theorems to $fail\_tac$ and $get\_pr\_tac1$ returns $Nil$.
+Merged proof contexts take their value for this field from the last proof context in the list that has this field set.
 
 When $asm\_prove\_tac$ is applied to its theorem list argument
 the system will evaluate this by applying the value set by
@@ -965,7 +967,7 @@ argument.
 51016	Proof context ?0 has been committed
 =ENDDOC
 =DOC
-val Ûcurrent_ad_pr_tacÝ : unit -> THM list -> TACTIC;
+val Ûcurrent_ad_pr_tacÝ : unit -> (THM list -> TACTIC) OPT;
 =DESCRIBE
 This function returns the application data of the current proof context
 for
@@ -979,13 +981,17 @@ $set\_pr\_tac$ for user data.
 =DOC
 val Ûset_pr_convÝ : (THM list -> CONV) -> string -> unit;
 val Ûget_pr_convÝ : string -> (THM list -> CONV);
+val Ûget_pr_conv1Ý : string -> (THM list -> CONV) OPT;
 =DESCRIBE
 These functions provide the interface to the
 proof contexts for
 $prove\_conv$.
 Note that setting overwrites all previous data in this field,
-including from merged in proof contexts,
-and merged proof contexts will take their value for this field from the last proof context merged in.
+including from merged in proof contexts.
+If the field has not been set, $get\_pr\_conv$ returns
+a function mapping any list of theorems to $fail\_conv$
+and $get\_pr_conv1$ returns $Nil$.
+Merged proof contexts take their value for this field from the last proof context in the list that has the field set.
 
 Note that when using these functions that the standard rewriting functions (obvious candidates for inclusion in
 automatic proof) access the current
@@ -998,9 +1004,9 @@ argument.
 51016	Proof context ?0 has been committed
 =ENDDOC
 =DOC
-val Ûcurrent_ad_pr_convÝ : unit -> THM list -> CONV;
+val Ûcurrent_ad_pr_convÝ : unit -> (THM list -> CONV) OPT;
 =DESCRIBE
-This function returns the application data of the current proof context
+These functions returns the application data of the current proof context
 to the
 proof contexts for
 $prove\_conv$.
@@ -1011,15 +1017,16 @@ $set\_pr\_conv$ for user data.
 	point now either not in scope, deleted or modified
 =ENDDOC
 =DOC
-val Ûset_mmp_ruleÝ : (THM -> THM -> THM) OPT -> string -> unit;
+val Ûset_mmp_ruleÝ : (THM -> THM -> THM) -> string -> unit;
 val Ûget_mmp_ruleÝ : string -> (THM -> THM -> THM) OPT;
 =DESCRIBE
 These functions provide the interface to the
 proof contexts for the matching modus ponens rule as used by tools such
 as $forward\_chain\_rule$.
 Note that setting overwrites all previous data in this field,
-including from merged in proof contexts,
-and merged proof contexts will take their value for this field from the last proof context merged in.
+including from merged in proof contexts.
+Merged proof contexts take their value for this field from the last proof context in the list that has the field set.
+
 
 =FAILURE
 51010	There is no proof context with key ?0
@@ -1140,10 +1147,8 @@ contexts with the given keys.
 Merged proof contexts upon the stack will have $current\-\_ad\-\_names$ giving the list of names of the constituent proof contexts, singleton contexts will have singleton lists.
 The proof contexts used need not have been committed.
 
-The head of the list of proof contexts to merge into $tokey$
-will be merged in last.
-Note that the $pr\_conv$ and $pr\_tac$ fields will take the value of the
-last of the list of proof contexts, rather than being a merge.
+The $pr\_conv$, $pr\_tac$ and $mmp\_rule$ fields take the value of the
+last proof context in the list that has the field set.
 
 The current proof context is accessed by the functions prefixed $current\_ad\_$, and by $get\-\_current\-\_pc$.
 =SEEALSO
@@ -1168,7 +1173,7 @@ without changing the stack.
 Merged proof contexts upon the stack will have $current\-\_ad\-\_names$ giving the list of names of the constituent proof contexts.
 The proof context used need not have been committed.
 
-The $pr\_conv$, $pr\_tac$ and $mpp\_rule$ fields will take the value from the named proof context.
+The $pr\_conv$, $pr\_tac$ and $mpp\_rule$ fields take the value from the named proof context.
 
 The current proof context is accessed by the functions prefixed $current\_ad\_$, and by $get\-\_current\-\_pc$.
 =SEEALSO
@@ -1193,10 +1198,8 @@ without changing the stack.
 Merged proof contexts upon the stack will have $current\-\_ad\-\_names$ giving the list of names of the constituent proof contexts, singleton contexts will have singleton lists.
 The proof contexts used need not have been committed.
 
-The head of the list of proof contexts to merge into $tokey$
-will be merged in last.
-Note that the $pr\_conv$, $pr\_tac$ and $mpp\_rule$ fields will take the value of the
-last of the list of proof contexts.
+The $pr\_conv$, $pr\_tac$ and $mmp\_rule$ fields take the value of the
+last proof context in the list that has the field set.
 
 The current proof context is accessed by the functions prefixed $current\_ad\_$, and by $get\-\_current\-\_pc$.
 =SEEALSO
@@ -1223,10 +1226,8 @@ like $pending\_push\_merge\_pcs$.
 
 Merged proof contexts upon the stack will have $current\-\_ad\-\_names$ giving the list of names of the constituent proof contexts, singleton contexts will have singleton lists.
 The proof contexts used need not have been committed.
-The head of the list of proof contexts to merge into $tokey$
-will be merged in last.
-Note that the $pr\_conv$ and $pr\_tac$ fields will take the value of the
-last of the list of proof contexts, rather than being a merge.
+The $pr\_conv$, $pr\_tac$ and $mmp\_rule$ fields take the value of the
+last proof context in the list that has the field set.
 
 The proof context must be in scope both at the time of the snapshot,
 and at the time of pushing on the stack.
