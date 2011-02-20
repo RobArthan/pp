@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp007.doc   %Z% $Date: 2011/02/11 17:09:37 $ $Revision: 1.53 $ $RCSfile: imp007.doc,v $
+% imp007.doc   %Z% $Date: 2011/02/20 13:47:23 $ $Revision: 1.54 $ $RCSfile: imp007.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Derived Rules of Inference}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the Derived Rules of Inference}
 \TPPref{DS/FMU/IED/IMP007}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.53 $
+\def\SCCSversion{$Revision: 1.54 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2011/02/11 17:09:37 $ %
+\TPPdate{\FormatDate{$Date: 2011/02/20 13:47:23 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -184,6 +184,8 @@ Correct $subst\_conv$.
 simple_ho_eq_match_conv
 =TEX
 .
+\item[Issue 1.55] Fixed error-handling for {simple\_ho\_eq\_match\_conv} and
+added {simple\_ho\_eq\_match\_conv1}.
 \end{description}
 \subsection{Changes Forecast}
 The conversions 
@@ -3264,12 +3266,13 @@ fun Ûsimple_Â_È_convÝ (t : TERM) : CONV = (
 =SML
 fun Ûsimple_ho_eq_match_convÝ (thm : THM) : CONV = (
 	let	val thm1 = all_simple_µ_elim thm;
-		val pat = fst(dest_eq(concl thm1))					handle ex as Fail _ =>
-			reraise ex "simple_ho_eq_match_conv";
+		val pat = fst(dest_eq(concl thm1))
+			handle Fail _ =>
+			thm_fail "simple_ho_eq_match_conv" 7095 [thm];
 	in	fn tm =>
 		let	val (ty_m, tm_m) = ho_match tm pat;
 			val thm2 = asm_inst_type_rule ty_m thm1;
-			val thm3 = inst_term_rule tm_m thm2;
+			val thm3 = asm_inst_term_rule tm_m thm2;
 			val ipat = fst(dest_eq(concl thm3));
 			val thm4 = simple_Â_È_conv ipat tm;
 			val thm5 = eq_trans_rule thm4 thm3;
@@ -3277,9 +3280,41 @@ fun Ûsimple_ho_eq_match_convÝ (thm : THM) : CONV = (
 		in	thm6
 		end
 		handle Fail _ =>
-			fail "simple_ho_eq_match_conv" 7044
-			[fn _ => string_of_thm thm,
-			 fn _ => string_of_term tm]
+			fail "simple_ho_eq_match_conv" 7076
+			[fn _ => string_of_term tm,
+			 fn _ => string_of_thm thm]
+
+	end
+);
+=TEX
+=SML
+fun Ûsimple_ho_eq_match_conv1Ý (thm : THM) : CONV = (
+	let	val (qvs, body) = strip_µ (concl thm);
+		val pat = fst(dest_eq body)
+			handle Fail _ =>
+			thm_fail "simple_ho_eq_match_conv1" 7095 [thm];
+	in	fn tm =>
+		let	val (ty_m, tm_m) = ho_match tm pat;
+			val thm2 = case ty_m of
+				[] => thm
+				| _ => inst_type_rule ty_m thm;
+			fun aux1 (qv :: rest) : TERM list = (
+				let	val qv' = inst [] ty_m qv;
+				in
+					(rassoc1 tm_m qv') :: aux1 rest 
+				end
+			) | aux1 [] = [];
+			val thm3 = list_simple_µ_elim (aux1 qvs) thm2;
+			val ipat = fst(dest_eq(concl thm3));
+			val thm4 = simple_Â_È_conv ipat tm;
+			val thm5 = eq_trans_rule thm4 thm3;
+			val thm6 = conv_rule(RIGHT_C(TRY_C(simple_Â_È_norm_conv))) thm5;
+		in	thm6
+		end
+		handle Fail _ =>
+			fail "simple_ho_eq_match_conv1" 7076
+			[fn _ => string_of_term tm,
+			 fn _ => string_of_thm thm]
 
 	end
 );
