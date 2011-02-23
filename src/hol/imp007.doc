@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp007.doc   %Z% $Date: 2011/02/23 18:00:46 $ $Revision: 1.56 $ $RCSfile: imp007.doc,v $
+% imp007.doc   %Z% $Date: 2011/02/23 18:52:00 $ $Revision: 1.57 $ $RCSfile: imp007.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Derived Rules of Inference}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the Derived Rules of Inference}
 \TPPref{DS/FMU/IED/IMP007}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.56 $
+\def\SCCSversion{$Revision: 1.57 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2011/02/23 18:00:46 $ %
+\TPPdate{\FormatDate{$Date: 2011/02/23 18:52:00 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -186,7 +186,7 @@ simple_ho_eq_match_conv
 .
 \item[Issue 1.55] Fixed error-handling for {simple\_ho\_eq\_match\_conv} and
 added {simple\_ho\_eq\_match\_conv1}.
-\item[Issue 1.56, 1.57] Implemented John Harrison's heuristic for renaming bound variables in the higher-order matching conversions.
+\item[Issues 1.56--1.58] Implemented a version of John Harrison's heuristic for renaming bound variables in the higher-order matching conversions.
 \end{description}
 \subsection{Changes Forecast}
 The conversions 
@@ -3406,17 +3406,20 @@ fun Ûsimple_Â_È_convÝ (t : TERM) : CONV = (
 The following function is a heuristic (due to John Harrison) that makes higher-order rewriting give more understandable results.
 It builds an association lists matching bound variables in a pattern term to bound variables in an instance term and returns a conversion that uses this association list
 to rename bound variables (e.g., in an equation having the pattern as its left-hand side, as in rewriting).
-=IGN
-val gpat = ¬µp· ³(µx· p x) ¤ ¶x·³p x®;
-val thm = prove_rule [] gpat;
-simple_ho_eq_match_conv1 thm itm;
+
+Even though patterns tend to be small, it is little extra work to avoid unnecessary copying by the usual
+approach of failing on subterms that are not changed by the renaming.
+The case when the same bound variable appears several times in a pattern is likely to be quite common so
+the code caters for that case by not adding entries to the association list for bound variables in the
+pattern that have been encountered before. 
+
 =SML
 
 fun Ûmatch_bound_vars_convÝ (itm : TERM) (pat : TERM) : CONV = (
 	let	fun aux1 alist i p = (
 			case (dest_simple_term i, dest_simple_term p) of
 				(SimpleÌ(iv, ib), SimpleÌ(pv, pb)) => (
-				if	iv = pv
+				if	any alist (fn (_, v) => v = pv)
 				then	aux1 alist ib pb
 				else	aux1 ((iv, pv)::alist) ib pb
 			) |	(App(ig, iy), App(pg, py)) => (
@@ -3427,12 +3430,9 @@ fun Ûmatch_bound_vars_convÝ (itm : TERM) (pat : TERM) : CONV = (
 		fun aux2 bvm p = (
 			case dest_simple_term p of
 				SimpleÌ(pv, pb) => (
-					let	val iv = rassoc1 alist pv;
-						val bvm' = 
-						if	iv = pv
-						then	bvm
-						else	(iv, pv)::bvm;
-					in	mk_simple_Ì(iv, aux2 bvm' pb)
+					let	val iv_pv as (iv, _) = find alist (fn (_, v) => v = pv)
+						handle Fail _ => (pv, pv);
+					in	mk_simple_Ì(iv, aux2 (iv_pv::bvm) pb)
 					end
 			) |	App(pf, px) => (
 				let	val (pf', c1) = (aux2 bvm pf, true)
@@ -3443,8 +3443,13 @@ fun Ûmatch_bound_vars_convÝ (itm : TERM) (pat : TERM) : CONV = (
 					then	mk_app(pf', px')
 					else	fail "" 0 []
 				end
-			) |	Var _ => rassoc3 bvm p
-			|	Const _ => fail "" 0 []
+			) |	Var _ => (
+				let	val v = rassoc1 bvm p;
+				in	if	v = p
+					then	fail "" 0 []
+					else	v
+				end
+			) |	Const _ => fail "" 0 []
 		);
 	in	fn tm =>
 		Á_conv (aux2 [] tm) tm
