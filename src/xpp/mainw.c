@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: mainw.c,v 2.121 2011/02/12 10:17:57 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -107,6 +107,7 @@ XtAppContext app; /* global because needed in msg.c */
  * frame        root        main window
  * mainpanes    frame       paned window for scriptpanes and journal window
  * scriptpanes	mainpanes   paned window for infobar and script
+ * journalform	mainpanes   form to manage the journal widget
  * infobar      scriptpanes manager form for next four
  * infolabel    infobar     label indicating if file has been modified, etc.
  * linenumber	infobar     current line number indicator
@@ -116,7 +117,7 @@ XtAppContext app; /* global because needed in msg.c */
  * namestring   filename    displays name of file being edited
  * lnpopup	linenumber  popup menu to enable/disable line number indicator
  * script       scriptpanes the script being edited
- * journal      mainpanes   displays application output
+ * journal      journalform   displays application output
  * menubar      frame       the menu bar at the top of the main window
  * filemenu     menubar     the file menu
  * toolsmenu    menubar     the tools menu
@@ -138,7 +139,7 @@ Widget  script,
 static Widget
 	frame, infobar, filelabel, filename, infolabel,
 	namestring, logo, linenumber, lnpopup,
-	mainpanes, scriptpanes,
+	mainpanes, scriptpanes, journalform,
 	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, winmenu,
 	cmdmenu, helpmenu;
 
@@ -185,7 +186,8 @@ static void script_open_action(ACTION_PROC_ARGS);
 static void script_redo_action(ACTION_PROC_ARGS);
 static void script_save_action(ACTION_PROC_ARGS);
 static void script_undo_action(ACTION_PROC_ARGS);
-static void show_hide_action(ACTION_PROC_ARGS);
+static void show_hide_script_action(ACTION_PROC_ARGS);
+static void show_hide_journal_action(ACTION_PROC_ARGS);
 static void search_action(ACTION_PROC_ARGS);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -297,9 +299,25 @@ static MenuItem tools_menu_items[] = {
     {NULL}
 };
 
+/*
+ * Data for the show_hide operation. The semantics is: if both widgets
+ * displayed toggle display of widget1, else display both.
+ */
+typedef struct {
+	Widget	*widget1, *widget2;
+} show_hide_info;
+
+static show_hide_info 
+	show_hide_script_data = {&scriptpanes, &journalform};
+
+static show_hide_info 
+	show_hide_journal_data = {&journalform, &scriptpanes};
+
 static MenuItem window_menu_items[] = {
     { "Show/hide Script", &xmPushButtonGadgetClass, 't', NULL, NULL,
-        show_hide_cb, (XtPointer)&scriptpanes, (MenuItem *)NULL, False },
+        show_hide_cb, (XtPointer)&show_hide_script_data, (MenuItem *)NULL, False },
+    { "Show/hide Journal", &xmPushButtonGadgetClass, 'l', NULL, NULL,
+        show_hide_cb, (XtPointer)&show_hide_journal_data, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -389,7 +407,9 @@ static XtActionsRec actions[] = {
 	{ "script-redo", script_redo_action },
 	{ "script-save", script_save_action },
 	{ "script-undo", script_undo_action },
-	{ "show-hide", show_hide_action },
+	{ "show-hide", show_hide_script_action }, /* historical */
+	{ "show-hide-script", show_hide_script_action },
+	{ "show-hide-journal", show_hide_journal_action },
 	{ "search", search_action }
 };
 
@@ -818,12 +838,26 @@ static Boolean setup_main_window(
 		Widget *children;
 		Cardinal num_children;
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * The journal widget is managed by a form to support the show-hide-journal
+ * functionality (so that when it is hidden, the scriptpanes widget will take
+ * over its part of the display).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	journalform = XtVaCreateWidget("journalform",
+		xmFormWidgetClass,
+		mainpanes, NULL);
+
 		i = 0;
 		XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
 		XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
 		XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
+		XtSetArg(args[i], XmNtopAttachment, 		XmATTACH_FORM); ++i;
+		XtSetArg(args[i], XmNbottomAttachment, 		XmATTACH_FORM); ++i;
+		XtSetArg(args[i], XmNleftAttachment, 		XmATTACH_FORM); ++i;
+		XtSetArg(args[i], XmNrightAttachment, 		XmATTACH_FORM); ++i;
 
-		journal = XmCreateScrolledText(mainpanes, "journal", args, i);
+		journal = XmCreateScrolledText(journalform, "journal", args, i);
 		attach_ro_edit_popup(journal);
 		register_selection_source(journal);
 		register_palette_client(journal);
@@ -995,6 +1029,7 @@ static Boolean setup_main_window(
 	XtManageChild(menubar);
 	XtManageChild(script);
 	if( !global_options.edit_only ) {
+		XtManageChild(journalform);
 		XtManageChild(journal);
 	}
 	XtManageChild(mainpanes);
@@ -1506,16 +1541,18 @@ static void popup_command_line_tool_cb(
 
 /*
  * show_hide: support function for the window menu
+ * If both widgets managed, unmanage widget1, else manage both.
  */
-static void show_hide(Widget w)
+static void show_hide(show_hide_info *inf)
 {
 	if(global_options.edit_only) {
 		return;
 	}
-	if(XtIsManaged(w)) {
-		XtUnmanageChild(w);
+	if(XtIsManaged(*inf->widget1) && XtIsManaged(*inf->widget2)) {
+		XtUnmanageChild(*inf->widget1);
 	} else {
-		XtManageChild(w);
+		XtManageChild(*inf->widget1);
+		XtManageChild(*inf->widget2);
 	}
 }
 
@@ -1527,7 +1564,7 @@ static void show_hide_cb(
 		XtPointer	cbd,
 		XtPointer	unused_cbs)
 {
-	show_hide(*(Widget*) cbd);
+	show_hide((show_hide_info *) cbd);
 }
 
 /*
@@ -2085,16 +2122,26 @@ static void search_action(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * show-hide action function:
+ * show-hide action functions:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void show_hide_action(
+static void show_hide_script_action(
     Widget 		unused_widget,
     XEvent*		unused_event,
     String*		unused_params,
     Cardinal*		unused_num_params)
 {
-	show_hide(scriptpanes);
+	show_hide(&show_hide_script_data);
+}
+
+
+static void show_hide_journal_action(
+    Widget 		unused_widget,
+    XEvent*		unused_event,
+    String*		unused_params,
+    Cardinal*		unused_num_params)
+{
+	show_hide(&show_hide_journal_data);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
