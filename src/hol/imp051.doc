@@ -18,7 +18,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \def\SCCSversion{$Revision: 1.37 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2011/02/19 16:22:03 $ %
+\TPPdate{\FormatDate{$Date: 2011/02/19 17:03:10 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -110,6 +110,8 @@ $force\_delete\_theory$ (and trial runs for it).
 \item[Issue 1.37] $pr\_conv$ and $pr\_tac$ are now optional
 fields and these and $mmp\_rule$ are now handled uniformly when proof contexts
 are merged, by taking the merge of a list of optional values to be the last non-nil value. Rationalised merging and extending operations to exploit this.
+\item[Issue 1.38] Fixed handling of the names field when merging into a proof
+context stored in the database.
 \end{description}
 \subsection{Changes Forecast}
 As detailed design.
@@ -290,37 +292,6 @@ And finally the committal data
 	a_valid_thm = refl_conv (mk_var("a",BOOL)),
 	committed = committed
 	};
-=TEX
-=SML
-fun €change_names› (new_names : string list)
-	({
-	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
-	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
-	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
-	∂_vs_thms = ∂_vs_thms, 
-	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
-	rw_net = rw_net,
-	rw_canon = rw_canon, st_conv = st_conv,
-	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
-	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
-	names = names, theoryname = theoryname,
-	a_valid_thm = a_valid_thm, committed = committed} : PROOF_CONTEXT)
-	: PROOF_CONTEXT = (
-	{
-	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
-	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
-	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
-	∂_vs_thms = ∂_vs_thms, 
-	nd_entries=nd_entries,nd_nets=nd_nets,
-	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
-	rw_net = rw_net,
-	rw_canon = rw_canon, st_conv = st_conv,
-	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
-	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
-	names = new_names, theoryname = theoryname,
-	a_valid_thm = a_valid_thm, committed = committed}
-);
 =TEX
 Now the initial proof context (local only):
 =SML
@@ -1346,7 +1317,11 @@ change_pc "commit_pc" key
 o evaluate_proof_context)
 );
 =TEX
-N.B. the second of the pair is ``the master'', to which the first is added in.
+We now give a function for merging two proof contexts. The behaviour is slightly different
+when we are creating a dynamic proof context to be put on the stack from when we are
+creating a proof context to be stored in the database.
+Where relevant, e.g., in creating the names field for a proof context stored in the
+database, the second of the pair is ``the master'', to which the first is added in.
 The additional ``override''arguments are the source for $pr\_tac$ and $pr\_conv$.
 =SML
 local
@@ -1361,7 +1336,7 @@ fun merge_opt _ (y as Value _) = y
 |   merge_opt x Nil = x;
 
 in
-fun €local_merge_pc› (caller:string) (test_committed:bool) 
+fun €local_merge_pc› (caller:string) (making_stored_pc:bool) 
 	(({
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
@@ -1389,7 +1364,7 @@ fun €local_merge_pc› (caller:string) (test_committed:bool)
 	names = names1, theoryname = theoryname1,
 	a_valid_thm = a_valid_thm1, committed = committed1}:PROOF_CONTEXT
 )) : PROOF_CONTEXT = (
-	if test_committed andalso not committed
+	if making_stored_pc andalso not committed
 	then fail caller 51017 [fn () => hd names]
 	else
 	{
@@ -1412,7 +1387,7 @@ fun €local_merge_pc› (caller:string) (test_committed:bool)
 	∂_ad_cd_thms = ∂_ad_cd_thms1,
 	∂_ad_vs_thms  = ∂_ad_vs_thms1,
 	nd_nets = nd_nets1,
-	names = names @ names1,
+	names = if making_stored_pc then names1 else (names @ names1),
 	theoryname = theoryname1,
 	a_valid_thm = a_valid_thm1,
 	committed = false}
@@ -1591,7 +1566,7 @@ in
 end);
 =TEX
 =SML
-fun €set_extend_pcs› ([]: string list): unit = fail "set_merge_pcs" 51020 []
+fun €set_extend_pcs› ([]: string list): unit = fail "set_extend_pcs" 51020 []
 | set_extend_pcs keys = (
 let	val cur_pc = lget_current_pc();
 	val pcs = cur_pc :: map (get_pc "set_extend_pcs") keys;
