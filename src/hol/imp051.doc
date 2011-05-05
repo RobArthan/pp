@@ -15,10 +15,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPproject{FST PROJECT}  %% Mandatory field
 \TPPtitle{Implementation of Proof Contexts}
 \TPPref{DS/FMU/IED/IMP051}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.37 $
+\def\SCCSversion{$Revision: 1.38 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2011/02/19 17:03:10 $ %
+\TPPdate{\FormatDate{$Date: 2011/05/05 13:02:58 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -112,6 +112,7 @@ fields and these and $mmp\_rule$ are now handled uniformly when proof contexts
 are merged, by taking the merge of a list of optional values to be the last non-nil value. Rationalised merging and extending operations to exploit this.
 \item[Issue 1.38] Fixed handling of the names field when merging into a proof
 context stored in the database.
+\item[Issue 1.39] Added equation preprocessor field. 
 \end{description}
 \subsection{Changes Forecast}
 As detailed design.
@@ -219,6 +220,7 @@ type €PROOF_CONTEXT› = {
 	rw_eqn_cxt: (EQN_CXT * string)list,
 	rw_canons: ((THM -> THM list) list * string)list,
 				(* CANON list * ... *)
+	rw_epp_fun : (THM -> TERM * CONV) OPT,
 	st_eqn_cxt: (EQN_CXT * string) list,
 	sc_eqn_cxt: (EQN_CXT * string) list,
 	nd_entries: (((TERM * (TERM -> THM))list * string)list * string) list,
@@ -260,6 +262,7 @@ at the creation of the proof context, and if that is not valid (by $valid\_thm$)
 fun €empty_pc› (committed : bool)(names : string list): PROOF_CONTEXT = {
 	rw_eqn_cxt = [],
 	rw_canons = [],
+	rw_epp_fun = Nil,
 	st_eqn_cxt = [],
 	sc_eqn_cxt = [],
 	nd_entries = [],
@@ -477,6 +480,10 @@ fun €current_ad_mmp_rule› (): (THM -> THM -> THM) OPT =
 	if valid_thm (#a_valid_thm (!current_pc)) 
 	then (#mmp_rule (!current_pc))
 	else fail "current_ad_mmp_rule" 51021 [fn () => (#theoryname (!current_pc))];
+fun €current_ad_rw_epp_fun› (): (THM -> TERM * CONV) OPT = 
+	if valid_thm (#a_valid_thm (!current_pc)) 
+	then (#rw_epp_fun (!current_pc))
+	else fail "current_ad_rw_epp_fun" 51021 [fn () => (#theoryname (!current_pc))];
 
 fun €get_current_pc› () : (string list * string) = (
 	if valid_thm (#a_valid_thm (!current_pc))
@@ -625,7 +632,7 @@ Now the method of evaluating a proof context:
 *)
 fun €evaluate_proof_context› (
 	{
-	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons, rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	nd_entries=nd_entries,nd_nets=nd_nets,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
@@ -641,6 +648,7 @@ fun €evaluate_proof_context› (
 	{
 	rw_eqn_cxt = rw_eqn_cxt,
 	rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt,
 	sc_eqn_cxt = sc_eqn_cxt,
 	nd_entries=nd_entries,
@@ -671,13 +679,14 @@ end;
 =TEX
 \section{OTHER FUNCTIONS}
 \subsection{Setting and Getting User Data}
-\subsubsection{Rewriting Equations Context}
+\subsubsection{Rewriting: Equations Context}
 =SML
 fun €set_rw_eqn_cxt› (ec:EQN_CXT) (key:string) : unit =  (
 change_pc "set_rw_eqn_cxt" key 
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -692,6 +701,7 @@ change_pc "set_rw_eqn_cxt" key
  =>
 	{
 	rw_eqn_cxt = roverwrite1 rw_eqn_cxt (ec,key), rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -708,14 +718,15 @@ fun €get_rw_eqn_cxt› (key:string) : (EQN_CXT * string) list = (
 	#rw_eqn_cxt (get_pc "get_rw_eqn_cxt" key)
 );
 =TEX
-In adding the theorems we canonicalise them by what the
-proof context would evaluate as its current canonicalisation.
+In adding the theorems we use the canonicalisation and equation
+preprocessing function from the current proof context.
 =SML
 fun €add_rw_thms› (thms:THM list) (key:string) : unit =  (
 change_pc "add_rw_thms" key 
 ((fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -728,13 +739,17 @@ change_pc "add_rw_thms" key
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
  =>
-	let val cthms = map thm_eqn_cxt(flat (map (current_ad_rw_canon()) thms));
+	let	val tf = case current_ad_rw_epp_fun() of
+				Nil => thm_eqn_cxt
+			|	Value tf => tf;
+		val cthms = map tf(flat (map (current_ad_rw_canon()) thms));
 	in
 	{
 	rw_eqn_cxt = (case rassoc5 rw_eqn_cxt key of
 		Value x => roverwrite1 rw_eqn_cxt ((cthms @ x),key)
 		| Nil =>  ((cthms, key) :: rw_eqn_cxt)), 
 	rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -751,13 +766,14 @@ o
 evaluate_proof_context)
 );
 =TEX
-\subsubsection{Rewriting Canonicalisation}
+\subsubsection{Rewriting: Canonicalisation}
 =SML
 fun €set_rw_canons› (can: (THM -> THM list) list) (key:string) : unit =  (
 change_pc "set_rw_canons" key 
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -772,6 +788,7 @@ change_pc "set_rw_canons" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = roverwrite1 rw_canons (can,key),
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -788,13 +805,15 @@ fun €get_rw_canons› (key:string) : ((THM -> THM list) list * string) list = (
 	#rw_canons (get_pc "get_rw_canons" key)
 );
 =TEX
-\subsubsection{Theorem Stripping Equational Context}
+=TEX
+\subsubsection{Rewriting: Equation Preprocessing Function}
 =SML
-fun €set_st_eqn_cxt› (ec:EQN_CXT) (key:string) : unit =  (
-change_pc "set_st_eqn_cxt" key 
+fun €set_rw_epp_fun› (epp_fun : THM -> TERM * CONV) (key:string) : unit =  (
+change_pc "set_rw_epp_fun" key 
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -809,6 +828,46 @@ change_pc "set_st_eqn_cxt" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = Value epp_fun,
+	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, 
+	nd_entries=nd_entries,nd_nets=nd_nets,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
+	rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed})
+);
+fun €get_rw_epp_fun› (key:string) : (THM -> TERM * CONV) OPT = (
+	#rw_epp_fun (get_pc "get_rw_epp_fun" key)
+);
+=TEX
+\subsubsection{Theorem Stripping Equational Context}
+=SML
+fun €set_st_eqn_cxt› (ec:EQN_CXT) (key:string) : unit =  (
+change_pc "set_st_eqn_cxt" key 
+(fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
+	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, 
+	nd_entries=nd_entries,nd_nets=nd_nets,
+	pr_conv = pr_conv, pr_tac = pr_tac, mmp_rule = mmp_rule,
+	rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sc_conv = sc_conv, cs_∂_conv = cs_∂_conv,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = roverwrite1 st_eqn_cxt (ec,key), sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -833,6 +892,7 @@ change_pc "add_st_thms" key
 ((fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -850,6 +910,7 @@ change_pc "add_st_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, 
 	rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = (case rassoc5 st_eqn_cxt key of
 		Value x => roverwrite1 st_eqn_cxt ((cthms @ x),key)
 		| Nil =>  ((cthms, key) :: st_eqn_cxt)), 
@@ -876,6 +937,7 @@ change_pc "set_sc_eqn_cxt" key
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -890,6 +952,7 @@ change_pc "set_sc_eqn_cxt" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = roverwrite1 sc_eqn_cxt (ec,key),
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -912,6 +975,7 @@ change_pc "add_sc_thms" key
 ((fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -929,6 +993,7 @@ change_pc "add_sc_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, 
 	rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, 
 	sc_eqn_cxt = (case rassoc5 sc_eqn_cxt key of
 		Value x => roverwrite1 sc_eqn_cxt ((cthms @ x),key)
@@ -957,6 +1022,7 @@ change_pc "set_nd_entry" key
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -971,6 +1037,7 @@ change_pc "set_nd_entry" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1009,6 +1076,7 @@ change_pc "set_cs_∂_convs" key
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1023,6 +1091,7 @@ change_pc "set_cs_∂_convs" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = roverwrite1 cs_∂_convs (rls,key), ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1046,6 +1115,7 @@ change_pc "set_∂_cd_thms" key
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1060,6 +1130,7 @@ change_pc "set_∂_cd_thms" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = cd,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1082,6 +1153,7 @@ change_pc "add_∂_cd_thms" key
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1097,6 +1169,7 @@ change_pc "add_∂_cd_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, 
 	rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, 
 	sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, 
@@ -1128,6 +1201,7 @@ change_pc "set_∂_vs_thms" key
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1142,6 +1216,7 @@ change_pc "set_∂_vs_thms" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = union_bits ∂_vs_thms vs, 
@@ -1166,6 +1241,7 @@ change_pc "set_pr_tac" key
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1180,6 +1256,7 @@ change_pc "set_pr_tac" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1208,6 +1285,7 @@ change_pc "set_pr_conv" key
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1222,6 +1300,7 @@ change_pc "set_pr_conv" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1251,6 +1330,7 @@ change_pc "set_mmp_rule" key
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1265,6 +1345,7 @@ change_pc "set_mmp_rule" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1288,6 +1369,7 @@ change_pc "commit_pc" key
 ((fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1302,6 +1384,7 @@ change_pc "commit_pc" key
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1339,6 +1422,7 @@ in
 fun €local_merge_pc› (caller:string) (making_stored_pc:bool) 
 	(({
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1352,6 +1436,7 @@ fun €local_merge_pc› (caller:string) (making_stored_pc:bool)
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT),
 	({
 	rw_eqn_cxt = rw_eqn_cxt1, rw_canons = rw_canons1,
+	rw_epp_fun = rw_epp_fun1,
 	st_eqn_cxt = st_eqn_cxt1, sc_eqn_cxt = sc_eqn_cxt1,
 	cs_∂_convs = cs_∂_convs1, ∂_cd_thms = ∂_cd_thms1,
 	∂_vs_thms = ∂_vs_thms1,
@@ -1370,6 +1455,7 @@ fun €local_merge_pc› (caller:string) (making_stored_pc:bool)
 	{
 	rw_eqn_cxt = list_roverwrite1 rw_eqn_cxt rw_eqn_cxt1,
 	rw_canons = list_roverwrite1 rw_canons rw_canons1,
+	rw_epp_fun = merge_opt rw_epp_fun rw_epp_fun1,
 	st_eqn_cxt = list_roverwrite1 st_eqn_cxt st_eqn_cxt1,
 	sc_eqn_cxt = list_roverwrite1 sc_eqn_cxt sc_eqn_cxt1,
 	cs_∂_convs = list_roverwrite1 cs_∂_convs cs_∂_convs1,
@@ -1413,6 +1499,7 @@ val valid_fields = ["rw_eqn_cxt","rw_canons","st_eqn_cxt",
 =SML
 fun €prune_pc› (caller : string) (fields : string list) ({
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	rw_epp_fun = rw_epp_fun,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, 
@@ -1431,6 +1518,7 @@ fun €prune_pc› (caller : string) (fields : string list) ({
 	{
 	rw_eqn_cxt = if "rw_eqn_cxt" mem fields then rw_eqn_cxt else [],
 	rw_canons = if "rw_canons" mem fields then rw_canons else [],
+	rw_epp_fun = if "rw_epp_fun" mem fields then rw_epp_fun else Nil,
 	st_eqn_cxt = if "st_eqn_cxt" mem fields then st_eqn_cxt else [],
 	sc_eqn_cxt = if "sc_eqn_cxt" mem fields then sc_eqn_cxt else [],
 	cs_∂_convs = if "cs_∂_convs" mem fields then cs_∂_convs else [],

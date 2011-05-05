@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Rewriting Rules of Inference}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the Rewriting Rules of Inference}
 \TPPref{DS/FMU/IED/IMP026}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.36 $
+\def\SCCSversion{$Revision: 1.37 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $ %
+\TPPdate{\FormatDate{$Date: 2008/07/02 14:27:10 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -118,6 +118,8 @@ mostly proof context name changes.
 \item[Issue 1.35] PPHol-specific updates for open source release
 \item[Issue 1.36] The prefix for private interfaces is now $pp'$ rather than $icl'$.
 \item[Issue 1.37] Corrected error message.
+\item[Issue 1.38] The rewriting tools are now parametrised by an equation
+preprocessing function in the proof context.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -273,6 +275,14 @@ fun Ûcthm_eqn_cxtÝ (canon: CANON) (thm:THM) : EQN_CXT = (
 	mapfilter thm_eqn_cxt (canon thm)
 );
 =TEX
+=SML
+fun Ûeqn_cxt_of_thmÝ (canon: CANON) (epp_fun : (THM -> TERM * CONV) OPT)
+	: THM -> EQN_CXT = (
+	let	val f = case epp_fun of Value f => f | Nil => thm_eqn_cxt;
+	in	fn thm =>  mapfilter f (canon thm)
+	end
+);
+=TEX
 \subsection{prim\_rewrite\_conv}
 The core function:
 =SML
@@ -287,17 +297,19 @@ local
 in
 fun Ûprim_rewrite_convÝ (initial_net : CONV NET) :
 	CANON -> 
+	(THM -> TERM * CONV) OPT ->
 	(CONV -> CONV) -> 
 	EQN_CXT -> 
 	THM list -> TERM -> THM = (
 (fn (canon : CANON) =>
+(fn (epp_fun : (THM -> TERM * CONV) OPT) =>
 (fn (traverse : CONV -> CONV) =>
 (fn (with_eqn_cxt : EQN_CXT) =>
 let	val initial_with_eqn_cxt = list_net_enter 
 		with_eqn_cxt initial_net
 in
 (fn (with_thms : THM list) =>
-let	val with_entries = flat (map (cthm_eqn_cxt canon)
+let	val with_entries = flat (map (eqn_cxt_of_thm canon epp_fun)
 		with_thms);
 	val initial_with_thms = list_net_enter 
 		with_entries initial_with_eqn_cxt;
@@ -312,12 +324,14 @@ end)
 end)
 )
 )
+)
 );
 end; (* local fun FIRST_CHANGED_C ... *)
 =TEX
 =SML
 fun Ûprim_rewrite_ruleÝ (initial_net : CONV NET) :
 	CANON -> 
+	(THM -> TERM * CONV) OPT ->
 	(CONV -> CONV) -> 
 	EQN_CXT -> 
 	THM list -> THM -> THM = (
@@ -326,17 +340,21 @@ in
 (fn (canon : CANON) =>
 let	val c2 = c1 canon;
 in
+(fn (epp_fun : (THM -> TERM * CONV) OPT) =>
+let	val c3 = c2 epp_fun;
+in
 (fn (traverse : CONV -> CONV) =>
-let	val c3 = c2 traverse;
+let	val c4 = c3 traverse;
 in
 (fn (with_eqn_cxt : EQN_CXT) =>
-let	val c4 = c3 with_eqn_cxt;
+let	val c5 = c4 with_eqn_cxt;
 in
 (fn (with_thms : THM list) =>
-let	val c5 = c4 with_thms;
+let	val c6 = c5 with_thms;
 in
-(fn (thm : THM) => conv_rule c5 thm
+(fn (thm : THM) => conv_rule c6 thm
 )
+end)
 end)
 end)
 end)
@@ -346,6 +364,7 @@ end);
 =SML
 fun Ûprim_rewrite_tacÝ (initial_net : CONV NET) :
 	CANON -> 
+	(THM -> TERM * CONV) OPT ->
 	(CONV -> CONV) -> 
 	EQN_CXT -> 
 	THM list -> TACTIC = (
@@ -354,17 +373,21 @@ in
 (fn (canon : CANON) =>
 let	val c2 = c1 canon;
 in
+(fn (epp_fun : (THM -> TERM * CONV) OPT) =>
+let	val c3 = c2 epp_fun;
+in
 (fn (traverse : CONV -> CONV) =>
-let	val c3 = c2 traverse;
+let	val c4 = c3 traverse;
 in
 (fn (with_eqn_cxt : EQN_CXT) =>
-let	val c4 = c3 with_eqn_cxt;
+let	val c5 = c4 with_eqn_cxt;
 in
 (fn (with_thms : THM list) =>
-let	val c5 = c4 with_thms;
+let	val c6 = c5 with_thms;
 in
-(fn (gl : GOAL) => conv_tac c5 gl
+(fn (gl : GOAL) => conv_tac c6 gl
 )
+end)
 end)
 end)
 end)
@@ -468,84 +491,109 @@ Now the actual inferences.
 Rules first:
 =SML
 fun Ûrewrite_ruleÝ (thms : THM list) : THM -> THM = (
-let	val r1 = prim_rewrite_rule (current_ad_rw_net ())
+let	val r1 = prim_rewrite_rule
+		(current_ad_rw_net ())
 		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(REWRITE_MAP_C "rewrite_rule") [] thms;
 in
 	(fn (thm : THM) => r1 thm)
 end);
 
 fun Ûpure_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
-let	val rw_canon = current_ad_rw_canon();
-	val r1 = prim_rewrite_rule empty_net rw_canon 
+let	val r1 = prim_rewrite_rule
+		empty_net 
+		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(REWRITE_MAP_C "pure_rewrite_rule") [] thms;
 in
 	(fn (thm : THM) => r1 thm)
 end);
 
 fun Ûonce_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
-let	val r1 = prim_rewrite_rule (current_ad_rw_net ())
+let	val r1 = prim_rewrite_rule
+		(current_ad_rw_net ())
 		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(ONCE_MAP_WARN_C "once_rewrite_rule") [] thms;
 in
 	(fn (thm : THM) => r1 thm)
 end);
 
 fun Ûpure_once_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
-let	val rw_canon = current_ad_rw_canon();
-	val r1 = prim_rewrite_rule empty_net rw_canon 
+let	val r1 = prim_rewrite_rule empty_net 
+		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(ONCE_MAP_WARN_C "pure_once_rewrite_rule") [] thms;
 in
 	(fn (thm : THM) => r1 thm)
 end);
+
 =TEX
 Now with assumptions:
 =SML
+
 fun Ûasm_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
 let	val rw_canon = current_ad_rw_canon ();
-	val rw_net = current_ad_rw_net();
-	val r1 = prim_rewrite_rule rw_net rw_canon 
+	val rw_epp_fun = current_ad_rw_epp_fun ();
+	val r1 = prim_rewrite_rule 
+		(current_ad_rw_net ())
+		rw_canon 
+		rw_epp_fun
 		(REWRITE_MAP_C "asm_rewrite_rule")
-		(flat(map (cthm_eqn_cxt rw_canon) thms));
+		(flat(map (eqn_cxt_of_thm rw_canon rw_epp_fun) thms));
 in
 	(fn (thm : THM) => r1 (map asm_rule (asms thm)) thm)
 end);
 
 fun Ûpure_asm_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
 let	val rw_canon = current_ad_rw_canon ();
-	val r1 = prim_rewrite_rule empty_net rw_canon 
+	val rw_epp_fun = current_ad_rw_epp_fun ();
+	val r1 = prim_rewrite_rule
+		empty_net 
+		rw_canon
+		rw_epp_fun
 		(REWRITE_MAP_C "pure_asm_rewrite_rule")
-		(flat(map (cthm_eqn_cxt rw_canon) thms));
+		(flat(map (eqn_cxt_of_thm rw_canon rw_epp_fun) thms));
 in
 	(fn (thm : THM) => r1 (map asm_rule (asms thm)) thm)
 end);
 
 fun Ûonce_asm_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
 let	val rw_canon = current_ad_rw_canon ();
-	val rw_net = current_ad_rw_net();
-	val r1 = prim_rewrite_rule rw_net rw_canon 
+	val rw_epp_fun = current_ad_rw_epp_fun ();
+	val r1 = prim_rewrite_rule 
+		(current_ad_rw_net ())
+		rw_canon
+		rw_epp_fun 
 		(ONCE_MAP_WARN_C "once_asm_rewrite_rule")
-		(flat(map (cthm_eqn_cxt rw_canon) thms));
+		(flat(map (eqn_cxt_of_thm rw_canon rw_epp_fun) thms));
 in
 	(fn (thm : THM) => r1 (map asm_rule (asms thm)) thm)
 end);
 
 fun Ûpure_once_asm_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
 let	val rw_canon = current_ad_rw_canon ();
-	val r1 = prim_rewrite_rule empty_net rw_canon 
+	val rw_epp_fun = current_ad_rw_epp_fun ();
+	val r1 = prim_rewrite_rule
+		empty_net 
+		rw_canon
+		rw_epp_fun
 		(ONCE_MAP_WARN_C "pure_once_asm_rewrite_rule")
-		(flat(map (cthm_eqn_cxt rw_canon) thms));
+		(flat(map (eqn_cxt_of_thm rw_canon rw_epp_fun) thms));
 in
 	(fn (thm : THM) => r1 (map asm_rule (asms thm)) thm)
 end);
+
 =TEX
 
 Conversions:
 =SML
 fun Ûrewrite_convÝ (thms : THM list) : CONV = (
-let	val rw_canon = current_ad_rw_canon ();
-	val rw_net = current_ad_rw_net();
-	val r1 = prim_rewrite_conv rw_net rw_canon 
+let	val r1 = prim_rewrite_conv
+		(current_ad_rw_net ())
+		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(REWRITE_MAP_C "rewrite_conv")
 		 [] thms;
 in
@@ -553,25 +601,30 @@ in
 end);
 
 fun Ûpure_rewrite_convÝ (thms : THM list) : CONV = (
-let	val rw_canon = current_ad_rw_canon ();
-	val r1 = prim_rewrite_conv empty_net rw_canon 
+let	val r1 = prim_rewrite_conv
+		empty_net 
+		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(REWRITE_MAP_C "pure_rewrite_conv") [] thms;
 in
 	r1
 end);
 
 fun Ûonce_rewrite_convÝ (thms : THM list) : CONV = (
-let	val rw_canon = current_ad_rw_canon ();
-	val rw_net = current_ad_rw_net();
-	val r1 = prim_rewrite_conv rw_net rw_canon 
+let	val r1 = prim_rewrite_conv 
+		(current_ad_rw_net ())
+		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(ONCE_MAP_WARN_C "once_rewrite_conv") [] thms;
 in
 	r1
 end);
 
 fun Ûpure_once_rewrite_convÝ (thms : THM list) : CONV = (
-let	val rw_canon = current_ad_rw_canon ();
-	val r1 = prim_rewrite_conv empty_net rw_canon 
+let	val r1 = prim_rewrite_conv
+		empty_net 
+		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(ONCE_MAP_WARN_C "pure_once_rewrite_conv") [] thms;
 in
 	r1
@@ -580,34 +633,40 @@ end);
 Tactics:
 =SML
 fun Ûrewrite_tacÝ (thms : THM list) : TACTIC = (
-let	val rw_canon = current_ad_rw_canon ();
-	val rw_net = current_ad_rw_net();
-	val r1 = prim_rewrite_tac rw_net rw_canon 
+let	val r1 = prim_rewrite_tac
+		(current_ad_rw_net ())
+		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(REWRITE_MAP_C "rewrite_tac") [] thms;
 in
 	r1
 end);
 
 fun Ûpure_rewrite_tacÝ (thms : THM list) : TACTIC = (
-let	val rw_canon = current_ad_rw_canon ();
-	val r1 = prim_rewrite_tac empty_net rw_canon 
+let	val r1 = prim_rewrite_tac
+		empty_net
+		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(REWRITE_MAP_C "pure_rewrite_tac") [] thms;
 in
 	r1
 end);
 
 fun Ûonce_rewrite_tacÝ (thms : THM list) : TACTIC = (
-let	val rw_canon = current_ad_rw_canon ();
-	val rw_net = current_ad_rw_net();
-	val r1 = prim_rewrite_tac rw_net rw_canon 
+let	val r1 = prim_rewrite_tac 
+		(current_ad_rw_net ())
+		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(ONCE_MAP_WARN_C "once_rewrite_tac") [] thms;
 in
 	r1
 end);
 
 fun Ûpure_once_rewrite_tacÝ (thms : THM list) : TACTIC = (
-let	val rw_canon = current_ad_rw_canon ();
-	val r1 = prim_rewrite_tac empty_net rw_canon 
+let	val r1 = prim_rewrite_tac
+		empty_net
+		(current_ad_rw_canon ()) 
+		(current_ad_rw_epp_fun ()) 
 		(ONCE_MAP_WARN_C "pure_once_rewrite_tac") [] thms;
 in
 	r1
@@ -617,41 +676,56 @@ Now with assumptions:
 =SML
 fun Ûasm_rewrite_tacÝ (thms : THM list) : TACTIC = (
 let	val rw_canon = current_ad_rw_canon ();
-	val rw_net = current_ad_rw_net();
-	val r1 = prim_rewrite_tac rw_net rw_canon 
+	val rw_epp_fun = current_ad_rw_epp_fun ();
+	val r1 = prim_rewrite_tac
+		(current_ad_rw_net ())
+		rw_canon 
+		rw_epp_fun
 		(REWRITE_MAP_C "asm_rewrite_tac")
-		(flat(map (cthm_eqn_cxt rw_canon) thms));
+		(flat(map (eqn_cxt_of_thm rw_canon rw_epp_fun) thms));
 in
 	(fn ((seqasms,conc):GOAL) => r1 (map asm_rule seqasms) (seqasms,conc))
 end);
 
 fun Ûpure_asm_rewrite_tacÝ (thms : THM list) : TACTIC = (
 let	val rw_canon = current_ad_rw_canon ();
-	val r1 = prim_rewrite_tac empty_net rw_canon 
+	val rw_epp_fun = current_ad_rw_epp_fun ();
+	val r1 = prim_rewrite_tac
+		empty_net
+		rw_canon 
+		rw_epp_fun
 		(REWRITE_MAP_C "pure_asm_rewrite_tac")
-		(flat(map (cthm_eqn_cxt rw_canon) thms));
+		(flat(map (eqn_cxt_of_thm rw_canon rw_epp_fun) thms));
 in
 	(fn ((seqasms,conc):GOAL) => r1 (map asm_rule seqasms) (seqasms,conc))
 end);
 
 fun Ûonce_asm_rewrite_tacÝ (thms : THM list) : TACTIC = (
 let	val rw_canon = current_ad_rw_canon ();
-	val rw_net = current_ad_rw_net();
-	val r1 = prim_rewrite_tac rw_net rw_canon 
+	val rw_epp_fun = current_ad_rw_epp_fun ();
+	val r1 = prim_rewrite_tac
+		(current_ad_rw_net ())
+		rw_canon 
+		rw_epp_fun
 		(ONCE_MAP_WARN_C "once_asm_rewrite_tac")
-		(flat(map (cthm_eqn_cxt rw_canon) thms));
+		(flat(map (eqn_cxt_of_thm rw_canon rw_epp_fun) thms));
 in
 	(fn ((seqasms,conc):GOAL) => r1 (map asm_rule seqasms) (seqasms,conc))
 end);
 
 fun Ûpure_once_asm_rewrite_tacÝ (thms : THM list) : TACTIC = (
 let	val rw_canon = current_ad_rw_canon ();
-	val r1 = prim_rewrite_tac empty_net rw_canon 
+	val rw_epp_fun = current_ad_rw_epp_fun ();
+	val r1 = prim_rewrite_tac
+		empty_net 
+		rw_canon 
+		rw_epp_fun 
 		(ONCE_MAP_WARN_C "pure_once_asm_rewrite_tac")
-		(flat(map (cthm_eqn_cxt rw_canon) thms));
+		(flat(map (eqn_cxt_of_thm rw_canon rw_epp_fun) thms));
 in
 	(fn ((seqasms,conc):GOAL) => r1 (map asm_rule seqasms) (seqasms,conc))
 end);
+
 =TEX
 
 =SML
