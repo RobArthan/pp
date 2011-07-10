@@ -144,6 +144,8 @@ Corrected treatment of given set paragraph with a constraint.
 \item[Issue 1.71] Added support for floating point literals
 \item[Issues 1.72, 1.73] Fixed type-checking of let expressions.
 \item[Issue 1.74] Support for empty schemas.
+\item[Issue 1.75] Fixed bug caused by working with characteristic tuples of
+schema texts that had not been type-checked.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1059,26 +1061,7 @@ fun  ÛmanifestÝ (ty:EXTYPE) : MANIFEST_EXTYPE = (
 	)|_ => NotManifest
 );
 =TEX
-=SML
-fun ÛchartupleÝ ((decls, tm, _) : Z_SCH_TEXT) : Z_TM = (
-let	fun f (ZDDec(ids, tm, _)) = (
-		map (fn id => ZTmLVar(id, Nil, [])) ids
-	) | f (ZDSchemaDec (ZTmDecor (tm1, d), _)) = (
-		[ZTmÊ(tm1, d)]
-	) | f (ZDSchemaDec (tm1, _)) = (
-		[ZTmÊ(tm1, "")]
-	);
-in
-	case decls of
-	[] => ZTmBinding []
-	|[decl] => (case f decl of
-			[tm] => tm
-			|tms => ZTmTuple tms)
-	|decls => ZTmTuple(flat (map f decls)
-	)
-end);
-=TEX
-The following function is used by the term generator.
+The following function is also used by the term generator.
 
 =SML
 fun Ûmake_chartupleÝ ((decls, _, _) : Z_SCH_TEXT) : Z_TM * EXTYPE = (
@@ -1358,11 +1341,10 @@ end)
 =SML
 *)
   | ti_z_tm pars env (term as ZTmSeta1 schtext) = (
-let	val ctm = chartuple schtext;
-	val (schtext', env', _) = ti_z_schtext pars env schtext
+let	val (schtext', env', _) = ti_z_schtext pars env schtext
 		handle ZExn (FailedZSchText (_, env, tm', ty')) =>
 		raise ZExn (FailedZTm (term, env, FailedSeta(tm',ty',62031)));
-	val (_, ty') = ti_z_tm pars env' ctm;
+	val (_, ty') = make_chartuple schtext';
 in
 	(ZTmSeta1 schtext', ex_set ty')
 end)
@@ -1631,13 +1613,12 @@ end
 =SML
 *)
  | ti_z_tm pars env (term as ZTmÌ (sch, tm)) = (
-let	val ctm = chartuple sch;
-	val (sch', env', _) = ti_z_schtext pars env sch;
-	val (tm', ty') = ti_z_tm pars env' tm;
-	val (tm2, ty2) = ti_z_tm pars env' ctm;
-	val ty = ex_set (tuple_extype [ty2, ty']);
+let	val (sch', env', _) = ti_z_schtext pars env sch;
+	val (_, arg_ty) = make_chartuple sch';
+	val (tm', res_ty) = ti_z_tm pars env' tm;
+	val fun_ty = ex_set (tuple_extype [arg_ty, res_ty]);
 in
-	(ZTmÌ (sch', tm'), ty)
+	(ZTmÌ (sch', tm'), fun_ty)
 end)
 (*
 =TEX
@@ -1646,9 +1627,8 @@ end)
 =SML
 *)
  | ti_z_tm pars env (ZTmÍ1 sch) = (
-let	val ctm = chartuple sch;
-	val (sch',env', _) = ti_z_schtext pars env sch;
-	val (_, ty') = ti_z_tm pars env' ctm;
+let	val (sch',env', _) = ti_z_schtext pars env sch;
+	val (_, ty') = make_chartuple sch';
 in
 	(ZTmÍ1 sch', ty')
 end)
