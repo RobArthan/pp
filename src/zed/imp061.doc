@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp061.doc   %Z% $Date: 2007/08/03 16:44:15 $ $Revision: 1.46 $ $RCSfile: imp061.doc,v $
+% imp061.doc   %Z% $Date: 2010/04/01 17:27:59 $ $Revision: 1.47 $ $RCSfile: imp061.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Parser}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP061}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.46 $%
+\def\SCCSversion{$Revision: 1.47 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/08/03 16:44:15 $%
+\TPPdate{\FormatDate{$Date: 2010/04/01 17:27:59 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -105,6 +105,7 @@ Relaxed dependency on makestring.
 \item[Issue 1.45] Made errors in phase 2 raise the standard failure exception.
 \item[Issue 1.46] Quoted identifiers are not allowed in templates.
 \item[Issue 1.47] Support for empty schemas.  Updated for change to SLRP grammar for declarations, obviating error 61104 from phase 2 syntax check.
+\item[Issue 1.48] Separated parsing of lambda and mu expressions.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -298,7 +299,8 @@ datatype Z_LEX_CLASS	= Ampersand
 			| LSqBrk
 			| Let
 			| LogInOp
-			| MuLambda
+			| Lambda
+			| Mu
 			| Not
 			| Number
 			| PostBeginOp
@@ -356,8 +358,8 @@ fun ÛclassifyÝ  (use_fix_db : bool) (tok : Z_TOKEN) : Z_LEX_CLASS = (
 	|	ZTSt		=>	St
 	|	ZTBar		=>	Bars
 	|	ZTAmpersand	=>	Ampersand
-	|	ZTÌ		=>	MuLambda
-	|	ZTÍ		=>	MuLambda
+	|	ZTÌ		=>	Lambda
+	|	ZTÍ		=>	Mu
 	|	ZTµ _		=>	Quant
 	|	ZT¶ _		=>	Quant
 	|	ZT¶‰1 _		=>	Quant
@@ -1071,26 +1073,30 @@ fun Ûred_decl_semi_pred1_semiÝ x1 x2 _ stk = (
 val Ûred_expr1_as_expr0Ý = red_accept;
 =TEX
 =SML
-fun Ûmu_lambda_auxÝ (Token (ZTÍ, _)) = PredMu
-|   mu_lambda_aux (Token (ZTÌ, _)) = PredLambda
-|   mu_lambda_aux _ = raise PARSER_ERROR "mu_lambda_aux";;
-=TEX
-=SML
-fun Ûred_mu_lambdaÝ
-	mu_lambda
+fun Ûred_lambdaÝ
+	_
 	(Parsed(PPSchText st)) _
 	(Parsed(PPPred p)) _ = (
-	 PPPred(mu_lambda_aux mu_lambda (st, Value p))
-) | red_mu_lambda x1 x2 x3 x4 stk =
-		stack_error "red_mu_lambda" (x1::x2::x3::x4::stk);
+	 PPPred(PredLambda (st, p))
+) | red_lambda x1 x2 x3 x4 stk =
+		stack_error "red_lambda" (x1::x2::x3::x4::stk);
 =TEX
 =SML
-fun Ûred_mu_lambda_no_spotÝ
-	_ mu_lambda
+fun Ûred_muÝ
+	_
+	(Parsed(PPSchText st)) _
+	(Parsed(PPPred p)) _ = (
+	 PPPred(PredMu (st, Value p))
+) | red_mu x1 x2 x3 x4 stk =
+		stack_error "red_mu" (x1::x2::x3::x4::stk);
+=TEX
+=SML
+fun Ûred_mu_no_spotÝ
+	_ _
 	(Parsed(PPSchText st)) _ _ = (
-	 PPPred(mu_lambda_aux mu_lambda (st, Nil))
-) | red_mu_lambda_no_spot x1 x2 x3 x4 stk =
-		stack_error "red_mu_lambda_no_spot" (x1::x2::x3::x4::stk);
+	 PPPred(PredMu (st, Nil))
+) | red_mu_no_spot x1 x2 x3 x4 stk =
+		stack_error "red_mu_no_spot" (x1::x2::x3::x4::stk);
 =TEX
 =SML
 fun Ûred_no_eq_defsÝ _ = PPEqDefs [];
@@ -1810,9 +1816,8 @@ fun Ûx_predÝ (expr : bool) (p : PRED) : Z_TM = (
 			ZTmÍ2 (x_sch_text st, x_pred true p)
 	|	PredMu (st, Nil) =>
 			ZTmÍ1 (x_sch_text st)
-	|	PredLambda (st, Value p) =>
+	|	PredLambda (st, p) =>
 			ZTmÌ (x_sch_text st, x_pred true p)
-	|	PredLambda _ => raise PARSER_ERROR "invalid PredLambda arguments"
 	|	PredFancyFix (tmpl, decor, args) =>
 			x_fancyfix_args expr x_pred tmpl decor args
 	|	PredCrossProduct ps => 
