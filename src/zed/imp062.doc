@@ -146,6 +146,7 @@ Corrected treatment of given set paragraph with a constraint.
 \item[Issue 1.74] Support for empty schemas.
 \item[Issue 1.75] Fixed bug caused by working with characteristic tuples of
 schema texts that had not been type-checked.
+\item[Issue 1.76] Support for predicate contexts flagged by the parser.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -442,6 +443,7 @@ datatype ÛZ_DETAILSÝ	=
 	|	FailedActual2 of Z_TM list * EXTYPE list
 	|	FailedConstrained of Z_TM * EXTYPE * Z_TM
 	|	FailedPredCast of Z_TM * EXTYPE
+	|	FailedPredContext of Z_TM * EXTYPE
 	|	FailedTmQuotation1 of (TERM*string*EXTYPE*EXTYPE)
 	|	FailedTmQuotation2 of (TERM*(string*TYPE) list)
 	|	FailedNonStandardZ of int
@@ -772,6 +774,9 @@ fun Ûprint_z_errorÝ ((FailedZTm (term, env, details)) : Z_ERROR_INFO) = (
 		report 62323 [format_z_tm tm2]
 	) | FailedPredCast (tm, ty) => (
 		report 62325 [];
+		report 62326 [format_z_tm tm, format_z_extype ty]
+	) | FailedPredContext (tm, ty) => (
+		report 62327 [];
 		report 62326 [format_z_tm tm, format_z_extype ty]
 	) | FailedTmQuotation1 (tm, s, ty1, ty2) => (
 		report 62890 [];
@@ -1551,6 +1556,7 @@ end
 )
 (*
 =TEX
+N.b., if modifying the following, please check whether the very similar code for predicate contexts needs modifying too.
 =SML
 *)
   | ti_z_tm (pars as {standard, ...}) env (term as ZTmFancyApp (id as (TmplPre (("", Nil), _), ""), ZTmTuple[tm])) = (
@@ -1644,7 +1650,29 @@ in
 end)
 (*
 =TEX
+\subsection{Predicate Contexts}
 
+N.b., if modifying the following, please check whether the very similar code for applications of  needs modifying too.
+=SML
+*)
+  | ti_z_tm pars env (ZTmPredContext tm) = (
+let	val (tm', ty') = ti_z_tm pars env tm;
+	val (tm'', ty'') = (
+		case manifest ty' of
+			SchemaType idtyl =>	(
+			bind_zenv pars env tm tm' idtyl;
+			(ZTmSchemaPred tm', ex_bool))
+		|_ => (tm', ty')
+	);
+	val side = unify zti_subs (ty'', ex_bool)
+		handle Fail msg =>
+		raise ZExn (FailedZTm (tm, env, FailedPredContext
+				(tm, ty')));
+in	(tm'', sub_type zti_subs ty'')
+end
+)
+(*
+=SML
 \subsection{Truth}
 
 ZTmTruth is not expected by the parser, but we pass it on anyway.
