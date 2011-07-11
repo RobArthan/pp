@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$§
+ * $Id: xpp.c,v 2.41 2011/02/12 10:17:57 rda Exp rda $§
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -80,10 +80,9 @@ static char *file_name;
 /*
 * In the following, the first two %s are set to $HOME and the third to $PPHOME
 */
-#define X_SEARCH_PATH \
-	"%s/app-defaults/%%N:%s/%%N:%s/app-defaults/%%N"
-#define X_SEARCH_PATH_NO_HOME \
-	"%s/app-defaults/%%N"
+#define X_SEARCH_PATH_FORMAT \
+	XUSERFILESEARCHPATH "=" \
+		"%s/app-defaults/%%N:%s/%%N:%s/app-defaults/%%N"
 
 #define TEST_FONT "holnormal"
 #define FONTS "fonts"
@@ -329,13 +328,12 @@ void set_pp_home(void)
 			env_val = pp_home;
 		}
 		x_search_path = (char*)XtMalloc(
-			sizeof(XUSERFILESEARCHPATH) + 
-			sizeof(X_SEARCH_PATH) +
-			2*sizeof(env_val) +
-			sizeof(pp_home) +
-			sizeof(X_SEARCH_PATH) +2);
+			strlen(X_SEARCH_PATH_FORMAT) +
+			2*strlen(env_val) +
+			strlen(pp_home) - 8);
+	/* Allow for 3*"%s" (-6), 3*"%%" (-3), 1*null-terminator (+1) */
 		sprintf(x_search_path,
-			XUSERFILESEARCHPATH "=" X_SEARCH_PATH,
+			X_SEARCH_PATH_FORMAT,
 			env_val, env_val, pp_home);
 		putenv(x_search_path);
 		env_diag("using %s", x_search_path);
