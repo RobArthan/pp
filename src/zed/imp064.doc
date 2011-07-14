@@ -8,18 +8,18 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp064.doc   %Z% $Date: 2010/04/01 17:28:44 $ $Revision: 1.60 $ $RCSfile: imp064.doc,v $
+% imp064.doc   %Z% $Date: 2010/04/05 12:30:05 $ $Revision: 1.61 $ $RCSfile: imp064.doc,v $
 
 =TEX
-% imp064.doc   %Z% $Date: 2010/04/01 17:28:44 $ $Revision: 1.60 $ $RCSfile: imp064.doc,v $
+% imp064.doc   %Z% $Date: 2010/04/05 12:30:05 $ $Revision: 1.61 $ $RCSfile: imp064.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 
 \TPPtitle{Implementation of the Z Pretty Printer}
 \TPPref{DS/FMU/IED/IMP064}
-\def\SCCSissue{$Revision: 1.60 $%
+\def\SCCSissue{$Revision: 1.61 $%
 }
 \TPPissue{\SCCSissue}
-\TPPdate{\FormatDate{$Date: 2010/04/01 17:28:44 $%
+\TPPdate{\FormatDate{$Date: 2010/04/05 12:30:05 $%
 }}
 \TPPproject{FST PROJECT}
 
@@ -156,6 +156,7 @@ lasp -s -u imp064.OKwords imp064.doc > zz1
 \item[Issue 1.59] \ldots or the letter `Q'.
 \item[Issue 1.60] Support for empty schemas.
 \item[Issue 1.61] Horizontal schema with single schema reference declaration always has predicate part printed.
+\item[Issue 1.62] Fixed bugs in {\em do\_generic} and {\em do\_decor}.
 \end{description}
 
 %********************************************************************
@@ -656,19 +657,36 @@ brackets around it when it appears as a declaration.
 Moreover, the operand must be bracketed unless it is just a variable,
 or (as coded below) if it is also decorated so that the recursive call
 will add the brackets.
+If the operand is a local variable (rare) we put the brackets in, but
+if it is a global variable (common), we only put them in if the type
+inferrer would need them, i.e., in the (rare) case when the user has
+declared say S and S! both with a schema type and writes S!?, which the
+type inferrer will treat as (S!)?.
 Since this needs to be done in
 several different contexts we common up the code to do it.
 The precedence should be set to $PcLowest$ on entry in declaration
 processing to ensure that
 the outermost decoration is not bracketed.
+
 =SML
 fun Ûdo_decorÝ (tm : TERM, d : string) (cur_env:PP_ENV) : PFUN_ANS = (
 	let	val PpEnv{pe_addstring=addstring, pe_prec, ...} = cur_env;
+		fun gvar_needs_brackets holname "" = false
+		|   gvar_needs_brackets holname dec  = (
+			case get_const_type (holname ^ dec) of
+				Value _ => true
+			|	Nil => gvar_needs_brackets
+					holname
+					(substring(dec, 0, size dec - 1))
+		);
+		fun is_decor s = s mem  ["'", "!", "?"];
 		val need_brackets = (
 			case dest_z_term tm of
-				ZLVar _ => false
-			|	ZGVar _ => false
-			|	ZDecor‰s _ => false
+				ZLVar _ => true
+			|	ZGVar (n, _, _) => 
+					n = ""
+				orelse	is_decor(substring(n, size n - 1, 1))
+				orelse	gvar_needs_brackets (bind_gvar_name n) d
 			|	_ => true
 		);
 		val new_env = (
@@ -1346,10 +1364,10 @@ in
 		if not_all_u
 		then	bracket(cur_env, pc_expr4_gvar, true,
 			fn e => (
-				do_dec_var_name(set_prec pc cur_env, name, pc_dec_var_name);
+				do_dec_var_name(set_prec pc cur_env, fullname, pc_dec_var_name);
 				do_wrapped_list("[", ",", "]", tms) e
 			))
-		else do_dec_var_name(set_prec pc cur_env, name, pc_dec_var_name)
+		else do_dec_var_name(set_prec pc cur_env, fullname, pc_dec_var_name)
 	)
 end
 );
