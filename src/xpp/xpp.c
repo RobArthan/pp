@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.41 2011/02/12 10:17:57 rda Exp rda $§
+ * $Id: xpp.c,v 2.42 2011/07/11 07:40:54 rda Exp rda $§
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -31,10 +31,12 @@
 #define XtCDefaultCommand		"DefaultCommand"
 #define XtNargumentChecker		"argumentChecker"
 #define XtCArgumentChecker		"ArgumentChecker"
-#define XtNOptionString		"optionString"
+#define XtNoptionString		"optionString"
 #define XtCOptionString		"OptionString"
 #define XtNpalette			"palette"
 #define XtCPalette			"Palette"
+#define XtNjournalToScriptRatio		"journalToScriptRatio"
+#define XtCJournalToScriptRatio		"JournalToScriptRatio"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -131,6 +133,7 @@ typedef struct {
 	char *default_command;
 	char *argument_checker;
 	char *option_string;
+	int journal_to_script_ratio;
 } XppResources;
 
 XppResources xpp_resources;
@@ -208,13 +211,22 @@ static XtResource resources[] = {
 		"pp -V"
 	},
 	{
-		XtNOptionString,
+		XtNoptionString,
 		XtCOptionString,
 		XtRString,
 		sizeof(char *),
 		XtOffsetOf(XppResources, option_string),
 		XtRString,
 		"bchrf:d:i:F:nsv"
+	},
+	{
+		XtNjournalToScriptRatio,
+		XtCJournalToScriptRatio,
+		XtRInt,
+		sizeof(int),
+		XtOffsetOf(XppResources, journal_to_script_ratio),
+		XtRImmediate,
+		50
 	}
 };
 
@@ -629,6 +641,10 @@ int main(int argc, char **argv)
 	text_translations = xpp_resources.text_translations;
 	templates = xpp_resources.templates;
 	palette = xpp_resources.palette;
+	journal_to_script_ratio =
+		xpp_resources.journal_to_script_ratio < 10 ? 10 :
+		xpp_resources.journal_to_script_ratio > 90 ? 90 :
+		xpp_resources.journal_to_script_ratio;
 
 	cmd_line = get_command_line(argc, argv, &use_default_command);
 	

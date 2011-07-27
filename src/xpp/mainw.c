@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.121 2011/02/12 10:17:57 rda Exp rda $
+ * $Id: mainw.c,v 2.122 2011/02/24 21:56:49 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -167,7 +167,8 @@ static void
 	popup_options_tool_cb(CALLBACK_ARGS),
 	new_editor_session_cb(CALLBACK_ARGS),
 	new_command_session_cb(CALLBACK_ARGS),
-	show_hide_cb(CALLBACK_ARGS);
+	show_hide_cb(CALLBACK_ARGS),
+	toggle_geometry_cb(CALLBACK_ARGS);
 
 static void setup_reopen_menu(char *filename);
 static void defer_resize (EVENT_HANDLER_ARGS);
@@ -188,6 +189,7 @@ static void script_save_action(ACTION_PROC_ARGS);
 static void script_undo_action(ACTION_PROC_ARGS);
 static void show_hide_script_action(ACTION_PROC_ARGS);
 static void show_hide_journal_action(ACTION_PROC_ARGS);
+static void toggle_geometry_action(ACTION_PROC_ARGS);
 static void search_action(ACTION_PROC_ARGS);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -318,6 +320,8 @@ static MenuItem window_menu_items[] = {
         show_hide_cb, (XtPointer)&show_hide_script_data, (MenuItem *)NULL, False },
     { "Show/hide Journal", &xmPushButtonGadgetClass, 'l', NULL, NULL,
         show_hide_cb, (XtPointer)&show_hide_journal_data, (MenuItem *)NULL, False },
+    { "Toggle Geometry", &xmPushButtonGadgetClass, 'G', NULL, NULL,
+        toggle_geometry_cb, (XtPointer)NULL, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -410,7 +414,8 @@ static XtActionsRec actions[] = {
 	{ "show-hide", show_hide_script_action }, /* historical */
 	{ "show-hide-script", show_hide_script_action },
 	{ "show-hide-journal", show_hide_journal_action },
-	{ "search", search_action }
+	{ "search", search_action },
+	{ "toggle-geometry", toggle_geometry_action }
 };
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -746,7 +751,9 @@ static Boolean setup_main_window(
 
 	scriptpanes = XtVaCreateWidget("scriptpanes",
 		XMPANEDCLASS,
-		mainpanes, NULL);
+		mainpanes,
+		XmNallowResize,		True,
+		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Info Bar: File-name area and logo
@@ -825,6 +832,9 @@ static Boolean setup_main_window(
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
 	script = XmCreateScrolledText(scriptpanes, "script", args, i);
+	XtVaSetValues(XtParent(script),
+		XmNallowResize,		True,
+		NULL);
 
 	XtOverrideTranslations(script, text_translations);
 
@@ -846,7 +856,9 @@ static Boolean setup_main_window(
 
 	journalform = XtVaCreateWidget("journalform",
 		xmFormWidgetClass,
-		mainpanes, NULL);
+		mainpanes,
+		XmNallowResize,		True,
+		NULL);
 
 		i = 0;
 		XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
@@ -1557,7 +1569,7 @@ static void show_hide(show_hide_info *inf)
 }
 
 /*
- * show_hide_cb: callback for the window menu
+ * show_hide_cb: callback for the show/hide items in the window menu
  */
 static void show_hide_cb(
 		Widget		unused_w,
@@ -1565,6 +1577,74 @@ static void show_hide_cb(
 		XtPointer	unused_cbs)
 {
 	show_hide((show_hide_info *) cbd);
+}
+
+/*
+ * toggle_geometry: switch main panes from vertical layout to horizontal or
+ * vice versa.
+ */
+static void toggle_geometry(void)
+{
+	unsigned char orientation;
+	XtVaGetValues(mainpanes,
+		XmNorientation,	&orientation,
+		NULL);
+	if(orientation == XmVERTICAL) {/* change to HORIZONTAL */
+		short old_columns, script_columns, journal_columns;
+		XtVaGetValues(journal,
+			XmNcolumns,	&old_columns,
+			NULL);
+		journal_columns = (journal_to_script_ratio * old_columns)/100;
+		script_columns = old_columns - journal_columns;
+		XtVaSetValues(mainpanes,
+			XmNorientation, XmHORIZONTAL,
+			NULL);
+		XtVaSetValues(script,
+			XmNcolumns,	script_columns,
+			NULL);
+		XtVaSetValues(journal,
+			XmNcolumns,	journal_columns,
+			NULL);
+	} else { /* change to VERTICAL */
+		short old_rows, script_rows, journal_rows;
+		XtVaGetValues(journal,
+			XmNrows,	&old_rows,
+			NULL);
+		journal_rows = (journal_to_script_ratio * old_rows)/100;
+		script_rows = old_rows - journal_rows;
+		XtVaSetValues(mainpanes,
+			XmNorientation, XmVERTICAL,
+			NULL);
+		XtVaSetValues(script,
+			XmNrows,	script_rows,
+			NULL);
+		XtVaSetValues(journal,
+			XmNrows,	journal_rows,
+			NULL);
+	}
+}
+
+/*
+ * toggle_geometry_cb: callback for toggling the geometry
+ */
+static void toggle_geometry_cb(
+		Widget		unused_w,
+		XtPointer	unused_cbd,
+		XtPointer	unused_cbs)
+{
+	toggle_geometry();
+}
+
+/*
+ * toggle_geometry_action: action for toggling the geometry
+ */
+static void toggle_geometry_action(
+    Widget 		unused_widget,
+    XEvent*		unused_event,
+    String*		unused_params,
+    Cardinal*		unused_num_params)
+{
+	toggle_geometry();
 }
 
 /*

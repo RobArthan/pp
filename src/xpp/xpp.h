@@ -383,6 +383,7 @@ typedef enum {
 	extern char *pp_home;
 	extern Boolean pp_env_debug;
 	extern Boolean updating_journal;
+	extern int journal_to_script_ratio;
 	extern const char *const file_type_names[]
 #ifdef _xpp
 	= {"Unix", "MS-DOS", "Macintosh" };
