@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.122 2011/02/24 21:56:49 rda Exp rda $
+ * $Id: mainw.c,v 2.123 2011/07/27 16:29:34 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -106,7 +106,7 @@ XtAppContext app; /* global because needed in msg.c */
  * root         -           the top level of the hierarchy
  * frame        root        main window
  * mainpanes    frame       paned window for scriptpanes and journal window
- * scriptpanes	mainpanes   paned window for infobar and script
+ * scriptpanes	mainpanes   paned window for infobar and sscript
  * journalform	mainpanes   form to manage the journal widget
  * infobar      scriptpanes manager form for next four
  * infolabel    infobar     label indicating if file has been modified, etc.
@@ -168,7 +168,8 @@ static void
 	new_editor_session_cb(CALLBACK_ARGS),
 	new_command_session_cb(CALLBACK_ARGS),
 	show_hide_cb(CALLBACK_ARGS),
-	toggle_geometry_cb(CALLBACK_ARGS);
+	toggle_geometry_cb(CALLBACK_ARGS),
+	show_geometry_cb(CALLBACK_ARGS);
 
 static void setup_reopen_menu(char *filename);
 static void defer_resize (EVENT_HANDLER_ARGS);
@@ -190,6 +191,7 @@ static void script_undo_action(ACTION_PROC_ARGS);
 static void show_hide_script_action(ACTION_PROC_ARGS);
 static void show_hide_journal_action(ACTION_PROC_ARGS);
 static void toggle_geometry_action(ACTION_PROC_ARGS);
+static void show_geometry_action(ACTION_PROC_ARGS);
 static void search_action(ACTION_PROC_ARGS);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -316,16 +318,18 @@ static show_hide_info
 	show_hide_journal_data = {&journalform, &scriptpanes};
 
 static MenuItem window_menu_items[] = {
-    { "Show/hide Script", &xmPushButtonGadgetClass, 't', NULL, NULL,
+    { "Show/hide Script", &xmPushButtonGadgetClass, 'h', NULL, NULL,
         show_hide_cb, (XtPointer)&show_hide_script_data, (MenuItem *)NULL, False },
-    { "Show/hide Journal", &xmPushButtonGadgetClass, 'l', NULL, NULL,
+    { "Show/hide Journal", &xmPushButtonGadgetClass, 'J', NULL, NULL,
         show_hide_cb, (XtPointer)&show_hide_journal_data, (MenuItem *)NULL, False },
-    { "Toggle Geometry", &xmPushButtonGadgetClass, 'G', NULL, NULL,
+    { "Toggle Geometry", &xmPushButtonGadgetClass, 'T', NULL, NULL,
         toggle_geometry_cb, (XtPointer)NULL, (MenuItem *)NULL, False },
+    { "Show Geometry", &xmPushButtonGadgetClass, 'w', NULL, NULL,
+        show_geometry_cb, (XtPointer)NULL, (MenuItem *)NULL, False },
     {NULL}
 };
 
-/* Item 2 is a separator */
+/* Item 1 is a separator */
 #define CMD_MENU_EXECUTE      2
 #define CMD_MENU_EXECUTE_LINE 3
 #define CMD_MENU_RETURN       4
@@ -415,7 +419,8 @@ static XtActionsRec actions[] = {
 	{ "show-hide-script", show_hide_script_action },
 	{ "show-hide-journal", show_hide_journal_action },
 	{ "search", search_action },
-	{ "toggle-geometry", toggle_geometry_action }
+	{ "toggle-geometry", toggle_geometry_action },
+	{ "show-geometry", show_geometry_action }
 };
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -734,7 +739,9 @@ static Boolean setup_main_window(
 
 	mainpanes = XtVaCreateWidget("mainpanes",
 		XMPANEDCLASS,
-		frame, NULL);
+		frame,
+		XmNorientation,	orientation,
+		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu bar:
@@ -843,7 +850,7 @@ static Boolean setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	if( !global_options.edit_only ) {
+	if( !global_options.edit_only ) { /* command session */
 		Boolean editable;
 		Widget *children;
 		Cardinal num_children;
@@ -908,7 +915,36 @@ static Boolean setup_main_window(
 
 		updating_journal = False;
 		XtAddCallback(journal, XmNmodifyVerifyCallback, journal_modify_cb, 0);
-
+		if(orientation == XmVERTICAL) {
+			short script_rows, script_columns, journal_rows;
+			script_columns = total_columns;
+			journal_rows = (short)(journal_ratio * total_rows);
+			script_rows = total_rows - journal_rows;
+			XtVaSetValues(script,
+				XmNrows,	script_rows,
+				XmNcolumns,	script_columns,
+				NULL);
+			XtVaSetValues(journal,
+				XmNrows,	journal_rows,
+				NULL);
+		} else { /* Horizontal layout */
+			short script_columns, journal_rows, journal_columns;
+			journal_rows = total_rows;
+			journal_columns = (short)(journal_ratio * total_columns);
+			script_columns = total_columns - journal_columns;
+			XtVaSetValues(script,
+				XmNcolumns,	script_columns,
+				NULL);
+			XtVaSetValues(journal,
+				XmNrows,	journal_rows,
+				XmNcolumns,	journal_columns,
+				NULL);
+		}
+	} else { /* edit-only session */
+		XtVaSetValues(script,
+			XmNrows,	total_rows,
+			XmNcolumns,	total_columns,
+			NULL);
 	}
 
 /*
@@ -1590,15 +1626,33 @@ static void toggle_geometry(void)
 		XmNorientation,	&orientation,
 		NULL);
 	if(orientation == XmVERTICAL) {/* change to HORIZONTAL */
-		short old_columns, script_columns, journal_columns;
-		XtVaGetValues(journal,
-			XmNcolumns,	&old_columns,
-			NULL);
-		journal_columns = (journal_to_script_ratio * old_columns)/100;
-		script_columns = old_columns - journal_columns;
+		short old_script_columns, old_journal_columns,
+			total_columns, script_columns, journal_columns;
+		/* change the orientation */
 		XtVaSetValues(mainpanes,
 			XmNorientation, XmHORIZONTAL,
 			NULL);
+		/* make sure both children are managed */
+		XtManageChild(scriptpanes);
+		XtManageChild(journalform);
+		/* find total number of columns available */
+		/* (get better answer if we ask for the minimum first) */
+		XtVaSetValues(script,
+			XmNcolumns,	1,
+			NULL);
+		XtVaSetValues(journal,
+			XmNcolumns,	1,
+			NULL);
+		XtVaGetValues(script,
+			XmNcolumns,	&old_script_columns,
+			NULL);
+		XtVaGetValues(journal,
+			XmNcolumns,	&old_journal_columns,
+			NULL);
+		total_columns = old_script_columns + old_journal_columns;
+		/* divide the columns between script and journal */
+		journal_columns = (short)(journal_ratio * total_columns);
+		script_columns = total_columns - journal_columns;
 		XtVaSetValues(script,
 			XmNcolumns,	script_columns,
 			NULL);
@@ -1606,15 +1660,33 @@ static void toggle_geometry(void)
 			XmNcolumns,	journal_columns,
 			NULL);
 	} else { /* change to VERTICAL */
-		short old_rows, script_rows, journal_rows;
-		XtVaGetValues(journal,
-			XmNrows,	&old_rows,
-			NULL);
-		journal_rows = (journal_to_script_ratio * old_rows)/100;
-		script_rows = old_rows - journal_rows;
+		short old_script_rows, old_journal_rows,
+			total_rows, script_rows, journal_rows;
+		/* change the orientation */
 		XtVaSetValues(mainpanes,
 			XmNorientation, XmVERTICAL,
 			NULL);
+		/* make sure both children are managed */
+		XtManageChild(scriptpanes);
+		XtManageChild(journalform);
+		/* find total number of rows available */
+		/* (get better answer if we ask for the minimum first) */
+		XtVaSetValues(script,
+			XmNrows,	1,
+			NULL);
+		XtVaSetValues(journal,
+			XmNrows,	1,
+			NULL);
+		XtVaGetValues(script,
+			XmNrows,	&old_script_rows,
+			NULL);
+		XtVaGetValues(journal,
+			XmNrows,	&old_journal_rows,
+			NULL);
+		total_rows = old_script_rows + old_journal_rows;
+		/* divide the rows between script and journal */
+		journal_rows = (short)(journal_ratio * total_rows);
+		script_rows = total_rows - journal_rows;
 		XtVaSetValues(script,
 			XmNrows,	script_rows,
 			NULL);
@@ -1645,6 +1717,71 @@ static void toggle_geometry_action(
     Cardinal*		unused_num_params)
 {
 	toggle_geometry();
+}
+
+
+/*
+ * show_geometry: show current settings for geometry
+ */
+static void show_geometry(void)
+{
+	unsigned char orientation;
+	short script_rows, journal_rows, script_columns, journal_columns,
+		total_rows, total_columns;
+	float ratio;
+	char *fmt =
+		"Script is %d rows by %d columns\n"
+		"Journal is %d rows by %d columns\n"
+		"Journal ratio is %4f\n";
+	char msg[3*sizeof "Journal is NNNNNN rows by NNNNNN columns\n"];
+	XtVaGetValues(mainpanes,
+		XmNorientation,	&orientation,
+		NULL);
+	XtVaGetValues(script,
+		XmNrows,	&script_rows,
+		XmNcolumns,	&script_columns,
+		NULL);
+	XtVaGetValues(journal,
+		XmNrows,	&journal_rows,
+		XmNcolumns,	&journal_columns,
+		NULL);
+	if(orientation == XmVERTICAL) {
+		total_rows = script_rows + journal_rows;
+		total_columns = script_columns;
+		ratio = ((float) journal_rows)/total_rows;
+	} else {
+		total_rows = journal_rows;
+		total_columns = script_columns + journal_columns;
+		ratio = ((float) journal_columns)/total_columns;
+	}
+	sprintf(msg, fmt,
+		script_rows, script_columns,
+		journal_rows, journal_columns,
+		ratio);
+	help_dialog(root, msg);
+}
+
+/*
+ * show_geometry_cb: callback for showing the geometry
+ */
+static void show_geometry_cb(
+		Widget		unused_w,
+		XtPointer	unused_cbd,
+		XtPointer	unused_cbs)
+{
+	show_geometry();
+}
+
+/*
+ * show_geometry_action: action for showing the geometry
+ */
+static void show_geometry_action(
+    Widget 		unused_widget,
+    XEvent*		unused_event,
+    String*		unused_params,
+    Cardinal*		unused_num_params)
+{
+	show_geometry();
 }
 
 /*

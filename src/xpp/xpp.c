@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.42 2011/07/11 07:40:54 rda Exp rda $§
+ * $Id: xpp.c,v 2.43 2011/07/27 16:29:34 rda Exp rda $§
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -23,20 +23,24 @@
 #define XtCTextTranslations	"TextTranslations"
 #define XtNtemplates		"templates"
 #define XtCTemplates		"Templates"
-#define XtNaddNewlineMode		"addNewlineMode"
-#define XtCAddNewlineMode		"AddNewlineMode"
-#define XtNcommandLineList		"commandLineList"
-#define XtCCommandLineList		"CommandLineList"
-#define XtNdefaultCommand		"defaultCommand"
-#define XtCDefaultCommand		"DefaultCommand"
-#define XtNargumentChecker		"argumentChecker"
-#define XtCArgumentChecker		"ArgumentChecker"
+#define XtNaddNewlineMode	"addNewlineMode"
+#define XtCAddNewlineMode	"AddNewlineMode"
+#define XtNcommandLineList	"commandLineList"
+#define XtCCommandLineList	"CommandLineList"
+#define XtNdefaultCommand	"defaultCommand"
+#define XtCDefaultCommand	"DefaultCommand"
+#define XtNargumentChecker	"argumentChecker"
+#define XtCArgumentChecker	"ArgumentChecker"
 #define XtNoptionString		"optionString"
 #define XtCOptionString		"OptionString"
-#define XtNpalette			"palette"
-#define XtCPalette			"Palette"
-#define XtNjournalToScriptRatio		"journalToScriptRatio"
-#define XtCJournalToScriptRatio		"JournalToScriptRatio"
+#define XtNpalette		"palette"
+#define XtCPalette		"Palette"
+#define XtNjournalRatio		"journalRatio"
+#define XtCJournalRatio		"JournalRatio"
+#define XtNtotalRows		"totalRows"
+#define XtCTotalRows		"TotalRows"
+#define XtNtotalColumns		"totalColumns"
+#define XtCTotalColumns		"TotalColumns"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -133,7 +137,10 @@ typedef struct {
 	char *default_command;
 	char *argument_checker;
 	char *option_string;
-	int journal_to_script_ratio;
+	float journal_ratio;
+	unsigned char orientation;
+	int total_rows;
+	int total_columns;
 } XppResources;
 
 XppResources xpp_resources;
@@ -220,13 +227,40 @@ static XtResource resources[] = {
 		"bchrf:d:i:F:nsv"
 	},
 	{
-		XtNjournalToScriptRatio,
-		XtCJournalToScriptRatio,
+		XtNjournalRatio,
+		XtCJournalRatio,
+		XtRFloat,
+		sizeof(float),
+		XtOffsetOf(XppResources, journal_ratio),
+		XtRString,
+		"0.5"
+	},
+	{
+		XtNorientation,
+		XtCOrientation,
+		XtROrientation,
+		sizeof(unsigned char),
+		XtOffsetOf(XppResources, orientation),
+		XtRString,
+		"VERTICAL"
+	},
+	{
+		XtNtotalRows,
+		XtCTotalRows,
 		XtRInt,
 		sizeof(int),
-		XtOffsetOf(XppResources, journal_to_script_ratio),
+		XtOffsetOf(XppResources, total_rows),
 		XtRImmediate,
-		50
+		(XtPointer) 32
+	},
+	{
+		XtNtotalColumns,
+		XtCTotalColumns,
+		XtRInt,
+		sizeof(int),
+		XtOffsetOf(XppResources, total_columns),
+		XtRImmediate,
+		80
 	}
 };
 
@@ -641,10 +675,24 @@ int main(int argc, char **argv)
 	text_translations = xpp_resources.text_translations;
 	templates = xpp_resources.templates;
 	palette = xpp_resources.palette;
-	journal_to_script_ratio =
-		xpp_resources.journal_to_script_ratio < 10 ? 10 :
-		xpp_resources.journal_to_script_ratio > 90 ? 90 :
-		xpp_resources.journal_to_script_ratio;
+	journal_ratio =
+		xpp_resources.journal_ratio < 0.1 ? 0.1 :
+		xpp_resources.journal_ratio > 0.9 ? 0.9 :
+		xpp_resources.journal_ratio;
+
+	orientation =
+		xpp_resources.orientation == XmVERTICAL ? XmVERTICAL :
+		 XmHORIZONTAL;
+
+	total_rows =
+		xpp_resources.total_rows < 2 ? 2 :
+		xpp_resources.total_rows > 10000 ? 10000 :
+		xpp_resources.total_rows;
+
+	total_columns =
+		xpp_resources.total_columns < 2 ? 2 :
+		xpp_resources.total_columns > 10000 ? 10000 :
+		xpp_resources.total_columns;
 
 	cmd_line = get_command_line(argc, argv, &use_default_command);
 	
