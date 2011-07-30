@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: palette.c,v 2.36 2011/02/12 10:17:57 rda Exp rda $
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -105,7 +105,7 @@ static void get_pretty_chars(PaletteConfig *palette_config)
 	char ch;
 	int i = 0, col = 0;
 	do {
-		ch = palette[i];
+		ch = xpp_resources.palette[i];
 		switch(ch) {
 			case '\n':
 				palette_config->pretty_chars

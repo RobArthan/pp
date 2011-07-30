@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: lineno.c,v 1.17 2011/02/12 10:17:57 rda Exp rda $
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -286,7 +286,8 @@ Boolean add_line_no_tool(Widget text_w)
  *set up text widget translations
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtOverrideTranslations(line_no_text, text_translations);
+	XtOverrideTranslations(line_no_text,
+		xpp_resources.text_translations);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Make return in the line number text widget activate it

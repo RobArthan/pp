@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.36 2009/06/20 14:35:30 rda Exp rda $
+ * $Id: cmdline.c,v 2.37 2009/09/06 14:50:50 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -252,7 +252,8 @@ void add_command_line_tool(Widget text_w)
  * set up text widget translations and font
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtOverrideTranslations(cmd_text, text_translations);
+	XtOverrideTranslations(cmd_text,
+		xpp_resources.text_translations);
 
 	copy_font_list(list_w, cmd_text);
 
@@ -334,10 +335,11 @@ static void get_initial_command_line_list(Widget list_w)
 	XmString s;
 	Boolean last;
 	char *list_items, *p, *q;
-	if( !(list_items = XtMalloc(strlen(command_line_list) + 1)) ) {
+	if( !(list_items = XtMalloc(
+		strlen(xpp_resources.command_line_list) + 1)) ) {
 		return;
 	}
-	strcpy(list_items, command_line_list);
+	strcpy(list_items, xpp_resources.command_line_list);
 	for(p = list_items, last = False; *p; p = last ? q : q + 1) {
 		q = p;
 		while (*q && *q != '\n') ++q;

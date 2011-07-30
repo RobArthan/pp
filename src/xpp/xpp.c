@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.43 2011/07/27 16:29:34 rda Exp rda $§
+ * $Id: xpp.c,v 2.44 2011/07/28 10:53:50 rda Exp rda $§
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -128,23 +128,6 @@ static XrmOptionDescRec options [] = {
 	{"-z", "*commandLine",  XrmoptionSkipLine, NULL}
 };
 
-typedef struct {
-	XtTranslations text_translations;
-	char *templates;
-	char *palette;
-	char *command_line_list;
-	int  add_new_line_mode;
-	char *default_command;
-	char *argument_checker;
-	char *option_string;
-	float journal_ratio;
-	unsigned char orientation;
-	int total_rows;
-	int total_columns;
-} XppResources;
-
-XppResources xpp_resources;
-
 static XtResource resources[] = {
 	{
 		XtNtextTranslations,
@@ -260,7 +243,7 @@ static XtResource resources[] = {
 		sizeof(int),
 		XtOffsetOf(XppResources, total_columns),
 		XtRImmediate,
-		80
+		(XtPointer)80
 	}
 };
 
@@ -672,26 +655,23 @@ int main(int argc, char **argv)
 		XtNumber(resources),
 		NULL);
 
-	text_translations = xpp_resources.text_translations;
-	templates = xpp_resources.templates;
-	palette = xpp_resources.palette;
-	journal_ratio =
+	xpp_resources.journal_ratio =
 		xpp_resources.journal_ratio < 0.1 ? 0.1 :
 		xpp_resources.journal_ratio > 0.9 ? 0.9 :
 		xpp_resources.journal_ratio;
 
-	orientation =
+	xpp_resources.orientation =
 		xpp_resources.orientation == XmVERTICAL ? XmVERTICAL :
 		 XmHORIZONTAL;
 
-	total_rows =
+	xpp_resources.total_rows =
 		xpp_resources.total_rows < 2 ? 2 :
-		xpp_resources.total_rows > 10000 ? 10000 :
+		xpp_resources.total_rows > 1000 ? 1000 :
 		xpp_resources.total_rows;
 
-	total_columns =
+	xpp_resources.total_columns =
 		xpp_resources.total_columns < 2 ? 2 :
-		xpp_resources.total_columns > 10000 ? 10000 :
+		xpp_resources.total_columns > 1000 ? 1000 :
 		xpp_resources.total_columns;
 
 	cmd_line = get_command_line(argc, argv, &use_default_command);

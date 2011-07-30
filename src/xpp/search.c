@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: search.c,v 2.75 2011/02/12 10:17:57 rda Exp rda $
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -569,8 +569,10 @@ Boolean add_search_tool(Widget text_w)
  *set up text widget translations
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtOverrideTranslations(search_text, text_translations);
-	XtOverrideTranslations(replace_text, text_translations);
+	XtOverrideTranslations(search_text,
+		xpp_resources.text_translations);
+	XtOverrideTranslations(replace_text, 
+		xpp_resources.text_translations);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Manage everything:

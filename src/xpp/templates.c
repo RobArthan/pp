@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: templates.c,v 2.36 2011/02/12 10:17:57 rda Exp rda $
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -98,7 +98,7 @@ static char *bad_pixmap_nomalloc_msg =
 
 static void get_templates_data(void)
 {
-	char *ptr = templates;
+	char *ptr = xpp_resources.templates;
 	Cardinal i;
 
 	while (*ptr != '/' && *ptr != '\0') ptr++;
@@ -240,7 +240,7 @@ Boolean init_templates_tool(Widget w)
 	int i, x, y, fbase;
 	Widget template_btn;
 
-	if(!templates || !*templates) {
+	if(!xpp_resources.templates || !*xpp_resources.templates) {
 		/* resource not set up */
 		return False;
 	};

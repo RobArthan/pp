@@ -370,23 +370,32 @@ typedef enum {
  * GLOBAL DATA: the source file xpp.c which contains main is
  * chosen to define the global data. It does not export any functions.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+typedef struct {
+	XtTranslations text_translations;
+	char *templates;
+	char *palette;
+	char *command_line_list;
+	int  add_new_line_mode;
+	char *default_command;
+	char *argument_checker;
+	char *option_string;
+	float journal_ratio;
+	unsigned char orientation;
+	int total_rows;
+	int total_columns;
+} XppResources;
+
 #ifdef _xpp
 #define	extern
 #endif
 	GlobalOptions		global_options;
-	extern XtTranslations text_translations;
-	extern char *templates;
-	extern char *palette;
-	extern char *command_line_list;
+	extern XppResources xpp_resources;
 	extern char *title;
 	extern char *argv0;
 	extern char *pp_home;
 	extern Boolean pp_env_debug;
 	extern Boolean updating_journal;
-	extern float journal_ratio;
-	extern unsigned char orientation;
-	extern int total_rows;
-	extern int total_columns;
 	extern const char *const file_type_names[]
 #ifdef _xpp
 	= {"Unix", "MS-DOS", "Macintosh" };

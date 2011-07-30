@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.123 2011/07/27 16:29:34 rda Exp rda $
+ * $Id: mainw.c,v 2.124 2011/07/28 10:53:50 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "xpp.h"
 
@@ -317,18 +318,21 @@ static show_hide_info
 static show_hide_info 
 	show_hide_journal_data = {&journalform, &scriptpanes};
 
+/* The set up code needs to be able to locate the Show Geometry item: */
 static MenuItem window_menu_items[] = {
+    { "Show Geometry ...", &xmPushButtonGadgetClass, 'w', NULL, NULL,
+        show_geometry_cb, (XtPointer)NULL, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
     { "Show/hide Script", &xmPushButtonGadgetClass, 'h', NULL, NULL,
         show_hide_cb, (XtPointer)&show_hide_script_data, (MenuItem *)NULL, False },
     { "Show/hide Journal", &xmPushButtonGadgetClass, 'J', NULL, NULL,
         show_hide_cb, (XtPointer)&show_hide_journal_data, (MenuItem *)NULL, False },
     { "Toggle Geometry", &xmPushButtonGadgetClass, 'T', NULL, NULL,
         toggle_geometry_cb, (XtPointer)NULL, (MenuItem *)NULL, False },
-    { "Show Geometry", &xmPushButtonGadgetClass, 'w', NULL, NULL,
-        show_geometry_cb, (XtPointer)NULL, (MenuItem *)NULL, False },
     {NULL}
 };
 
+/* Item 0 uses its own callback not cmd_menu_cb */
 /* Item 1 is a separator */
 #define CMD_MENU_EXECUTE      2
 #define CMD_MENU_EXECUTE_LINE 3
@@ -370,8 +374,8 @@ static MenuItem cmd_menu_items[] = {
 #define	HELP_MENU_TOOLS_MENU    4
 #define	HELP_MENU_WINDOW_MENU   5
 #define	HELP_MENU_EDIT_MENU     6
-#define	HELP_MENU_FILE_NAME_BAR 7
-#define	HELP_MENU_COMMAND_MENU  8
+#define	HELP_MENU_COMMAND_MENU  7
+#define	HELP_MENU_FILE_NAME_BAR 8
 static MenuItem help_menu_items[] = {
     { "About Xpp", &xmPushButtonGadgetClass, 'A', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_ABOUT_XPP, (MenuItem *)NULL, False },
@@ -387,10 +391,10 @@ static MenuItem help_menu_items[] = {
         help_menu_cb, (XtPointer)HELP_MENU_TOOLS_MENU, (MenuItem *)NULL, False },
     { "Window Menu", &xmPushButtonGadgetClass, 'W', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_WINDOW_MENU, (MenuItem *)NULL, False },
-    { "File Name Bar", &xmPushButtonGadgetClass, 'N', NULL, NULL,
-        help_menu_cb, (XtPointer)HELP_MENU_FILE_NAME_BAR, (MenuItem *)NULL, False },
     { "Command Menu", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_COMMAND_MENU, (MenuItem *)NULL, False },
+    { "File Name Bar", &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_FILE_NAME_BAR, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -740,7 +744,7 @@ static Boolean setup_main_window(
 	mainpanes = XtVaCreateWidget("mainpanes",
 		XMPANEDCLASS,
 		frame,
-		XmNorientation,	orientation,
+		XmNorientation,	xpp_resources.orientation,
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -843,7 +847,7 @@ static Boolean setup_main_window(
 		XmNallowResize,		True,
 		NULL);
 
-	XtOverrideTranslations(script, text_translations);
+	XtOverrideTranslations(script, xpp_resources.text_translations);
 
 	line_number_cb(script, NULL, NULL);
 
@@ -885,7 +889,8 @@ static Boolean setup_main_window(
 
 		XtVaSetValues(journal, XmNtraversalOn, editable, NULL);
 
-		XtOverrideTranslations(journal, text_translations);
+		XtOverrideTranslations(journal,
+			xpp_resources.text_translations);
 
 		XtVaGetValues(mainpanes, XmNchildren, &children,
 			XmNnumChildren, &num_children, NULL);
@@ -915,11 +920,13 @@ static Boolean setup_main_window(
 
 		updating_journal = False;
 		XtAddCallback(journal, XmNmodifyVerifyCallback, journal_modify_cb, 0);
-		if(orientation == XmVERTICAL) {
+		if(xpp_resources.orientation == XmVERTICAL) {
 			short script_rows, script_columns, journal_rows;
-			script_columns = total_columns;
-			journal_rows = (short)(journal_ratio * total_rows);
-			script_rows = total_rows - journal_rows;
+			script_columns = xpp_resources.total_columns;
+			journal_rows =
+				(short)roundf(xpp_resources.journal_ratio *
+						xpp_resources.total_rows);
+			script_rows = xpp_resources.total_rows - journal_rows;
 			XtVaSetValues(script,
 				XmNrows,	script_rows,
 				XmNcolumns,	script_columns,
@@ -929,9 +936,11 @@ static Boolean setup_main_window(
 				NULL);
 		} else { /* Horizontal layout */
 			short script_columns, journal_rows, journal_columns;
-			journal_rows = total_rows;
-			journal_columns = (short)(journal_ratio * total_columns);
-			script_columns = total_columns - journal_columns;
+			journal_rows = xpp_resources.total_rows;
+			journal_columns =
+				(short)roundf(xpp_resources.journal_ratio *
+						xpp_resources.total_columns);
+			script_columns = xpp_resources.total_columns - journal_columns;
 			XtVaSetValues(script,
 				XmNcolumns,	script_columns,
 				NULL);
@@ -942,8 +951,8 @@ static Boolean setup_main_window(
 		}
 	} else { /* edit-only session */
 		XtVaSetValues(script,
-			XmNrows,	total_rows,
-			XmNcolumns,	total_columns,
+			XmNrows,	xpp_resources.total_rows,
+			XmNcolumns,	xpp_resources.total_columns,
 			NULL);
 	}
 
@@ -983,16 +992,23 @@ static Boolean setup_main_window(
 		menubar, XmMENU_PULLDOWN, "Tools", 'T', False, tools_menu_items);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Window menu:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	if( global_options.edit_only ) { /* Only have Show Geometry */
+		window_menu_items[1].label = NULL;
+	} /* else get everything */
+	winmenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "Window", 'W',
+			False, window_menu_items);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	if( !global_options.edit_only ) {
-		winmenu = setup_menu(
-			menubar, XmMENU_PULLDOWN, "Window", 'W',
-				False, window_menu_items);
 		cmdmenu = setup_menu(
 			menubar, XmMENU_PULLDOWN, "Command", 'C',
 				False, cmd_menu_items);
-	}
+	} /* else no Command menu */
 /*
  * Users have complained that the "Execute Selection" item in the command menu
  * does not work when the caps lock modifier is present; however, Motif
@@ -1008,7 +1024,9 @@ static Boolean setup_main_window(
  * Help menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	if(global_options.edit_only) {
-		help_menu_items[HELP_MENU_COMMAND_MENU].label = NULL;
+		help_menu_items[HELP_MENU_COMMAND_MENU] = 
+			help_menu_items[HELP_MENU_FILE_NAME_BAR];
+		help_menu_items[HELP_MENU_FILE_NAME_BAR].label = NULL;
 	}
 	helpmenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "Help", 'H', False, help_menu_items);
@@ -1651,7 +1669,7 @@ static void toggle_geometry(void)
 			NULL);
 		total_columns = old_script_columns + old_journal_columns;
 		/* divide the columns between script and journal */
-		journal_columns = (short)(journal_ratio * total_columns);
+		journal_columns = (short)(xpp_resources.journal_ratio * total_columns);
 		script_columns = total_columns - journal_columns;
 		XtVaSetValues(script,
 			XmNcolumns,	script_columns,
@@ -1685,7 +1703,7 @@ static void toggle_geometry(void)
 			NULL);
 		total_rows = old_script_rows + old_journal_rows;
 		/* divide the rows between script and journal */
-		journal_rows = (short)(journal_ratio * total_rows);
+		journal_rows = (short)(xpp_resources.journal_ratio * total_rows);
 		script_rows = total_rows - journal_rows;
 		XtVaSetValues(script,
 			XmNrows,	script_rows,
@@ -1730,10 +1748,16 @@ static void show_geometry(void)
 		total_rows, total_columns;
 	float ratio;
 	char *fmt =
-		"Script is %d rows by %d columns\n"
-		"Journal is %d rows by %d columns\n"
-		"Journal ratio is %4f\n";
-	char msg[3*sizeof "Journal is NNNNNN rows by NNNNNN columns\n"];
+		"==== Current Geometry Settings ====\n\n"
+		"The script window is %d rows by %d columns.%c"
+		"The journal window is %d rows by %d columns.\n"
+		"\nUse the following settings in the resource file\n"
+		"(e.g., $HOME/app-defaults/Xpp) for this layout:\n\n"
+		"Xpp.orientation:\t\t\t%s\n"
+		"Xpp.totalRows:\t\t\t\t%d\n"
+		"Xpp.totalColumns:\t\t\t%d\n"
+		"Xpp.journalRatio:\t\t\t%1.4f\n";
+	char msg[10*81]; /* 10 lines of (a lot less than) 80 chars + newline */
 	XtVaGetValues(mainpanes,
 		XmNorientation,	&orientation,
 		NULL);
@@ -1741,24 +1765,37 @@ static void show_geometry(void)
 		XmNrows,	&script_rows,
 		XmNcolumns,	&script_columns,
 		NULL);
-	XtVaGetValues(journal,
-		XmNrows,	&journal_rows,
-		XmNcolumns,	&journal_columns,
-		NULL);
-	if(orientation == XmVERTICAL) {
-		total_rows = script_rows + journal_rows;
-		total_columns = script_columns;
-		ratio = ((float) journal_rows)/total_rows;
+	if(global_options.edit_only) { /* just report on the script window */
+		sprintf(msg, fmt, script_rows, script_columns, '\0');
+		help_dialog(root, msg);
 	} else {
-		total_rows = journal_rows;
-		total_columns = script_columns + journal_columns;
-		ratio = ((float) journal_columns)/total_columns;
+		XtVaGetValues(journal,
+			XmNrows,	&journal_rows,
+			XmNcolumns,	&journal_columns,
+			NULL);
+		if(orientation == XmVERTICAL) {
+			total_rows = script_rows + journal_rows;
+/* reason script_columns and journal_columns can differ by 1; use larger one */
+			total_columns =
+				script_columns >= journal_columns ?
+					script_columns :
+					journal_columns;
+			ratio = ((float) journal_rows)/total_rows;
+		} else {/* horizontal */
+/* the setup needs total_rows = script_rows (always < journal_rows here) */
+			total_rows = script_rows;
+			total_columns = script_columns + journal_columns;
+			ratio = ((float) journal_columns)/total_columns;
+		}
+		sprintf(msg, fmt,
+			script_rows, script_columns, '\n',
+			journal_rows, journal_columns,
+			orientation == XmVERTICAL ? "VERTICAL" : "HORIZONTAL",
+			total_rows,
+			total_columns,
+			ratio);
+		help_dialog(root, msg);
 	}
-	sprintf(msg, fmt,
-		script_rows, script_columns,
-		journal_rows, journal_columns,
-		ratio);
-	help_dialog(root, msg);
 }
 
 /*
