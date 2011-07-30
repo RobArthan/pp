@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.54 2011/01/30 17:28:03 rda Exp rda $
+# $Id: configure.sh,v 1.55 2011/02/01 15:30:00 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -360,13 +360,15 @@ case "${PPDOCFORMAT:-}" in
 	*)	give_up "unsupported document format \"$PPDOCFORMAT\" (not one of PDF or PS)"
 esac
 if	[ "$DOPDF" = y ]
-then	if	find_in_path dvipdfm >/dev/null 2>&1
-	then	DVI2PDF=dvipdfm
-	elif	find_in_path dvipdf >/dev/null 2>&1
+then	echo 'Generating code to produce PDF versions of the documents'
+	if	find_in_path dvipdf >/dev/null 2>&1
 	then	DVI2PDF=dvipdf
+	elif	find_in_path dvipdfm >/dev/null 2>&1
+	then	DVI2PDF=dvipdfm
+		warn "dvipdf not available, using dvipdfm"
+		warn "dvipdfm cannot include some diagrams in the documents"
 	else	give_up 'dvipdfm or dvipdf must be available if you specify PPDOCFORMAT=PDF'
 	fi
-	echo 'Generating code to produce PDF versions of the documents'
 elif	[ "$DOPS" = y ]
 then	if	find_in_path dvips >/dev/null 2>&1
 	then	echo 'Generating code to produce PostScript versions of the documents'
