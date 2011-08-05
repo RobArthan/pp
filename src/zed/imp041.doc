@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2011/02/06 17:41:38 $ $Revision: 1.59 $ $RCSfile: imp041.doc,v $
+% %Z% $Date: 2011/05/05 16:12:06 $ $Revision: 1.60 $ $RCSfile: imp041.doc,v $
 
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
@@ -19,10 +19,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Language Predicates}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP041}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.59 $%
+\def\SCCSversion{$Revision: 1.60 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2011/02/06 17:41:38 $%
+\TPPdate{\FormatDate{$Date: 2011/05/05 16:12:06 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -153,6 +153,8 @@ handling of tthe flag {\em check\_is\_z} more efficient.
 \item[Issue 1.58] Fixed $z\_\_u\_conv$ ($seta\_u\_conv$) to work for set abstractions with declaration variables not in Z~signature order.
 \item[Issue 1.59] Allowed for changes to forward chaining.
 \item[Issue 1.60] Allowed for extra parameter to primitive rewriting functions.
+\item[Issue 1.61] Made $z\_µ\_intro\_conv1$ and $z\_¶\_intro\_conv1$ more accommodating with terms in which bound variables have been renamed.
+This is done via a forward reference to $z\_dec\_rename_s\_conv$ which is resolved once that has been defined.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -188,8 +190,12 @@ None known.
 
 \section{PREAMBLE}
 =SML
-structure ÛZPredicateCalculusÝ = struct
-(* start of structure ZPredicateCalculus --- part 1 *)
+structure ÛZPredicateCalculusÝ :
+	sig
+		include ZPredicateCalculus;
+		val Ûresolve_forward_referencesÝ
+			: {z_dec_rename‰s_conv: CONV} -> unit;
+	end = struct
 =TEX
 =SML
 open Resolution;
@@ -210,6 +216,18 @@ val _ = set_pr_conv basic_prove_conv "'z_predicate_calculus_build";
 =TEX
 
 \section{THE CODE}
+\subsection{Forward References}
+=TEX
+Some of the conversion etc. are made more powerful by using tools that are not available until later in the build.
+=SML
+val Ûforward_referencesÝ : { z_dec_rename‰s_conv : CONV } ref =
+	ref { z_dec_rename‰s_conv = fail_conv };
+=TEX
+=SML
+fun Ûresolve_forward_referencesÝ (rf : { z_dec_rename‰s_conv : CONV }) : unit = (
+	forward_references := rf
+);
+=TEX
 \subsection{Utilities}
 =SML
 fun Ûlist_eqÝ (eq : 'a * 'a -> bool) (a :: x) (b :: y) = 
@@ -291,6 +309,14 @@ in
 end
 ) | seq_binder_simple_Á_conv [] = id_conv;
 end;
+=TEX
+The following is used to map a conversion over the elements of a HOL list display. Its behaviour is suited to the specific uses in this document.
+=SML
+fun ÛLIST_CÝ (conv : CONV) : CONV = (fn tm =>
+	(COND_C	is_app
+		(LEFT_C conv THEN_C RIGHT_C (LIST_C conv))
+		id_conv) tm
+);
 =TEX
 \subsubsection{Conversionals}
 Apply through all $Ì$'s.
@@ -2193,47 +2219,50 @@ local
 	val cnv3 = simple_eq_match_conv1 (eqn_sym_rule z'µ_body_def);
 	val cnv4 = simple_eq_match_conv1 (eqn_sym_rule z'µ_def);
 
- 
+fun Ûcnv5Ý (recurring : bool) : CONV = (fn tm =>
+let	val (vs,bdy) = strip_simple_µ tm;
+	val ((d,p),v) = (dest_± ** Combinators.I)(dest_´ bdy);
+	val dbind =  dest_decl d;
+	val vs' = map dest_var vs;
+	val vnames = map fst vs';
+in	if	vnames ~= (map fst dbind)
+	then	let	val dummy = if all vs' (fn (nm,ty) => lassoc3 dbind nm =: ty)
+				then ()
+				else term_fail "z_µ_intro_conv1" 41024 [tm];
+			val s1 = cnv3 bdy;
+			val s2 = fold (fn (x,t) => µ_¤_rule x t) vs s1;
+			val svs = var_sort vs';
+			val rs2 = snd(dest_eq(concl s2));
+			val rbs2 = snd(strip_simple_µ rs2);
+			val s3 = µ_reorder_conv (list_mk_simple_µ (svs,rbs2)) rs2;
+			val s4 = eq_trans_rule s2 s3;
+			val s5 = conv_rule(RIGHT_C cnv4) s4;
+			val dummy = check_is_z_term "z_µ_intro_conv1" 
+				(snd(dest_eq(concl s5)));
+		in
+			s5
+		end
+	else if	not recurring
+	then	let	val dec_rename‰s_conv = #z_dec_rename‰s_conv(!forward_references);
+			val fix_conv = ALL_SIMPLE_µ_C (LEFT_C(LEFT_C(RAND_C
+					(LIST_C (TRY_C dec_rename‰s_conv)))))
+					ORELSE_C (fn _ => term_fail "z_µ_intro_conv1" 41024 [tm]);
+		in	(fix_conv THEN_C cnv5 true) tm
+		end
+	else	term_fail "z_µ_intro_conv1" 41024 [tm]
+end	handle complaint =>
+		list_divert complaint "z_µ_intro_conv1"
+		[("dest_±", 41023, [fn () => string_of_term tm]),
+		("dest_´", 41023, [fn () => string_of_term tm]),
+		("dest_decl", 41023, [fn () => string_of_term tm])]
+);
 in
 val Ûz_µ_elim_conv2Ý :CONV = 
 	(cnv1 THEN_C ALL_SIMPLE_µ_C cnv2)
 	ORELSE_C (fn tm => 
 	term_fail "z_µ_elim_conv2" 41022 [tm]
 	);
-
-val Ûz_µ_intro_conv1Ý :CONV = (
-all_µ_uncurry_conv AND_OR_C
-(fn tm =>(
-let	val (vs,bdy) = strip_simple_µ tm;
-	val ((d,p),v) = (dest_± ** Combinators.I)(dest_´ bdy);
-	val dbind =  dest_decl d;
-	val vs' = map dest_var vs;
-	val vnames = map fst vs';
-	val dummy = if vnames ~= (map fst dbind)
-		then ()
-		else term_fail "z_µ_intro_conv1" 41024 [tm];
-	val dummy = if all vs' (fn (nm,ty) => lassoc3 dbind nm =: ty)
-		then ()
-		else term_fail "z_µ_intro_conv1" 41024 [tm];
-	val s1 = cnv3 bdy;
-	val s2 = fold (fn (x,t) => µ_¤_rule x t) vs s1;
-	val svs = var_sort vs';
-	val rs2 = snd(dest_eq(concl s2));
-	val rbs2 = snd(strip_simple_µ rs2);
-	val s3 = µ_reorder_conv (list_mk_simple_µ (svs,rbs2)) rs2;
-	val s4 = eq_trans_rule s2 s3;
-	val s5 = conv_rule(RIGHT_C cnv4) s4;
-	val dummy = check_is_z_term "z_µ_intro_conv1" 
-		(snd(dest_eq(concl s5)));
-in
-	s5
-end)
-handle complaint =>
-list_divert complaint "z_µ_intro_conv1"
-[("dest_±", 41023, [fn () => string_of_term tm]),
-("dest_´", 41023, [fn () => string_of_term tm]),
-("dest_decl", 41023, [fn () => string_of_term tm])]
-));
+val Ûz_µ_intro_conv1Ý : CONV = cnv5 false;
 end;
 =TEX
 Examples:
@@ -2594,18 +2623,6 @@ z_µ_inv_conv ñµ x,y : X · g®;
 z_µ_inv_conv ñµ x,y : X | f· false®;
 =TEX
 
-Split the structure here to avoid a compiler quirk that means this
-structure fails to compile on a Sun~3.
-
-=SML
-end; (* of structure ZPredicateCalculus --- part 1 *)
-
-structure ÛZPredicateCalculusÝ : ZPredicateCalculus = struct
-(* start of structure ZPredicateCalculus --- part 2 *)
-
-open ZPredicateCalculus;
-=TEX
-
 =SML
 local
 	fun ct args = (
@@ -2765,15 +2782,8 @@ local
 	val cnv2 = simple_eq_match_conv1 z'¶_body_def;
 	val cnv3 = simple_eq_match_conv1 (eqn_sym_rule z'¶_body_def);
 	val cnv4 = simple_eq_match_conv1 (eqn_sym_rule z'¶_def);
-in
-val Ûz_¶_elim_conv2Ý :CONV = 
-	(cnv1 THEN_C ALL_SIMPLE_¶_C cnv2)
-	ORELSE_C (fn tm =>
-	term_fail "z_¶_elim_conv2" 41044 [tm]);
 
-val Ûz_¶_intro_conv1Ý :CONV = (
-all_¶_uncurry_conv AND_OR_C
-(fn tm =>
+fun Ûcnv5Ý (recurring : bool) : CONV = (fn tm =>
 let	val (vs,bdy) = strip_simple_¶ tm;
 	val (d,(p,v)) = (Combinators.I ** dest_±)(dest_± bdy)
 		handle complaint =>
@@ -2782,24 +2792,38 @@ let	val (vs,bdy) = strip_simple_¶ tm;
 	val dbind =  dest_decl d;
 	val vs' = map dest_var vs;
 	val vnames = map fst vs';
-	val dummy = if vnames ~= (map fst dbind)
-		then ()
-		else term_fail "z_¶_intro_conv1" 41041 [tm];
-	val dummy = if all vs' (fn (nm,ty) => lassoc3 dbind nm =: ty)
-		then ()
-		else term_fail "z_¶_intro_conv1" 41041 [tm];
-	val s1 = cnv3 bdy;
-	val s2 = fold (fn (x,t) => ¶_¤_rule x t) vs s1;
-	val svs = var_sort vs';
-	val rs2 = snd(dest_eq(concl s2));
-	val rbs2 = snd(strip_simple_¶ rs2);
-	val s3 = ¶_reorder_conv (list_mk_simple_¶ (svs,rbs2)) rs2;
-	val s4 = eq_trans_rule s2 s3;
-	val s5 = conv_rule(RIGHT_C cnv4) s4;
-	val dummy = check_is_z_term "z_¶_intro_conv1" (snd(dest_eq(concl s5)));
+in	if	vnames ~= (map fst dbind)
+	then	let	val dummy = if all vs' (fn (nm,ty) => lassoc3 dbind nm =: ty)
+				then ()
+				else term_fail "z_¶_intro_conv1" 41041 [tm];
+			val s1 = cnv3 bdy;
+			val s2 = fold (fn (x,t) => ¶_¤_rule x t) vs s1;
+			val svs = var_sort vs';
+			val rs2 = snd(dest_eq(concl s2));
+			val rbs2 = snd(strip_simple_¶ rs2);
+			val s3 = ¶_reorder_conv (list_mk_simple_¶ (svs,rbs2)) rs2;
+			val s4 = eq_trans_rule s2 s3;
+			val s5 = conv_rule(RIGHT_C cnv4) s4;
+			val dummy = check_is_z_term "z_¶_intro_conv1" (snd(dest_eq(concl s5)));
+		in
+			s5
+		end
+	else if	not recurring
+	then	let	val dec_rename‰s_conv = #z_dec_rename‰s_conv(!forward_references);
+			val fix_conv = ALL_SIMPLE_¶_C (LEFT_C(RAND_C
+					(LIST_C (TRY_C dec_rename‰s_conv))))
+					ORELSE_C (fn _ => term_fail "z_¶_intro_conv1" 41041 [tm]);
+		in	(fix_conv THEN_C cnv5 true) tm
+		end
+	else term_fail "z_¶_intro_conv1" 41041 [tm]
+end);
+
 in
-	s5
-end));
+val Ûz_¶_elim_conv2Ý :CONV = 
+	(cnv1 THEN_C ALL_SIMPLE_¶_C cnv2)
+	ORELSE_C (fn tm =>
+	term_fail "z_¶_elim_conv2" 41044 [tm]);
+val Ûz_¶_intro_conv1Ý : CONV = cnv5 false;
 end;
 =IGN
 Examples:
@@ -4001,8 +4025,8 @@ a(step_strip_tac);
 \section{EPILOGUE}
 =SML
 end; (* of structure ZPredicateCalculus --- part 2 *)
-open ZPredicateCalculus;
 =TEX
+The structure is not opened at the top level until the forward reference has been resolved and the function for resolving it can be hidden (in IMP043).
 \twocolumn[\section{INDEX}]
 \small
 \printindex
