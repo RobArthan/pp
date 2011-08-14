@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.124 2011/07/28 10:53:50 rda Exp rda $
+ * $Id: mainw.c,v 2.125 2011/07/30 14:23:12 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -30,7 +30,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 
 #include "xpp.h"
 
@@ -924,8 +923,8 @@ static Boolean setup_main_window(
 			short script_rows, script_columns, journal_rows;
 			script_columns = xpp_resources.total_columns;
 			journal_rows =
-				(short)roundf(xpp_resources.journal_ratio *
-						xpp_resources.total_rows);
+				(xpp_resources.journal_ratio *
+					xpp_resources.total_rows) + 0.5;
 			script_rows = xpp_resources.total_rows - journal_rows;
 			XtVaSetValues(script,
 				XmNrows,	script_rows,
@@ -938,8 +937,8 @@ static Boolean setup_main_window(
 			short script_columns, journal_rows, journal_columns;
 			journal_rows = xpp_resources.total_rows;
 			journal_columns =
-				(short)roundf(xpp_resources.journal_ratio *
-						xpp_resources.total_columns);
+				(xpp_resources.journal_ratio *
+					xpp_resources.total_columns) + 0.5;
 			script_columns = xpp_resources.total_columns - journal_columns;
 			XtVaSetValues(script,
 				XmNcolumns,	script_columns,
