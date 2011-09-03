@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.44 2011/07/28 10:53:50 rda Exp rda $§
+ * $Id: xpp.c,v 2.45 2011/07/30 14:23:12 rda Exp rda $§
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -381,11 +381,12 @@ Boolean get_pp_fonts(void)
 	int nfonts, npaths, i;
 	fonts = XListFonts(XtDisplay(root), TEST_FONT, 1, &nfonts);
 	if(nfonts == 1) {
+		XFreeFontNames(fonts);
 		return 0;
 	}
 	old_font_path = XGetFontPath(XtDisplay(root), &npaths);
 	new_font_path = (char**)XtMalloc( (npaths+1) * (sizeof (char*)) );
-	pp_font_dir = (char*) XtMalloc(strlen(pp_home) + strlen(FONTS) + 2);
+	pp_font_dir = (char*)XtMalloc(strlen(pp_home) + strlen(FONTS) + 2);
 	sprintf(pp_font_dir, "%s/%s", pp_home, FONTS);
 	if(!is_dir(pp_font_dir)) {
 		msg("warning", " cannot find the ProofPower font directory");
@@ -401,6 +402,7 @@ Boolean get_pp_fonts(void)
 		env_diag("failed to add %s to X font path", pp_font_dir);
 		msg("warning", " could not use the ProofPower font directory");
 	} else {
+		XFreeFontNames(fonts);
 		env_diag("added %s to X font path", pp_font_dir);
 	}
 	XFreeFontPath(old_font_path);
