@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.58 2009/09/06 13:20:10 rda Exp rda $
+ * $Id: pterm.c,v 2.59 2009/09/06 14:50:50 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -1218,11 +1218,7 @@ static int x_io_error_handler(Display *d)
 	return panic_exit("exiting", 17);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * handle signals and Xt errors: the derivation of the following list
- * of OS signals to handle is not very scientific, but seems to catch
- * the common problems. Earlier versions of this code also used to
- * catch SIGSYS on Solaris, but this has been removed since it's not
- * portable and there is no evidence that the SIGSYS signal ever occurred.
+ * handle signals and Xt errors:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void handle_sigs(void)
 {
