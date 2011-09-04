@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: xmisc.c,v 2.40 2011/02/12 10:17:57 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -417,7 +417,7 @@ extern char *text_get_line(
 			;
 		}
 		if(*p == '\n') {
-			right = ins_pos + (p - data);
+			right = cur_pos + (p - data);
 			break;
 		}
 	}
