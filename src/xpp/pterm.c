@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.59 2009/09/06 14:50:50 rda Exp rda $
+ * $Id: pterm.c,v 2.60 2011/09/04 15:04:57 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -392,8 +392,8 @@ static char* send_error_message =
  */
 typedef enum {
 	H_DEFAULT,	/* default using SIG_DFL */
-	H_ASK,		/* sig_ask_handler -  ask the user what to do */
-	H_FATAL,	/* sig_panic_handler - attempt to save the editor text and die */
+	H_CHECK_QUIT,	/* ask the user if they want to quit */
+	H_FATAL,	/* attempt to save the editor text and die */
 	H_IGNORE	/* ignore it using SIG_IGN */
 } handler_info;
 
@@ -441,7 +441,7 @@ static sig_info	sig_infos []  = {
 	{"illegal instruction",		SIGILL,		H_FATAL, },
 #endif
 #ifdef SIGINT
-	{"interrupt",		SIGINT,		H_ASK, },
+	{"interrupt",		SIGINT,		H_CHECK_QUIT, },
 #endif
 /* SIGKILL cannot be caught or ignored */
 #ifdef SIGPIPE
@@ -1127,24 +1127,28 @@ static char *sig_desc(int sig)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Signal handling for the controller process:
- * We define two handlers:
- * sig_ask_handler uses the new X11R6 signal handling functions
- * to arrange to ask the user what to do:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void sig_ask_handler(int sig)
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * sig_notice_handler uses the new X11R6 signal handling functions
+ * to arrange to notice a signal that has an associated callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void sig_notice_handler(int sig)
 {
 	int i;
 	for(i = 0; i < XtNumber(sig_infos); i += 1) {
-		if(sig_infos[i].number == sig && sig_infos[i].disposition == H_ASK) {
+		if(sig_infos[i].number == sig) {
 			XtNoticeSignal(sig_infos[i].signal_id);
 			break;
 		}
 	}
 }
 
-static void sig_ask_callback(XtPointer cbd_ignored, XtSignalId *s_ignored)
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * check_quit_scb: check_quit packaged as a signal callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void check_quit_scb(XtPointer cbd_ignored, XtSignalId *s_ignored)
 {
-	XtAppAddTimeOut(app, 0, (XtTimerCallbackProc) check_quit_cb, root);
+	check_quit();
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1233,11 +1237,11 @@ void handle_sigs(void)
 				sigaction(sig_infos[i].number, &acts, 0);
 				break;
 				break;
-			case H_ASK:
-				acts.sa_handler = sig_ask_handler;
+			case H_CHECK_QUIT:
+				acts.sa_handler = sig_notice_handler;
 				sigaction(sig_infos[i].number, &acts, 0);
 				sig_infos[i].signal_id = XtAppAddSignal(app,
-					sig_ask_callback, (XtPointer) 0);
+					check_quit_scb, (XtPointer) 0);
 				break;
 			case H_FATAL:
 				acts.sa_handler = sig_panic_handler;

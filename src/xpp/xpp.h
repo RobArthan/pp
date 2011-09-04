@@ -191,7 +191,7 @@ typedef enum {
 	extern Widget root;
 	extern Widget script;
 	extern Widget journal;
-	extern void check_quit_cb(CALLBACK_ARGS);
+	extern void check_quit(void);
 	extern void scroll_out(char *buf, Cardinal ct, Boolean ignored);
 	extern void show_modified(Boolean force);
 	extern void show_unmodified(void);

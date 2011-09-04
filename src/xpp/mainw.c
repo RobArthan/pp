@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.128 2011/09/04 14:08:31 rda Exp rda $
+ * $Id: mainw.c,v 2.129 2011/09/04 14:51:50 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -150,49 +150,51 @@ XtPointer undo_ptr;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void
+	check_quit_cb(CALLBACK_ARGS),
 	cmd_menu_cb(CALLBACK_ARGS),
-	script_undo_cb(CALLBACK_ARGS),
-	script_redo_cb(CALLBACK_ARGS),
 	file_menu_cb(CALLBACK_ARGS),
 	help_menu_cb(CALLBACK_ARGS),
-	reopen_cb(CALLBACK_ARGS),
+	journal_modify_cb(CALLBACK_ARGS),
 	line_number_cb(CALLBACK_ARGS),
 	ln_popup_cb(CALLBACK_ARGS),
-	journal_modify_cb(CALLBACK_ARGS),
-	popup_search_tool_cb(CALLBACK_ARGS),
-	popup_line_no_tool_cb(CALLBACK_ARGS),
-	popup_palette_cb(CALLBACK_ARGS),
-	popup_templates_tool_cb(CALLBACK_ARGS),
-	popup_command_line_tool_cb(CALLBACK_ARGS),
-	popup_options_tool_cb(CALLBACK_ARGS),
-	new_editor_session_cb(CALLBACK_ARGS),
 	new_command_session_cb(CALLBACK_ARGS),
+	new_editor_session_cb(CALLBACK_ARGS),
+	popup_command_line_tool_cb(CALLBACK_ARGS),
+	popup_line_no_tool_cb(CALLBACK_ARGS),
+	popup_options_tool_cb(CALLBACK_ARGS),
+	popup_palette_cb(CALLBACK_ARGS),
+	popup_search_tool_cb(CALLBACK_ARGS),
+	popup_templates_tool_cb(CALLBACK_ARGS),
+	reopen_cb(CALLBACK_ARGS),
+	script_redo_cb(CALLBACK_ARGS),
+	script_undo_cb(CALLBACK_ARGS),
+	show_geometry_cb(CALLBACK_ARGS),
 	show_hide_cb(CALLBACK_ARGS),
-	toggle_geometry_cb(CALLBACK_ARGS),
-	show_geometry_cb(CALLBACK_ARGS);
+	toggle_geometry_cb(CALLBACK_ARGS);
 
-static void setup_reopen_menu(char *filename);
-static void defer_resize (EVENT_HANDLER_ARGS);
-static void journal_resize_handler (EVENT_HANDLER_ARGS);
-static void execute_command(void);
-static void execute_current_line(void);
-static void file_menu_op(int op, Boolean *success);
 static Boolean check_save(void);
 static void command_line_action(ACTION_PROC_ARGS);
+static void defer_resize (EVENT_HANDLER_ARGS);
 static void execute_action(ACTION_PROC_ARGS);
+static void execute_command(void);
+static void execute_current_line(void);
 static void execute_line_action(ACTION_PROC_ARGS);
+static void file_menu_op(int op, Boolean *success);
 static void goto_line_action(ACTION_PROC_ARGS);
 static void interrupt_action(ACTION_PROC_ARGS);
+static void journal_resize_handler (EVENT_HANDLER_ARGS);
 static void quit_action(ACTION_PROC_ARGS);
 static void script_open_action(ACTION_PROC_ARGS);
 static void script_redo_action(ACTION_PROC_ARGS);
 static void script_save_action(ACTION_PROC_ARGS);
 static void script_undo_action(ACTION_PROC_ARGS);
-static void show_hide_script_action(ACTION_PROC_ARGS);
-static void show_hide_journal_action(ACTION_PROC_ARGS);
-static void toggle_geometry_action(ACTION_PROC_ARGS);
-static void show_geometry_action(ACTION_PROC_ARGS);
 static void search_action(ACTION_PROC_ARGS);
+static void setup_reopen_menu(char *filename);
+static void show_geometry_action(ACTION_PROC_ARGS);
+static void show_hide_journal_action(ACTION_PROC_ARGS);
+static void show_hide_script_action(ACTION_PROC_ARGS);
+static void toggle_geometry_action(ACTION_PROC_ARGS);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
  * N.b. parts of what follow (e.g., those dealing with menu item
@@ -1366,7 +1368,7 @@ static void file_menu_op(int op, Boolean *success)
 		if(old_fname) {XtFree(old_fname);}
 		break;
 	case FILE_MENU_QUIT:
-		check_quit_cb(root, NULL, NULL);
+		check_quit();
 		break;
 	default:
 		break;
@@ -2122,12 +2124,9 @@ static Boolean check_save (void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * See if the user really wants to quit, and if so do so:
+ * check_quit: see if the user really wants to quit, and if so do so:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void check_quit_cb (
-		Widget		w,
-		XtPointer	unused_cbd,
-		XtPointer	unused_cbs)
+void check_quit (void)
 {
 	char *fname = get_file_name();
 	if(!check_save()) {
@@ -2144,6 +2143,17 @@ void check_quit_cb (
 #endif
 		exit(0);
 	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * check_quit_cb: check_quit packaged as a callback:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void check_quit_cb (
+		Widget		w,
+		XtPointer	unused_cbd,
+		XtPointer	unused_cbs)
+{
+	check_quit();
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
