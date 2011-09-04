@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.126 2011/08/14 15:26:21 rda Exp rda $
+ * $Id: mainw.c,v 2.127 2011/09/04 13:30:14 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -842,6 +842,7 @@ static Boolean setup_main_window(
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
 	script = XmCreateScrolledText(scriptpanes, "script", args, i);
+
 	XtVaSetValues(XtParent(script),
 		XmNallowResize,		True,
 		NULL);
@@ -853,15 +854,20 @@ static Boolean setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	if( !global_options.edit_only ) { /* command session */
+	if( global_options.edit_only ) { /* edit-only session */
+		XtVaSetValues(script,
+			XmNrows,	xpp_resources.edit_only_rows,
+			XmNcolumns,	xpp_resources.edit_only_columns,
+			NULL);
+	} else { /* command session */
 		Boolean editable;
 		Widget *children;
 		Cardinal num_children;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * The journal widget is managed by a form to support the show-hide-journal
- * functionality (so that when it is hidden, the scriptpanes widget will take
- * over its part of the display).
+ * functionality (so that when it is hidden, the scriptpanes widget
+ * will take over its part of the display).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	journalform = XtVaCreateWidget("journalform",
@@ -948,11 +954,6 @@ static Boolean setup_main_window(
 				XmNcolumns,	journal_columns,
 				NULL);
 		}
-	} else { /* edit-only session */
-		XtVaSetValues(script,
-			XmNrows,	xpp_resources.total_rows,
-			XmNcolumns,	xpp_resources.total_columns,
-			NULL);
 	}
 
 /*
@@ -1749,9 +1750,9 @@ static void show_geometry(void)
 	short script_rows, journal_rows, script_columns, journal_columns,
 		total_rows, total_columns;
 	float ratio;
-	char *fmt =
+	char *command_session_fmt =
 		"==== Current Geometry Settings ====\n\n"
-		"The script window is %d rows by %d columns.%c"
+		"The script window is %d rows by %d columns.\n"
 		"The journal window is %d rows by %d columns.\n"
 		"\nUse the following settings in the resource file\n"
 		"(e.g., $HOME/app-defaults/Xpp) for this layout:\n\n"
@@ -1759,7 +1760,15 @@ static void show_geometry(void)
 		"Xpp.totalRows:\t\t\t\t%d\n"
 		"Xpp.totalColumns:\t\t\t%d\n"
 		"Xpp.journalRatio:\t\t\t%1.4f\n";
-	char msg[10*81]; /* 10 lines of (a lot less than) 80 chars + newline */
+	char *edit_only_session_fmt =
+		"==== Current Geometry Settings ====\n\n"
+		"The script window is %d rows by %d columns.\n"
+		"\nUse the following settings in the resource file\n"
+		"(e.g., $HOME/app-defaults/Xpp) for this layout:\n\n"
+		"Xpp.editOnlyRows:\t\t\t%d\n"
+		"Xpp.editOnlyColumns:\t\t\t%d\n";
+	char msg[10*81]; /* 10 lines of (less than) 80 chars + newline */
+
 	XtVaGetValues(mainpanes,
 		XmNorientation,	&orientation,
 		NULL);
@@ -1767,18 +1776,18 @@ static void show_geometry(void)
 		XmNrows,	&script_rows,
 		XmNcolumns,	&script_columns,
 		NULL);
-	if(global_options.edit_only) { /* just report on the script window */
-		sprintf(msg, fmt, script_rows, script_columns, '\0',
-			0, 0, "", 0, 0, 0.0f);
-		help_dialog(root, msg);
-	} else {
+	if(global_options.edit_only) { /* report on the script window */
+		sprintf(msg, edit_only_session_fmt,
+			script_rows, script_columns,
+			script_rows, script_columns);
+	} else { /* command session - report on both windows */
 		XtVaGetValues(journal,
 			XmNrows,	&journal_rows,
 			XmNcolumns,	&journal_columns,
 			NULL);
 		if(orientation == XmVERTICAL) {
 			total_rows = script_rows + journal_rows;
-/* reason script_columns and journal_columns can differ by 1; use larger one */
+/* script_columns and journal_columns can differ; use larger one */
 			total_columns =
 				script_columns >= journal_columns ?
 					script_columns :
@@ -1790,15 +1799,15 @@ static void show_geometry(void)
 			total_columns = script_columns + journal_columns;
 			ratio = ((float) journal_columns)/total_columns;
 		}
-		sprintf(msg, fmt,
-			script_rows, script_columns, '\n',
+		sprintf(msg, command_session_fmt,
+			script_rows, script_columns,
 			journal_rows, journal_columns,
 			orientation == XmVERTICAL ? "VERTICAL" : "HORIZONTAL",
 			total_rows,
 			total_columns,
 			ratio);
-		help_dialog(root, msg);
 	}
+	help_dialog(root, msg);
 }
 
 /*

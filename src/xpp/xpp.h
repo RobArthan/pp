@@ -384,6 +384,8 @@ typedef struct {
 	unsigned char orientation;
 	int total_rows;
 	int total_columns;
+	int edit_only_rows;
+	int edit_only_columns;
 } XppResources;
 
 #ifdef _xpp

@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.45 2011/07/30 14:23:12 rda Exp rda $§
+ * $Id: xpp.c,v 2.46 2011/09/03 14:17:37 rda Exp rda $§
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -19,6 +19,9 @@
 
 #define _xpp
 
+#define LIMIT_RANGE(VAR,LOW,HIGH) \
+	(VAR) = (VAR) < (LOW) ? (LOW) : (VAR) > (HIGH) ? (HIGH) : (VAR);
+
 #define XtNtextTranslations	"textTranslations"
 #define XtCTextTranslations	"TextTranslations"
 #define XtNtemplates		"templates"
@@ -35,12 +38,16 @@
 #define XtCOptionString		"OptionString"
 #define XtNpalette		"palette"
 #define XtCPalette		"Palette"
-#define XtNjournalRatio		"journalRatio"
-#define XtCJournalRatio		"JournalRatio"
 #define XtNtotalRows		"totalRows"
 #define XtCTotalRows		"TotalRows"
 #define XtNtotalColumns		"totalColumns"
 #define XtCTotalColumns		"TotalColumns"
+#define XtNjournalRatio		"journalRatio"
+#define XtCJournalRatio		"JournalRatio"
+#define XtNeditOnlyRows		"editOnlyRows"
+#define XtCEditOnlyRows		"EditOnlyRows"
+#define XtNeditOnlyColumns	"editOnlyColumns"
+#define XtCEditOnlyColumns	"EditOnlyColumns"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -244,11 +251,26 @@ static XtResource resources[] = {
 		XtOffsetOf(XppResources, total_columns),
 		XtRImmediate,
 		(XtPointer)80
+	},
+	{
+		XtNeditOnlyRows,
+		XtCEditOnlyRows,
+		XtRInt,
+		sizeof(int),
+		XtOffsetOf(XppResources, edit_only_rows),
+		XtRImmediate,
+		(XtPointer) 24
+	},
+	{
+		XtNeditOnlyColumns,
+		XtCEditOnlyColumns,
+		XtRInt,
+		sizeof(int),
+		XtOffsetOf(XppResources, edit_only_columns),
+		XtRImmediate,
+		(XtPointer)80
 	}
 };
-
-
-
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Usage line
@@ -657,24 +679,20 @@ int main(int argc, char **argv)
 		XtNumber(resources),
 		NULL);
 
-	xpp_resources.journal_ratio =
-		xpp_resources.journal_ratio < 0.1 ? 0.1 :
-		xpp_resources.journal_ratio > 0.9 ? 0.9 :
-		xpp_resources.journal_ratio;
-
 	xpp_resources.orientation =
-		xpp_resources.orientation == XmVERTICAL ? XmVERTICAL :
-		 XmHORIZONTAL;
+		xpp_resources.orientation == XmVERTICAL ?
+			XmVERTICAL :
+			XmHORIZONTAL;
 
-	xpp_resources.total_rows =
-		xpp_resources.total_rows < 2 ? 2 :
-		xpp_resources.total_rows > 1000 ? 1000 :
-		xpp_resources.total_rows;
+	LIMIT_RANGE(xpp_resources.journal_ratio, 0.1, 0.9)
 
-	xpp_resources.total_columns =
-		xpp_resources.total_columns < 2 ? 2 :
-		xpp_resources.total_columns > 1000 ? 1000 :
-		xpp_resources.total_columns;
+	LIMIT_RANGE(xpp_resources.total_rows, 2, 1000)
+
+	LIMIT_RANGE(xpp_resources.total_columns, 2, 1000)
+
+	LIMIT_RANGE(xpp_resources.edit_only_rows, 2, 1000)
+
+	LIMIT_RANGE(xpp_resources.edit_only_columns, 2, 1000)
 
 	cmd_line = get_command_line(argc, argv, &use_default_command);
 	
