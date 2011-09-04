@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.125 2011/07/30 14:23:12 rda Exp rda $
+ * $Id: mainw.c,v 2.126 2011/08/14 15:26:21 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1642,6 +1642,9 @@ static void toggle_geometry(void)
 	XtVaGetValues(mainpanes,
 		XmNorientation,	&orientation,
 		NULL);
+	if(global_options.edit_only) {
+		return;
+	}
 	if(orientation == XmVERTICAL) {/* change to HORIZONTAL */
 		short old_script_columns, old_journal_columns,
 			total_columns, script_columns, journal_columns;
@@ -1765,7 +1768,8 @@ static void show_geometry(void)
 		XmNcolumns,	&script_columns,
 		NULL);
 	if(global_options.edit_only) { /* just report on the script window */
-		sprintf(msg, fmt, script_rows, script_columns, '\0');
+		sprintf(msg, fmt, script_rows, script_columns, '\0',
+			0, 0, "", 0, 0, 0.0f);
 		help_dialog(root, msg);
 	} else {
 		XtVaGetValues(journal,
