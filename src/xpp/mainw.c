@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.127 2011/09/04 13:30:14 rda Exp rda $
+ * $Id: mainw.c,v 2.128 2011/09/04 14:08:31 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -2230,6 +2230,7 @@ static void execute_current_line(void)
 		execute_string(cmd);
 		XmTextSetInsertionPosition(script, eoln + 1);
 		XmTextClearSelection(script, CurrentTime);
+		XtFree(cmd);
 	}
 }
 
