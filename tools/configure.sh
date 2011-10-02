@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.55 2011/02/01 15:30:00 rda Exp rda $
+# configure.sh,v 1.57 2011/10/02 13:45:59 rda Exp
 #
 # Environment variables may be used to force various decisions:
 #
@@ -279,8 +279,9 @@ then
 		if	[ ! -f "$PPPOLYHOME"/bin/poly ]
 		then	give_up "The file \"$PPPOLYHOME/bin/poly\" does not exist"
 		fi
-		if	[ ! -f "$PPPOLYHOME"/lib/libpolymain.a ]
-		then	give_up "The file \"$PPPOLYHOME/lib/libpolymain.a\" does not exist"
+		if	[ ! -f "$PPPOLYHOME"/lib/libpolymain.a -a \
+			  ! -f "$PPPOLYHOME"/lib64/libpolymain.a ]
+		then	give_up "Cannot find libpolymain.a in "$PPPOLYHOME/lib" or "$PPPOLYHOME/lib64
 		fi
 		if	[ "$OS" = darwin ]
 		then	POLYLINKFLAGS="${PPPOLYLINKFLAGS:--segprot POLY rwx rwx}"
