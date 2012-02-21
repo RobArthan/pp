@@ -48,9 +48,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.7 $
+\def\Version{$Revision: 1.8 $
 }
-\def\Date{\FormatDate{$Date: 2011/02/26 15:03:42 $
+\def\Date{\FormatDate{$Date: 2011/05/05 11:36:01 $
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -87,6 +87,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \item[Issue 1.5, 1.6] Fixed problems in cases where the pattern contains $\eta$-redexes.
 \item[Issue 1.7, 1.8] Renamed $ho\_match$ on $simple\_ho\_match$ to make
 way for an implementation of the Fettig/L\"{o}chner algorithm or similar later.
+\item[Issue 1.9] Fixed type variable capture problem.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -316,26 +317,48 @@ and ÛrigidrigidÝ (env : HOM_ENV)
 	end	handle Fail _ => raise HOMatch
 );
 =TEX
+To avoid problems with type variables being captured, we preprocess
+the pattern to make its type variables distinct from the type variables
+of the target term.
+Without this, the terms
+=INLINEFT
+¬Ìab: 'a ¸ 'b· Snd ab®
+=TEX
+\ and
+=INLINEFT
+¬Ìx:'b· Snd ((t : 'b ­ 'c ¸ 'd) x)®;
+=TEX
+\ would fail to match.
+=IGN
+val s = ¬x:'a®;
+val t = ¬y:'a®;
 =SML
 fun Ûsimple_ho_matchÝ (s : TERM) (t : TERM)
 	: (TYPE * TYPE) list * (TERM * TERM) list = (
-	let	val s_ty = type_of s;
-		val t_ty = type_of t;
-		val sigma = type_match1 [] s_ty t_ty;
-		val t = inst [] sigma t;
+	let	val s_tyvars = term_tyvars s;
+		val t_tyvars = term_tyvars t;
+		val ok = t_tyvars diff s_tyvars;
+		val common = t_tyvars diff ok;
+		val new = list_string_variant (ok @ s_tyvars) common;
+		val sigma0 = combine (map mk_vartype new) (map mk_vartype common);
+		val t1 = inst [] sigma0 t; 
+		val s_ty = type_of s;
+		val t_ty = type_of t1;
+		val sigma1 = type_match1 [] s_ty t_ty;
+		val t2 = inst [] sigma1 t1;
 		val env = {
 			theta = [],
-			sigma = sigma,
+			sigma = sigma1,
 			bvars = []
 		};
-		val {theta, sigma, ...} = hom ((s, t), env);
-	in	(sigma drop (op =), theta drop (op =))
+		val {theta = theta , sigma = sigma2, ...} = hom ((s, t2), env);
+		fun sigma02 tv = (rassoc1 sigma2 (rassoc1 sigma0 tv), tv);
+		val sigma3 = map sigma02 (map mk_vartype t_tyvars);
+	in	(sigma3 drop (op =), theta drop (op =))
 	end	handle HOMatch => (
 			term_fail "simple_ho_match" 120001 [s, t]
 		) | Fail _ => term_fail "simple_ho_match" 120001 [s, t]
 );
-
-
 =TEX
 =SML
 end (* of structure HigherOrderMatching *);
@@ -350,90 +373,3 @@ open HigherOrderMatching;
 
 
 =IGN
-
-val (m1, s1) = term_match ¬(Ì(b:'b)·(a:'a))® ¬x:'a®;
-
-simple_ho_match ¬ x ® ¬ x ®;
-simple_ho_match ¬ 1 ® ¬ x ®;
-simple_ho_match ¬ µx· x < 1 ² x = y ® ¬ µx· P x ®;
-simple_ho_match ¬ µx· x < 1 ² Fst (T, (T, F))® ¬ µx· P x ² Fst y®;
-simple_ho_match ¬ µx· x < 1 ± x = y ® ¬ µx· P x ± Q x®;
-simple_ho_match ¬ (t : 'a ­ 'b) ® ¬ Ìx:'a·(f x : 'b)®;
-simple_ho_match ¬ (t : î ­ î ¸ î ­ BOOL) ® ¬ Ìx:'a; y : 'b·(f x y: 'c)®;
-
-
-simple_È_norm_conv ¬ x ®;
-simple_È_norm_conv ¬ 1 ®;
-simple_È_norm_conv ¬ Ìx·f x ®;
-simple_È_norm_conv ¬ (Ìx·x + 1) 2 ®;
-simple_È_norm_conv ¬ (Ìf g·f 1 + g 2) ($* 2) ($- 2)®;
-simple_È_norm_conv ¬ (Ìf·f 1 + f(f(f((Ìj· f j) k)))) (Ìi·2 * i)®;
-simple_È_norm_conv ¬ ((Ìx·$+ x), (Ìx·Fst x), (Ìx·Succ x)) ®;
-simple_Â_È_conv ¬ (Ìx·$+ x) ® ¬ ($+) ®;
-
-val ³_µ_thm =
-	prove_rule[]¬µP·³(µx· P x) ¤ (¶x·³P x) ®;
-val µ_±_thm =
-	prove_rule[]¬µP Q·((µx· P x) ± (µx·Q x)) ¤ (µx·P x ± Q x) ®;
-val µ_²_thm =
-	prove_rule[]¬µP Q·((µx· P x) ² (µx·Q x)) ¤ (µx y·P x ² Q y) ®;
-val ³_¶_thm =
-	prove_rule[]¬µP·³(¶x· P x) ¤ (µx·³P x) ®;
-val ¶_±_thm =
-	prove_rule[]¬µP Q·((¶x· P x) ± (¶x·Q x)) ¤ (¶x y·P x ± Q y) ®;
-val ¶_²_thm =
-	prove_rule[]¬µP Q·(P ² (¶x·Q x)) ¤ (¶x·P ² Q x) ®;
-
-val ³_³_thm =
-	prove_rule[]¬µa·³³a ¤ a®;
-val ³_±_thm =
-	prove_rule[]¬µa b·³(a ± b) ¤ ³a ² ³b®;
-val ³_²_thm =
-	prove_rule[]¬µa b·³(a ² b) ¤ ³a ± ³b®;
-val ´_thm =
-	prove_rule[]¬µa b·a ´ b ¤ ³a ² b®;
-val ¤_thm =
-	prove_rule[]¬µa b·(a ¤ b) ¤ (³a ² b) ± (a ² ³b)®;
-
-val thms1 = [³_µ_thm, µ_±_thm, µ_²_thm, ³_¶_thm, ¶_±_thm,
-	¶_²_thm, ³_³_thm, ³_±_thm, ³_²_thm, ´_thm, ¤_thm];
-
-val µ_±_thm2a =
-	prove_rule[]¬µa Q·(a ± (µx· Q x)) ¤ (µx·a ± Q x) ®;
-val µ_±_thm2b =
-	prove_rule[]¬µP b·((µx· P x) ± b) ¤ (µx·P x ± b) ®;
-val µ_²_thm2a =
-	prove_rule[]¬µa Q·(a ² (µx· Q x)) ¤ (µx·a ² Q x) ®;
-val µ_²_thm2b =
-	prove_rule[]¬µP b·((µx· P x) ² b) ¤ (µx·P x ² b) ®;
-val ¶_±_thm2a =
-	prove_rule[]¬µa Q·(a ± (¶x· Q x)) ¤ (¶x·a ± Q x) ®;
-val ¶_±_thm2b =
-	prove_rule[]¬µP b·((¶x· P x) ± b) ¤ (¶x·P x ± b) ®;
-val ¶_²_thm2a =
-	prove_rule[]¬µa Q·(a ² (¶x· Q x)) ¤ (¶x·a ² Q x) ®;
-val ¶_²_thm2b =
-	prove_rule[]¬µP b·((¶x· P x) ² b) ¤ (¶x·P x ² b) ®;
-
-val thms2 = [
-	µ_±_thm2a, µ_±_thm2b, µ_²_thm2a, µ_²_thm2b, ¶_±_thm2a, ¶_±_thm2b, ¶_²_thm2a, ¶_²_thm2b];
-
-val quant_out_conv = TOP_MAP_C
-	(FIRST_C (map simple_ho_eq_match_conv thms) ORELSE_C
-	 FIRST_C (map simple_ho_eq_match_conv thms2));
-
-quant_out_conv ¬(µx· x < 1) ± (µx·x > 2)®;
-
-quant_out_conv ¬(¶x·x < 1) ² (¶x·x = 0)®;
-
-quant_out_conv ¬(¶x·x < 1) ´ (¶x·x = 0)®;
-quant_out_conv ¬¶x· (µ x· ³ x < 1) ² x = 0®;
-
-simple_ho_eq_match_conv µ_²_thm ¬(µ x· ³ x < 1) ² x = 0®;
-simple_ho_eq_match_conv µ_²_thm ¬(µx· x < 1) ² (µx·x > 2)®;
-
-
-
-
-
-
