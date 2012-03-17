@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp020.doc   %Z% $Date: 2005/12/16 09:45:48 $ $Revision: 1.34 $ $RCSfile: imp020.doc,v $
+% imp020.doc   %Z% $Date: 2005/12/16 10:34:27 $ $Revision: 1.35 $ $RCSfile: imp020.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for ICL HOL Symbol Table}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP020}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.34 $%
+\def\SCCSversion{$Revision: 1.35 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 09:45:48 $%
+\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -103,7 +103,7 @@ Renamings from version 1.5 of DS/FMU/IED/WRK038.
 \item[Issue 1.20~(\FormatDate{92/07/07
 }) ]
 	Allow multiple languages per constant.
-\item[Issue \SCCSversion~(\FormatDate{$Date: 2005/12/16 09:45:48 $%
+\item[Issue \SCCSversion~(\FormatDate{$Date: 2005/12/16 10:34:27 $%
 }) ]
 	Made languages of new theories be inherited from the parent.
 	Use error code 20501 in $declare_const_language$, was 20502.
@@ -118,6 +118,7 @@ Fixed {\it undeclare\_alias} and added {\it get\_alias\_info}
 \item[Issue 1.30] Now uses {\em get\_const\_keys} and {\em get\_type\_keys}.
 \item[Issues 1.31--1.33] Kernel interface and symbol table reform.
 \item[Issue 1.35] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.36] Support for using type abbreviations in pretty printing.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -399,10 +400,19 @@ functions which read and write these caches (the read functions are part of
 the visible interface).
 
 \subsection{The Caches}
-The type information cache contains entries as suggested by the
-discussion of $get\_type\_info$ in the detailed design.
+The type information cache contains a field for each type
+abbreviation or constructor giving
+the information returned by $get\_type\_info$ in the detailed design
+(this is the information needed when parsing a type)
+and a field for a constructor
+giving any type abbreviations for instances of the type
+(this is the field used by $get\_type\_abbrev$).
+(With the current use of this, exactly one of the two fields will
+be present.)
 =SML
-val Ûty_info_cacheÝ : (int * (((string list) * TYPE)OPT)) E_DICT ref = ref initial_e_dict;
+val Ûty_info_cacheÝ : (
+	(int * (string list * TYPE) OPT) *
+	(string * string list * TYPE) list ) E_DICT ref = ref initial_e_dict;
 =TEX
 The constant information cache contains a field for each
 name which gives the
@@ -539,16 +549,43 @@ val cache2 =
 	end
 );
 =TEX
+The handler below is defensive against the odd but permitted
+case when $ty$ is a type variable.
 =SML
-fun Ûcache_type_abbrevÝ(a : string, (args : string list, ty : TYPE)) : unit = (
-	ty_info_cache := e_enter a (length args, Value(args, ty)) (!ty_info_cache)
+fun Ûcache_type_abbrevÝ(a : string, (pars : string list, ty : TYPE)) : unit = (
+	let	val cache1 = e_enter a ((length pars, Value (pars, ty)), []) (!ty_info_cache);
+		val cache2 =
+			let	val (con, args) = dest_ctype ty;
+				val (info, tyabs) =
+					case e_lookup con cache1 of
+						Value i_ta => i_ta
+					|	Nil => ((length args, Nil), []);
+			in	e_enter con (info, (a, pars, ty)::tyabs) cache1
+			end	handle Fail _ => cache1;
+	in	ty_info_cache := cache2
+	end
 );
 =TEX
+Again we have a handler to defend against an unusual case.
 =SML
 fun Ûuncache_type_abbrevÝ (a : string) : unit = (
-	case get_type_arity a of
-		Nil => ty_info_cache := e_delete a (!ty_info_cache)
-	|	Value ar => ty_info_cache := e_enter a (ar, Nil) (!ty_info_cache)
+	case e_lookup a (!ty_info_cache) of
+		Value ((_, Value (_, ty)), _) => (
+		let	val cache1 = e_delete a (!ty_info_cache);
+			val cache2 =
+			let	val con = fst(dest_ctype ty);
+				val (info, tyabs) =
+					case e_lookup con cache1 of
+						Value i_ta => i_ta
+					|	Nil => ((0, Nil), []);
+				val tyabs' = tyabs drop (fn (n, _, _) => n = a);
+			in	case tyabs' of
+					[] => e_delete con cache1
+				|	_ => e_enter con (info, tyabs') cache1
+			end	handle Fail _ => cache1;
+		in	ty_info_cache := cache2
+		end
+	) |	_ => ()
 );
 =TEX
 The following is required here for use in {\em cache\_const\_language}.
@@ -991,11 +1028,13 @@ fun Ûget_aliasÝ (s : string, ty : TYPE) : string = (
 =SML
 fun Ûget_type_infoÝ (t : string) : (int * (string list * TYPE) OPT) OPT = (
 	case e_lookup t (!ty_info_cache) of
-		Nil => (
+		 Value((info as (_, Value _)), _) => (
+			Value info
+	) | 	_ => (
 			case get_type_arity t of
 				Value a => Value(a, Nil)
 			|	Nil => Nil
-	) |	v => v
+	)
 );
 =TEX
 =SML
@@ -1037,10 +1076,26 @@ fun Ûis_type_abbrevÝ (a : string) : bool =(
 );
 =TEX
 =SML
-fun Ûget_type_abbrevÝ (a : string) : string list * TYPE = (
-	case get_type_info a of
-		Value(_, Value (formals, ty)) => (formals, ty)
-	|	_ => fail "expand_type_abbrev" 20404 [fn()=>a]
+fun Ûget_type_abbrevÝ (ty : TYPE) : (string * TYPE list) OPT = (
+	let	val con = fst(dest_ctype ty);
+		val (_, tyabs) = force_value(e_lookup con (!ty_info_cache));
+		fun aux [] = Nil
+		|   aux ((n, pars, typat)::more) = (
+			let	val subs = type_match ty typat;
+				fun maplet par = (
+					let	val vty = mk_vartype par;
+					in	(rassoc1 subs vty, vty)
+					end
+				);
+				val parsubs = map maplet pars;
+				val test_ty = inst_type parsubs typat;
+			in	if	test_ty = ty
+				then	Value(n, map fst parsubs)
+				else	aux more
+			end	handle Fail _ => aux more
+		);
+	in	aux tyabs
+	end	handle	Fail _ => Nil
 );
 =TEX
 =SML
