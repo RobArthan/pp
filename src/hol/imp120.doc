@@ -48,9 +48,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.8 $
+\def\Version{$Revision: 1.9 $
 }
-\def\Date{\FormatDate{$Date: 2011/05/05 11:36:01 $
+\def\Date{\FormatDate{$Date: 2012/02/21 13:18:26 $
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -88,6 +88,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \item[Issue 1.7, 1.8] Renamed $ho\_match$ on $simple\_ho\_match$ to make
 way for an implementation of the Fettig/L\"{o}chner algorithm or similar later.
 \item[Issue 1.9] Fixed type variable capture problem.
+\item[Issue 1.10] You can now specify a list of ``rigid'' variables that will not be instantiated.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -139,6 +140,7 @@ Here and throughout we follow the {\Product}
 convention of putting things relating to the target of the match to the left of things relating to the pattern:
 so we represent a substition $[t_1/F_1, \ldots, t_k/F_k]$
 using the pairs $(t_i, F_i)$ not $(F_i, t_i)$ as Nipkow does.
+
 We carry around the type instantiation $\sigma$ and
 term substitution $\theta$ (which becomes {\tt S}
 in Nipkow's final code).
@@ -147,6 +149,8 @@ side of a pair $(t_i, F_i)$ in $\theta$ has already been
 instantiated to its final target type when it is
 put in $\theta$ and no further instantation can apply to it.
 The bound variables never need instantiation.
+We also have the list of rigid variables passed in as a parameter.
+These are treated as monomorphic constants.
 =SML
 type ÛHOM_ENVÝ = {
 	theta : (TERM * TERM) list,
@@ -217,11 +221,14 @@ fun ÛrigidflexÝ ({theta, sigma, bvars} : HOM_ENV)
 =TEX
 {\tt matchtypes} is used in the rigid-rigid case to
 maintain the invariant that the two terms have the
-same type. Note the type-matching here is necessary
-even if $a$ and $b$ are Á-equivalent since we must not further instantiate
-the type variables in the type of $a$.
-The code drops redundant entries from $\sigma'$ here
-to avoid the type instantiations doing unnecessary copying.
+same type.
+We arrange for $\sigma$ to give the complete correspondence
+between type variables in the target $a$ and the pattern $b$, including
+type variables that are matched with themselves.
+This prevents us further instantiating type variables in the type of $a$.
+Before actually using $\sigma'$ to do an instantiation, we drop pairs of
+identical type variables from $\sigma'$ to avoid the instantiations doing
+unnecessary copying.
 =SML
 fun ÛmatchtypesÝ ({theta, sigma, bvars} : HOM_ENV)
 	(a : TERM, ss : TERM list)
@@ -261,8 +268,11 @@ fun ÛpopbvarÝ ({theta, sigma, bvars} : HOM_ENV) : HOM_ENV = (
 =TEX
 {\tt hom} is Nipkow's {\tt unif} simplified to do matching rather than unification.
 It assumes caller has ensured that $s$ and $t$ have the same type and has recorded the type instantiation
-used to do this in $\theta$.
+used to do this in $\sigma$.
 
+We have to deal with the cases when a bound variable in the pattern $t$
+hides one of the rigid variables and when the bound variable in the 
+target $s$ should not hide it.
 =SML
 fun ÛhomÝ ((s : TERM, t : TERM), env : HOM_ENV) : HOM_ENV = (
 	let	val t1 = devar env t;
@@ -317,6 +327,8 @@ and ÛrigidrigidÝ (env : HOM_ENV)
 	end	handle Fail _ => raise HOMatch
 );
 =TEX
+We implement the input list of rigid variables by treating them as outer bound variables and matching their type variables with themselves in the initial value of $\sigma$.
+
 To avoid problems with type variables being captured, we preprocess
 the pattern to make its type variables distinct from the type variables
 of the target term.
@@ -330,26 +342,36 @@ Without this, the terms
 =TEX
 \ would fail to match.
 =IGN
-val s = ¬x:'a®;
-val t = ¬y:'a®;
+val rvars = [¬f:'a ­ 'b®, ¬x:'z®];
+val s = ¬Ìa· (f : 'a ­ 'b)(q x a)®;
+val t = ¬Ìx· (f : 'a ­ 'b)(t x)®;
+=TEX
+
 =SML
-fun Ûsimple_ho_matchÝ (s : TERM) (t : TERM)
+fun Ûsimple_ho_matchÝ (rvars : TERM list) (s : TERM) (t : TERM)
 	: (TYPE * TYPE) list * (TERM * TERM) list = (
-	let	val s_tyvars = term_tyvars s;
+	let	val _ = case Value (find rvars (not o is_var))
+				handle Fail _ => Nil of
+			Nil => ()
+		|	Value t => term_fail "simple_ho_match" 120002 [t];
+		val r_tyvars = list_cup (map term_tyvars rvars);
+		val s_tyvars = term_tyvars s;
 		val t_tyvars = term_tyvars t;
-		val ok = t_tyvars diff s_tyvars;
+		val ok = (t_tyvars diff s_tyvars) cup r_tyvars;
 		val common = t_tyvars diff ok;
 		val new = list_string_variant (ok @ s_tyvars) common;
 		val sigma0 = combine (map mk_vartype new) (map mk_vartype common);
-		val t1 = inst [] sigma0 t; 
+		val t1 = inst [] sigma0 t;
 		val s_ty = type_of s;
 		val t_ty = type_of t1;
-		val sigma1 = type_match1 [] s_ty t_ty;
+		val r_tys = map mk_vartype r_tyvars;
+		val r_tym = combine r_tys r_tys;
+		val sigma1 = type_match1 r_tym s_ty t_ty;
 		val t2 = inst [] sigma1 t1;
 		val env = {
 			theta = [],
 			sigma = sigma1,
-			bvars = []
+			bvars = rvars
 		};
 		val {theta = theta , sigma = sigma2, ...} = hom ((s, t2), env);
 		fun sigma02 tv = (rassoc1 sigma2 (rassoc1 sigma0 tv), tv);
