@@ -108,6 +108,7 @@ made sure that no theorems have free variables.
 \item[Issue 1.27] Added quantifier elimination procedure for linear real arithmetic.
 \item[Issues 1.28, 1.29] Redesign of the term ordering functions using the new term order combinators.
 \item[Issue 1.30] Fixes for SML/NJ.
+\item[Issue 1.31] Arithmetic normal form now uses natural number powers.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -5672,14 +5673,6 @@ We arrange things so that a monomial with a sign comes immediately after the mon
 =GFT
 	a*b < ~a * b < 0 * a * b < ~1 * a * b < 1 * a * b < ....
 =TEX
-The function {\it pervert} below corresponds to the suggestions
-in the documentation for {\it gen\_term\_order} taking the sets
-$X_m$ to be the numbers of the form $i/m$ together with
-$X_{-1}$ containing numbers of the form
-=INLINEFT
-î¯ i
-=TEX
-.
 =SML
 fun Ûdest_litÝ (tm : TERM) : INTEGER * INTEGER OPT = (
 	(dest_î(dest_î¯ tm), Nil)
@@ -5766,14 +5759,14 @@ type ÛMONOMIALÝ = (TERM * INTEGER OPT) list;
 =SML
 fun Ûdest_monomial_and_signsÝ (tm : TERM) : MONOMIAL * INTEGER list = (
 	let	fun dest1 t = (
-			let	val (x, e) = dest_¯_î_exp t;
-			in	(dest_signed_or_recip x, Value (dest_î e))
-			end	handle Fail _ => (dest_signed_or_recip t, Nil)
+			let	val (xe, s) = dest_signed_or_recip t;
+			in	let	val (x, e) = dest_¯_î_exp t;
+				in	((x, Value (dest_î e)), s)
+				end	handle Fail _ => ((xe, Nil), s)
+			end
 		);
-		val tses = map dest1 (strip_¯_times tm);
-		val (tss, es) = split tses;
-		val (ts, ss) = split tss;
-	in	(combine ts es, ss)
+		val tess = map dest1 (strip_¯_times tm);
+	in	split tess
 	end
 );
 =TEX
@@ -5827,8 +5820,9 @@ This is intuitive but not admissible in the sense of the  Gr\"{o}bner basis theo
 fun Û¯_term_order_combÝ
 	(r : TERM -> TERM -> int)
 	: TERM -> TERM -> int = (
-	let	val monomial_order =
-			list_order(pair_order r exponent_order);
+	let	fun monomial_order m1 m2 =
+			pair_order(list_order r) (list_order exponent_order)
+			(split m1) (split m2);
 		val coeff_order =
 			pair_order
 			(opt_order1 rat_order)
@@ -6024,7 +6018,11 @@ fun ÛA_CÝ (c : CONV) : CONV = (fn tm =>
 	end
 );
 =TEX
-We want to simplify multiplication according to the following scheme, where $x$ and $y$ denotes atoms (and other variables are as in the list of simplifications for addition):
+We want to simplify multiplication according to the following scheme, where $x$ and $y$ denotes atoms, $m$ and $n$ are natural number indices, other variables are as in the list of simplifications for addition and 
+=INLINEFT
+[~]
+=TEX
+\ stands for an optional unary minus:
 =GFT
 1.	c*d		= c*d
 2.	0*x		= 0
@@ -6033,7 +6031,12 @@ We want to simplify multiplication according to the following scheme, where $x$ 
 5.	~1*x		= ~x
 6.	~x*~y		= x*y
 7.	x*~y		= ~x*y
+8.	[~]x*x^n	= [~]x^(n+1)
+9. 	[~]x^m*x	= [~]x^(m+1)
+10. 	[~]x^m*x^n	= [~]x^(m+n)
+11.	[~]x*x		= [~]x^2
 =TEX
+The exponent in the last 4 rules is converted to natural number arithmetic normal form.
 =SML
 val Ûtimes234567_thmÝ = tac_proof(([],
 	¬µx y:¯·
@@ -6064,7 +6067,49 @@ val Ûtimes0_thmÝ = tac_proof(([],
 val Ûtimes_minus0_thmÝ = tac_proof(([],
 	¬µx:¯·~(î¯ 0) * x = î¯ 0®),
 		rewrite_tac[¯_times_clauses, ¯_minus_clauses]);
-
+=TEX
+=SML
+val Ûtimes_8_thmÝ = tac_proof(([],
+	 ¬µx : ¯; n: î· x * x^n = x^(n+1)®),
+	rewrite_tac[¯_î_exp_def]);
+val Ûtimes_9_thmÝ = tac_proof(([],
+	 ¬µx : ¯; m: î· x^m * x = x^(m+1)®),
+	once_rewrite_tac[¯_times_comm_thm] THEN
+	rewrite_tac[times_8_thm]);
+val Ûtimes_10_thmÝ = tac_proof(([],
+	¬µx : ¯; m n : î· x^m * x^n = x^(m+n)®),
+		REPEAT strip_tac THEN induction_tac¬n:î® THEN
+		asm_rewrite_tac[¯_î_exp_def, plus_assoc_thm1, 
+			µ_elim¬x:¯® ¯_times_order_thm]);
+val Ûtimes_11_thmÝ = tac_proof(([],
+	 ¬µx : ¯; n: î· x * x = x^2®),
+	pure_rewrite_tac[pc_rule1 "lin_arith"prove_rule[]¬2 = (0+1)+1®,
+		 ¯_î_exp_def] THEN
+	rewrite_tac[]);
+val [Ûtimes_8_thm1Ý, Ûtimes_9_thm1Ý,
+		Ûtimes_10_thm1Ý, Ûtimes_11_thm1Ý] = map
+	(pure_once_rewrite_rule[
+		conv_rule(ONCE_MAP_C eq_sym_conv) ¯_times_minus_thm] o
+	pure_once_rewrite_rule[
+		conv_rule(ONCE_MAP_C eq_sym_conv) ¯_minus_eq_thm])
+	[times_8_thm, times_9_thm,
+		times_10_thm, times_11_thm];
+=TEX
+=SML
+val Ûtimes_89_10_11_convÝ = (
+	(FIRST_C (map simple_eq_match_conv [
+		times_8_thm,
+		times_9_thm,
+		times_10_thm, 
+		times_11_thm]) THEN_TRY_C RAND_C anf_conv) ORELSE_C
+	(FIRST_C (map simple_eq_match_conv [
+		times_8_thm1,
+		times_9_thm1,
+		times_10_thm1,
+		times_11_thm1]) THEN_TRY_C RAND_C (RAND_C anf_conv))
+);
+=IGN
+=SML
 val Û¯_timesÝ = ¬$*‰R®;
 fun ÛM_C1Ý (c : CONV) : CONV = (fn tm =>
 	let	val (ltm, rtm) = dest_¯_times tm;
@@ -6079,10 +6124,11 @@ fun ÛM_C1Ý (c : CONV) : CONV = (fn tm =>
 	end
 );
 fun ÛM_CÝ (c : CONV) : CONV = 
-	M_C1 c THEN_TRY_C
+	(M_C1 c THEN_TRY_C
 	FIRST_C (map simple_eq_match_conv
-		[times0_thm, times_minus0_thm, ¯_times_assoc_thm]
-);
+		[times0_thm, times_minus0_thm, ¯_times_assoc_thm])) AND_OR_C
+	(M_C1 times_89_10_11_conv ORELSE_C RAND_C (M_C1 times_89_10_11_conv));
+
 =TEX
 Finally, we need to sort out reciprocals, unary minus and unnormalised literal fractions:
 =SML
@@ -6111,7 +6157,6 @@ val Ûtimes_simp_convÝ =
 		CHANGED_C(RANDS_C (TRY_C ¯_signed_lit_conv)),
 		times1234567_conv,
 		¯_signed_lit_conv]));
-
 =TEX
 Unlike the natural number case, we have some  non-trivial work to
 do trying to make non-atoms from what $poly\_conv$ will see as
@@ -6202,8 +6247,6 @@ val Û¯_anf_convÝ : CONV = (fn tm =>
 );
 end;
 =TEX
-
-
 \section{LINEAR ARITHMETIC DECISION PROCEDURE}
 The material in this section implements the linear
 arithmetic decision procedure for the reals.
