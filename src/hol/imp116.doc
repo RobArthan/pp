@@ -108,7 +108,7 @@ made sure that no theorems have free variables.
 \item[Issue 1.27] Added quantifier elimination procedure for linear real arithmetic.
 \item[Issues 1.28, 1.29] Redesign of the term ordering functions using the new term order combinators.
 \item[Issue 1.30] Fixes for SML/NJ.
-\item[Issue 1.31] Arithmetic normal form now uses natural number powers.
+\item[Issues 1.31,1.32] Arithmetic normal form now uses natural number powers and the real number term ordering has been adjusted to match.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -5754,14 +5754,14 @@ fun €dest_signed_or_recip› (tm : TERM)
 );
 =TEX
 =SML
-type €MONOMIAL› = (TERM * INTEGER OPT) list;
+type €MONOMIAL› = (TERM * TERM OPT) list;
 =TEX
 =SML
 fun €dest_monomial_and_signs› (tm : TERM) : MONOMIAL * INTEGER list = (
 	let	fun dest1 t = (
 			let	val (xe, s) = dest_signed_or_recip t;
 			in	let	val (x, e) = dest_Ø_Ó_exp t;
-				in	((x, Value (dest_Ó e)), s)
+				in	((x, Value e), s)
 				end	handle Fail _ => ((xe, Nil), s)
 			end
 		);
@@ -5798,20 +5798,30 @@ fun €order_inducer› (tm : TERM)
 );
 =TEX
 =SML
-fun €degree› (m : MONOMIAL) : INTEGER = (
-	let	fun folder((_, Nil), d) = d @+ one
-		|   folder((_, Value e), d) = d @+ e;
-	in	fold folder m zero
+fun €degree› (m : MONOMIAL) : INTEGER OPT * TERM = (
+	let	fun int_folder((_, Nil), d) = d @+ one
+		|   int_folder((_, Value e), d) = d @+ dest_Ó e;
+		fun term_folder((_, Nil), d) = mk_plus(d, mk_Ó one)
+		|   term_folder((_, Value e), d) = mk_plus(e, d);
+	in	(Value(fold int_folder m zero), mk_t)
+		handle Fail _ => (Nil, fold term_folder m (mk_Ó zero))
 	end
 );
 =TEX
-The following gives an ordering appropriate for exponents, sliding an omitted exponent in between 0 and 1:
+The following gives an ordering appropriate for exponents, insert an omitted exponent in between 0 and 1:
 =SML
-val €exponent_order› : INTEGER OPT ORDER = 
-	induced_order(
-		fn	Nil => one
-		|	Value x => if x = zero then x else x @+ one,
-		integer_order);
+fun €exponent_order› (r : TERM ORDER) : TERM OPT ORDER = (
+	let	fun inducer Nil = mk_Ó one
+		|   inducer (Value tm) = (
+			let	val n = dest_Ó tm;
+			in	if	n = zero
+				then	tm
+				else	mk_Ó(n @+ one)
+			end	handle Fail _ => tm
+		);
+	in	induced_order(inducer, r)
+	end
+);
 =TEX
 The following gives the lexicographic ordering of monomials over the reals.
 Here ``lexicographic'' is used in the sense appropriate to a sparse representation of monomials, so that $xy$ precedes $xz$ (whereas in a dense representation, $xz$ = x^1y^0z^1$ precedes $xy = x^1y^1z^1$).
@@ -5821,7 +5831,7 @@ fun €Ø_term_order_comb›
 	(r : TERM -> TERM -> int)
 	: TERM -> TERM -> int = (
 	let	fun monomial_order m1 m2 =
-			pair_order(list_order r) (list_order exponent_order)
+			pair_order(list_order r) (list_order (exponent_order r))
 			(split m1) (split m2);
 		val coeff_order =
 			pair_order
@@ -5842,17 +5852,18 @@ The version that produces the admissible orderings:
 fun €Ø_term_order_comb1›
 	{graded : bool, inverse : bool}
 	(r : TERM ORDER) : TERM ORDER = (
-	let	val m_order =
+	let	val e_order = exponent_order r;
+		val m_order =
 		if	inverse
-		then	inv_list_order(pair_order r exponent_order)
-		else	list_order(pair_order (rev_order r) exponent_order);
+		then	inv_list_order(pair_order r e_order)
+		else	list_order(pair_order (rev_order r) e_order);
 		val coeff_order =
 			pair_order
 			(opt_order1 rat_order)
 			(list_order integer_order);
 		val d_order =
 		if	graded
-		then	induced_order(degree, integer_order)
+		then	induced_order(degree, pair_order (opt_order integer_order) r)
 		else	no_order;
 		val monomial_order =
 			d_order THEN_O m_order;
@@ -6007,15 +6018,12 @@ and then applying the conversion to the subterm $x + y$).
 val €Ø_plus› = ¨$+âRÆ;
 fun €A_C› (c : CONV) : CONV = (fn tm =>
 	let	val (ltm, rtm) = dest_Ø_plus tm;
-		exception BaseCase;
-	in let	val (rtm1, rtm2) = dest_Ø_plus rtm
-		handle Fail _ => raise BaseCase;
+		val (rtm1, rtm2) = dest_Ø_plus rtm;
 		val thm = c (mk_Ø_plus(ltm, rtm1));
 	in	eq_trans_rule
 		(list_µ_elim[ltm, rtm1, rtm2] Ø_plus_assoc_thm1)
 		(app_arg_rule rtm2 (app_fun_rule Ø_plus thm))
-	end 	handle BaseCase => c tm
-	end
+	end 	handle Fail _ => c tm
 );
 =TEX
 We want to simplify multiplication according to the following scheme, where $x$ and $y$ denotes atoms, $m$ and $n$ are natural number indices, other variables are as in the list of simplifications for addition and 
@@ -6035,8 +6043,10 @@ We want to simplify multiplication according to the following scheme, where $x$ 
 9. 	[~]x^m*x	= [~]x^(m+1)
 10. 	[~]x^m*x^n	= [~]x^(m+n)
 11.	[~]x*x		= [~]x^2
+12.	[~]x^1		= [~]x
+13.	[~]x^0		= [~]1
 =TEX
-The exponent in the last 4 rules is converted to natural number arithmetic normal form.
+The exponent is converted to natural number arithmetic normal form and if case 13 applies we simplify again.
 =SML
 val €times234567_thm› = tac_proof(([],
 	¨µx y:Ø∑
@@ -6082,18 +6092,31 @@ val €times_10_thm› = tac_proof(([],
 		asm_rewrite_tac[Ø_Ó_exp_def, plus_assoc_thm1, 
 			µ_elim¨x:ØÆ Ø_times_order_thm]);
 val €times_11_thm› = tac_proof(([],
-	 ¨µx : Ø; n: Ó∑ x * x = x^2Æ),
+	 ¨µx : Ø∑ x * x = x^2Æ),
 	pure_rewrite_tac[pc_rule1 "lin_arith"prove_rule[]¨2 = (0+1)+1Æ,
 		 Ø_Ó_exp_def] THEN
 	rewrite_tac[]);
-val [€times_8_thm1›, €times_9_thm1›,
-		€times_10_thm1›, €times_11_thm1›] = map
+val €times_12_thm› = tac_proof(([],
+	 ¨µx : Ø∑ x^1 = xÆ),
+	pure_once_rewrite_tac[pc_rule1 "lin_arith"prove_rule[]¨1 = 0+1Æ] THEN
+	rewrite_tac[Ø_Ó_exp_def]);
+val €times_13_thm› = tac_proof(([],
+	 ¨µx : Ø∑ x^0 = 1.Æ),
+	rewrite_tac[Ø_Ó_exp_def]);
+
+val [	€times_8_thm1›, €times_9_thm1›,
+	€times_10_thm1›, €times_11_thm1›] = map
 	(pure_once_rewrite_rule[
 		conv_rule(ONCE_MAP_C eq_sym_conv) Ø_times_minus_thm] o
 	pure_once_rewrite_rule[
 		conv_rule(ONCE_MAP_C eq_sym_conv) Ø_minus_eq_thm])
-	[times_8_thm, times_9_thm,
+	[	times_8_thm, times_9_thm,
 		times_10_thm, times_11_thm];
+
+val [	€times_12_thm1›, €times_13_thm1›] = map
+	(pure_once_rewrite_rule[
+		conv_rule(ONCE_MAP_C eq_sym_conv) Ø_minus_eq_thm])
+	[times_12_thm, times_13_thm];
 =TEX
 =SML
 val €times_89_10_11_conv› = (
@@ -6108,27 +6131,31 @@ val €times_89_10_11_conv› = (
 		times_10_thm1,
 		times_11_thm1]) THEN_TRY_C RAND_C (RAND_C anf_conv))
 );
-=IGN
+=TEX
+=SML
+val €times_12_13_conv› = (
+	FIRST_C (map simple_eq_match_conv [
+		times_12_thm, 
+		times_13_thm])
+);
+=TEX
 =SML
 val €Ø_times› = ¨$*âRÆ;
 fun €M_C1› (c : CONV) : CONV = (fn tm =>
 	let	val (ltm, rtm) = dest_Ø_times tm;
-		exception BaseCase;
-	in let	val (rtm1, rtm2) = dest_Ø_times rtm
-		handle Fail _ => raise BaseCase;
+		val (rtm1, rtm2) = dest_Ø_times rtm;
 		val thm = c (mk_Ø_times(ltm, rtm1));
 	in	eq_trans_rule
 		(list_µ_elim[ltm, rtm1, rtm2] Ø_times_assoc_thm1)
 		(app_arg_rule rtm2 (app_fun_rule Ø_times thm))
-	end 	handle BaseCase => c tm
-	end
+	end	handle Fail _ => c tm
 );
+=TEX
+and then $M\_C$ allows for the possiblity that we may have a leading zero coefficient.
+=SML
 fun €M_C› (c : CONV) : CONV = 
 	(M_C1 c THEN_TRY_C
-	FIRST_C (map simple_eq_match_conv
-		[times0_thm, times_minus0_thm, Ø_times_assoc_thm])) AND_OR_C
-	(M_C1 times_89_10_11_conv ORELSE_C RAND_C (M_C1 times_89_10_11_conv));
-
+	FIRST_C (map simple_eq_match_conv [times0_thm, times_minus0_thm]));
 =TEX
 Finally, we need to sort out reciprocals, unary minus and unnormalised literal fractions:
 =SML
@@ -6156,6 +6183,9 @@ val €times_simp_conv› =
 	(M_C (FIRST_C[
 		CHANGED_C(RANDS_C (TRY_C Ø_signed_lit_conv)),
 		times1234567_conv,
+		times_89_10_11_conv,
+		times_12_13_conv,
+		RAND_C times_12_13_conv,
 		Ø_signed_lit_conv]));
 =TEX
 Unlike the natural number case, we have some  non-trivial work to
