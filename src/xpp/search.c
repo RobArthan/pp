@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.75 2011/02/12 10:17:57 rda Exp rda $
+ * $Id: search.c,v 2.76 2011/07/30 14:23:12 rda Exp rda $
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -1325,7 +1325,7 @@ static Substring search_forwards(
 	} else {
 		if(last_comp != 0) {
 			if(cbdata->use_wildcards) {
-				regfree((regex_t *)comp);
+				regfree((regex_t *)last_comp);
 			} else {
 	 			XtFree((char*)last_comp);
 			}
@@ -1340,7 +1340,7 @@ static Substring search_forwards(
 	if(pattern == 0 && text == 0) {
 		if(last_comp != 0) {
 			if(cbdata->use_wildcards) {
-				regfree((regex_t *)comp);
+				regfree((regex_t *)last_comp);
 			} else {
 	 			XtFree((char*)last_comp);
 			}
