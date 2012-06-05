@@ -48,9 +48,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.9 $
+\def\Version{$Revision: 1.10 $
 }
-\def\Date{\FormatDate{$Date: 2012/02/21 13:18:26 $
+\def\Date{\FormatDate{$Date: 2012/05/06 12:46:31 $
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -88,7 +88,8 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \item[Issue 1.7, 1.8] Renamed $ho\_match$ on $simple\_ho\_match$ to make
 way for an implementation of the Fettig/L\"{o}chner algorithm or similar later.
 \item[Issue 1.9] Fixed type variable capture problem.
-\item[Issue 1.10] You can now specify a list of ``rigid'' variables that will not be instantiated.
+\item[Issues 1.10] You can now specify a list of ``rigid'' variables that will not be instantiated.
+\item[Issues 1.11] Fixed incorrect treatment of rigid variables in the rigid-flex case (where they must not be treated as bound variables).
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -150,12 +151,13 @@ instantiated to its final target type when it is
 put in $\theta$ and no further instantation can apply to it.
 The bound variables never need instantiation.
 We also have the list of rigid variables passed in as a parameter.
-These are treated as monomorphic constants.
+The rigid variables are treated as monomorphic constants (i.e., type variables in their types are not instantiated).
 =SML
 type €HOM_ENV› = {
 	theta : (TERM * TERM) list,
 	sigma : (TYPE * TYPE) list,
-	bvars : TERM list
+	bvars : TERM list,
+	rvars : TERM list
 };
 =TEX
 =SML
@@ -203,7 +205,7 @@ fun »_norm_fun_arg tm = (
 =TEX
 To keep the pattern to the right of the target, we do {\tt rigidflex} rather than {\tt flexrigid}.
 =SML
-fun €rigidflex› ({theta, sigma, bvars} : HOM_ENV)
+fun €rigidflex› ({theta, sigma, bvars, rvars} : HOM_ENV)
 	(t : TERM) (f : TERM, ym : TERM list) : HOM_ENV = (
 	let	fun ok v = v mem ym orelse not(v mem bvars);
 	in	case frees t drop ok of
@@ -213,7 +215,8 @@ fun €rigidflex› ({theta, sigma, bvars} : HOM_ENV)
 					val theta' = (s, f)::theta;
 				in	{theta = theta',
 					 sigma = sigma,
-					 bvars = bvars}
+					 bvars = bvars,
+					 rvars = rvars}
 				end
 		) |	_ =>	raise HOMatch
 	end
@@ -230,7 +233,7 @@ Before actually using $\sigma'$ to do an instantiation, we drop pairs of
 identical type variables from $\sigma'$ to avoid the instantiations doing
 unnecessary copying.
 =SML
-fun €matchtypes› ({theta, sigma, bvars} : HOM_ENV)
+fun €matchtypes› ({theta, sigma, bvars, rvars} : HOM_ENV)
 	(a : TERM, ss : TERM list)
 	(b : TERM, ts : TERM list) : HOM_ENV * TERM list = (
 	let	val ty_a = type_of a;
@@ -239,7 +242,8 @@ fun €matchtypes› ({theta, sigma, bvars} : HOM_ENV)
 		val env' = {
 			theta = theta,
 			sigma = sigma',
-			bvars = bvars};
+			bvars = bvars,
+			rvars = rvars};
 	in	if	a ~=$ b
 		then	(env', ts)
 		else if	fst(dest_const a) = fst(dest_const b)
@@ -252,18 +256,20 @@ fun €matchtypes› ({theta, sigma, bvars} : HOM_ENV)
 );
 =TEX
 =SML
-fun €pushbvar› ({theta, sigma, bvars} : HOM_ENV)
+fun €pushbvar› ({theta, sigma, bvars, rvars} : HOM_ENV)
 	(x : TERM) : HOM_ENV = (
 	{theta = theta,
 	 sigma = sigma,
-	 bvars = x :: bvars}
+	 bvars = x :: bvars,
+	 rvars = rvars}
 );
 =TEX
 =SML
-fun €popbvar› ({theta, sigma, bvars} : HOM_ENV) : HOM_ENV = (
+fun €popbvar› ({theta, sigma, bvars, rvars} : HOM_ENV) : HOM_ENV = (
 	{theta = theta,
 	 sigma = sigma,
-	 bvars = tl bvars}
+	 bvars = tl bvars,
+	 rvars = rvars}
 );
 =TEX
 {\tt hom} is Nipkow's {\tt unif} simplified to do matching rather than unification.
@@ -310,6 +316,7 @@ and €cases› ((s : TERM, t : TERM), env : HOM_ENV) : HOM_ENV = (
 		val g' = »_norm_fun_arg g;
 	in	if	is_var g'
 		andalso	not(g' mem #bvars env)
+		andalso	not(g' mem #rvars env)
 		then	rigidflex env s (g', zn)
 		else	rigidrigid env (strip_app s) (g', zn)
 	end
@@ -371,7 +378,8 @@ fun €simple_ho_match› (rvars : TERM list) (s : TERM) (t : TERM)
 		val env = {
 			theta = [],
 			sigma = sigma1,
-			bvars = rvars
+			bvars = [],
+			rvars = rvars
 		};
 		val {theta = theta , sigma = sigma2, ...} = hom ((s, t2), env);
 		fun sigma02 tv = (rassoc1 sigma2 (rassoc1 sigma0 tv), tv);
