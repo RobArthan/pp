@@ -347,8 +347,11 @@ then	if	[ "${PPMOTIFLINKING:-}" != "" ]
 	elif	[ -d /sw/include/Xm ]
 	then	PPMOTIFHOME=/sw
 	fi
-	if	[ "${PPMOTIFHOME:-}" = "" ]
-	then	warn 'Motif installation not found'
+	if	[ "${PPMOTIFHOME:-}" != "" ]
+	then	echo "Using $PPMOTIFHOME for Motif include files and binaries"
+		USERCFLAGS="-I$PPMOTIFHOME/include $USERCFLAGS"
+		USERCLIBS="-L$PPMOTIFHOME/lib $USERCLIBS"
+	else	warn 'Motif installation not found'
 	fi
 fi
 #
