@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.60 2011/09/04 15:04:57 rda Exp rda $
+ * $Id: pterm.c,v 2.61 2011/09/04 15:45:53 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -834,7 +834,9 @@ static void get_from_application(
 		XtAppAddWorkProc(app,
 				get_from_app_work_proc,
 				(XtPointer) CONTINUE_LISTENING);
-	}		
+	} else if(ct <= 0) { /* application may have died; if so, tidy up. */
+		(void) application_alive();
+	}
 }
 
 static Boolean get_from_app_work_proc(XtPointer continue_flag)
