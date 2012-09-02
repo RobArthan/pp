@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  imp006.doc  %Z% $Date: 2006/01/26 12:19:20 $ $Revision: 1.65 $ $RCSfile: imp006.doc,v $
+%  imp006.doc  %Z% $Date: 2009/06/10 16:19:10 $ $Revision: 1.66 $ $RCSfile: imp006.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP006}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.65 $
+\def\SCCSversion{$Revision: 1.66 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/01/26 12:19:20 $ %
+\TPPdate{\FormatDate{$Date: 2009/06/10 16:19:10 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -170,10 +170,12 @@ The inference rules now report error messages without the icl' prefix on the sou
 This saves the need to remap the names in the interface functions.
 \item[Issue 1.60]
 Brought handling of initial state of the abstract data type of types and terms into line with intended design.
-\item[Issues 1.61, 1.62] Kernel interface and symbol table reform.
-\item[Issue 1.63] Now using $pp'$ instead of $icl'$ to prefix private interface names.
-\item[Issue 1.64] Added $pp'step\_current\_level$.
-\item[Issue 1.65] Fixed checks for clashing types and constants when a new parent is added.
+\item[Issues 1.61--1.63] Kernel interface and symbol table reform.
+\item[Issue 1.64] Now using $pp'$ instead of $icl'$ to prefix private interface names.
+\item[Issue 1.65] Added $pp'step\_current\_level$.
+\item[Issue 1.66] Fixed checks for clashing types and constants when a new parent is added.
+\item[Issue 1.67] {\em plus\_conv} now does the addition directly on the digit strings rather than
+converting to integers and back again.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -3358,20 +3360,56 @@ pp'plus_conv
 	‘mk_î n®® = 
 	‘mk_î(m + n)®
 =TEX
+It is more efficient to implement the addition digit-by-digit rather than converting to
+integers and using integer arithmetic. The following function does this 
+on the assumption that the operands are strings of decimal digits (which will be guaranteed
+by the discriminator function
+=INLINEFT
+is_î
+=TEX
+\ at the point of use).
+If the operands have no leading zeroes, then neither will the result.
 =SML
+local
+val ord0 = ord "0";
+fun Ûadd_decimalÝ (x : string) (y : string) : string = (
+	let	open SML97BasisLibrary;
+		fun digit i z = (
+			if	i >= 0
+			then	Char.ord(String.sub(z, i)) - ord0
+			else	0
+		);
+		fun recur acc carry i j = (
+			if	i >= 0 orelse j >= 0
+			then	let	val r = digit i x + digit j y + carry;
+					val (carry, r) =
+						if	r >= 10
+						then	(1, r - 10)
+						else	(0, r);
+					val d = Char.chr(r + ord0);
+				in	recur (d::acc) carry (i - 1) (j - 1)
+				end
+			else if	carry = 0
+			then	String.implode acc
+			else	String.implode (#"1" :: acc)
+		);
+	in	recur [] 0 (size x - 1) (size y - 1)
+	end
+);
+in
 val Ûpp'plus_convÝ : CONV = (fn (tm : TERM) =>
 let	val (m,n) = dest_bin_op "plus_conv" 6085 "+" tm;
-
-	val mint = dest_î m;
-	val nint = dest_î n;
-	val rhs = mk_î (mint @+ nint);
+	val _ =
+		if is_î m andalso is_î n
+		then ()
+		else fail "plus_conv" 6085 [fn () => string_of_term tm];
+	val mds = fst(dest_const m);
+	val nds = fst(dest_const n);
+	val rhs = mk_const (add_decimal mds nds, î);
 in
 	mk_current_thm([],mk_eq(tm,rhs))
-end
-handle complaint =>
-divert complaint "dest_î" "plus_conv" 6085
-	[fn () => string_of_term tm]
-);
+end);
+end;
 =TEX
 
 \section{END OF THE ADT}
