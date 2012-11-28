@@ -44,9 +44,9 @@ fairly complete parser for the full ANSI-C language.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.15 $%
+\def\Version{$Revision: 1.16 $%
 }
-\def\Date{\FormatDate{$Date: 2006/10/24 16:41:43 $%
+\def\Date{\FormatDate{$Date: 2006/10/25 13:31:40 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -125,9 +125,9 @@ There are two main problems with the reference grammar of \cite{LEMMA1/DEV/WRK06
 
 \begin{enumerate}
 \item
-The grannar as presented effectively assumes that {\tt typedef} names
+The grammar as presented effectively assumes that {\tt typedef} names
 comprise a distinguished subset of the set of identifers.
-This means that ther declarations must be analysed as they are encountered to maintain a timely record of what names are {\tt typedef} names.
+This means that their declarations must be analysed as they are encountered to maintain a timely record of what names are {\tt typedef} names.
 For example, to parse  `{\tt typedef int I; I i;}' properly according to the reference grammar,
 one must take the first `{\tt I}' as an {\em identifier} and the second `{\tt I}' as a {\em typedef\_name}.
 \item
@@ -191,7 +191,41 @@ a {\tt typedef} name shall not be redeclared as a parameter.}
 \item[6.5.2] {\em Each list of type specifiers shall be one of the following sets \ldots}
 
 (This implies that the type specifier part of a declaration can contain at most one {\tt typedef} name and that {\tt typedef} name cannot appear with other kinds of type specifier so that the second `{\tt I}' in the declaration `{\tt I I;}' above must be a declarator and cannot be a type specifier.)
+
 \end{description}
+
+There is an additional problem with the interpretation of parameter declarations, that was not completely addressed in \cite{ansi90}.
+In the following example: 
+\begin{verbatim}
+typedef int INT;
+float g4 (float INT (int));
+\end{verbatim}
+it is unclear whether {\tt INT} is a formal parameter name 
+or a typedef name.
+This was clarified in \cite{ansi11} as follows:
+
+\begin{description}
+\item[6.7.6.3p11] If, in a parameter declaration, an identifier can be treated as a typedef name or a parameter name, it shall be taken as a typedef name.
+\end{description}
+
+This is still slightly unclear. We follow {\tt gcc} and the
+defect report for this problem\footnote{
+See
+{\tt http://www.open-std.org/jtc1/sc22/WG14/www/docs/dr\_009.html}}
+in 
+interpreting ``can be treated as a typedef name or a parameter name'' as
+meaning ``can be parsed as a typedef name or a parameter name''.
+Thus even though parameter names are required in a function definition,
+we will take {\tt INT} to be a typedef name
+and hence construe {\tt float(INT(int))} as an abstract declarator
+in the following function definition (which will therefore be disallowed):
+\begin{verbatim}
+typedef int INT;
+float g4 (float (INT (int))) { return (float) INT(42); }
+\end{verbatim}
+The above function definition becomes valid if the redundant brackets are
+removed.
+
 
 The following records the various changes that have been made to the grammar of \cite{LEMMA1/DEV/WRK063}.
 If the changes are made incrementally, then, at each stage, the only LALR(1) conflict is the shift/reduce conflict caused by the dangling else problem.
@@ -218,8 +252,10 @@ change {\em specifier\_qualifier\_list} to have at least one type specifier and 
 \item
 \item[Parameter declarations:]
 Add new non-terminals {\em parameter\_direct\_declarator} and {\em parameter\_declarator}.
-{\em parameter\_direct\_declarator} is the union of {\em direct\_declarator}, {\em type\_direct\_declarator} and {\em direct\_abstract\_declarator} expressed in a separate recursion to avoid LALR(1) conflicts.
+{\em parameter\_direct\_declarator} is essentially the union of {\em direct\_declarator}, and {\em direct\_abstract\_declarator} generalised to allow the identifier being declared to be a typedef name provided the
+declarator is not enclosed in brackets.
 Use {\em parameter\_declarator} in {\em parameter\_declaration} in place of the separate alternatives for {\em declarator} and {\em abstract\_declarator}.
+
 \end{description}
 \item
 Add in new non-terminals, {\em do\_push\_members} etc. at the points in the syntax where an action function needs to be invoked, see section~\ref{actions} below.
@@ -535,12 +571,16 @@ The distinction between identifier or {\em typedef\_name} declarators then rippl
 =DUMPMORE wrk077.grm.txt
 Ûparameter_direct_declaratorÝ
 	= identifier_or_typedef_name, do_declaration_name
-	| `(`, parameter_declarator, `)`
+	| `(`, declarator, `)`
+	| `(`, abstract_declarator, `)`, do_abstract_declarator
 	| `(`, `)`, do_abstract_declarator
 	| `[`, `]`, do_abstract_declarator
 	| `[`, constant_expression, `]`, do_abstract_declarator
 	| parameter_direct_declarator, `[`, `]`
 	| parameter_direct_declarator, `[`, constant_expression, `]`
+	| `(`, do_push_parameters,
+		parameter_type_list, do_pop_parameters, `)`,
+			do_abstract_declarator
 	| parameter_direct_declarator, do_push_parameters,
 		`(`, parameter_type_list, do_pop_parameters, `)`
 	| parameter_direct_declarator, do_push_parameters,
@@ -1312,7 +1352,7 @@ fun Ûred_do_abstract_declaratorÝ () = (
 fun Ûred_do_push_parametersÝ () = (
 	(* do_push_parameters =  *)
 	push_scope Parameters;
-	generic_reducer ("do_push_paramters", 1) [] []
+	generic_reducer ("do_push_parameters", 1) [] []
 );
 =TEX
 =SML
@@ -1789,10 +1829,31 @@ int g(void)
 	x = (enum{I}) I;
 	x = I + 1;
 }
+float ff(float(int));
+typedef int INT;
+float ff(float INT (int))
+{
+	return (float)INT(42);
+}
 =SH
 cc -E wrk077.2.c >wrk077.2.i
 =SML
 print_tree (c_parse_file"wrk077.2.i");
+=TEX
+=DUMP wrk077.3.c
+typedef int INT;
+float ff(float (INT (int)))
+{
+	return (float) INT(42); /* syntax errpr: INT is still a typedef name */
+}
+=SH
+cc -E wrk077.3.c >wrk077.3.i
+=TEX
+We expect this one to give a syntax error:
+=SML
+(print_tree (c_parse_file"wrk077.3.i");
+	print "*** ERROR EXPECTED BUT NOT REPORTED ***\n"; raise Div)
+		handle SYNTAX_ERROR => ();
 =TEX
 \newpage
 \section{INDEX}
