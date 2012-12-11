@@ -24,7 +24,12 @@
 
 #include <X11/Intrinsic.h>
 #include <Xm/XmAll.h>
-#ifdef USEPANED
+
+/*
+ * Compile with -DUSEPANEDW on Motif versions before 2.2.1 (to use
+ * XmPanedWindow rather than XmPaned).
+ */
+#ifndef USEPANEDW
 #include <Xm/Paned.h>
 #define XMPANEDCLASS xmPanedWidgetClass
 #else

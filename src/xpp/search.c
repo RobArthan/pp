@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.76 2011/07/30 14:23:12 rda Exp rda $
+ * $Id: search.c,v 2.77 2012/06/03 14:38:28 rda Exp rda $
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -232,8 +232,7 @@ Boolean add_search_tool(Widget text_w)
 
 	XmString s;
 	int	i, j;
-#ifdef USEPANED
-#else
+#ifdef USEPANEDW
 /*
  * The following are used to record what sashes in paned before the
  * replacement text pane is added. This then allows us to remove the unwanted
@@ -370,8 +369,7 @@ Boolean add_search_tool(Widget text_w)
 		XmNbottomAttachment,		XmATTACH_FORM,
 		NULL);
 	XmStringFree(s);
-#ifdef USEPANED
-#else
+#ifdef USEPANEDW
 /*
  * Now take a snapshot of the children before creating the replacement text widget.
  */
@@ -387,7 +385,7 @@ Boolean add_search_tool(Widget text_w)
 	replace_text = XtVaCreateManagedWidget("replace-text",
 		xmTextWidgetClass,		paned,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
-#ifdef USEPANED
+#ifndef USEPANEDW
 		XmNshowSash,			False,
 #endif
 		NULL);
@@ -590,8 +588,7 @@ Boolean add_search_tool(Widget text_w)
 	fix_pane_height(replace_form, replace_form);
 	fix_pane_height(toggle_form, toggle_form);
 	fix_pane_height(action_form, action_form);
-#ifdef USEPANED
-#else
+#ifdef USEPANEDW
 /*
  * Now remove any sashes introduced while or since the replacement text pane
  * was added.

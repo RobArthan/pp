@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.40 2011/02/12 10:17:57 rda Exp rda $
+ * $Id: xmisc.c,v 2.41 2011/09/04 14:51:50 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -664,7 +664,7 @@ void remove_sashes(Widget paned_w)
 		XmNchildren,		&children,
 		XmNnumChildren,		&num_children,
 		NULL);
-#ifdef USEPANED
+#ifndef USEPANEDW
 	for(i = 0; i < num_children; ++i) {
 		if(strcmp(XtName(children[i]), "sash")) {
 			XtVaSetValues(children[i],
