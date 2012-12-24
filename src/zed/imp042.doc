@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Language Expressions}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP042}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.51 $%
+\def\SCCSversion{$Revision: 1.52 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2011/05/05 16:12:06 $%
+\TPPdate{\FormatDate{$Date: 2011/08/05 14:37:29 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -122,6 +122,7 @@ Fixing $Z\_ç_ELIM\_C$.
 \item[Issue 1.50] Support for empty schemas.  Improved $z\_ç\_seta\_conv1$.
 \item[Issue 1.51] Allowed for extra parameter to primitive rewriting functions.
 \item[Issue 1.52] Allowed for forward reference trick in IMP041.
+\item[Issue 1.53] Bugfix and improved backwards compatibility for $z\_ç\_seta\_conv1$.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1472,18 +1473,18 @@ local
 	end);
 
 	fun explode_tm (tm : TERM) : THM = (
-	(case dest_z_type (type_of tm) of
-	ZSchemaType _ => z_bindingd_intro_conv THEN_C (RANDS_C explode_tm)
-	| ZTupleType _ => z_selât_intro_conv THEN_C (RANDS_C explode_tm)
-	| _ => refl_conv)
-	tm
+		(case dest_z_type (type_of tm) of
+		ZSchemaType _ => z_bindingd_intro_conv THEN_C (RANDS_C explode_tm)
+		| ZTupleType _ => z_selât_intro_conv THEN_C (RANDS_C explode_tm)
+		| _ => refl_conv)
+		tm
 	);
 
 	fun exploded_bits tm = (
-	case dest_z_term1 tm of (* was dest_z_term KB *)
-	ZTuple bits => flat(map exploded_bits bits)
-	| ZBinding bits1 => flat (map (exploded_bits o snd) bits1)
-	| _ => [tm]
+		(case dest_z_term1 tm of (* was dest_z_term KB *)
+		ZTuple bits => flat(map exploded_bits bits)
+		| ZBinding bits1 => flat (map (exploded_bits o snd) bits1)
+		| _ => [tm]) handle Fail _ => [tm]
 	);
 	val Ua = ÒÉÆ;
 	fun uf ty = inst [] [(ty, î'aÆ)] Ua;
@@ -1800,12 +1801,14 @@ val z_empty_schema_type = mk_z_schema_type [];
 in
 val €z_binding_eq_conv2› : CONV = (fn tm => (
 let	val (b1,b2) = dest_z_eq tm;
-	val (b1args, b2args) = case (dest_z_term b1, dest_z_term b2) of
+	val (b1args, b2args) = (case (dest_z_term b1, dest_z_term b2) of
 		(ZBinding xs, ZBinding ys)	=> (map snd xs, map snd ys)
-	|	_				=>
-			if type_of b1 = z_empty_schema_type
-			then ([], [])
-			else term_fail "z_binding_eq_conv2" 42021 [tm];
+	|	_				=> fail "" 0 [])
+			handle Fail _ => (
+				if type_of b1 = z_empty_schema_type
+				then ([], [])
+				else term_fail "z_binding_eq_conv2" 42021 [tm]
+			);
 	val aconst = const_of_binding_type (type_of b1);
 	val spec = binding_gen_semantic_const aconst
 		handle (Fail _) => 
@@ -1942,18 +1945,18 @@ local
 	val z_tuple_eq_conv =
 		(RIGHT_C (COND_C is_z_tuple id_conv z_selât_intro_conv)) THEN_C
 			z_tuple_lang_eq_conv;
-	fun is_z_tuple_eq tm = is_z_tuple (fst (dest_eq tm)) handle Fail _ => false;
-	fun is_z_binding_eq tm = is_z_binding (fst (dest_eq tm)) handle Fail _ => false;
-	val cnv4 = TRY_C (
-		LEFT_C (
-			simple_eq_match_conv1 z' _def
-				ORELSE_C RANDS_C (TRY_C (simple_eq_match_conv1 z' _def))
-		)
-	) THEN_C (
-		COND_C is_z_tuple_eq z_tuple_eq_conv id_conv
-	) THEN_C (
-		ALL_±_C (COND_C is_z_binding_eq z_binding_eq_conv1 id_conv)
+	val empty_binding_thm = all_µ_intro(z_binding_eq_conv Ò() = xÆ);
+	val check_eqs_c = (
+			COND_C (switch all is_var o map (fst o dest_eq) o strip_±)
+				id_conv fail_conv
+		ORELSE_C
+			COND_C is_t id_conv fail_conv
 	);
+	val cnv4 = TRY_C z_tuple_eq_conv
+		THEN_C
+			ALL_±_C (TRY_C(LEFT_C (simple_eq_match_conv1 z' _def)
+					AND_OR_C (z_binding_eq_conv1
+							THEN_C check_eqs_c)));
 in
 val €z_ç_seta_conv1› : CONV = (fn tm =>
 let	val ciz = set_check_is_z false;
@@ -1963,29 +1966,24 @@ let	val ciz = set_check_is_z false;
 	val rhs = snd(dest_eq(concl s1));
 	val (d,p,v_eq_t) = dest_z_∂ rhs;
 	val (v,t) = dest_eq v_eq_t;
-	val res = (
-	if
-		case dest_z_term v of
+	val res =
+	if	(case dest_z_term v of
 			ZTuple _	=> false
 		|	ZBinding _	=> false
 		|	Z  _		=> false
 		|	ZLVar _		=> false
-		|	_		=> true
-	then s1
-	else ((
-let	val s2 = (z_∂_elim_conv THEN_TRY_C
-		ALL_SIMPLE_∂_C (RIGHT_C (RIGHT_C cnv4))) rhs;
-	val s3 = conv_rule (RIGHT_C(TRY_C cnv1 THEN_TRY_C cnv2
-			THEN_C REPEAT_C (LAST_SIMPLE_∂_C simple_∂_equation_conv)
-			THEN_TRY_C cnv3)) s2;
-	val s4 = eq_trans_rule s1 s3;
-in
-	if is_∂(snd(dest_eq(concl s4)))
-	then s1
-	else s4
-end
-	) handle (Fail _) => s1)
-	);
+		|	_		=> true)
+			handle Fail _ => true
+	then	s1
+	else	let	val s2 = (z_∂_elim_conv THEN_TRY_C
+				ALL_SIMPLE_∂_C (RIGHT_C (RIGHT_C cnv4))) rhs;
+			val s3 = conv_rule (RIGHT_C(TRY_C cnv1 THEN_TRY_C cnv2
+				THEN_C REPEAT_C (LAST_SIMPLE_∂_C simple_∂_equation_conv)
+				THEN_TRY_C cnv3)) s2;
+			val s4 = eq_trans_rule s1 s3;
+		in
+			if is_∂(snd(dest_eq(concl s4))) then s1 else s4
+		end	handle Fail _ => s1;
 	val _ = set_check_is_z ciz;
 in
 	check_is_z_conv_result "z_ç_seta_conv1" res
