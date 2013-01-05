@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.129 2011/09/04 14:51:50 rda Exp rda $
+ * $Id: mainw.c,v 2.130 2011/09/04 15:45:53 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -903,7 +903,7 @@ static Boolean setup_main_window(
 			XmNnumChildren, &num_children, NULL);
 
 		for(i = 0; i < num_children; ++i) {
-#ifdef USEPANED
+#ifndef USEPANEDW
 #define SASH "sash"
 #else
 #define SASH "Sash"
