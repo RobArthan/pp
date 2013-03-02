@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.35 2009/09/06 14:50:50 rda Exp rda $
+ * $Id: options.c,v 2.36 2009/09/06 15:54:05 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -65,6 +65,7 @@ GlobalOptions	orig_global_options;
  * <>	`Execute' adds missing new-lines;
  * <>  `Execute' prompts for new-lines
  * <>  `Execute' ignores missing new-lines
+ * []  Only display output in the Journal Window
  * Apply Current Original Dismiss Help
  * The parameter is a widget to be the owner of the
  * popup shell. It should be the text widget from which the source
@@ -73,7 +74,7 @@ GlobalOptions	orig_global_options;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static Widget
-	shell = NULL,
+	shell,
 	shell_row_col,
 		edit_frame,
 			edit_row_col,
@@ -90,6 +91,7 @@ static Widget
 				journal_max_form,
 					journal_max_lab,
 						journal_max_text,
+				echo_executed_text_toggle,
 		add_new_line_frame,
 			add_new_line_radio_buttons,
 		button_frame,
@@ -167,12 +169,13 @@ void init_options(Widget owner_w)
 	XmStringFree(lab);
 
 	lab = XmStringCreateSimple("Read only");
-
 	read_only_toggle = XtVaCreateManagedWidget("read-only",
 		xmToggleButtonWidgetClass,	edit_row_col,
 		XmNlabelString,		lab,
 		NULL);
-
+	if(global_options.read_only) {
+		XmToggleButtonSetState(read_only_toggle, True, False);
+	}
 	XmStringFree(lab);
 
 	file_type_frame = XtVaCreateManagedWidget("edit-frame",
@@ -195,10 +198,6 @@ void init_options(Widget owner_w)
 	XmStringFree(s3);
 	XtVaGetValues(file_type_menu, XmNsubMenuId, &w, NULL);
 	XtVaGetValues(w,  XmNchildren, &file_type_buttons, NULL ) ;
-
-	if(global_options.read_only) {
-		XmToggleButtonSetState(read_only_toggle,True, False);
-	}
 
 if(!global_options.edit_only) {
 	app_frame = XtVaCreateManagedWidget("app-frame",
@@ -271,6 +270,16 @@ if(!global_options.edit_only) {
 	attach_rw_edit_popup(journal_max_text);
 	register_selection_source(journal_max_text);
 	register_palette_client(journal_max_text);
+
+	s1 = XmStringCreateSimple("Echo executed text in the Journal Window");
+	echo_executed_text_toggle = XtVaCreateManagedWidget("echo-executed-text",
+		xmToggleButtonWidgetClass,	app_row_col,
+		XmNlabelString,		s1,
+		NULL);
+	if(global_options.echo_executed_text) {
+		XmToggleButtonSetState(echo_executed_text_toggle, True, False);
+	}
+	XmStringFree(s1);
 
 	add_new_line_frame = XtVaCreateManagedWidget(
 		"add-new-line-frame",
@@ -495,8 +504,9 @@ void add_options_tool(void)
 		XtManageChild(button_frame);
 		if(!global_options.edit_only) {
 			XmTextPosition last_pos;
-			XtManageChild(journal_max_form);
 			XtManageChild(command_form);
+			XtManageChild(journal_max_form);
+			XtManageChild(echo_executed_text_toggle);
 			XtManageChild(app_row_col);
 			XtManageChild(add_new_line_radio_buttons);
 			XtManageChild(add_new_line_frame);
@@ -554,6 +564,19 @@ static void apply_cb(
 
 	global_options.add_new_line_mode = add_new_line_mode_mirror;
 
+	if(command_text) {
+		char *new_cmd = XmTextGetString(command_text);
+		if(strcmp(new_cmd, global_options.command_line)) {
+			XtFree(global_options.command_line);
+			global_options.command_line = new_cmd;
+			if(yes_no_dialog(shell, restart_message, confirm_restart)) {
+				restart_application();
+			}
+		} else {
+			XtFree(new_cmd);
+		}
+	}
+
 	if(journal_max_text) {
 		char	*journal_max_buf;
 		char buf[20];
@@ -566,17 +589,9 @@ static void apply_cb(
 		XmTextSetString(journal_max_text, buf);
 	}
 
-	if(command_text) {
-		char *new_cmd = XmTextGetString(command_text);
-		if(strcmp(new_cmd, global_options.command_line)) {
-			XtFree(global_options.command_line);
-			global_options.command_line = new_cmd;
-			if(yes_no_dialog(shell, restart_message, confirm_restart)) {
-				restart_application();
-			}
-		} else {
-			XtFree(new_cmd);
-		}
+	if(echo_executed_text_toggle) {
+		global_options.echo_executed_text =
+			XmToggleButtonGetState(echo_executed_text_toggle);
 	}
 
 	XtPopdown((Widget)shell);

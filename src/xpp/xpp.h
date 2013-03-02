@@ -80,6 +80,7 @@ typedef struct {
 	FileType		file_type;
 /* journal option: */
 	Cardinal		journal_max;
+	Boolean			echo_executed_text;
 /* command menu options: */
 	AddNewLineMode		add_new_line_mode;
 	String			command_line;}

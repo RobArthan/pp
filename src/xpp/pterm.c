@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.61 2011/09/04 15:45:53 rda Exp rda $
+ * $Id: pterm.c,v 2.62 2012/08/24 12:15:33 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -311,7 +311,7 @@ macros before using them.
 #define STDERR 2
 
 /* For the following see "Data transfer from application" below */
-#define XFER_SIZE 8
+#define XFER_SIZE 100
 
 
 /* For the following see "Data transfer to application" below */
@@ -918,10 +918,12 @@ static Boolean dequeue(void)
 		}
 	}
 
-/* display what was sent, if anything: */
+/* update queue head, and optionally display what was sent, if anything: */
 
 	if(sent_something)  {
-		scroll_out(queue + q_head, bytes_written, True);
+		if(global_options.echo_executed_text) {
+			scroll_out(queue + q_head, bytes_written, True);
+		}
 		q_head = (q_head + bytes_written);
 	}
 

@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.46 2011/09/03 14:17:37 rda Exp rda $§
+ * $Id: xpp.c,v 2.47 2011/09/04 14:08:31 rda Exp rda $§
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -214,7 +214,7 @@ static XtResource resources[] = {
 		sizeof(char *),
 		XtOffsetOf(XppResources, option_string),
 		XtRString,
-		"bchrf:d:i:F:nsv"
+		"bchrf:d:i:F:nsve"
 	},
 	{
 		XtNjournalRatio,
@@ -489,6 +489,7 @@ static char *get_command_line(int argc, char **argv, Boolean *use_default_comman
 	havefonts = False;
 	file_name = NULL;
 	global_options.edit_only = False;
+	global_options.echo_executed_text = True;
 	res = NULL;
 	*use_default_command = True;
 	opterr = 0;
@@ -534,6 +535,9 @@ static char *get_command_line(int argc, char **argv, Boolean *use_default_comman
 					}
 					have_minus_c = True;
 					*use_default_command = False;
+					break;
+				case 'e' :
+					global_options.echo_executed_text = False;
 					break;
 				case '?' :
 				case ':' :
