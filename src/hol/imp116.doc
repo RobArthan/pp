@@ -109,6 +109,7 @@ made sure that no theorems have free variables.
 \item[Issues 1.28, 1.29] Redesign of the term ordering functions using the new term order combinators.
 \item[Issue 1.30] Fixes for SML/NJ.
 \item[Issues 1.31--1.35] Arithmetic normal form now uses natural number powers and the real number term ordering has been adjusted to match.
+\item[Issue 1.36] Fixed problems in the arithmetic normal form conversion when the input involves natural number powers.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -6245,6 +6246,34 @@ We need the following theorem:
 val Û¯_left_times_plus_distrib_thmÝ =
 	all_µ_intro(±_left_elim(all_µ_elim ¯_times_plus_distrib_thm));
 =TEX
+We need to preprocess terms of the form $t^e$ that 
+{\em poly\_conv} would otherwise consider to be atomic.
+If $t$ is a variable, we attempt to put $e$ in the ANF for natural numbers (hoping to obtain a
+numeric literal so that the result can be combined with other powers of $t$).
+If $t$ is not variable, we put $e$ in the ANF for natural numbers if necessary and possible
+and then, if the result is a numeric literal, we replace $t^0$ by $1$ and $t^n$ by $t \cdot t^{(n-1)}$
+if $n > 0$, allowing {\em poly\_conv} to make further simplifications.
+=SML
+local
+val Û¯_î_exp_0_thmÝ = ±_left_elim ¯_î_exp_def;
+val Û¯_î_exp_plus_1_thmÝ = ±_right_elim ¯_î_exp_def;
+val Ûî_eq_plus_1_convÝ : CONV = (fn tm =>
+	eq_sym_rule(plus_conv(mk_plus(mk_î(dest_î tm - 1), one_tm)))
+);
+val Û¯_î_exp_atom_convÝ : CONV = (fn tm =>
+	let val (x, _) = dest_¯_î_exp tm;
+	in	if	is_var x
+		then	RIGHT_C anf_conv
+		else	RIGHT_C anf_conv AND_OR_C
+			(simple_eq_match_conv ¯_î_exp_0_thm ORELSE_C
+				(RIGHT_C î_eq_plus_1_conv THEN_C
+					simple_eq_match_conv ¯_î_exp_plus_1_thm))
+	end	tm
+);
+in
+val Û¯_î_exp_signed_atom_convÝ = ¯_î_exp_atom_conv ORELSE_C COND_C is_¯_minus (RAND_C ¯_î_exp_atom_conv) fail_conv;
+end;
+=TEX
 Now we can define the external interfaces:
 =SML
 local
@@ -6268,6 +6297,7 @@ in
 fun  Û¯_ANF_CÝ (conv : CONV) : CONV = (fn tm =>
 	(¯_ANF_C_AUX (
 		conv AND_OR_C
+		¯_î_exp_signed_atom_conv AND_OR_C
 		¯_signed_lit_conv AND_OR_C
 		minus_simp_conv AND_OR_C
 		anf_frac_conv AND_OR_C
