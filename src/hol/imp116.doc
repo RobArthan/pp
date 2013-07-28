@@ -110,6 +110,7 @@ made sure that no theorems have free variables.
 \item[Issue 1.30] Fixes for SML/NJ.
 \item[Issues 1.31--1.35] Arithmetic normal form now uses natural number powers and the real number term ordering has been adjusted to match.
 \item[Issue 1.36] Fixed problems in the arithmetic normal form conversion when the input involves natural number powers.
+\item[Issue 1.37] More bug fixes relating to the new arithemetic normal form.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -5591,6 +5592,7 @@ val Ûeval_netÝ = switch list_net_enter empty_net
 	(¬x /‰R y®, ¯_over_conv THEN_C COND_C is_¯_times fail_conv id_conv),
 	(¬x ›-›1®, ¯_recip_conv),
 	(¬Abs‰R x®, ¯_abs_conv),
+	(¬(x:¯) ^ (n:î)®, TRY_C (RIGHT_C anf_conv) THEN_C ¯_î_exp_conv),
 	(¬~‰R x®, TRY_C ¯_minus_conv),
 	(¬Float x p e®, TRY_C float_conv)
 ];
@@ -5598,7 +5600,7 @@ val Ûeval_netÝ = switch list_net_enter empty_net
 =SML
 val rec Û¯_EVAL_CÝ : CONV -> CONV = (fn user_conv => fn tm =>
 	let	fun chk tm = (
-			let	val tm2 = dest_¯_minus tm	handle Fail _=> tm;
+			let	val tm2 = dest_¯_minus tm handle Fail _=> tm;
 			in	let	val (a, b) = dest_¯_frac tm2;
 					val (_, bi) = (dest_î a, dest_î b);
 				in	bi <> zero
@@ -6248,12 +6250,15 @@ val Û¯_left_times_plus_distrib_thmÝ =
 =TEX
 We need to preprocess terms of the form $t^e$ that 
 {\em poly\_conv} would otherwise consider to be atomic.
-If $t$ is a variable, we attempt to put $e$ in the ANF for natural numbers (hoping to obtain a
+We attempt to put $e$ in the ANF for natural numbers (hoping to obtain a
 numeric literal so that the result can be combined with other powers of $t$).
-If $t$ is not variable, we put $e$ in the ANF for natural numbers if necessary and possible
-and then, if the result is a numeric literal, we replace $t^0$ by $1$ and $t^n$ by $t \cdot t^{(n-1)}$
-if $n > 0$, allowing {\em poly\_conv} to make further simplifications.
+If we find $e = 0$, we replace $t^e$ with $t$ and we are done.
+If we find $e = n$, where $n$ is a non-zero numeric literal and 
+the principle connective of $t$ is one of the real arithmetic operators, we
+$t^n$ by $t \cdot t^{(n-1)}$, allowing {\em poly\_conv} to make further simplifications.
 =SML
+val Ûis_¯_termÝ : TERM -> bool = 
+	is_¯_plus fun_or is_¯_subtract fun_or is_¯_minus fun_or is_¯_times;
 local
 val Û¯_î_exp_0_thmÝ = ±_left_elim ¯_î_exp_def;
 val Û¯_î_exp_plus_1_thmÝ = ±_right_elim ¯_î_exp_def;
@@ -6261,13 +6266,13 @@ val Ûî_eq_plus_1_convÝ : CONV = (fn tm =>
 	eq_sym_rule(plus_conv(mk_plus(mk_î(dest_î tm - 1), one_tm)))
 );
 val Û¯_î_exp_atom_convÝ : CONV = (fn tm =>
-	let val (x, _) = dest_¯_î_exp tm;
-	in	if	is_var x
-		then	RIGHT_C anf_conv
-		else	RIGHT_C anf_conv AND_OR_C
-			(simple_eq_match_conv ¯_î_exp_0_thm ORELSE_C
-				(RIGHT_C î_eq_plus_1_conv THEN_C
-					simple_eq_match_conv ¯_î_exp_plus_1_thm))
+	let	val (x, _) = dest_¯_î_exp tm;
+		val base_c = RIGHT_C anf_conv AND_OR_C simple_eq_match_conv ¯_î_exp_0_thm;
+	in	if	not (is_¯_term x)
+		then	base_c
+		else	base_c AND_OR_C
+			(RIGHT_C î_eq_plus_1_conv THEN_C
+				simple_eq_match_conv ¯_î_exp_plus_1_thm)
 	end	tm
 );
 in
