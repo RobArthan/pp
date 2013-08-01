@@ -344,6 +344,8 @@ then	if	[ "${PPMOTIFLINKING:-}" != "" ]
 	then	PPMOTIFHOME=/usr/openwin
 	elif	[ -d /usr/include/Xm ]
 	then	PPMOTIFHOME=/usr
+	elif	[ -d /opt/local/include/Xm ]
+	then	PPMOTIFHOME=/opt/local
 	elif	[ -d /sw/include/Xm ]
 	then	PPMOTIFHOME=/sw
 	fi
