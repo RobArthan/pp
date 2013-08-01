@@ -121,6 +121,9 @@ of time and space. Added set inclusion test for lists.
 \item[Issue 2.53] Hack for Poly/ML 4.1.3.
 \item[Issue 2.54] Back to Poly/ML 5.1.X.
 \item[Issue 2.55] Suppressed pretty-printing of the abstypes under Poly/ML.
+\itempIssue 2.56] Added search tree structure.
+\end{desription}
+
 %\subsection{Changes Forecast}
 \section{GENERAL}
 \subsection{Scope}
@@ -1556,7 +1559,6 @@ end; (* of abstype OE_DICT *)
 end (* of OrderedEfficientDictionary *);
 
 open OrderedEfficientDictionary;
-
 =TEX
 \section{CODE PROFILING}
 The following definitions may be used to record
@@ -2124,6 +2126,221 @@ end;
 =SML
 end; (* of abstype 'a DYNAMIC_ARRAY *)
 end; (* of structure DynamicArray *)
+
+=TEX
+\section{SEARCH TREES}
+=SML
+structure €SearchTree› : SearchTree = struct
+=TEX
+=SML
+	open Order;
+=TEX
+The search trees are implemented as 1-2 brother trees (or just brother trees for short)
+following \cite{Hinzeo09}.
+The performance is very good even without the two optimisations that Hinze identifies.
+
+The main data type allows for unlabelled leaves ($N0$) and unary nodes ($N1$) and
+labelled binary nodes ($N2$). Inside the insertion function, we also use labelled leaves ($L2$)
+and ternary nodes with two labels ($N3$). These auxiliary nodes actually only appear
+at the root of the tree, but it greatly simplifies the pattern-matching in the insertion
+operation not to express this in the type.
+
+The operations preserve the following invariants (a) all leaves have the same depth and
+(b) unary nodes only occur as the children of a binary node.
+These invariants imply that brother trees are equivalent to AVL trees: if
+we elide the unary nodes in a brother the result is a binary tree in which the heights of
+the left and right children of every binary node differ by at most 1, which is the defining
+properties of AVL trees.
+
+=SML
+datatype ('k, 'd) €BT› =
+		€N0›
+	|	€N1› of ('k, 'd) BT
+	|	€N2› of ('k, 'd) BT * ('k * 'd) * ('k, 'd) BT
+	|	€L2› of ('k *'d)
+	|	€N3› of ('k, 'd) BT * ('k * 'd) * ('k, 'd) BT * ('k *'d) * ('k, 'd) BT;
+=TEX
+The functions that follow carry out the basic operations on brother trees (look-up, insert,
+delete and flatten).
+These functions assume that their inputs
+satisfy these invariants and do not contain any auxiliary nodes.
+The external interfaces packages them inside an abstract data type
+to guarantee that this holds.
+
+The look-up function is the standard look-up for binary trees skipping over the unary nodes.
+=SML
+fun €lookup› (order : 'k ORDER) (tree : ('k, 'd) BT) (key : 'k) : 'd OPT = (
+	let	fun lu N0 = Nil
+		|   lu (N1 t) = lu t
+		|   lu (N2 (l, (k, d), r)) = (
+			let	val s = order key k;
+			in	if s < 0 then lu l
+				else if s = 0 then Value d
+				else lu r
+			end
+		) | lu _ = error "st_lookup" 1402 [];
+	in	lu tree
+	end
+);
+=TEX
+The insertion function is parametrised by a flag indicating whether updates to existing
+nodes are allowed. When a new item is inserted, it is initially a labelled leaf ($L2$).
+This is either accommodated in the parent or results in a ternary node ($N3$) that is passed
+up the tree until it can be accomodated or until we reach the root, where we can increase the
+height of the tree to accomodate it. The rewrites that do this carefully preserve the height of
+subtrees. See \cite{Hinze09} for diagrams and details.
+=SML
+fun €insert› (update : bool)
+		(order : 'k ORDER) (key : 'k) (d : 'd) (tree: ('k, 'd) BT) : ('k, 'd) BT = (
+	let	fun root(N3(t1, a1, t2, a2, t3)) =
+			N2(N2(t1, a1, t2), a2, N1 t3)
+		|   root(L2 a) =
+			N2(N0, a, N0)
+		|   root t = t;
+		fun n1(L2 a) =
+			N2(N0, a, N0)
+		|   n1(N3(t1, a1, t2, a2, t3)) =
+			N2(N2(t1, a1, t2), a2, N1 t3)
+		|   n1 t = N1 t;
+		fun n2l(L2 a1, a2, t1) = N3(N0, a1, N0, a2, t1) (* t1 must equal N0 *)
+		|   n2l(N3(t1, a1, t2, a2, t3), a3, N1 t4) =
+			N2(N2(t1, a1, t2), a2, N2(t3, a3, t4))
+		|   n2l(N3(t1, a1, t2, a2, t3), a3, t4 as N2 _) =
+			N3(N2(t1, a1, t2), a2, N1 t3, a3, t4)
+		|   n2l(t1, a1, t2) = N2(t1, a1, t2);
+		fun n2r(t1, a1, L2 a2) =
+			N3(t1, a1, N0, a2, N0) (* t1 must equal N0 *)
+		|   n2r(N1 t1, a1, N3(t2, a2, t3, a3, t4)) =
+			N2(N2(t1, a1, t2), a2, N2(t3, a3, t4))
+		|   n2r(t1 as N2 _, a1, N3(t2, a2, t3, a3, t4)) =
+			N3(t1, a1, N1 t2, a2, N2(t3, a3, t4))
+		|   n2r(t1, a1, t2) = N2(t1, a1, t2);
+		fun replace (l, r) =
+			if update then N2(l, (key, d), r)
+			else fail "st_extend" 1401 [];
+		fun ins N0 = L2(key, d)
+		|   ins(N1 t) = n1(ins t)
+		|   ins(N2(l, b as (k, _), r)) =
+			let	val s = order key k;
+			in	if s < 0 then n2l(ins l, b, r)
+				else if s = 0 then replace (l, r)
+				else n2r(l, b, ins r)
+			end
+		|   ins _ = error "st_insert" 1402 [];
+	in	root(ins tree)
+	end
+);
+=TEX
+To delete the rightmost item in the tree, we replace its node by a unary node and
+to delete any other item, we replace it by the leftmost item to its right using a unary
+node to remove that item from the tree. In both cases, a binary node is replaced by a unary
+node, which will generally violate the invariants on a brother tree. We repair the tree
+by rewriting. See \cite{Hinze09} for diagrams and details.
+=SML
+fun €delete› (order : 'k ORDER) (key : 'k) (d : 'd) (tree: ('k, 'd) BT) : ('k, 'd) BT = (
+	let	fun root (N1 t) = t
+		|   root t = t;
+		fun n2(N1 t1, a1, N1 t2) =
+			N1(N2(t1, a1, t2))
+		|   n2(N1(N1 t1), a1, N2(N1 t2, a2, t3 as N2 _)) =
+			N1(N2(N2(t1, a1, t2), a2, t3))
+		|   n2(N1(N1 t1), a1, N2(N2(t2, a2, t3), a3, N1 t4)) =
+			N1(N2(N2(t1, a1, t2), a2, N2(t3, a3, t4)))
+		|   n2(N1(t1 as N1 _), a1, N2(t2 as N2 _, a2, t3 as N2 _)) =
+			N2(N2(t1, a1, t2), a2, N1 t3)
+		|   n2(N2(N1 t1, a1, N2(t2, a2, t3)), a3, N1(N1 t4)) =
+			N1(N2(N2(t1, a1, t2), a2, N2(t3, a3, t4)))
+		|   n2(N2(t1 as N2 _, a1, N1 t2), a2, N1(N1 t3)) =
+			N1(N2(t1, a1, N2(t2, a2, t3)))
+		|   n2(N2(t1 as N2 _, a1, t2 as N2 _), a2, N1(t3 as N1 _)) =
+			N2(N1 t1, a1, N2(t2, a2, t3))
+		|   n2(t1, a1, t2) = N2(t1, a1, t2);
+		fun split_min N0 = Nil
+		|   split_min(N1 t) =
+			(case split_min t of Nil => Nil | Value (a, t') => Value(a, N1 t'))
+		|   split_min(N2(t1, a1, t2)) =
+			(case split_min t1 of Nil => Value(a1, N1 t2)
+				| Value(a, t1') => Value(a, n2(t1', a1, t2)))
+		|   split_min _ = error "st_delete" 1402 [];
+		fun del N0 = N0
+		|   del(N1 t) = N1(del t)
+		|   del(N2(l, b as (k, _), r)) =
+			let	val s = order key k;
+			in	if s < 0 then n2(del l, b, r)
+				else if s = 0 then
+					case split_min r of
+						Nil => N1 l
+					|	Value(a', r') => n2(l, a', r')
+				else n2(l, b, del r)
+			end
+		|   del _ = error "st_delete" 1402 [];
+	in	root(del tree)
+	end
+);
+=TEX
+The other basic operation we support is flattening a search tree into a list.
+=SML
+fun €flatten› (tree : ('k, 'd) BT) : ('k * 'd) list = (
+	let	fun aux acc N0 = acc
+		|   aux acc (N1 t) = aux acc t
+		|   aux acc (N2(l, a, r)) = aux (a::aux acc r) l
+		|   aux acc _ = error "st_flatten" 1402 [];
+	in	aux [] tree
+	end
+);
+=TEX
+The external interface is an abstract datatype encapsulating a pair comprising the ordering
+function and a brother tree built using that ordering.
+=SML
+abstype ('k, 'd) €SEARCH_TREE› = €SearchTree› of {order : 'k ORDER, tree : ('k, 'd) BT}
+with
+	fun €initial_search_tree› (order : 'k ORDER) : ('k, 'd) SEARCH_TREE = (
+		SearchTree {order = order, tree = N0}
+	);
+	fun €st_lookup› (k : 'k)
+			(SearchTree {order, tree} : ('k, 'd) SEARCH_TREE): 'd OPT = (
+		lookup order tree k
+	);
+	fun €st_enter› (k : 'k) (d : 'd)
+			(SearchTree {order, tree} : ('k, 'd) SEARCH_TREE): ('k, 'd) SEARCH_TREE = (
+		SearchTree {order = order, tree = insert true order k d tree}
+	);
+	fun  €list_st_enter› (SearchTree {order, tree} : ('k, 'd) SEARCH_TREE)
+		(kvs :  ('k * 'd) list) : ('k, 'd) SEARCH_TREE  = (
+		SearchTree {order = order,
+			tree = foldl (fn ((k, d), t) => insert true order k d t) tree kvs}
+	);
+	fun €st_extend› (k : 'k) (d : 'd)
+			(SearchTree {order, tree} : ('k, 'd) SEARCH_TREE): ('k, 'd) SEARCH_TREE = (
+		SearchTree {order = order, tree = insert false order k d tree}
+	);
+	fun  €list_st_merge› (SearchTree {order, tree} : ('k, 'd) SEARCH_TREE)
+		(kvs :  ('k * 'd) list) : ('k, 'd) SEARCH_TREE  = (
+		SearchTree {order = order,
+			tree = foldl (fn ((k, d), t) => insert false order k d t) tree kvs}
+		handle ex as Fail _ => reraise ex "list_st_merge"
+	);
+	fun €st_flatten› (SearchTree {order, tree} : ('k, 'd) SEARCH_TREE): ('k *'d) list = (
+		flatten tree
+	);
+end;
+=TEX
+=POLYML
+local
+	fun pp _ _ (_ : ('k, 'd) SEARCH_TREE) = PolyML.PrettyString "?"
+in
+	val _ = PolyML.addPrettyPrinter pp
+end;
+=SML
+=TEX
+=SML
+val €list_st_enter› : ('k, 'd) SEARCH_TREE -> ('k * 'd) list -> ('k, 'd) SEARCH_TREE = (fn st => fn kvs =>
+	foldl (fn ((k, d), t) => st_enter k d t) st kvs
+);
+=TEX
+=SML
+end (* of structure SearchTree *);
+open SearchTree;
 =TEX
 \section{ARBITRARY MAGNITUDE INTEGER ARITHMETIC}
 =SML
