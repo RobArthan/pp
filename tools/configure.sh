@@ -369,8 +369,10 @@ if	[ "$DOPDF" = y ]
 then	echo 'Generating code to produce PDF versions of the documents'
 	if	find_in_path dvipdf >/dev/null 2>&1
 	then	DVI2PDF=dvipdf
+		DVI2PDFOPTS="-sPAPERSIZE=a4"
 	elif	find_in_path dvipdfm >/dev/null 2>&1
 	then	DVI2PDF=dvipdfm
+		DVI2PDFOPTS="-z9"
 		warn "dvipdf not available, using dvipdfm"
 		warn "dvipdfm cannot include some diagrams in the documents"
 	else	give_up 'dvipdfm or dvipdf must be available if you specify PPDOCFORMAT=PDF'
@@ -424,6 +426,7 @@ declare_quoted LC_ALL
 declare_quoted ACTTARGETS
 if	[ "$DOPDF" = y ]
 then	declare_quoted DVI2PDF
+	declare_quoted DVI2PDFOPTS
 fi
 declare_quoted PPBUILDDIR
 declare_quoted PPCACHESIZE
@@ -523,7 +526,7 @@ then
 	if	[ "$DOPDF" = y ]
 	then	out 'echo "Converting documents to PDF (see $PPTARGETDIR/$DVI2PDF.log for messages)"'
 		out 'for f in *.dvi'
-		out 'do	$DVI2PDF $f'
+		out 'do	$DVI2PDF $DVI2PDFOPTS $f'
 		out 'done >"$PPTARGETDIR/$DVI2PDF.log" 2>&1'
 	fi
 	if	[ "$DOPS" = y ]
