@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.41 $
+\def\SCCSversion{$Revision: 2.42 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2007/05/28 10:48:15 $ %
+\TPPdate{\FormatDate{$Date: 2009/11/25 17:03:55 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -107,6 +107,7 @@ Tidied up some aspects of {\em get\_ancestors} and {\em rollback}.
 \item[Issue 2.38] Fixed silly in {\em new\_spec}.
 \item[Issues 2.39, 2.40] Default compactification mask is now compiler-dependent (Poly/ML is better without compactification these days).
 \item[Issue 2.41] Suppressed pretty-printing of the abstype.
+\item[Issue 2.42] Added {\em delete\_kernel\_inference\_fun}.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -702,13 +703,28 @@ datatype ÛKERNEL_INFERENCEÝ =
 	|	ÛKIPlusConvÝ of TERM * THM;
 =TEX
 =SML
-val Ûon_kernel_inference_funsÝ : (KERNEL_INFERENCE -> unit) list ref = ref [];
+datatype ÛKI_KEYÝ = ÛKIKeyÝ of int;
+val Ûkernel_inference_funsÝ : (int * (KERNEL_INFERENCE -> unit)) list ref = ref [];
 fun Ûki_notifyÝ (ki : KERNEL_INFERENCE) : unit = (
-	map (fn f => f ki) (!on_kernel_inference_funs);
+	map (fn (_, f) => f ki) (!kernel_inference_funs);
 	()
 );
-fun Ûon_kernel_inferenceÝ (f : KERNEL_INFERENCE -> unit) : unit = (
-	on_kernel_inference_funs := !on_kernel_inference_funs @ [f]
+=TEX
+=SML
+fun Ûon_kernel_inferenceÝ (f : KERNEL_INFERENCE -> unit) : KI_KEY = (
+	let	fun next_key k [] = k+1
+		|   next_key k ((i, _) :: more) = next_key (if i > k then i else k) more;
+		val k = next_key ~1 (!kernel_inference_funs);
+	in	kernel_inference_funs := !kernel_inference_funs @ [(k, f)];
+		KIKey k
+	end
+);
+=TEX
+=SML
+fun Ûdelete_kernel_inference_funÝ (KIKey k : KI_KEY) : unit = (
+	if	any (!kernel_inference_funs) (fn (i, _) => i = k)
+	then	kernel_inference_funs := !kernel_inference_funs drop (fn (i, _) => i = k)
+	else	fail "delete_kernel_inference_fun" 12301 []
 );
 =TEX
 =SML
@@ -2121,7 +2137,7 @@ fun ÛrollbackÝ (cp : CHECKPOINT) : unit = (
 fun Ûpending_reset_kernel_interfaceÝ () : unit -> unit =(
 let	val f1 = !on_ksc_functions;
 	val f2 = !before_ksc_functions;
-	val f3 = !on_kernel_inference_funs;
+	val f3 = !kernel_inference_funs;
 	val {clean_flag, const_thys, type_thys,
 			int_thy_names, in_scope} = global_tables;
 	val f4 = !clean_flag;
@@ -2131,7 +2147,7 @@ let	val f1 = !on_ksc_functions;
 in	fn () => (
 		on_ksc_functions := f1;
 		before_ksc_functions := f2;
-		on_kernel_inference_funs := f3;
+		kernel_inference_funs := f3;
 		clean_flag := f4;
 		const_thys := f5;
 		type_thys := f6;
