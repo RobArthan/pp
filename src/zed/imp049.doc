@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp049.doc   %Z% $Date: 2011/07/11 11:44:45 $ $Revision: 1.60 $ $RCSfile: imp049.doc,v $
+% imp049.doc   %Z% $Date: 2013/11/02 16:46:13 $ $Revision: 1.61 $ $RCSfile: imp049.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of Z Paragraphs}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP049}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.60 $%
+\def\SCCSversion{$Revision: 1.61 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2011/07/11 11:44:45 $%
+\TPPdate{\FormatDate{$Date: 2013/11/02 16:46:13 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -121,6 +121,7 @@ Corrections to {\em new\_z\_type} and some general tidying up.
 \item[Issues 1.58, 1.59] Allowed for kernel interface reforms.
 \item[Issue 1.60] Support for empty schemas in paragraphs.
 \item[Issue 1.61] Made `ñ' into a general reader so that it can have dialects (like Z declarations).
+\item[Issue 1.62] Added support for parsing declarations.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1505,7 +1506,7 @@ Z paragraph delimiting symbols.
 
 =SMLLITERAL
 
-val sd = add_new_symbols [
+val _ = add_new_symbols [
 	([	"SZG"],	Value "", Starting(specific_quotation, "")),
 	([	"SZS"],	Value "ÿ", Starting(specific_quotation, "")),
 	([	"EZ"],		Value "ˆ", Ending ""),
@@ -1519,26 +1520,25 @@ val Ûz_axbox_readerÝ = HOL_reader "z_axbox_recogniser" true;
 val Ûz_genbox_readerÝ = Z_reader "z_genbox_recogniser" true "œ";
 val Ûz_schbox_readerÝ = Z_reader "z_schbox_recogniser" true "ü";
 val Ûz_term_readerÝ = HOL_reader "z_term_recogniser" false;
+val Ûz_decl_readerÝ = HOL_reader "z_decl_recogniser" false;
 val Ûz_other_readerÝ = HOL_reader "z_other_recogniser" true;
 =TEX
 =SMLLITERAL
-val sd = map add_named_reader [
+val _ = map add_named_reader [
 	("¹", "ZAX", "Lex.Term", z_axbox_reader),
 	("¹", "Z", "Lex.Term", z_other_reader)
 	] handle (Fail _) => [];
 
-val sd = map add_specific_reader [
+val _ = map add_specific_reader [
 	("", "Lex.Term", z_genbox_reader),
 	("ÿ", "Lex.Term", z_schbox_reader)
 	] handle Fail _ => [];
-
-val sd = map add_general_reader [
+val _ = map add_general_reader [
 	("¬", "Z", "Lex.Term", z_term_reader),
 	("ñ", "", "Lex.Term", z_term_reader)
 	] handle Fail _ => [];
+val _ = add_general_reader("ñ", ":", "Lex.Term", z_decl_reader);
 =TEX
-
-
 \section{PARAGRAPH RECOGNIZERS}
 
 \subsection{Z Axiomatic Box Recogniser}
@@ -1673,6 +1673,44 @@ let	val side_effect =
 				{standard = standard, allow_frees = true} parsed;
 	val para = z_para_of_zinferred type_checked;
 in	term_of_z_para para
+end);
+
+=TEX
+\section{RECOGNIZING Z DECLARATIONS}
+=TEX
+Declarations are parsed by wrapping the declaration up as the declaration
+part of a horizontal schema, parsing that as a term and then extracting
+the declaration:
+=SML
+fun Ûz_decl_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
+let	val side_effect =
+		if(	is_same_symbol(start, "SZT")
+			andalso	is_same_symbol(finish, ">")
+			andalso	(lang = ":")
+		) orelse (
+			is_same_symbol(start, "<")
+			andalso	is_same_symbol(finish, ">")
+			andalso	lang = "Z"
+		)
+		then	()
+		else
+			fail "z_decl_recogniser" 49010 [
+				fn () => start,
+				fn () => lang,
+				fn () => finish];
+	val standard = get_flag "standard_z_terms";
+	val tokens = ZTLsqbrack:: (rev o tl o rev o z_lex) value @
+			[ZTVert, ZTId "true", ZTRsqbrack, ZTEos];
+	val parsed = z_parser {is_quot = true} tokens;
+	val side = case parsed of
+		ZParaTerm _ => ()
+		|_ => fail "z_decl_recogniser" 49001 [];
+	val type_checked = type_check_z_para
+				{standard = standard, allow_frees = true} parsed;
+	val para = z_para_of_zinferred type_checked;
+
+	val hschema = term_of_z_para para;
+in	(fst o dest_z_h_schema) hschema
 end);
 
 
