@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.42 $
+\def\SCCSversion{$Revision: 2.43 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2009/11/25 17:03:55 $ %
+\TPPdate{\FormatDate{$Date: 2013/11/21 15:05:38 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -476,33 +476,65 @@ datatype ÛKERNEL_STATE_CHANGEÝ
 		|	ÛSetUserDatumÝ of string * USER_DATUM;
 
 =TEX
-The notifier functions are called $notify\_on\_ksc$ and
-$notify\_before\_ksc$, and the list of
-functions to be notified is hidden, named $on\_ksc\_functions$
-and $before\_ksc\_functions$.
+The following functions manage registration and unregistrations of the various
+monitor functions.
+=SML 
+fun ÛregisterÝ (r : (int * 'a) list ref) (f : 'a) : int = (
+	let	fun next_key k [] = k+1
+		|   next_key k ((i, _) :: more) = next_key (if i > k then i else k) more;
+		val k = next_key ~1 (!r);
+	in	r := !r @ [(k, f)];
+		k
+	end
+);
+=TEX
+=SML 
+fun ÛunregisterÝ (caller : string) (errno : int) (r : (int * 'a) list ref) (k : int) : unit = (
+	if	any (!r) (fn (i, _) => i = k)
+	then	r := !r drop (fn (i, _) => i = k)
+	else	fail caller errno []
+);
+=TEX
 =SML
-val Ûon_ksc_functionsÝ : ((KERNEL_STATE_CHANGE -> unit) list) ref = ref [];
-val Ûbefore_ksc_functionsÝ : ((KERNEL_STATE_CHANGE -> unit) list) ref = ref [];
+val Ûon_ksc_functionsÝ : ((int * (KERNEL_STATE_CHANGE -> unit)) list) ref = ref [];
+datatype ÛOKSC_KEYÝ = ÛOKSCKeyÝ of int;
+=TEX
+=SML
 fun Ûon_kernel_state_changeÝ (to_notify : KERNEL_STATE_CHANGE -> unit) 
+	: OKSC_KEY = (
+	OKSCKey(register on_ksc_functions to_notify)
+);
+=TEX
+=SML
+fun Ûdelete_on_kernel_state_change_funÝ (OKSCKey k : OKSC_KEY)
 	: unit = (
-	on_ksc_functions := (!on_ksc_functions) @ [to_notify]
+	unregister "delete_on_kernel_state_change_fun" 12050 on_ksc_functions k
 );
 =TEX
 =SML
 fun Ûnotify_on_kscÝ (ksc : KERNEL_STATE_CHANGE) : unit = (
-	map (fn f => f ksc) (!on_ksc_functions);
+	map (fn (_, f) => f ksc) (!on_ksc_functions);
 	()
 );
+=SML
+val Ûbefore_ksc_functionsÝ : ((int * (KERNEL_STATE_CHANGE -> unit)) list) ref = ref [];
+datatype ÛBKSC_KEYÝ = ÛBKSCKeyÝ of int;
 =TEX
 =SML
 fun Ûbefore_kernel_state_changeÝ (to_notify : KERNEL_STATE_CHANGE -> unit) 
+	: BKSC_KEY = (
+	BKSCKey(register before_ksc_functions to_notify)
+);
+=TEX
+=SML
+fun Ûdelete_before_kernel_state_change_funÝ (BKSCKey k : BKSC_KEY)
 	: unit = (
-	before_ksc_functions := (!before_ksc_functions) @ [to_notify]
+	unregister "delete_before_kernel_state_change_fun" 12051 before_ksc_functions k
 );
 =TEX
 =SML
 fun Ûnotify_before_kscÝ (ksc : KERNEL_STATE_CHANGE) : unit = (
-	map (fn f => f ksc) (!before_ksc_functions);
+	map (fn (_, f) => f ksc) (!before_ksc_functions);
 	()
 );
 =TEX
@@ -703,28 +735,23 @@ datatype ÛKERNEL_INFERENCEÝ =
 	|	ÛKIPlusConvÝ of TERM * THM;
 =TEX
 =SML
-datatype ÛKI_KEYÝ = ÛKIKeyÝ of int;
 val Ûkernel_inference_funsÝ : (int * (KERNEL_INFERENCE -> unit)) list ref = ref [];
-fun Ûki_notifyÝ (ki : KERNEL_INFERENCE) : unit = (
-	map (fn (_, f) => f ki) (!kernel_inference_funs);
-	()
-);
+datatype ÛKI_KEYÝ = ÛKIKeyÝ of int;
 =TEX
 =SML
 fun Ûon_kernel_inferenceÝ (f : KERNEL_INFERENCE -> unit) : KI_KEY = (
-	let	fun next_key k [] = k+1
-		|   next_key k ((i, _) :: more) = next_key (if i > k then i else k) more;
-		val k = next_key ~1 (!kernel_inference_funs);
-	in	kernel_inference_funs := !kernel_inference_funs @ [(k, f)];
-		KIKey k
-	end
+	KIKey(register kernel_inference_funs f)
 );
 =TEX
 =SML
 fun Ûdelete_kernel_inference_funÝ (KIKey k : KI_KEY) : unit = (
-	if	any (!kernel_inference_funs) (fn (i, _) => i = k)
-	then	kernel_inference_funs := !kernel_inference_funs drop (fn (i, _) => i = k)
-	else	fail "delete_kernel_inference_fun" 12301 []
+	unregister "delete_kernel_inference_fun" 12301 kernel_inference_funs k
+);
+=TEX
+=SML
+fun Ûki_notifyÝ (ki : KERNEL_INFERENCE) : unit = (
+	map (fn (_, f) => f ki) (!kernel_inference_funs);
+	()
 );
 =TEX
 =SML
