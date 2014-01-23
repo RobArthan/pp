@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.62 2012/08/24 12:15:33 rda Exp rda $
+ * $Id: pterm.c,v 2.63 2013/03/02 17:21:43 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -674,7 +674,7 @@ void get_pty(void)
 /*
  * Stop apps that check the TERM environment variable mistreating us:
  */
-		putenv("TERM=xpp");
+		unsetenv("TERM");
 /*
  * Now get the command line options for the command and exec it:
  */
