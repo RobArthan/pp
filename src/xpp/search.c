@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.77 2012/06/03 14:38:28 rda Exp rda $
+ * $Id: search.c,v 2.78 2012/12/11 12:00:25 rda Exp rda $
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -635,7 +635,7 @@ static void toggle_button_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search forwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean search_and_show(Widget, SearchData*, Cardinal);
+static void search_and_show(Widget, SearchData*, Cardinal);
 static void search_forwards_cb(
 	Widget		w,
 	XtPointer	cbd,
@@ -643,7 +643,7 @@ static void search_forwards_cb(
 {
 	SearchData *cbdata = cbd;
 	CHECK_MAP_STATE(cbdata)
-	(void) search_and_show(w, cbdata, FORWARDS);
+	search_and_show(w, cbdata, FORWARDS);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search backwards callback.
@@ -655,7 +655,7 @@ static void search_backwards_cb(
 {
 	SearchData *cbdata = cbd;
 	CHECK_MAP_STATE(cbdata)
-	(void) search_and_show(w, cbdata, BACKWARDS);
+	search_and_show(w, cbdata, BACKWARDS);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -663,7 +663,7 @@ static void search_backwards_cb(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Substring search_cyclic(char*, char*, long int, Cardinal, SearchData*);
 static Boolean report_re_error(Widget);
-static Boolean search_and_show(
+static void search_and_show(
 	Widget				w,
 	SearchData			*cbdata,
 	Cardinal			dir)
@@ -671,7 +671,6 @@ static Boolean search_and_show(
 	Substring ss;
 	Cardinal start_point;
 	char *pattern, *text_buf;
-	Boolean result;
 	XmTextPosition pl, pr;
 	pattern = XmTextGetString(search_data.search_w);
 	text_buf = XmTextGetString(search_data.text_w);
@@ -696,17 +695,13 @@ static Boolean search_and_show(
 			ss.offset + ss.length,
 			CurrentTime);
 		cbdata->submatch_status = SM_GOOD;
-		result = True;
 	} else if (!(*pattern)){
 		ok_dialog(search_data.shell_w, no_search_string);
-		result = False;
 	} else if(!report_re_error(search_data.shell_w)) {
 		ok_dialog(search_data.shell_w, not_found);
-		result = False;
 	}
 	XtFree(pattern);
 	XtFree(text_buf);
-	return result;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -875,7 +870,7 @@ static void replace_search_backwards_cb(
 	SearchData *cbdata = cbd;
 	CHECK_MAP_STATE(cbdata)
 	if(replace_selection(w, cbdata)) {
-		(void) search_and_show(w, cbdata, BACKWARDS);
+		search_and_show(w, cbdata, BACKWARDS);
 	}
 }
 
@@ -890,7 +885,7 @@ static void replace_search_forwards_cb(
 	SearchData *cbdata = cbd;
 	CHECK_MAP_STATE(cbdata)
 	if(replace_selection(w, cbdata)) {
-		(void) search_and_show(w, cbdata, FORWARDS);
+		search_and_show(w, cbdata, FORWARDS);
 	}
 }
 
