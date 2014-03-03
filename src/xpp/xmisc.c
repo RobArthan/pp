@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.41 2011/09/04 14:51:50 rda Exp rda $
+ * $Id: xmisc.c,v 2.42 2012/12/11 12:00:25 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -100,7 +100,7 @@ void toggle_menu_item_sensitivity(Widget w, Cardinal i)
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
-	if (0 <= i && i < num_btns) {
+	if (i < num_btns) {
 		XtSetSensitive(btns[i], !XtIsSensitive(btns[i]));
 	};
 }
@@ -116,7 +116,7 @@ void set_menu_item_sensitivity(Widget w, Cardinal i, Boolean b)
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
-	if (0 <= i && i < num_btns) {
+	if (i < num_btns) {
 		XtSetSensitive(btns[i], b);
 	};
 }
@@ -132,7 +132,7 @@ void set_menu_item_label(Widget w, Cardinal i, char *lab)
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
-	if (0 <= i && i < num_btns) {
+	if (i < num_btns) {
 		str = XmStringCreateSimple(lab);
 		XtVaSetValues(btns[i], 
 			XmNlabelString, str,
