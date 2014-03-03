@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.130 2011/09/04 15:45:53 rda Exp $
+ * $Id: mainw.c,v 2.131 2013/01/05 17:10:47 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1464,7 +1464,6 @@ static void reopen_cb(
 	Cardinal i = (uintptr_t) cbd;
 	old_fname = get_file_name();
 	fname = reopen_menu_items[i].label;
-	strcpy(fname,reopen_menu_items[i].label);
 	if(!check_save()) {
 		return;
 	}
