@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.43 $
+\def\SCCSversion{$Revision: 2.44 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2013/11/21 15:05:38 $ %
+\TPPdate{\FormatDate{$Date: 2014/01/10 17:18:41 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -108,6 +108,7 @@ Tidied up some aspects of {\em get\_ancestors} and {\em rollback}.
 \item[Issues 2.39, 2.40] Default compactification mask is now compiler-dependent (Poly/ML is better without compactification these days).
 \item[Issue 2.41] Suppressed pretty-printing of the abstype.
 \item[Issue 2.42] Added {\em delete\_kernel\_inference\_fun}.
+\item[Issue 2.43] Fixed silly design error in {\em register}: we don't want it to recycle keys.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -479,24 +480,27 @@ datatype ÛKERNEL_STATE_CHANGEÝ
 The following functions manage registration and unregistrations of the various
 monitor functions.
 =SML 
-fun ÛregisterÝ (r : (int * 'a) list ref) (f : 'a) : int = (
-	let	fun next_key k [] = k+1
-		|   next_key k ((i, _) :: more) = next_key (if i > k then i else k) more;
-		val k = next_key ~1 (!r);
-	in	r := !r @ [(k, f)];
+fun ÛregisterÝ (r : {tidemark : int, funs : (int * 'a) list} ref) (f : 'a) : int = (
+	let	val {tidemark, funs} = !r;
+		val k = tidemark + 1;
+	in	r := {tidemark = k, funs = funs @ [(k, f)]};
 		k
 	end
 );
 =TEX
 =SML 
-fun ÛunregisterÝ (caller : string) (errno : int) (r : (int * 'a) list ref) (k : int) : unit = (
-	if	any (!r) (fn (i, _) => i = k)
-	then	r := !r drop (fn (i, _) => i = k)
-	else	fail caller errno []
+fun ÛunregisterÝ (caller : string) (errno : int)
+	(r : {tidemark : int, funs : (int * 'a) list} ref) (k : int) : unit = (
+	let	val  {tidemark, funs} = !r;
+	in	if	any funs (fn (i, _) => i = k)
+		then	r := {tidemark = tidemark, funs = funs drop (fn (i, _) => i = k)}
+		else	fail caller errno []
+	end
 );
 =TEX
 =SML
-val Ûon_ksc_functionsÝ : ((int * (KERNEL_STATE_CHANGE -> unit)) list) ref = ref [];
+val Ûon_ksc_functionsÝ : {tidemark : int, funs : (int * (KERNEL_STATE_CHANGE -> unit)) list} ref =
+	ref {tidemark = ~1, funs = []};
 datatype ÛOKSC_KEYÝ = ÛOKSCKeyÝ of int;
 =TEX
 =SML
@@ -513,11 +517,11 @@ fun Ûdelete_on_kernel_state_change_funÝ (OKSCKey k : OKSC_KEY)
 =TEX
 =SML
 fun Ûnotify_on_kscÝ (ksc : KERNEL_STATE_CHANGE) : unit = (
-	map (fn (_, f) => f ksc) (!on_ksc_functions);
-	()
+	(app (fn (_, f) => f ksc) o #funs o !) on_ksc_functions
 );
 =SML
-val Ûbefore_ksc_functionsÝ : ((int * (KERNEL_STATE_CHANGE -> unit)) list) ref = ref [];
+val Ûbefore_ksc_functionsÝ : {tidemark : int, funs : (int * (KERNEL_STATE_CHANGE -> unit)) list} ref =
+	ref {tidemark = ~1, funs = []};
 datatype ÛBKSC_KEYÝ = ÛBKSCKeyÝ of int;
 =TEX
 =SML
@@ -534,8 +538,7 @@ fun Ûdelete_before_kernel_state_change_funÝ (BKSCKey k : BKSC_KEY)
 =TEX
 =SML
 fun Ûnotify_before_kscÝ (ksc : KERNEL_STATE_CHANGE) : unit = (
-	map (fn (_, f) => f ksc) (!before_ksc_functions);
-	()
+	(app (fn (_, f) => f ksc) o #funs o !) before_ksc_functions
 );
 =TEX
 \subsection{Temporary Working in Other Theories}
@@ -735,7 +738,8 @@ datatype ÛKERNEL_INFERENCEÝ =
 	|	ÛKIPlusConvÝ of TERM * THM;
 =TEX
 =SML
-val Ûkernel_inference_funsÝ : (int * (KERNEL_INFERENCE -> unit)) list ref = ref [];
+val Ûkernel_inference_funsÝ : {tidemark : int, funs : (int * (KERNEL_INFERENCE -> unit)) list} ref =
+	ref {tidemark = ~1, funs = []};
 datatype ÛKI_KEYÝ = ÛKIKeyÝ of int;
 =TEX
 =SML
@@ -750,8 +754,7 @@ fun Ûdelete_kernel_inference_funÝ (KIKey k : KI_KEY) : unit = (
 =TEX
 =SML
 fun Ûki_notifyÝ (ki : KERNEL_INFERENCE) : unit = (
-	map (fn (_, f) => f ki) (!kernel_inference_funs);
-	()
+	(app (fn (_, f) => f ki) o #funs o !) kernel_inference_funs
 );
 =TEX
 =SML
