@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  imp006.doc  %Z% $Date: 2009/06/10 16:19:10 $ $Revision: 1.66 $ $RCSfile: imp006.doc,v $
+%  imp006.doc  %Z% $Date: 2012/09/02 14:34:54 $ $Revision: 1.67 $ $RCSfile: imp006.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP006}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.66 $
+\def\SCCSversion{$Revision: 1.67 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2009/06/10 16:19:10 $ %
+\TPPdate{\FormatDate{$Date: 2012/09/02 14:34:54 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -176,6 +176,12 @@ Brought handling of initial state of the abstract data type of types and terms i
 \item[Issue 1.66] Fixed checks for clashing types and constants when a new parent is added.
 \item[Issue 1.67] {\em plus\_conv} now does the addition directly on the digit strings rather than
 converting to integers and back again.
+\item[Issue 1.68] Fixed some cosmetic issues and rationalised some error handling
+in preparation for implementing
+=GFT
+gen_new_spec
+=TEX
+.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -1659,14 +1665,18 @@ let	val dummy = check_c_writable "pp'new_parent";
 		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
+(*
 =TEX
 The ancestors of the current and parent theories:
 =SML
+*)
 	val pthy_anc = pp'get_ancestors pthy;
 	val cthy_anc = pp'get_ancestors cthy;
+(*
 =TEX
 A theory is an ancestor of the current one if and only if it is in scope.
 =SML
+*)
 	val dummy = if pthy mem parents
 		then fail "pp'new_parent" 6082 [fn () => fname]
 		else if cthy mem pthy_anc
@@ -1680,9 +1690,11 @@ A theory is an ancestor of the current one if and only if it is in scope.
 		name = fname});
 
 	val new_thys_in_scope = pthy_anc diff cthy_anc ;
+(*
 =TEX
 The following detects clashes with things in scope.
 =SML
+*)
 	val check_cons = (
 		case check_con_env new_thys_in_scope of
 			Nil => ()
@@ -1694,9 +1706,11 @@ The following detects clashes with things in scope.
 			Nil => ()
 		|	Value cn => fail "pp'new_parent" 6067 [fn() => fname]
 	);
+(*
 =TEX
 Add the new parent to the theory:
 =SML
+*)
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
 		con_env = con_env,
@@ -1707,9 +1721,11 @@ Add the new parent to the theory:
 		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data};
+(*
 =TEX
 Put the new ancestor theories in scope:
 =SML
+*)
 	fun put_in_scope [] = () 
 	| put_in_scope (n :: x) = (
 	let val ThyInfo{status = astatus, 
@@ -2097,9 +2113,11 @@ but we are very cautious).
 		user_data = user_data};
 	val was_inconsistent = !inconsistent;
 in
+(*
 =TEX
 Note that the current theory address doesn't change, only the contents of the location pointed to.
 =SML
+*)
 	inconsistent:=true;
 	theory := new_thy; (* spec. step 4 *)
 	current := {hierarchy=hierarchy, theory=theory,
@@ -2178,9 +2196,11 @@ let	val {theory=theory,...} = !current;
 	val new_axiom = Thm{level = current_level+1, 
 		theory=theory, 
 		sequent = ([], tm)}; (* spec step 2,3 *)
+(*
 =TEX
 We both check for an unused key (part of specification step 1 *), and insert a new entry in the dictionary by using $s\_extend$.
 =SML
+*)
 	val new_axiom_dict = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
 			oe_extend key new_axiom dct
@@ -2211,6 +2231,20 @@ These functions follow the specification of \cite{DS/FMU/IED/SPC005}.
 The following five functions follow the pattern of the
 definitional mechanisms of the specification.
 
+In various places, it is an error if a certain term or theorem contains
+certain free variables. The following function
+reports on these errors giving the right wording using error message 6059.
+=TEX
+=SML
+fun Ûfv_errorÝ (caller : string) (what : string) (format_x : 'a -> string)
+		(x : 'a) (fvs : TERM list) : 'b = (
+	let	fun s () = case fvs of [_] => "" | _ => "s";
+	in	fail caller 6059 [
+			fn () => what, fn () => format_x x, s,
+			fn () => format_list (fst o dest_var) fvs ", "]
+	end
+);
+=TEX
 The following is a function to add a new constant to the theory.
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
 =SML
@@ -2367,7 +2401,7 @@ Interrupting the body of the main $let$ statement may leave the state with the $
 Note that the function assumes the presence of $=$ as a valid constant.
 =SML
 fun Ûpp'new_defnÝ (keys : string list, cnm : string, vl : TERM) : THM = (
-let	val {hierarchy=hierarchy as hier(inconsistent,lookup, _), 
+let	val {hierarchy=hierarchy as hier(inconsistent, lookup, _), 
 		 theory=theory, in_scope = in_scope,
 		sealed=sealed} = !current;
 
@@ -2383,9 +2417,11 @@ let	val {hierarchy=hierarchy as hier(inconsistent,lookup, _),
 		user_data = user_data} = !theory;
 
 	val ctype = type_of vl;
+(*
 =TEX
 Do the checks required (other than on keys):
 =SML
+*)
 	val dummy = (check_c_writable "pp'new_defn";
 		(case const_in_anc_or_des cnm of
 		InScope => fail "pp'new_defn" 6049 [fn () => cnm]
@@ -2395,8 +2431,7 @@ Do the checks required (other than on keys):
 		if is_nil keys
 		then fail "pp'new_defn" 6031 []
 		else if not(is_nil (frees vl))
-		then fail "pp'new_defn" 6059 [fn () => string_of_term vl,
-			fn () => format_list (fst o dest_var) (frees vl) ", "]
+		then fv_error "pp'new_defn" "term" string_of_term vl (frees vl)
 		else if not(is_nil((term_tyvars vl) diff (type_tyvars ctype)))
 		then fail "pp'new_defn" 6058 
 			[fn () => string_of_term vl,
@@ -2405,14 +2440,16 @@ Do the checks required (other than on keys):
 
 		else ()
 		);
+(*
 =TEX
 Now build up the new material:
 =SML
-	val new_const = mk_const(cnm,ctype)
+*)
+	val new_const = mk_const(cnm, ctype)
 		handle complaint =>
 		pass_on complaint "mk_const" "pp'new_defn";
 
-	val con_decl = {ty=ctype,level=current_level+1};
+	val con_decl = {ty=ctype, level=current_level+1};
 
 	val new_con_env = oe_extend cnm con_decl con_env;
 
@@ -2420,7 +2457,7 @@ Now build up the new material:
 		theory=theory, 
 		sequent = ([], mk_eq(new_const, vl))};
 
-	val new_defn_dict = (fold (fn (x,y) => x y)
+	val new_defn_dict = (fold (fn (x, y) => x y)
 		(map (fn key => fn dct =>
 			oe_extend key new_defn dct
 			handle complaint =>
@@ -2456,8 +2493,8 @@ Note that the function assumes the presence of $TypeDefn$ and $¶$ as valid const
 =SML
 fun Ûpp'new_type_defnÝ (keys : string list, tnm : string, 
 		typars : string list,
-		defthm : THM as Thm{sequent = (asms, concl),...}) : THM = (
-let	val {hierarchy=hierarchy as hier(inconsistent,lookup, _),
+		defthm : THM as Thm{sequent = (asms, concl), ...}) : THM = (
+let	val {hierarchy=hierarchy as hier(inconsistent, lookup, _),
 		 theory=theory, in_scope = in_scope,
 		sealed=sealed} = !current;
 
@@ -2471,9 +2508,11 @@ let	val {hierarchy=hierarchy as hier(inconsistent,lookup, _),
 		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
+(*
 =TEX
 Do the checks required (other than on keys):
 =SML
+*)
 	val dummy = (check_c_writable "pp'new_type_defn";
 		(case type_in_anc_or_des tnm of
 		InScope => fail "pp'new_type_defn" 6045 [fn () => tnm]
@@ -2486,17 +2525,7 @@ Do the checks required (other than on keys):
 		else if not(is_nil asms)
 		then thm_fail "pp'new_type_defn" 6053 [defthm]
 		else if not(is_nil (frees concl))
-		then (let val fc = map (fst o dest_var)(frees concl) in
-			if length fc = 1
-			then 
-			fail "pp'new_type_defn" 6056 
-			[fn () => hd fc,
-			 fn () => string_of_thm defthm]
-			else
-			fail "pp'new_type_defn" 6062 
-			[fn () => format_list Combinators.I fc ", ",
-			 fn () => string_of_thm defthm]
-		end)
+		then fv_error "pp'new_type_defn" "theorem" string_of_thm defthm (frees concl)
 		else if not(is_nil((term_tyvars concl) diff typars))
 		then fail "pp'new_type_defn" 6057
 			[fn () => string_of_thm defthm,
@@ -2506,10 +2535,12 @@ Do the checks required (other than on keys):
 		then fail "pp'new_type_defn" 6079 
 			[fn () => two_the_same typars]
 		else ());
+(*
 =TEX
 Now build up the new material:
 =SML
-	val (x,(p, x1)) = ((Combinators.I ** dest_app)(dest_simple_¶ concl)
+*)
+	val (x, (p, x1)) = ((Combinators.I ** dest_app)(dest_simple_¶ concl)
 		handle complaint =>
 		case (area_of complaint) of
 		"dest_app" => thm_fail "pp'new_type_defn" 6055 [defthm]
@@ -2526,9 +2557,9 @@ Now build up the new material:
 
 	val ftype = mk_­_type(new_type, type_of x);
 
-	val f = mk_var("f",ftype); (* cannot be present in p, from frees test *)
+	val f = mk_var("f", ftype); (* cannot be present in p, from frees test *)
 
-	val td = mk_const("TypeDefn",mk_­_type(type_of p,
+	val td = mk_const("TypeDefn", mk_­_type(type_of p,
 		mk_­_type(ftype, BOOL)));
 
 	val seq_concl = mk_simple_¶(f, list_mk_app (td, [p, f]));
@@ -2537,11 +2568,11 @@ Now build up the new material:
 		theory=theory, 
 		sequent = ([], seq_concl)};
 
-	val ty_decl = {arity = arity,level=current_level+1};
+	val ty_decl = {arity = arity, level=current_level+1};
 
 	val new_ty_env = oe_extend tnm ty_decl ty_env;
 
-	val new_defn_dict = (fold (fn (x,y) => x y)
+	val new_defn_dict = (fold (fn (x, y) => x y)
 		(map (fn key => fn dct =>
 			oe_extend key new_type_defn dct
 			handle complaint =>
@@ -2577,9 +2608,9 @@ Note that this function examines theorems involving $¶$,
 through there is no guarantee of this constant being present yet.
 =SML
 fun Ûpp'new_specÝ (keys : string list, ndef : int, 
-	defthm : THM as Thm{sequent = (asms, concl),...}) : THM = (
-let	val {hierarchy=hierarchy as hier(inconsistent,lookup, _),
-		 theory=theory, in_scope = in_scope,sealed=sealed} = !current;
+	defthm : THM as Thm{sequent = (asms, concl), ...}) : THM = (
+let	val {hierarchy=hierarchy as hier(inconsistent, lookup, _),
+		 theory=theory, in_scope = in_scope, sealed=sealed} = !current;
 
 	val Thy{name = iname,
 		ty_env = ty_env,
@@ -2591,44 +2622,38 @@ let	val {hierarchy=hierarchy as hier(inconsistent,lookup, _),
 		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
+(*
 =TEX
 Do the checks required (other than on keys, and theorem form):
 =SML
+*)
 	val dummy = (check_c_writable "pp'new_spec";
 		check_thm "pp'new_spec" defthm;
 		wf_thm "pp'new_spec" defthm;
 		if is_nil keys
 		then fail "pp'new_spec" 6031 []
 		else if not(is_nil (frees concl))
-		then (let val fc = map (fst o dest_var)(frees concl) in
-			if length fc = 1
-			then 
-			fail "pp'new_spec" 6056 
-			[fn () => hd fc,
-			 fn () => string_of_thm defthm]
-			else
-			fail "pp'new_spec" 6062 
-			[fn () => format_list Combinators.I fc ", ",
-			 fn () => string_of_thm defthm]
-		end)
+		then fv_error "pp'new_spec" "theorem" string_of_thm defthm (frees concl)
 		else if ndef < 1
 		then fail "pp'new_spec" 6044 []
 		else if is_nil asms
 		then ()
 		else thm_fail "pp'new_spec" 6053 [defthm]
 		);
+(*
 =TEX
 Now build up the new material:
 =SML
+*)
 	fun nexists (n:int) (tm : TERM) (res : TERM list) : (TERM list * TERM) = (
 		if n = 0 
 		then (res, tm)
-		else (let val (x,bdy) = dest_simple_¶ tm
+		else (let val (x, bdy) = dest_simple_¶ tm
 			handle complaint =>
 			divert complaint "dest_simple_¶" "pp'new_spec" 
 			6060 [fn () => string_of_thm defthm,
 				fn () => string_of_int ndef]
-		in
+	   	in
 			nexists (n-1) bdy (res @ [x])
 		end)
 	);
@@ -2636,9 +2661,11 @@ Now build up the new material:
 	val (xlist, bdt) = nexists ndef concl [];
 
 	val xtyvars = term_tyvars(hd xlist);
+(*
 =TEX
 Check the results of picking apart the theorem:
 =SML
+*)
 	val dummy = (if any (tl xlist) (fn x => not((term_tyvars x) ~= xtyvars)) 
 		then term_fail "pp'new_spec" 6081 [hd xlist, 
 			find (tl xlist) (fn x => not((term_tyvars x) ~= xtyvars))]
@@ -2653,7 +2680,7 @@ Check the results of picking apart the theorem:
 			 fn () => string_of_thm defthm]
 		else ();
 		map (fn x =>
-			let val (cnm,ty) = dest_var x
+			let val (cnm, ty) = dest_var x
 			in
 			(case const_in_anc_or_des cnm of
 			InScope => fail "pp'new_spec" 6049 [fn () => cnm]
@@ -2669,25 +2696,27 @@ Check the results of picking apart the theorem:
 
 	val new_current_level = current_level+1;
 
-	val con_decl = map (fn x => let val(cnm,ty) = dest_var x
+	val con_decl = map (fn x => let val(cnm, ty) = dest_var x
 			in
-			(cnm,{ty=ty,level=new_current_level})
+			(cnm, {ty=ty, level=new_current_level})
 			end)
 		xlist;
 
 	val new_con_env = fold 
-		(fn ((cnm,entry),edict) => oe_extend cnm entry edict)
+		(fn ((cnm, entry), edict) => oe_extend cnm entry edict)
 		 con_decl con_env;
 
 	val new_concl = subst(combine new_consts xlist) bdt;
+(*
 =TEX
 Now put everything in the correct place:
 =SML
+*)
 	val new_defn = Thm{level = current_level+1, 
 		theory=theory, 
 		sequent = ([], new_concl)};
 
-	val new_defn_dict = (fold (fn (x,y) => x y)
+	val new_defn_dict = (fold (fn (x, y) => x y)
 		(map (fn key => fn dct =>
 			oe_extend key new_defn dct
 			handle complaint =>
@@ -2720,14 +2749,14 @@ end);
 =SML
 fun Ûpp'get_const_typeÝ (thyn : int) (nm : string) : TYPE OPT = (
 	case (get_con_env (Value thyn) nm) of
-	Value {ty = ty,...} => Value ty
+	Value {ty = ty, ...} => Value ty
 	| _ => Nil
 );
 =TEX
 =SML
 fun Ûpp'get_type_arityÝ (thyn : int) (nm : string) : int OPT = (
 	case (get_ty_env (Value thyn) nm) of
-	Value {arity=arity,...} => Value arity
+	Value {arity=arity, ...} => Value arity
 	| _ => Nil
 );
 =TEX
@@ -2750,9 +2779,9 @@ fun Ûlist_is_free_inÝ (x:TERM) (tms:TERM list) : bool = (
 Create a theorem from a sequent of the current theory and current definition level:
 =SML
 fun Ûmk_current_thmÝ(seq : SEQ) : THM = (
-let	val {theory = theory,...} = !current;
+let	val {theory = theory, ...} = !current;
 
-	val Thy{current_level = current_level,...} = !theory;
+	val Thy{current_level = current_level, ...} = !theory;
 in
 	Thm{theory = theory, level = current_level, sequent = seq}
 end);
@@ -2764,9 +2793,9 @@ This function partially evaluates with one or two arguments.
 pp'subst_rule
 ÷
 [‡1 ô t1=t1', ... , ‡n ô tn=tn']
-‡ ô t[t1,...tn]
+‡ ô t[t1, ..., tn]
 ÷
-‡1 À ... ‡n À ‡ ô t[t1',...tn']
+‡1 À ... À ‡n À ‡ ô t[t1', ..., tn']
 =TEX
 The following local function takes the input list and hypotheses to $pp'subst\_rule$, and returns the 
 substitution lists for $var\_subst$, as well as the 
@@ -2779,8 +2808,8 @@ local
 		([] : (THM * TERM) list) :
 		(((TERM * TERM) list) * ((TERM * TERM) list) * (TERM list)) = (
 		lhslst, rhslst, new_hyps
-	) | two_subst_lists lhslst rhslst new_hyps ((thmi,vari) :: lst) = (
-	let val (nhyps,(lhsi,rhsi)) = dest_thm_eq "subst_rule" 6002 thmi;
+	) | two_subst_lists lhslst rhslst new_hyps ((thmi, vari) :: lst) = (
+	let val (nhyps, (lhsi, rhsi)) = dest_thm_eq "subst_rule" 6002 thmi;
 	in
 		if not(is_var vari)
 		then term_fail "subst_rule" 3007 [vari]
@@ -2804,7 +2833,7 @@ fun Ûpp'subst_ruleÝ (thm_var_list : (THM * TERM) list):
 We optimize for the special case of an empty $thm\_var\_list$, which is just returning a theorem that is $\alpha$-convertible to the input:
 =SML
 		(fn (template : TERM) => 
-		(fn (ithm as Thm{sequent = (asms,concl),...}) =>
+		(fn (ithm as Thm{sequent = (asms, concl), ...}) =>
 		let val dummy = check_thm "subst_rule" ithm;
 		in
 			if concl ~=$ template
@@ -2828,7 +2857,7 @@ return the theorem that the $rhs$ term is true.
 		val template_as_lhs = var_subst lhssubs template;
 		val template_as_rhs = var_subst rhssubs template;
 	in
-	(fn (ithm as Thm{sequent = (asms,concl),...}) =>
+	(fn (ithm as Thm{sequent = (asms, concl), ...}) =>
 		let val dummy = (check_thm "subst_rule" ithm;
 			map (check_thm "subst_rule" o fst) thm_var_list);
 		in
@@ -2870,31 +2899,31 @@ let	 val dummy = (check_thm "simple_Ì_eq_rule" thrm;
 		then term_fail "simple_Ì_eq_rule" 3007 [absvar]
 		else ());
 
-	val (asms,(lhs,rhs)) = dest_thm_eq "simple_Ì_eq_rule" 6020 thrm;
+	val (asms, (lhs, rhs)) = dest_thm_eq "simple_Ì_eq_rule" 6020 thrm;
 
 	val dummy = if list_is_free_in absvar asms
 		then term_fail "simple_Ì_eq_rule" 6005 [absvar]
 		else ();
 in
 	mk_current_thm (asms, 
-		mk_eq(mk_simple_Ì(absvar, lhs),mk_simple_Ì(absvar, rhs)))
+		mk_eq(mk_simple_Ì(absvar, lhs), mk_simple_Ì(absvar, rhs)))
 end);
 =TEX
 \subsection{pp'inst\_type\_rule}
 =FRULE 1 Rule
 pp'inst_type_rule
-[(Ó1, tyv1), ..., (Ón,tyvn)]
+[(Ó1, tyv1), ..., (Ón, tyvn)]
 ÷
-‡ ô t[tyv1,...tyvn]
+‡ ô t[tyv1, ..., tyvn]
 ÷
-‡ ô t[Ó1,...Ón]
+‡ ô t[Ó1, ..., Ón]
 =TEX
 =SML
 fun Ûpp'inst_type_ruleÝ (talist: (TYPE * TYPE) list)
-	(thrm : THM as Thm{sequent = (asms, concl),...}) : THM = (
+	(thrm : THM as Thm{sequent = (asms, concl), ...}) : THM = (
 let	val dummy = check_thm "inst_type_rule" thrm;
 
-	val usingtvs : string list = map (fn (t,tv) => (dest_vartype tv
+	val usingtvs : string list = map (fn (t, tv) => (dest_vartype tv
 		handle complaint =>
 		pass_on complaint "dest_vartype" "inst_type_rule"))
 		talist;
@@ -2920,7 +2949,7 @@ pp'´_intro
 ‡ - {t1} ô t1 ´ t2
 =TEX
 =SML
-fun Ûpp'´_introÝ (asm : TERM) (thrm : THM as Thm{sequent = (asms,concl),...}) : THM = (
+fun Ûpp'´_introÝ (asm : TERM) (thrm : THM as Thm{sequent = (asms, concl), ...}) : THM = (
 let	val dummy = (check_thm "´_intro" thrm;
 	if type_of asm =: BOOL
 	then ()
@@ -2938,12 +2967,12 @@ pp'´_elim
 ‡1 À ‡2 ô t2
 =TEX
 =SML
-fun Ûpp'´_elimÝ (thrm1 : THM as Thm{sequent = (hyps1,concl1),...})
-	(thrm2 : THM as Thm{sequent = (hyps2,concl2),...}) : THM = (
+fun Ûpp'´_elimÝ (thrm1 : THM as Thm{sequent = (hyps1, concl1), ...})
+	(thrm2 : THM as Thm{sequent = (hyps2, concl2), ...}) : THM = (
 let	val dummy = (check_thm "´_elim" thrm1;
 		check_thm "´_elim" thrm2);
 
-	val (hconcl1,cconcl1) = (dest_´ concl1 
+	val (hconcl1, cconcl1) = (dest_´ concl1 
 		handle complaint =>
 		case (area_of complaint) of
 		"dest_´" => thm_fail "´_elim" 6010 [thrm1]
@@ -2965,7 +2994,7 @@ t ô t
 =SML
 fun Ûpp'asm_ruleÝ (tm : TERM) : THM = (
 	if type_of tm =: BOOL
-	then mk_current_thm([tm],tm)
+	then mk_current_thm([tm], tm)
 	else term_fail "asm_rule" 3031 [tm]
 );
 =TEX
@@ -2987,7 +3016,7 @@ pp'refl_conv
 =TEX
 =SML
 val Ûpp'refl_convÝ : CONV = (fn (tm : TERM) =>
-	mk_current_thm([],mk_eq(tm,tm))
+	mk_current_thm([], mk_eq(tm, tm))
 );
 =TEX
 \subsection{pp'simple\_$\beta$\_conv}
@@ -3014,9 +3043,9 @@ let	val ((vr, t1), t2) = ((dest_simple_Ì ** Combinators.I)(dest_app tm)
 		"dest_simple_Ì" => term_fail "simple_Â_conv" 6012 [tm]
 		| "dest_app" => term_fail "simple_Â_conv" 6012 [tm]
 		| _ => reraise complaint (area_of complaint));
-	val rhs = var_subst [(t2,vr)] t1;
+	val rhs = var_subst [(t2, vr)] t1;
 in
-	mk_current_thm([],mk_eq(tm,rhs))
+	mk_current_thm([], mk_eq(tm, rhs))
 end);
 =TEX
 \subsection{pp'suc\_conv}
@@ -3038,7 +3067,7 @@ pp'suc_conv
 The following inference rule relies on the well-formedness of the following constants.
 =SML
 local
-	val ÛSucÝ = mk_const("Suc",mk_­_type(î, î));
+	val ÛSucÝ = mk_const("Suc", mk_­_type(î, î));
 	val ÛZeroÝ = mk_const("Zero", î);
 in
 =TEX
@@ -3052,7 +3081,7 @@ let	val nint = (dest_î tm
 		then Zero
 		else mk_app(Suc, mk_î (nint @- one));
 in
-	mk_current_thm([],mk_eq(tm,rhs))
+	mk_current_thm([], mk_eq(tm, rhs))
 end);
 end;
 =TEX
@@ -3077,7 +3106,7 @@ pp'string_conv
 The following inference rule relies on the well-formedness of the following constants.
 =SML
 local
-	val SCons = mk_const("Cons",mk_­_type(CHAR, mk_­_type(STRING, STRING)));
+	val SCons = mk_const("Cons", mk_­_type(CHAR, mk_­_type(STRING, STRING)));
 	val SNil = mk_const("Nil", STRING);
 in
 val Ûpp'string_convÝ : CONV = (fn (tm : TERM) =>
@@ -3092,7 +3121,7 @@ let	val sex = explode(dest_string tm)
 			mk_string(implode (tl sex))]);
 
 in
-	mk_current_thm([],mk_eq(tm,rhs))
+	mk_current_thm([], mk_eq(tm, rhs))
 end);
 end;
 =TEX
@@ -3108,7 +3137,7 @@ pp'char_conv
 The following inference rule relies on the well-formedness of the following constant.
 =SML
 local 
-	val AbsChar = mk_const("AbsChar",mk_­_type(î,CHAR));
+	val AbsChar = mk_const("AbsChar", mk_­_type(î, CHAR));
 in
 val Ûpp'char_convÝ : CONV = (fn (tm : TERM) =>
 let	val cnum = integer_of_int(ord(dest_char tm))
@@ -3117,7 +3146,7 @@ let	val cnum = integer_of_int(ord(dest_char tm))
 	
 	val rhs = mk_app(AbsChar, mk_î cnum);
 in
-	mk_current_thm([],mk_eq(tm,rhs))
+	mk_current_thm([], mk_eq(tm, rhs))
 end);
 end;
 =TEX
@@ -3145,7 +3174,7 @@ pp'eq_sym_rule
 fun Ûpp'eq_sym_ruleÝ (thrm : THM) : THM = (
 let	val dummy = check_thm "eq_sym_rule" thrm;
 
-	val (asms,(lhs_concl,rhs_concl)) = dest_thm_eq "eq_sym_rule" 6020 thrm;
+	val (asms, (lhs_concl, rhs_concl)) = dest_thm_eq "eq_sym_rule" 6020 thrm;
 
 	val new_concl = mk_eq(rhs_concl, lhs_concl);
 in
@@ -3155,11 +3184,11 @@ end);
 \subsection{pp'list\_simple\_µ\_elim}
 =FRULE 1 Rule
 pp'list_simple_µ_elim
-[...,¬t1®,...]
+[..., ¬t1®, ...]
 ÷
-‡ ô µ ...x... · t2[...,xn,...]
+‡ ô µ ...x... · t2[..., xn, ...]
 ÷
-‡ ô t2'[...,tn,...]
+‡ ô t2'[..., tn, ...]
 =TEX
 In the following, when creating the local variable $subs$, of substitutions
 to be carried out, we reverse the order of the list so that
@@ -3168,15 +3197,15 @@ the inner quantifier's instantiation has effect, and the
 outer one is ignored.
 =SML
 local
-	fun simple_n_µ 0 acc tm = (acc,tm)
+	fun simple_n_µ 0 acc tm = (acc, tm)
 	| simple_n_µ n acc tm = (
-	let val (v,bdy) = dest_simple_µ tm
+	let val (v, bdy) = dest_simple_µ tm
 	in
 		simple_n_µ (n-1) (acc @ [v]) bdy
 	end);
 in
 fun Ûpp'list_simple_µ_elimÝ (tml : TERM list) 
-	(thrm : THM as Thm{sequent = (asms,concl),...}) : THM = (
+	(thrm : THM as Thm{sequent = (asms, concl), ...}) : THM = (
 let	val dummy = check_thm "list_simple_µ_elim" thrm;
 
 	val ninsts = length tml;
@@ -3220,15 +3249,15 @@ fun Ûpp'eq_trans_ruleÝ (thrm1 : THM) (thrm2 : THM) : THM = (
 let	val dummy = (check_thm "eq_trans_rule" thrm1;
 		check_thm "eq_trans_rule" thrm2);
 
-	val (hyps1,(lhs_concl1,rhs_concl1)) = dest_thm_eq "eq_trans_rule" 6020 thrm1;
+	val (hyps1, (lhs_concl1, rhs_concl1)) = dest_thm_eq "eq_trans_rule" 6020 thrm1;
 
-	val (hyps2,(lhs_concl2,rhs_concl2)) = dest_thm_eq "eq_trans_rule" 6020 thrm2;
+	val (hyps2, (lhs_concl2, rhs_concl2)) = dest_thm_eq "eq_trans_rule" 6020 thrm2;
 
 	val dummy = if rhs_concl1 ~=$ lhs_concl2
 		then ()
 		else thm_fail "eq_trans_rule" 6022 [thrm1, thrm2];
 
-	val new_concl = mk_eq(lhs_concl1,rhs_concl2);
+	val new_concl = mk_eq(lhs_concl1, rhs_concl2);
 in
 	mk_current_thm(hyps1 term_union hyps2, new_concl)
 end);
@@ -3246,12 +3275,12 @@ fun Ûpp'mk_app_ruleÝ (thrm1 : THM) (thrm2 : THM) : THM = (
 let	val dummy = (check_thm "mk_app_rule" thrm1;
 		check_thm "mk_app_rule" thrm2);
 
-	val (hyps1,(lhs_concl1,rhs_concl1)) = dest_thm_eq "mk_app_rule" 6020 thrm1;
+	val (hyps1, (lhs_concl1, rhs_concl1)) = dest_thm_eq "mk_app_rule" 6020 thrm1;
 
-	val (hyps2,(lhs_concl2,rhs_concl2)) = dest_thm_eq "mk_app_rule" 6020 thrm2;
+	val (hyps2, (lhs_concl2, rhs_concl2)) = dest_thm_eq "mk_app_rule" 6020 thrm2;
 
 	val new_concl = mk_eq(mk_app(lhs_concl1, lhs_concl2),
-		mk_app(rhs_concl1,rhs_concl2))
+		mk_app(rhs_concl1, rhs_concl2))
 		handle complaint =>
 		case (area_of complaint) of
 		"mk_app" => thm_fail "mk_app_rule" 6023 [thrm1, thrm2]
@@ -3270,11 +3299,11 @@ pp'¤_mp_rule
 =TEX
 =SML
 fun Ûpp'¤_mp_ruleÝ (thrm1 : THM)
-	(thrm2 : THM as Thm{sequent = (hyps2,concl2),...}) : THM = (
+	(thrm2 : THM as Thm{sequent = (hyps2, concl2), ...}) : THM = (
 let	val dummy = (check_thm "¤_mp_rule" thrm1;
 		check_thm "¤_mp_rule" thrm2);
 
-	val (hyps1,(lhs_concl1,rhs_concl1)) = dest_thm_eq "¤_mp_rule" 6030 thrm1;
+	val (hyps1, (lhs_concl1, rhs_concl1)) = dest_thm_eq "¤_mp_rule" 6030 thrm1;
 
 	val side_effect = if type_of lhs_concl1 =: BOOL
 		then ()
@@ -3298,7 +3327,7 @@ pp'simple_µ_intro
 =TEX
 =SML
 fun Ûpp'simple_µ_introÝ (tm : TERM) 
-	(thrm : THM as Thm{sequent = (asms,concl),...}) : THM = (
+	(thrm : THM as Thm{sequent = (asms, concl), ...}) : THM = (
 let	val dummy = check_thm "simple_µ_intro" thrm;
 		
 	val dummy = (if not(is_var tm)
@@ -3307,7 +3336,7 @@ let	val dummy = check_thm "simple_µ_intro" thrm;
 		then term_fail "simple_µ_intro" 6005 [tm]
 		else ());
 
-	val new_concl = mk_simple_µ(tm,concl);
+	val new_concl = mk_simple_µ(tm, concl);
 in
 	mk_current_thm(asms, new_concl)
 end);
@@ -3323,17 +3352,17 @@ pp'inst_term_rule
 =TEX
 =SML
 fun Ûpp'inst_term_ruleÝ (tvl : (TERM * TERM)list) 
-	(thrm : THM as Thm{sequent = (asms,concl),...}) : THM = (
+	(thrm : THM as Thm{sequent = (asms, concl), ...}) : THM = (
 let	val dummy = check_thm "inst_term_rule" thrm;
 
-	val svars = (map (fn (t,x) => (
-		let val (_,xty) = (dest_var x
+	val svars = (map (fn (t, x) => (
+		let val (_, xty) = (dest_var x
 			handle complaint =>
 			pass_on complaint "dest_var" "inst_term_rule")
 		in
 			if type_of t =: xty
 			then x
-			else term_fail "inst_term_rule" 6027 [t,x]
+			else term_fail "inst_term_rule" 6027 [t, x]
 		end))		
 		tvl);
 		
@@ -3398,7 +3427,7 @@ fun Ûadd_decimalÝ (x : string) (y : string) : string = (
 );
 in
 val Ûpp'plus_convÝ : CONV = (fn (tm : TERM) =>
-let	val (m,n) = dest_bin_op "plus_conv" 6085 "+" tm;
+let	val (m, n) = dest_bin_op "plus_conv" 6085 "+" tm;
 	val _ =
 		if is_î m andalso is_î n
 		then ()
@@ -3407,7 +3436,7 @@ let	val (m,n) = dest_bin_op "plus_conv" 6085 "+" tm;
 	val nds = fst(dest_const n);
 	val rhs = mk_const (add_decimal mds nds, î);
 in
-	mk_current_thm([],mk_eq(tm,rhs))
+	mk_current_thm([], mk_eq(tm, rhs))
 end);
 end;
 =TEX
