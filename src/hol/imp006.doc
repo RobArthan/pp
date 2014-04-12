@@ -178,7 +178,12 @@ Brought handling of initial state of the abstract data type of types and terms i
 converting to integers and back again.
 \item[Issue 1.68] Fixed some cosmetic issues and rationalised some error handling
 in preparation for implementing
-=GFT
+=INLINEFT
+gen_new_spec
+=TEX
+.
+\item[Issue 1.69] Implemented
+=INLINEFT
 gen_new_spec
 =TEX
 .
@@ -2396,12 +2401,22 @@ in
 	()
 end);
 =TEX
-The following is a function to declare a new, named, constant to be equal to some term.
+The following is the most general function for defining new constants.
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
 Note that the function assumes the presence of $=$ as a valid constant.
+=IGN
+val x = mk_var("x", BOOL);
+val lam = mk_simple_Ì(x, mk_eq(x, x));
+val def = mk_eq(mk_var("c1", type_of lam), lam);
+val defthm as Thm{sequent = (asms, concl),...} = pp'asm_rule def;
+val keys = ["c1"];
+val _ = pp'new_type("BOOL", 0);
+val _ = pp'new_type("­", 2);
+val _ = pp'new_const("=", mk_ctype("­", [mk_vartype "'a", mk_ctype("­", [mk_vartype "'a", mk_ctype("BOOL", [])])]));
 =SML
-fun Ûpp'new_defnÝ (keys : string list, cnm : string, vl : TERM) : THM = (
-let	val {hierarchy=hierarchy as hier(inconsistent, lookup, _), 
+fun Ûpp'gen_new_specÝ (keys : string list,
+		defthm : THM as Thm{sequent = (asms, concl),...}) : THM = (
+let	val {hierarchy=hierarchy as hier(inconsistent,lookup, _), 
 		 theory=theory, in_scope = in_scope,
 		sealed=sealed} = !current;
 
@@ -2415,58 +2430,103 @@ let	val {hierarchy=hierarchy as hier(inconsistent, lookup, _),
 		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
-
-	val ctype = type_of vl;
 (*
 =TEX
-Do the checks required (other than on keys):
+The theory must be writable and the list of keys must not be empty
 =SML
 *)
-	val dummy = (check_c_writable "pp'new_defn";
-		(case const_in_anc_or_des cnm of
-		InScope => fail "pp'new_defn" 6049 [fn () => cnm]
-		| InDescendant => fail "pp'new_defn" 6063 [fn () => cnm]
-		| NotPresent => ());
-		wf_term "pp'new_defn" vl;
-		if is_nil keys
-		then fail "pp'new_defn" 6031 []
-		else if not(is_nil (frees vl))
-		then fv_error "pp'new_defn" "term" string_of_term vl (frees vl)
-		else if not(is_nil((term_tyvars vl) diff (type_tyvars ctype)))
-		then fail "pp'new_defn" 6058 
-			[fn () => string_of_term vl,
-			 fn () => format_list (Combinators.I) 
-			 ((term_tyvars vl) diff (type_tyvars ctype)) ", "]
-
-		else ()
-		);
+	val _ = check_c_writable "pp'gen_new_spec";
+	val _ =	if is_nil keys
+		then fail "pp'gen_new_spec" 6031 []
+		else ();
+=TEX
+Derive a constant-variable pair from one assumption of the theorem, making all the
+checks that apply to an individual assumption. The check for
+no duplicates in the list of new constant names is done later (when the
+constant environment is extended).
+Note that it is sufficient to check that the right-hand side of the equation is well-formed
+since {\em mk\_eq} guarantees that the left-hand side will have the same type as the right-hand
+side (and as the left-hand side is checked to be a variable, only its type can make it ill-formed).
+=SML
+	fun const_var_from_eq (v_eq_t : TERM) : TERM * TERM = (
+		let	val (v, t) = dest_eq v_eq_t
+				handle complaint =>
+				divert complaint "dest_eq" "pp'gen_new_spec" 
+					6064 [fn () => string_of_term v_eq_t];
+			val (cnm, cty) = dest_var v
+				handle complaint =>
+				divert complaint "dest_var" "pp'gen_new_spec" 
+					6064 [fn () => string_of_term v_eq_t];
+			val c = mk_const (cnm, cty)
+				handle complaint =>
+				pass_on complaint "mk_const" "pp'gen_new_spec";
+			val _ = case const_in_anc_or_des cnm of
+					InScope => fail "pp'gen_new_spec" 6049 [fn () => cnm]
+				|	InDescendant => fail "pp'gen_new_spec" 6063 [fn () => cnm]
+				|	NotPresent => ();
+			val _ = wf_term "pp'gen_new_spec" t;
+			val _ = if not(is_nil (frees t))
+				then fv_error "pp'gen_new_spec" "term" string_of_term t (frees t)
+				else if not(is_nil((term_tyvars t) diff (type_tyvars cty)))
+				then fail "pp'gen_new_spec" 6058  [fn () => string_of_term t,
+					 fn () => format_list (Combinators.I) 
+						 ((term_tyvars t) diff (type_tyvars cty)) ", ",
+					fn () => string_of_term v]
+				else ();
+		in	(c, v)
+		end
+	);
+	val const_var_subs = map const_var_from_eq asms;
+=TEX
+Build and check the defining property. This must be well-formed and have no free variables
+(implying that the conclusion of the input theorem is well-formed and has all
+its free variables contained amoungst the $v_i$).
+=SML
+	val def_prop = var_subst const_var_subs concl;
+	val _ = if is_nil (frees def_prop)
+		then ()
+		else	fv_error "pp'new_type_defn" "theorem" string_of_thm defthm (frees def_prop);
 (*
 =TEX
-Now build up the new material:
+Build the new constant environment. It is here that we detect
+duplicate new constant names: {oe\_extend} will fail if this happens.
 =SML
 *)
-	val new_const = mk_const(cnm, ctype)
-		handle complaint =>
-		pass_on complaint "mk_const" "pp'new_defn";
+	val new_current_level = current_level + 1;
 
-	val con_decl = {ty=ctype, level=current_level+1};
+	val con_decl = map (fn (c, _) =>
+			let val (cnm, ty) = dest_const c
+			in	(cnm, {ty=ty, level=new_current_level})
+			end) const_var_subs;
 
-	val new_con_env = oe_extend cnm con_decl con_env;
+	val new_con_env = fold 
+		(fn ((cnm, entry), edict) => oe_extend cnm entry edict)
+		 con_decl con_env;
 
-	val new_defn = Thm{level = current_level+1, 
+(*
+=TEX
+Build the new definition dictionary.
+=SML
+*)
+	val new_defn = Thm{level = new_current_level, 
 		theory=theory, 
-		sequent = ([], mk_eq(new_const, vl))};
+		sequent = ([], def_prop)};
 
 	val new_defn_dict = (fold (fn (x, y) => x y)
 		(map (fn key => fn dct =>
 			oe_extend key new_defn dct
 			handle complaint =>
-			divert complaint "e_extend" "pp'new_defn" 6051 
-			[(fn () => key), 
-			 (fn () => get_current_theory_name())])
+			divert complaint "e_extend" "pp'gen_new_spec" 6051 
+				[(fn () => key),
+				(fn () => get_current_theory_name())])
+
 		keys)
 		defn_dict);
-
+(*
+=TEX
+Put it all together to give the new theory.
+=SML
+*)
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
 		con_env = new_con_env,
@@ -2481,9 +2541,8 @@ Now build up the new material:
 in
 	inconsistent:=true;
 	theory := new_thy;
-	current := {hierarchy=hierarchy, theory=theory, in_scope = in_scope,
-		sealed=sealed};
-	inconsistent:=was_inconsistent;
+	current := {hierarchy=hierarchy, theory=theory, in_scope = in_scope, sealed=sealed};
+	inconsistent := was_inconsistent;
 	new_defn
 end);
 =TEX
@@ -2564,11 +2623,13 @@ Now build up the new material:
 
 	val seq_concl = mk_simple_¶(f, list_mk_app (td, [p, f]));
 
-	val new_type_defn = Thm{level = current_level+1, 
-		theory=theory, 
+	val new_current_level = current_level + 1;
+
+	val new_type_defn = Thm{level = new_current_level, 
+		theory = theory, 
 		sequent = ([], seq_concl)};
 
-	val ty_decl = {arity = arity, level=current_level+1};
+	val ty_decl = {arity = arity, level = new_current_level};
 
 	val new_ty_env = oe_extend tnm ty_decl ty_env;
 
@@ -2712,7 +2773,7 @@ Check the results of picking apart the theorem:
 Now put everything in the correct place:
 =SML
 *)
-	val new_defn = Thm{level = current_level+1, 
+	val new_defn = Thm{level = new_current_level, 
 		theory=theory, 
 		sequent = ([], new_concl)};
 
@@ -2795,7 +2856,7 @@ pp'subst_rule
 [‡1 ô t1=t1', ... , ‡n ô tn=tn']
 ‡ ô t[t1, ..., tn]
 ÷
-‡1 À ... À ‡n À ‡ ô t[t1', ..., tn']
+‡1 À ... À ‡n À ‡ ô t[t1',..., tn']
 =TEX
 The following local function takes the input list and hypotheses to $pp'subst\_rule$, and returns the 
 substitution lists for $var\_subst$, as well as the 
@@ -2916,7 +2977,7 @@ pp'inst_type_rule
 ÷
 ‡ ô t[tyv1, ..., tyvn]
 ÷
-‡ ô t[Ó1, ..., Ón]
+‡ ô t[Ó1,..., Ón]
 =TEX
 =SML
 fun Ûpp'inst_type_ruleÝ (talist: (TYPE * TYPE) list)
