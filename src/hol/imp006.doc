@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  imp006.doc  %Z% $Date: 2012/09/02 14:34:54 $ $Revision: 1.67 $ $RCSfile: imp006.doc,v $
+%  imp006.doc  %Z% $Date: 2014/04/12 16:03:18 $ $Revision: 1.69 $ $RCSfile: imp006.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP006}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.67 $
+\def\SCCSversion{$Revision: 1.69 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2012/09/02 14:34:54 $ %
+\TPPdate{\FormatDate{$Date: 2014/04/12 16:03:18 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -185,6 +185,15 @@ gen_new_spec
 \item[Issue 1.69] Implemented
 =INLINEFT
 gen_new_spec
+=TEX
+.
+\item[Issue 1.70] Improved error handling in 
+=INLINEFT
+gen_new_spec
+=TEX
+\ and
+=INLINEFT
+new_spec
 =TEX
 .
 \end{description}
@@ -356,13 +365,6 @@ fun Ûtwo_the_sameÝ ((a :: x): ''a list) : ''a = (
 	then a
 	else two_the_same x
 ) | two_the_same _ = error "two_the_same" 6032 [];
-=TEX
-=SML
-fun Ûtwo_the_same1Ý (eq : 'a * 'a -> bool) ((a :: x): 'a list) : 'a = (
-	if present eq a x
-	then a
-	else two_the_same1 eq x
-) | two_the_same1 _ _ = error "two_the_same1" 6032 [];
 =TEX
 =SML
 fun Ûst_equalsÝ (((nm1,ty1):string * TYPE), ((nm2,ty2):string * TYPE))  : bool = (
@@ -2441,14 +2443,12 @@ The theory must be writable and the list of keys must not be empty
 		else ();
 =TEX
 Derive a constant-variable pair from one assumption of the theorem, making all the
-checks that apply to an individual assumption. The check for
-no duplicates in the list of new constant names is done later (when the
-constant environment is extended).
+checks that apply to an individual assumption.
 Note that it is sufficient to check that the right-hand side of the equation is well-formed
 since {\em mk\_eq} guarantees that the left-hand side will have the same type as the right-hand
 side (and as the left-hand side is checked to be a variable, only its type can make it ill-formed).
 =SML
-	fun const_var_from_eq (v_eq_t : TERM) : TERM * TERM = (
+	fun const_var_from_eq (v_eq_t : TERM) : string * (TERM * TERM) = (
 		let	val (v, t) = dest_eq v_eq_t
 				handle complaint =>
 				divert complaint "dest_eq" "pp'gen_new_spec" 
@@ -2473,15 +2473,26 @@ side (and as the left-hand side is checked to be a variable, only its type can m
 						 ((term_tyvars t) diff (type_tyvars cty)) ", ",
 					fn () => string_of_term v]
 				else ();
-		in	(c, v)
+		in	(cnm, (c, v))
 		end
 	);
-	val const_var_subs = map const_var_from_eq asms;
+	val (cnames, const_var_subs) = split (map const_var_from_eq asms);
+(*
+=TEX
+Check for duplicates in the list of constant names:
+=SML
+*)
+	val _ = if not(all_distinct (op =) cnames)
+		then fail "pp'gen_new_spec" 6019 
+			[fn () => two_the_same cnames, fn () => string_of_thm defthm]
+		else ();
+(*
 =TEX
 Build and check the defining property. This must be well-formed and have no free variables
 (implying that the conclusion of the input theorem is well-formed and has all
 its free variables contained amoungst the $v_i$).
 =SML
+*)
 	val def_prop = var_subst const_var_subs concl;
 	val _ = if is_nil (frees def_prop)
 		then ()
@@ -2727,6 +2738,7 @@ Now build up the new material:
 Check the results of picking apart the theorem:
 =SML
 *)
+	val cnames = map (fst o dest_var) xlist;
 	val dummy = (if any (tl xlist) (fn x => not((term_tyvars x) ~= xtyvars)) 
 		then term_fail "pp'new_spec" 6081 [hd xlist, 
 			find (tl xlist) (fn x => not((term_tyvars x) ~= xtyvars))]
@@ -2735,10 +2747,9 @@ Check the results of picking apart the theorem:
 			[fn () => string_of_thm defthm,
 			 fn () => format_list (Combinators.I) 
 			 ((term_tyvars concl) diff xtyvars) ", "]
-		else if not(all_distinct (op =$) xlist)
+		else if not(all_distinct (op =) cnames)
 		then fail "pp'new_spec" 6016 
-			[fn () => fst(dest_var(two_the_same1 (op =$) xlist)),
-			 fn () => string_of_thm defthm]
+			[fn () => two_the_same cnames, fn () => string_of_thm defthm]
 		else ();
 		map (fn x =>
 			let val (cnm, ty) = dest_var x
