@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for the Theory of Pairs}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP037}  %% Mandatory field
-\def\SCCSversion{$Date: 2012/03/27 10:47:38 $%
+\def\SCCSversion{$Date: 2014/04/13 10:56:18 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2012/03/27 10:47:38 $
+\TPPdate{\FormatDate{$Date: 2014/04/13 10:56:18 $
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -83,6 +83,11 @@ gen_new_spec
 \ rather than
 =INLINEFT
 new_spec
+=TEX
+.
+\item{Issue 1.17] Added implementation of
+=INLINEFT
+new_spec1
 =TEX
 .
 \end{description}
@@ -526,6 +531,97 @@ val _ = declare_nonfix "comma";
 val _ = pop_pc();
 end; (* of structure PairTheory *)
 open PairTheory;
+=TEX
+\section{COMPLETION OF KERNEL INTERFACE}
+We can now implement a working
+=INLINEFT
+new_spec1
+=TEX
+\ completing the functionality of the kernel interface.
+=SML
+structure €KernelInterface› : KernelInterface = struct
+	open KernelInterface;
+=TEX
+=SML
+val €new_spec1_lemma› : THM = (
+set_goal([], ¨µp∑ (∂x y∑ p x y) § (∂z∑ p (Fst z) (Snd z))Æ);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(simple_∂_tac¨(x, y)Æ THEN asm_rewrite_tac[pair_ops_def]);
+(* *** Goal "2" *** *)
+a(MAP_EVERY simple_∂_tac [¨Fst zÆ, ¨Snd zÆ] THEN asm_rewrite_tac[]);
+pop_thm()
+);
+=TEX
+=SML
+fun €mk_fst› (t : TERM) : TERM = (
+	let	val tys = (snd o dest_ctype o type_of) t;
+		val ty_a = hd tys;
+		val ty_b = hd(tl tys);
+		val fst_ty = mk_≠_type(mk_ctype("∏", [ty_a, ty_b]), ty_a)
+		val f = mk_const("Fst", fst_ty);
+	in	mk_app(f, t)
+	end
+);
+=TEX
+=SML
+fun €mk_snd› (t : TERM) : TERM = (
+	let	val tys = (snd o dest_ctype o type_of) t;
+		val ty_a = hd tys;
+		val ty_b = hd(tl tys);
+		val snd_ty = mk_≠_type(mk_ctype("∏", [ty_a, ty_b]), ty_b)
+		val f = mk_const("Snd", snd_ty);
+	in	mk_app(f, t)
+	end
+);
+=TEX
+=SML
+fun €new_spec1› (keys : string list, cnames : string list, thm : THM) : THM = (
+	let	val n = length cnames;
+		val (bvs, p) = (strip_∂ o concl) thm;
+		val _ = if n = 0 then fail "new_spec1" 12041 [] else ();
+		val _ =	if	length bvs < n orelse any bvs (not o is_var)
+			then	fail "new_spec1" 6060 [fn () => string_of_thm thm,
+					fn () => string_of_int n]
+			else if	(not o all_distinct (op =)) cnames
+			then	fail "new_spec1" 12042 []
+			else	();
+		fun conv n = (fn tm =>
+			(if	n <= 1
+			then	id_conv
+			else	(RAND_C o SIMPLE_Ã_C) (conv (n - 1)) THEN_C
+					simple_ho_eq_match_conv new_spec1_lemma) tm
+		);
+		val thm1 = conv_rule (conv n) thm;
+		val (z, p_sigma) = (dest_∂ o concl) thm1;
+		val ch_p_sigma = mk_≈(z, p_sigma);
+		fun mk_projs n tm = (
+			if	n <= 1
+			then	[tm]
+			else	mk_fst tm :: mk_projs (n-1) (mk_snd tm)
+		);
+		val cn_ts = combine cnames (mk_projs n ch_p_sigma);
+		fun mk_param_thm (cn, t) = (
+			let	val v = mk_var(cn, type_of t);
+				val v_eq_t = mk_eq(v, t);
+				val thm = (eq_sym_rule o asm_rule) v_eq_t;
+			in	(thm, v)
+			end
+		);
+		val param_thms = map mk_param_thm cn_ts;
+		val thm2 = simple_∂_≈_rule thm1;
+		val subs = map (fn (cn, v) => (mk_var(cn, type_of v), v))
+					(combine cnames (bvs to (n-1)));
+		val template = subst subs (list_mk_∂(bvs from n, p));
+		val thm3 = subst_rule param_thms template thm2;
+		val thm4 = gen_new_spec(keys, thm3);
+	in	thm4
+	end
+);
+=TEX
+=SML
+end (* of structure KernelInterface *);
+open KernelInterface;
 =TEX
 \newpage
 \twocolumn[\section{INDEX}]
