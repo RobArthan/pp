@@ -176,12 +176,7 @@ echo "Using $PPTARGETDIR as the installation target directory"
 # Calculate target list:
 #
 SUPPORTEDTARGETS="dev pptex xpp hol zed daz qcz"
-case $OS in
-	cygwin)
-		DEFAULTTARGETS="pptex hol zed daz qcz" ;;
-	*)
-		DEFAULTTARGETS="pptex xpp hol zed daz qcz" ;;
-esac
+DEFAULTTARGETS="pptex xpp hol zed daz qcz"
 if	[ "${PPTARGETS:-}" = "" ]
 then	
 	PPTARGETS=$DEFAULTTARGETS
@@ -226,15 +221,6 @@ do	if	eval [  \$$f = y  ]
 	then	ACTTARGETS=`echo $ACTTARGETS $f`
 	fi
 done
-#
-# OS-specific checks on requested targets
-#
-if	[ "$OS" = cygwin ]
-then
-	if	[ $xpp = y ]
-	then	warn "xpp has not been tested on Cygwin"
-	fi
-fi
 #
 # Find an ML Compiler, if we need one
 #
