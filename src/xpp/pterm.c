@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.63 2013/03/02 17:21:43 rda Exp rda $
+ * pterm.c,v 2.64 2014/01/23 17:19:42 rda Exp
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -237,6 +237,14 @@ macros before using them.
 	#define SET_ATTRS_IN_PARENT
 	#define USE_CFMAKERAW
  	#define USE_TIOCEXCL
+#endif
+
+#ifdef CYGWIN
+	#undef  USE_STREAMS
+	#define USE_POSIX_TERMIO
+	#define SET_ATTRS_IN_PARENT
+	#define USE_CFMAKERAW /* again historical: we probably could now */
+ 	#undef  USE_TIOCEXCL
 #endif
 
 #ifdef SOLARIS
@@ -651,10 +659,12 @@ void get_pty(void)
 			_exit(9);
 		}
 
+#ifdef TIOCNOTTY
 		if((tty_fd = open("/dev/tty", O_RDWR)) >= 0){
 		    ioctl(tty_fd, TIOCNOTTY, 0);
 		    close(tty_fd);
 		}
+#endif
 
 #ifndef SET_ATTRS_IN_PARENT
 		set_pty_attrs(STDIN, _exit);
