@@ -41,7 +41,7 @@ restart_application.
 
 The initialisation step (also used to re-initialise in restart_application) has
 several OS-dependent aspects. Data transfer from and to the application as
-coded here is not OS-dependent, but it care has had to be taken to ensure that
+coded here is not OS-dependent, but care has had to be taken to ensure that
 it doesn't deadlock and to ensure that it doesn't swamp interaction with the
 user. The control functions are less problematic but they do interact with data
 transfer.  Both data transfer and the control functions have to be careful
@@ -877,11 +877,7 @@ static Boolean get_from_app_work_proc(XtPointer continue_flag)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * dequeue tries to write out the command line at the head of the
- * queue. To simplify the coding and particularly the memory
- * management, if the line to be written out cross the boundary
- * at the end of the cyclic buffer containing the queue data,
- * the line is taken to end at that boundary.
- * It returns true iff. it reduced the size of the queue.
+ * queue. It returns true iff. it reduced the size of the queue.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean dequeue(void)
 {
@@ -947,8 +943,8 @@ static Boolean dequeue(void)
  * It returns true if it got its argument onto the queue.
  * Caller is expected to call try_drain_queue after this
  * to drain the queue and resize it as appropriate.
- * The queue always has one more byte than q_size actually says it does
- * to allow for scroll_out null-terminating a string right at the end.
+ * The queue always has a spare byte beyond queue + q_tail to allow
+ * for scroll_out null-terminating a string right at the end.
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
 static Boolean enqueue(char *buf, Cardinal siz)
 {
@@ -1013,7 +1009,15 @@ static Boolean enqueue(char *buf, Cardinal siz)
  * be emptied immediately by enqueue
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void try_drain_queue(Widget w)
+static void try_drain_queue(void);
+static void try_drain_queue_time_out_proc(
+		XtPointer	unused_p,
+		XtIntervalId	*unused_id)
+{
+	try_drain_queue();
+}
+
+static void try_drain_queue(void)
 {
 /* If there's something in the queue try to process it */
 	while(dequeue()) {
@@ -1023,8 +1027,7 @@ static void try_drain_queue(Widget w)
 /* If there's still something in the queue ask to be called again: */
 
 	if(queue != 0 && q_tail >= q_head) {
-		XtAppAddTimeOut(app, 25,
-			(XtTimerCallbackProc)try_drain_queue, w);
+		XtAppAddTimeOut(app, 25, try_drain_queue_time_out_proc, root);
 	} else if(queue != 0 && q_size > INIT_Q_LEN) {
 
 /* If not, reclaim space if appropriate: */
@@ -1066,9 +1069,9 @@ void send_to_application (char *buf, Cardinal siz)
 
 	enqueue(buf, siz);
 
-/* Call the timeout function to arrange to drain the queue if needed: */
+/* Try to drain the queue: */
 
-	try_drain_queue(root);
+	try_drain_queue();
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
