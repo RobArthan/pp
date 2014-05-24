@@ -332,15 +332,14 @@ macros before using them.
 /*
  * The argument to get_from_app_work_proc is one of the following two:
  */
-#define	CONTINUE_LISTENING	0
-#define	STOP_LISTENING		1
+
+enum {CONTINUE_LISTENING, STOP_LISTENING};
+
 /*
- * The argument to listening_state is on of the following four:
+ * The argument to listening_state is one of the following four:
  */
-#define	LISTEN	10
-#define	IGNORE	20
-#define	QUERY	30
-#define DEAD	40
+
+enum {LISTEN, IGNORE, QUERY, DEAD};
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * global, static and external data:
@@ -783,13 +782,12 @@ static Boolean get_from_app_work_proc(XtPointer);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  *
- * listening_state is used to toggle between the state where xp is listening
+ * listening_state is used to toggle between the state where xpp is listening
  * for output from the application being run and the state
  * where it is not. The state changes needs to be protected
  * against signals.
- * The actual listening state is just a flag which is true when we have Xt
+ * The listening state returned is a flag which is true when we have Xt
  * polling for input from control_fd.
- *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean listening_state(int req)
 {
@@ -1107,10 +1105,10 @@ void kill_application (void)
 	clear_queue();
 	if(application_alive()) {
 		listening_state(IGNORE);
+		close(control_fd);
 		kill((pid_t)(-child_pid), SIGKILL);
 		kill(child_pid, SIGKILL);
 		waitpid(child_pid, NULL, WUNTRACED);
-		close(control_fd);
 	}
 }
 
