@@ -1,5 +1,5 @@
 #
-# $Id: makehelp.sh,v 2.2 1999/04/20 12:07:32 xpp Rel rda $
+# $Id: makehelp.sh,v 2.3 2000/01/04 14:24:30 rda Rel rda $
 # makehelp - ProofPower X/Motif Interface build tool
 # This shell script constructs the files and help.c and help.h from help.txt
 # using nroff -ms to do the formatting.
@@ -48,9 +48,8 @@ g/^const/s/\*_//1
 0a
 /*
  * Help texts for the ProofPower X/Motif Interface.
- * This file is automatically created from help.txt.
+ * This file is automatically created from help.txt by the script makehelp.sh
  * Do not edit.
- * Made by $RCSfile: makehelp.sh,v $ version $Revision: 2.2 $ of $Date: 1999/04/20 12:07:32 $
  */
 #define _help
 #include "xpp.h"
@@ -64,9 +63,15 @@ v/^const String Help_/d
  * Help include file for the ProofPower X/Motif Interface.
  * This file is automatically created from help.txt.
  * Do not edit.
- * Made by $RCSfile: makehelp.sh,v $ version $Revision: 2.2 $ of $Date: 1999/04/20 12:07:32 $
+ * Made by $RCSfile: makehelp.sh,v $ version $Revision: 2.3 $ of $Date: 2000/01/04 14:24:30 $
  */
 .
 w help.h
+q
+!
+YEAR=`date +%Y`
+ed help.c <<!
+/Copyright/s/YEAR/$YEAR/
+w
 q
 !
