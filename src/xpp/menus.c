@@ -9,7 +9,7 @@
  * menus.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -175,7 +175,7 @@ Widget setup_menu(
 	MenuItem        *items)
 {
 	if(type == XmMENU_POPUP) {
-		return 
+		return
 			setup_menu_aux(
 				parent, type, menu_title,
 				menu_mnemonic, tear_off_enabled, items);

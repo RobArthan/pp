@@ -7,11 +7,11 @@
  * mainw.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
- * 
+ *
  * This implements the script editor, in which typically the user is building
  * a command script for an interactive program such as ProofPower, and
  * the user interface for interacting with the interactive program.
@@ -91,7 +91,7 @@ static char* restart_message =
 "The application is running. "
 "Do you want to kill it and then restart it?";
 
-static char *add_new_line_message = 
+static char *add_new_line_message =
 "The selection to be executed does not end in a new-line character."
 "Do you want a new-line to be added to it?";
 
@@ -313,10 +313,10 @@ typedef struct {
 	Widget	*widget1, *widget2;
 } show_hide_info;
 
-static show_hide_info 
+static show_hide_info
 	show_hide_script_data = {&scriptpanes, &journalform};
 
-static show_hide_info 
+static show_hide_info
 	show_hide_journal_data = {&journalform, &scriptpanes};
 
 /* The set up code needs to be able to locate the Show Geometry item: */
@@ -358,7 +358,7 @@ static MenuItem cmd_menu_items[] = {
     { "Semicolon", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_SEMICOLON, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
-    { "Interrupt", &xmPushButtonGadgetClass, 'I', NULL, NULL, 
+    { "Interrupt", &xmPushButtonGadgetClass, 'I', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_INTERRUPT, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
     { "Kill", &xmPushButtonGadgetClass, 'K', NULL, NULL,
@@ -533,7 +533,7 @@ static char *get_file_name(void)
 	}
 	return fname;
 }
- 
+
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * journal_resize_handler: work-around for Motif's treatment
@@ -811,7 +811,7 @@ static Boolean setup_main_window(
 		XmNleftWidget,		filename,
 		NULL);
 	XmStringFree(s1);
- 
+
 	logo = XtVaCreateManagedWidget("logo",
 		xmLabelWidgetClass, infobar,
 		XmNlabelType,		XmPIXMAP,
@@ -978,7 +978,7 @@ static Boolean setup_main_window(
  * code
  */
 	for(	i = 0;
-		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]); 
+		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]);
 		i += 1 ) {
 		edit_menu_items[i].callback_data = script;
 	}
@@ -1026,7 +1026,7 @@ static Boolean setup_main_window(
  * Help menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	if(global_options.edit_only) {
-		help_menu_items[HELP_MENU_COMMAND_MENU] = 
+		help_menu_items[HELP_MENU_COMMAND_MENU] =
 			help_menu_items[HELP_MENU_FILE_NAME_BAR];
 		help_menu_items[HELP_MENU_FILE_NAME_BAR].label = NULL;
 	}
@@ -1049,7 +1049,7 @@ static Boolean setup_main_window(
  * reminder in the pull-down one.
  */
 	for(	i = 0;
-		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]); 
+		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]);
 		i += 1 ) {
 		edit_menu_items[i].accelerator = NULL;
 	}
@@ -1983,7 +1983,7 @@ static void line_number_timeout_proc(
 }
 
 /*
- * line_number_cb: callback for motion verify in the text window to 
+ * line_number_cb: callback for motion verify in the text window to
  * request the line number to be recalcualted.
  */
 static void line_number_cb(

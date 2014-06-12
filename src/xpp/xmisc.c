@@ -8,7 +8,7 @@
  * xmisc.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -48,7 +48,7 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * messages
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char *too_many_selection_sources = 
+static char *too_many_selection_sources =
 	"DESIGN ERROR: too many attempts to register a text selection source";
 
 static char *selection_timeout_message =
@@ -134,7 +134,7 @@ void set_menu_item_label(Widget w, Cardinal i, char *lab)
 		XmNnumChildren, &num_btns, NULL);
 	if (i < num_btns) {
 		str = XmStringCreateSimple(lab);
-		XtVaSetValues(btns[i], 
+		XtVaSetValues(btns[i],
 			XmNlabelString, str,
 			NULL);
 		XmStringFree(str);
@@ -611,7 +611,7 @@ void help_cb(
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * text_show_position: like XmTextShowPosition but centres the
- * position if it's not on the screen to start with. 
+ * position if it's not on the screen to start with.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void text_show_position(
 	Widget	text_w,

@@ -8,7 +8,7 @@
  * cmdline.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -47,7 +47,7 @@ static void
 static void handle_resize(EVENT_HANDLER_ARGS);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * static data 
+ * static data
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 typedef struct{
@@ -64,7 +64,7 @@ char *no_command_to_add_msg =
 char *nothing_to_delete_msg =
 "No item in the list has been selected.";
 
-static char *no_selection_cmd = 
+static char *no_selection_cmd =
 	"No text selection is available "
 	"to be copied into the command field.";
 
@@ -145,7 +145,7 @@ void add_command_line_tool(Widget text_w)
 		transientShellWidgetClass,	root,
 		XmNdeleteResponse,		XmUNMAP,
 		XmNtitle,			"Command Line",
-		NULL); 
+		NULL);
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
@@ -554,7 +554,7 @@ static void list_select_cb(
 		XmTextSetInsertionPosition(cbdata->cmd_w, last_pos);
 		XmTextShowPosition(cbdata->cmd_w, last_pos);
 		XtFree(cmd);
-	} 
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

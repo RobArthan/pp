@@ -1,13 +1,13 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: diag.c,v 2.2 2002/10/17 17:09:34 rda Exp rda $ 
+ * $Id: diag.c,v 2.2 2002/10/17 17:09:34 rda Exp rda $
  *
  * diag.c - debugging tools for the X/Motif ProofPower Interface
  *
  * diag.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -19,7 +19,7 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _diag
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * include files: 
+ * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #include <stdio.h>
 

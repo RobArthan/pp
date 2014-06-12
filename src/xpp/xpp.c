@@ -6,7 +6,7 @@
  * xpp.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -14,7 +14,7 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * macro definitions: 
+ * macro definitions:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 #define _xpp
@@ -50,7 +50,7 @@
 #define XtCEditOnlyColumns	"EditOnlyColumns"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * include files: 
+ * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 #include <X11/StringDefs.h>
@@ -61,7 +61,7 @@
 #include <string.h>
 #include "xpp.h"
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * externs for getopt(3): 
+ * externs for getopt(3):
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 extern int optind, opterr, optopt;
@@ -394,7 +394,7 @@ void set_pp_home(void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Check for our fonts - must call after XtOpenDisplay 
+ * Check for our fonts - must call after XtOpenDisplay
  * Returns true if caller should close and reopen.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 Boolean get_pp_fonts(void)
@@ -706,7 +706,7 @@ int main(int argc, char **argv)
 		global_options.command_line = cmd_line;	
 	}
 
-	global_options.add_new_line_mode = 
+	global_options.add_new_line_mode =
 		xpp_resources.add_new_line_mode > EXECUTE_IGNORE_NEW_LINES
 	?	EXECUTE_IGNORE_NEW_LINES
 	:	xpp_resources.add_new_line_mode < EXECUTE_ADD_NEW_LINES

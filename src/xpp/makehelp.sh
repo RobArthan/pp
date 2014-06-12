@@ -15,12 +15,12 @@
 # hash signs and that lines beginning with asterisks are the
 # message headers to be turned into C string declarations.
 #
-# 
+#
 rm -f help.c
 rm -f help.h
 # ex >/dev/null 2>&1 -s <<\!
 ed <<\!
-r ! nroff -ms help.txt 
+r ! nroff -ms help.txt
 g/^#*$/s/^/#/
 1,$-1g/^#*$/j
 1,$-1g/^#*$/j

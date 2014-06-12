@@ -7,7 +7,7 @@
  * lineno.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -50,15 +50,15 @@ typedef struct {
  * messages
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static char *cant_get_line_no = 
+static char *cant_get_line_no =
 	"Running out of memory! "
 	"Not enough memory is left to calculate the line number";
 
-static char *cant_goto_line_no = 
+static char *cant_goto_line_no =
 	"Running out of memory! "
 	"Not enough memory is left to move to the line number";
 
-static char *no_line_no = 
+static char *no_line_no =
 	"Line number to go to is missing or zero.";
 
 static char *line_no_too_big1 =
@@ -115,7 +115,7 @@ static MenuItem line_no_edit_menu_items[] = {
 
 Boolean add_line_no_tool(Widget text_w)
 {
-	Widget shell, 
+	Widget shell,
 		paned,
 		top_form,
 		bottom_form,
@@ -144,7 +144,7 @@ Boolean add_line_no_tool(Widget text_w)
 		transientShellWidgetClass, text_w,
 		XmNdeleteResponse,		XmUNMAP,
 		XmNtitle,			"Goto Line",
-		NULL); 
+		NULL);
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
@@ -415,7 +415,7 @@ long int get_line_no(Widget text_w)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * line_no_to_offset returns the character offset of the 
+ * line_no_to_offset returns the character offset of the
  * first and last characters of a given line in a text widget.
  * first is set to  -(nlines + 1), where nlines is the total number
  * of lines in the file if number out of range.

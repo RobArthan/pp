@@ -11,7 +11,7 @@
 %       Of these only title is mandatory. `identity' is for project
 %       reference numbers (`DS/FMU/infra/001' and the like). If it is
 %       omitted in the .bib database, the cite key is output in its place
-%       
+%
 	% version 0.99a for BibTeX versions 0.99a or later, LaTeX version 2.09.
 	% Copyright (C) 1985, all rights reserved.
 	% Copying of this file is authorized only if either
@@ -823,7 +823,7 @@ FUNCTION {proceedings}
   note output
   fin.entry
 }
- 
+
 FUNCTION {projdoc}                                % RDA
 { output.bibitem
   identity missing$

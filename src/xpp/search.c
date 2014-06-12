@@ -7,7 +7,7 @@
  * search.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -92,28 +92,28 @@ typedef struct {
  * messages
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static char *no_room_for_search_op = 
+static char *no_room_for_search_op =
 	"Running out of memory! "
 	"Not enough memory is left to perform this search operation.";
 
-static char *no_search_string = 
+static char *no_search_string =
 	"There is nothing in the search field.";
 
-static char *no_selection_replace = 
+static char *no_selection_replace =
 	"No text selection is available "
 	"to be copied into the replacement field.";
 
-static char *no_selection_search = 
+static char *no_selection_search =
 	"No text selection is available "
 	"to be copied into the search field.";
 
-static char *no_selection_to_replace = 
+static char *no_selection_to_replace =
 	"There is no selection in the text window to be replaced.";
 
-static char *not_found = 
+static char *not_found =
 	"Search pattern not found.";
 
-static char *re_error = 
+static char *re_error =
 	"Error in search pattern: %s";
 
 static char *submatch_stale =
@@ -193,7 +193,7 @@ static MenuItem replace_text_edit_menu_items[] = {
  * |   <text to search for >       |
  * |-----------------------------+-|
  * | Replace      |  Replace All   |
- * | Replace & <= | Replace & =>   | 
+ * | Replace & <= | Replace & =>   |
  * |-------------------------------|
  * |   <text to replace with >     |
  * |-------------------------------|
@@ -256,7 +256,7 @@ Boolean add_search_tool(Widget text_w)
 		transientShellWidgetClass, text_w,
 		XmNdeleteResponse,		XmUNMAP,
 		XmNtitle,			"Search and Replace",
-		NULL); 
+		NULL);
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
@@ -267,7 +267,7 @@ Boolean add_search_tool(Widget text_w)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Part 1:
- * | <= Search    | Search =>    | 
+ * | <= Search    | Search =>    |
  * |   <text to search for >                     |
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
@@ -569,7 +569,7 @@ Boolean add_search_tool(Widget text_w)
 
 	XtOverrideTranslations(search_text,
 		xpp_resources.text_translations);
-	XtOverrideTranslations(replace_text, 
+	XtOverrideTranslations(replace_text,
 		xpp_resources.text_translations);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -735,7 +735,7 @@ static Boolean replace_selection(
 			long int text_len =right - left, rep_len;
 			char *text_buf = XtMalloc(text_len+1), *rep_buf;
 			Substring ss;
-			if(	text_buf == 0 
+			if(	text_buf == 0
 			||	XmTextGetSubstring(cbdata->text_w, left, text_len,
 					text_len + 1, text_buf)
 					== XmCOPY_FAILED ) {

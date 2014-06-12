@@ -7,7 +7,7 @@
  * msg.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -22,7 +22,7 @@
 #define NO 2
 #define CANCEL -1
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * include files: 
+ * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #include <stdio.h>
 #include <stdlib.h>

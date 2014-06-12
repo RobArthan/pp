@@ -7,11 +7,11 @@
  * pterm.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
- * 
+ *
  * This implements the  pseudo-terminal in which the interactive program is
  * run.
  *
@@ -211,7 +211,7 @@ macros before using them.
  *	USE_OPENPTY - BSD openpty
  *	else hunt in /dev
  * When to set termio attributes:
- *	SET_ATTRS_IN_PARENT 
+ *	SET_ATTRS_IN_PARENT
  *	else do it in the child
  * Whether to use cfmakeraw
  *	USE_CFMAKERAW (defined if so)
@@ -221,7 +221,7 @@ macros before using them.
  * 	USE_TIOCEXCL
  * We now define the combinations to be used for the supported OSs.
  * We make no claim that other combinations that these
- * combinations will work on other OSs even if they compile OK. 
+ * combinations will work on other OSs even if they compile OK.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #ifdef LINUX
 	#undef  USE_STREAMS
@@ -256,7 +256,7 @@ macros before using them.
 #endif
 /*
  * MacOS X doesn't define some of the termio input and output control
- * flags that are (or were) needed on Linux/Solaris. 
+ * flags that are (or were) needed on Linux/Solaris.
  * We define the missing ones as zero (which works with the usual idioms for adding
  * them in and taking them out).
  * MacOS X also currently (up to 10.3.6) doesn't have grantpt but does
@@ -364,7 +364,7 @@ static int q_size, q_head, q_tail;
 
 /* Messages for various purposes */
 
-static char *queue_malloc_failed_message = 
+static char *queue_malloc_failed_message =
 "Could not allocate memory for application transfer queue.";
 
 static char* signal_handled_message =
@@ -391,7 +391,7 @@ static char* x_io_error_message =
 static char* signal_in_signal_handler_message =
 "fatal error in signal handler";
 
-static char* send_error_message = 
+static char* send_error_message =
 "A system error occurred writing to the application.";
 
 /*
@@ -548,7 +548,7 @@ void get_pty(void)
 		perror("xpp");
 		exit(2);
 	}
-#else 
+#else
 #ifdef USE_OPENPTY
 	if( openpty(&control_fd, &slave_fd, NULL, NULL, NULL) < 0 ) {
 		msg("system error", "no pseudo-terminal devices available");
@@ -610,7 +610,7 @@ void get_pty(void)
 		msg("system error", "fork failed");
 		perror("xpp");
 		exit(6);
-	} else if (child_pid > 0) { 
+	} else if (child_pid > 0) {
  /******************************************************************/
  /* Parent */
  /******************************************************************/
@@ -632,7 +632,7 @@ void get_pty(void)
 
 		(void) write(control_fd, "\n", 1); /* Tell child to exec */
 
-	} else { 
+	} else {
  /******************************************************************/
  /* Child */
  /******************************************************************/
@@ -764,7 +764,7 @@ Boolean application_alive(void)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  *
  * Data transfer from application:
- * 
+ *
  * The point of most of the complication is to stop big data transfers
  * from the application swamping the user interface. The input callback proc,
  * get_from_application, reads just a small amount of data (XFER_SIZE)
@@ -855,7 +855,7 @@ static Boolean get_from_app_work_proc(XtPointer continue_flag)
 		scroll_out(buf, ct, False);
 	}
 	if(ct == XFER_SIZE) { /* Probably more to do */
-		return False;	/* arrange to be called again */ 
+		return False;	/* arrange to be called again */
 	} else	{
 		switch((int) (uintptr_t) continue_flag) {
 			case CONTINUE_LISTENING:
@@ -1030,7 +1030,7 @@ static void try_drain_queue(void)
 
 /* If not, reclaim space if appropriate: */
 
-		queue = XtRealloc(queue, INIT_Q_LEN); 
+		queue = XtRealloc(queue, INIT_Q_LEN);
 		if(queue == 0)  { /* weird, but ... */
 			ok_dialog(root, queue_malloc_failed_message);
 		}
@@ -1073,7 +1073,7 @@ void send_to_application (char *buf, Cardinal siz)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Interrupt the applications (as with Cntl-C): 
+ * Interrupt the applications (as with Cntl-C):
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void interrupt_application (void)
 {
@@ -1206,7 +1206,7 @@ static int panic_exit(char * m, Cardinal code)
 static void sig_panic_handler(int sig)
 {
 	char msg_buf[80];
-	sprintf(msg_buf, signal_handled_message, sig, sig_desc(sig)); 
+	sprintf(msg_buf, signal_handled_message, sig, sig_desc(sig));
 	(void) panic_exit(msg_buf, 15);
 }
 
@@ -1322,12 +1322,12 @@ int new_session(char *argv[], Boolean async)
 			msg("system error", "fork failed");
 			perror("xpp");
 			exit(18);
-		} else if (new_pid == 0) { 
+		} else if (new_pid == 0) {
 			new_pid = fork();
 			if (new_pid < 0) { /* Cannot fork */
 				msg("system error", "fork failed");
 				perror("xpp");
-			} else if (new_pid == 0) { 
+			} else if (new_pid == 0) {
 				 /* Grandchild */
 				 /* become session leader */
 				if(setsid() < 0) {
@@ -1415,7 +1415,7 @@ void  run_in_background(void)
 		msg("system error", "fork failed");
 		perror("xpp");
 		exit(14);
-	} else if (new_pid > 0) { 
+	} else if (new_pid > 0) {
 		_exit(0);
 	}
 }

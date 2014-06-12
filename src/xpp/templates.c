@@ -7,7 +7,7 @@
  * templates.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -20,7 +20,7 @@
 #define _templates
 #define MAX_TEMPLATES_FORMS 4
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * include files: 
+ * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #include <stdio.h>
 #include <ctype.h>
@@ -257,7 +257,7 @@ Boolean init_templates_tool(Widget w)
 	shell = XtVaCreatePopupShell("xpp-Templates",
 		xmDialogShellWidgetClass,		w,
 		XmNtitle,			"Templates",
-		NULL); 
+		NULL);
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif

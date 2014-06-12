@@ -8,11 +8,11 @@
  * pixmaps.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
- * 
+ *
  * The bitmaps (e.g., as made with the bitmap programme) are held
  * in include files, e.g., pp_bitmap.h).
  * For each bitmap a function is supplied here returning an X

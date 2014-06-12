@@ -7,7 +7,7 @@
  * options.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -55,7 +55,7 @@ GlobalOptions	orig_global_options;
  * edit-only session. Frames are used to group controls of similar types.
  *
  * Editor Controls
- *	 [] Take backup before writing file 
+ *	 [] Take backup before writing file
  *	 [] Delete backup after successful write
  *	 [] Read only
  * File type: Unix/MS-DOS/Macintosh
@@ -125,13 +125,13 @@ void init_options(Widget owner_w)
 	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Else ... have to create a new one 
+ * Else ... have to create a new one
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	shell = XtVaCreatePopupShell("xpp-Options",
 		xmDialogShellWidgetClass, owner_w,
 		XmNtitle,			"Options",
-		NULL); 
+		NULL);
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
@@ -539,7 +539,7 @@ void set_read_only(Boolean read_only)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void set_file_type(FileType file_type)
 {
-	orig_global_options.file_type = global_options.file_type = 
+	orig_global_options.file_type = global_options.file_type =
 				file_type_mirror = file_type;
 	XtVaSetValues(file_type_menu, XmNmenuHistory, file_type_buttons[file_type], NULL);
 }

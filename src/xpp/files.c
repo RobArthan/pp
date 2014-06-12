@@ -7,7 +7,7 @@
  * files.c: this file is part of the PPTex system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
- * 
+ *
  * See the file LICENSE for your rights to use and change this file.
  *
  * Contact: Rob Arthan < rda@lemma-one.com >
@@ -411,11 +411,11 @@ static char *get_file_contents(
 					*p++ = '\n';
 					break;
 				case FT_DOS_OR_MAC:
-					ft_state = FT_DOS; 
+					ft_state = FT_DOS;
 					*p++ = '\n';
 					break;
 				case FT_DOS:
-					ft_state = FT_MIXED; 
+					ft_state = FT_MIXED;
 					*p++ = '\n';
 					break;
 				case FT_MAC:
@@ -920,7 +920,7 @@ Boolean old_file_checks(
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * open_file: open a file and load it into a text widget given the
- * widget and the file name 
+ * widget and the file name
  * Implements `open' in a file menu.
  * If name is NULL or an empty string it just empties out the
  * contents of the text window and returns False.
@@ -1001,7 +1001,7 @@ Boolean open_file(
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include_file: open a file and include it into a text widget given the
- * widget and the file name 
+ * widget and the file name
  * Implements `include' in the file menu.
  * The w argument is used as the parent for error messages dialogues
  * to get the stacking order right.
