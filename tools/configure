@@ -32,12 +32,6 @@
 # PPMOTIFHOME      - directory containing the include and lib directories
 #                    for Motif (default: tries to find it in typical locations).
 #
-# PPTARGETDIR      - as PPHOME, overrides PPHOME if set and non-empty.
-#
-# PPTARGETS        - a space separated list of packages to include or "all" for
-#                    everything in the src directory.
-#                   (default: whichever of pptex hol zed daz qcz xpp are there).
-#
 # PPPOLYHOME       - name of directory containing the bin and lib directories
 #                    where Poly/ML (5.1 or later) may be found.
 #                    (default: /usr/local)
@@ -69,21 +63,15 @@
 #
 # If any of these is an empty string, it is treated as if it were unset.
 #
-# PPTARGETDIR is for developers who may want to test this script while
-# retaining an existing setting for PPHOME.
-#
-# The package names in PPTARGETS if used must be taken from the list:
-# pptex dev hol zed daz qcz xpp. This is mostly useful if you want to
-# install the development kit (possibly separately from the other packages).
-# The default is not to install it.
-#
 # PPPOLYHOME is not relevant if PPCOMPILER is SMLNJ. The default of
 # /usr/local matches the default of the Poly/ML make file.
-#
 # This is done by creating a shell script, install, which captures the decisions.
 # Makes some sanity checks on the source directory (but not many).
 #
-# We begin with some handy shell functions:
+VERSION=$PPVER
+SUPPORTEDTARGETS="pptex dev xpp hol zed daz"
+#
+# Some handy shell functions:
 #
 give_up(){
 	echo ERROR: $* 1>&2
@@ -144,9 +132,7 @@ OS=`find_os`
 #
 # Find a target directory
 #
-if	[ "${PPTARGETDIR:-}" = "" ]
-then	PPTARGETDIR="$PPHOME"
-fi
+PPTARGETDIR="$PPHOME"
 if	[ "${PPTARGETDIR:-}" = "" ]
 then	for parent in /usr/local /opt /sw /usr/share "$HOME"
 	do	if	[ -d "$parent" ]
@@ -173,27 +159,6 @@ then	give_up 'the target directory must be an absolute path name (i.e., begin wi
 fi
 echo "Using $PPTARGETDIR as the installation target directory"
 #
-# Calculate target list:
-#
-SUPPORTEDTARGETS="dev pptex xpp hol zed daz qcz"
-DEFAULTTARGETS="pptex xpp hol zed daz qcz"
-if	[ "${PPTARGETS:-}" = "" ]
-then	
-	PPTARGETS=$DEFAULTTARGETS
-	USERDEFINEDTARGETS=n
-elif	[ "${PPTARGETS:-}" = "all" ]
-then	PPTARGETS="dev $DEFAULTTARGETS"
-	USERDEFINEDTARGETS=n
-else	USERDEFINEDTARGETS=y
-	for f in $PPTARGETS
-	do	case "$f" in
-			dev|pptex|xpp|hol|zed|daz|qcz)
-				true;;
-			*)	give_up "unrecognised package \"$f\" (not one of dev, pptex, xpp, hol, zed, daz, qcz)"
-		esac
-	done
-fi
-#
 # Look for packages to be installed:
 #
 PPBUILDDIR=`pwd`
@@ -201,86 +166,77 @@ if	[ ! -d src ]
 then	give_up "the directory \"$PPBUILDDIR/src\" does not exist"
 fi
 SOMETODO=n
-for f in $SUPPORTEDTARGETS
-do	eval $f=n
-done
-for f in $PPTARGETS
-do	if	[ -f src/$f.mkf ]
-	then	eval $f=y
-		SOMETODO=y
-	elif	[ "$USERDEFINEDTARGETS" = y ]
-	then	give_up "the make file \"$f.mkf\" is missing from the source directory"
+for t in $SUPPORTEDTARGETS
+do	if	[ -f src/$t/$t.mkf ]
+	then	SOMETODO=y
+		eval $t=y
 	fi
 done
 if	[ "$SOMETODO" = n ]
 then	give_up "cannot find any packages to build in \"$PPBUILDDIR/src\""
 fi
+#
+# Get available targets in correct order:
+#
 ACTTARGETS=
-for f in $SUPPORTEDTARGETS
-do	if	eval [  \$$f = y  ]
-	then	ACTTARGETS=`echo $ACTTARGETS $f`
+for t in $SUPPORTEDTARGETS
+do	if	eval [  \$$t = y  ]
+	then	ACTTARGETS=`echo $ACTTARGETS $t`
 	fi
 done
 #
-# Find an ML Compiler, if we need one
+# Find an ML Compiler
 #
-if	[ "$dev" = y -o "$hol" = y -o "$zed" = y -o "$daz" = y -o "$qcz" = y ]
-then
-	#
-	# Determine PPCOMPILER 
-	#
-	if	[ "${PPCOMPILER:-}" != "" ]
-	then	case "$PPCOMPILER" in
-			POLYML) T='Poly/ML'; C='poly';;
-			SMLNJ)  T='Standard ML of New Jersey'; C='sml';;
-			*)	give_up 'PPCOMPILER must be one of "POLYML" or "SMLNJ"';;
-		esac
-		check_bin "$C" "$C not found on search path; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
-	elif	[ "$PPPOLYHOME" != "" ]
-	then	PPCOMPILER=POLYML
-	elif	POLY=`find_in_path poly 2>/dev/null`
-	then	PPCOMPILER=POLYML
-		POLYFROMPATH=y
-	elif	find_in_path sml >/dev/null 2>&1
-	then	PPCOMPILER=SMLNJ
-	else	give_up 'cannot find a Standard ML compiler'
-	fi
-	#
-	# Do compiler-specific checks and settings and report to user
-	#
-	if	[ "$PPCOMPILER" = POLYML ]
-	then	if	[ "${PPPOLYHOME:-}" = "" ]
-		then	if	[ "$POLYFROMPATH" != y ]
-			then	# User specified PPCOMPILER=POLYML but not PPPOLYHOME
-				if	POLY=`find_in_path poly 2>/dev/null`
-				then	POLYFROMPATH=y
-				fi
-			fi
-			if	[ "$POLYFROMPATH" = "y" ]
-			then	PPPOLYHOME=`dirname "$POLY"`
-				PPPOLYHOME=`dirname "$PPPOLYHOME"`
-			else	give_up "Cannot find the Poly/ML home directory; please set PPPOLYHOME"
+if	[ "${PPCOMPILER:-}" != "" ]
+then	case "$PPCOMPILER" in
+		POLYML) T='Poly/ML'; C='poly';;
+		SMLNJ)  T='Standard ML of New Jersey'; C='sml';;
+		*)	give_up 'PPCOMPILER must be one of "POLYML" or "SMLNJ"';;
+	esac
+	check_bin "$C" "$C not found on search path; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
+elif	[ "$PPPOLYHOME" != "" ]
+then	PPCOMPILER=POLYML
+elif	POLY=`find_in_path poly 2>/dev/null`
+then	PPCOMPILER=POLYML
+	POLYFROMPATH=y
+elif	find_in_path sml >/dev/null 2>&1
+then	PPCOMPILER=SMLNJ
+else	give_up 'cannot find a Standard ML compiler'
+fi
+#
+# Do compiler-specific checks and settings and report to user
+#
+if	[ "$PPCOMPILER" = POLYML ]
+then	if	[ "${PPPOLYHOME:-}" = "" ]
+	then	if	[ "$POLYFROMPATH" != y ]
+		then	# User specified PPCOMPILER=POLYML but not PPPOLYHOME
+			if	POLY=`find_in_path poly 2>/dev/null`
+			then	POLYFROMPATH=y
 			fi
 		fi
-		if	[ ! -f "$PPPOLYHOME"/bin/poly ]
-		then	give_up "The file \"$PPPOLYHOME/bin/poly\" does not exist"
+		if	[ "$POLYFROMPATH" = "y" ]
+		then	PPPOLYHOME=`dirname "$POLY"`
+			PPPOLYHOME=`dirname "$PPPOLYHOME"`
+		else	give_up "Cannot find the Poly/ML home directory; please set PPPOLYHOME"
 		fi
-		if	[ ! -f "$PPPOLYHOME"/lib/libpolymain.a -a \
-			  ! -f "$PPPOLYHOME"/lib64/libpolymain.a ]
-		then	give_up "Cannot find libpolymain.a in "$PPPOLYHOME/lib" or "$PPPOLYHOME/lib64
-		fi
-		if	[ "$OS" = darwin ]
-		then	POLYLINKFLAGS="${PPPOLYLINKFLAGS:--segprot POLY rwx rwx}"
-		else	POLYLINKFLAGS="${PPPOLYLINKFLAGS:-}"
-		fi
-		echo "Using Poly/ML from $PPPOLYHOME"
-	elif	[ "$PPCOMPILER" = SMLNJ ]
-	then	if	! find_in_path .arch-n-opsys >/dev/null 2>&1
-		then	give_up '".arch-n-opsys" not found: to build with SML/NJ, its installation bin directory must be on your path'
-		fi
-		echo 'Using Standard ML of New Jersey'
-
 	fi
+	if	[ ! -f "$PPPOLYHOME"/bin/poly ]
+	then	give_up "The file \"$PPPOLYHOME/bin/poly\" does not exist"
+	fi
+	if	[ ! -f "$PPPOLYHOME"/lib/libpolymain.a -a \
+		  ! -f "$PPPOLYHOME"/lib64/libpolymain.a ]
+	then	give_up "Cannot find libpolymain.a in "$PPPOLYHOME/lib" or "$PPPOLYHOME/lib64
+	fi
+	if	[ "$OS" = darwin ]
+	then	POLYLINKFLAGS="${PPPOLYLINKFLAGS:--segprot POLY rwx rwx}"
+	else	POLYLINKFLAGS="${PPPOLYLINKFLAGS:-}"
+	fi
+	echo "Using Poly/ML from $PPPOLYHOME"
+elif	[ "$PPCOMPILER" = SMLNJ ]
+then	if	! find_in_path .arch-n-opsys >/dev/null 2>&1
+	then	give_up '".arch-n-opsys" not found: to build with SML/NJ, its installation bin directory must be on your path'
+	fi
+	echo 'Using Standard ML of New Jersey'
 fi
 #
 # Check for various tbings we need:
@@ -382,6 +338,10 @@ then
 	echo "Using $PPCACHESIZE for the size of the labelled product cache"
 fi
 #
+# Clean up the src directory
+#
+./distclean
+#
 # Build the script
 #
 echo "Generating code to install the following packages: $ACTTARGETS"
@@ -409,6 +369,7 @@ out '# install: ProofPower installation script'
 out '# This file was automatically generated by the configure script.'
 out '# Edit it at your own risk!'
 declare_quoted LC_ALL
+declare_quoted VERSION
 declare_quoted ACTTARGETS
 if	[ "$DOPDF" = y ]
 then	declare_quoted DVI2PDF
@@ -433,10 +394,10 @@ then	declare_quoted PPPOLYHOME
 	out 'export LD_LIBRARY_PATH'
 fi
 declare_quoted POLYLINKFLAGS
-out 'PATH="$PPBUILDDIR/src:$PATH"'
+out 'PATH=".:$PPTARGETDIR/bin:$PATH"'
 out 'PPHOME="$PPTARGETDIR"'
-out 'PPDATABASEPATH="$PPBUILDDIR/src"'
-out 'PPETCPATH="$PPBUILDDIR/src"'
+out 'PPDATABASEPATH=".:$PPTARGETDIR/db"'
+out 'PPETCPATH=".:$PPTARGETDIR/etc"'
 out 'TEXINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$TEXINPUTS:"'
 out 'BIBINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BIBINPUTS:"'
 out 'BSTINPUTS=".:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BSTINPUTS:"'
@@ -444,7 +405,7 @@ out 'export LC_ALL PPCACHESIZE PPCOMPILER PPMOTIFLINKING PPTARGETDIR'
 out 'export PPHOME PATH PPDATABASEPATH PPETCPATH PPPOLYHOME'
 out 'export POLYLINKFLAGS TEXINPUTS BIBINPUTS BSTINPUTS USERCFLAGS USERCLIBS'
 out 'unset PPVER'
-out 'give_up(){'
+out 'inst_fail(){'
 out '	echo "install: installation failed; see $1 for more details"'
 out '	exit 1'
 out '}'
@@ -454,26 +415,25 @@ out 'then'
 TAB='	'
 out 'echo "Moving to build directory $PPBUILDDIR/src"'
 out 'cd "$PPBUILDDIR/src"'
-#
-# Clean up the src directory
-#
-./distclean
 # 
-# Output the make command to build the packages
+# Output a loop to run the make commands to install the packages
 #
 out 'echo Building $ACTTARGETS'
 out 'echo See $PPBUILDDIR/build.log for messages'
-out 'if	make -f install.mkf $ACTTARGETS >"$PPBUILDDIR/build.log" 2>&1'
-out 'then	date +"Build complete [%c] ..."'
-out 'else	give_up "$PPBUILDDIR/build.log"'
-out 'fi'
-out 'cat "$PPBUILDDIR/src/version" >"$PPTARGETDIR/VERSION"'
+out 'for d in $ACTTARGETS'
+out 'do'
+out '	cd $PPBUILDDIR/src/$d'
+out '	echo $VERSION > version'
+out '	if	! make -f $d.mkf inst'
+out '	then	inst_fail "$PPBUILDDIR/build.log"'
+out '	fi'
+out 'done >"$PPBUILDDIR/build.log" 2>&1'
+out 'date +"Build complete [%c] ..."'
+out 'echo $VERSION >"$PPTARGETDIR/VERSION"'
 #
-# Now go to the target directory, build the demos (and freeze the
-# databases, en passant, or explicitly for daz and qcz which don't have
-# demo scripts at the moment).
+# Now go to the target directory, build the demos.
 #
-if	[ "$hol" = y -o "$zed" = y -o "$daz" = y -o "$qcz" = y ]
+if	[ "$hol" = y -o "$zed" = y ]
 then
 	out 'echo "Moving to installation directory $PPTARGETDIR" ...'
 	out 'echo "See $PPTARGETDIR/<package>.log for messages"'
@@ -483,19 +443,11 @@ then
 	out 'PPETCPATH="$PPTARGETDIR/db:$PPBUILDDIR/src"'
 	if	[ "$hol" = y ]
 	then	out 'echo Installing hol demo database'
-		out './install_holdemo >hol.log 2>&1 || give_up "$PPTARGETDIR/hol.log"'
+		out './install_holdemo >hol.log 2>&1 || inst_fail "$PPTARGETDIR/hol.log"'
 	fi
 	if	[ "$zed" = y ]
 	then	out 'echo Installing zed demo database'
-		out './install_zeddemo >zed.log 2>&1 || give_up "$PPTARGETDIR/zed.log"'
-	fi
-	if	[ "$daz" = y -a "$PPCOMPILER" = POLYML ]
-	then	out 'echo Freezing daz database'
-		out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >daz.log 2>&1 || give_up "$PPTARGETDIR/daz.log"'
-	fi
-	if	[ "$qcz" = y -a "$PPCOMPILER" = POLYML ]
-	then	out 'echo Freezing qcz database'
-		out '( pp_make_database -f -p qcz junk$$; rm junk$$.polydb ) >qcz.log 2>&1 || give_up "$PPTARGETDIR/qcz.log"'
+		out './install_zeddemo >zed.log 2>&1 || inst_fail "$PPTARGETDIR/zed.log"'
 	fi
 fi
 TAB=
