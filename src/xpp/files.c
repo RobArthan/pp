@@ -319,16 +319,16 @@ static char *get_file_contents(
 			file_error_dialog(w, cant_stat_message, name);
 			return NULL;
 		}
-	};
+	}
 	if(!S_ISREG(status.st_mode)) {
 		file_error_dialog(w, load_not_reg_message, name);
 		return NULL;
-	};
+	}
 	siz = status.st_size;
 	if(!(buf = XtMalloc(siz + 1))) { /* note some space will be unused if its an MS-DOS file */
 		file_error_dialog(w, no_space_message, name);
 		return NULL;
-	};
+	}
 	if((fp = fopen(name, "r")) == NULL) {
 		if (file_quit_new_dialog(w, cant_read_message, name)) {
 			if (outcome != (OpenOutcome *) NULL) {
@@ -342,7 +342,7 @@ static char *get_file_contents(
 		}
 		XtFree(buf);
 		return NULL;
-	};
+	}
 	p = buf;
 /*
  * Now the FSM that reads the file and copies it into the buffer mapping DOS and Mac line terminators
@@ -521,7 +521,7 @@ static char *get_file_contents(
 		XtFree(buf);
 		fclose(fp);
 		return NULL;
-	};
+	}
 	if(binary) {
 		*binary = False; /* overwritten if ft_state = FT_BINARY */
 	}
@@ -588,16 +588,16 @@ static Boolean backup_file(
 		if((fp = fopen(name, "r")) == NULL) {
 			return file_yes_no_dialog(w,
 				cant_open_file_to_backup_message, name, NULL);
-		};
+		}
 	} else { /* else file doesn't exist so no backup needed */
 		return True;
-	};
+	}
 
 	siz = strlen(name);
 	if((*backup_name = XtMalloc(siz + strlen(suffix) + 1)) == NULL) {
 		file_error_dialog(w, no_backup_name_space_message, name);
 		return False;
-	};
+	}
 	strcpy(*backup_name, name);
 	strcpy(*backup_name + siz, suffix);
 	if(	(backup_fp = fopen(*backup_name, "r")) != NULL ) {
@@ -636,7 +636,7 @@ static Boolean backup_file(
 				return reply;
 			}
 		}
-	};
+	}
 	fclose(fp);
 	fclose(backup_fp);
 	return True;
@@ -666,13 +666,13 @@ static Boolean store_file_contents(
 	if(global_options.backup_before_save) {
 		if(!backup_file(w, name, &backup_name)) {
 			return False;
-		};
+		}
 	}
 	if((fp = fopen(name, "w")) == NULL) {
 		file_error_dialog(w, cant_write_message, name);
 		if(backup_name) {XtFree(backup_name);}
 		return False;
-	};
+	}
 	switch(global_options.file_type) {
 		case UNIX: eoln = "\n"; break;
 		case MSDOS: eoln = "\r\n"; break;
@@ -692,7 +692,7 @@ static Boolean store_file_contents(
 		fclose(fp);
 		if(backup_name) {XtFree(backup_name);}
 		return False;
-	};
+	}
 	fclose(fp);
 	if(backup_name) {
 		if(global_options.delete_backup_after_save) {
@@ -803,7 +803,7 @@ Boolean save_file_as(
 		if(!S_ISREG(status.st_mode)) {
 			file_error_dialog(w, save_not_reg_message, name);
 			return False;
-		};
+		}
 		if(access(name, W_OK) != 0) {
 			file_error_dialog(w, cant_write_message, name);
 			return False;
@@ -811,7 +811,7 @@ Boolean save_file_as(
 		if(!file_yes_no_dialog(w, overwrite_message, name, "Confirm Save As")) {
 			return False;
 		}
-	}; /* else file doesn't exist so no checks needed */
+	} /* else file doesn't exist so no checks needed */
 	buf = XmTextGetString(text);
 	success = store_file_contents(w, name, buf);
 	XtFree(buf);
@@ -847,11 +847,11 @@ Boolean save_string_as(
 		if(!S_ISREG(status.st_mode)) {
 			file_error_dialog(w, save_not_reg_message, name);
 			return False;
-		};
+		}
 		if(!file_yes_no_dialog(w, overwrite_message, name, "Confirm Save Selection")) {
 			return False;
 		}
-	}; /* else file doesn't exist so no checks needed */
+	} /* else file doesn't exist so no checks needed */
 	success = store_file_contents(w, name, (data ? data : ""));
 	return success;
 }

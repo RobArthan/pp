@@ -120,7 +120,7 @@ static void get_templates_data(void)
 			} else {
 				template_table[i].expansion = "";
 				return;
-			};
+			}
 			template_table[i].expansion = *++ptr ? ptr : "";
 			while (*ptr != '/' && *ptr) ptr++;
 			if (*ptr == '/') {
@@ -128,7 +128,7 @@ static void get_templates_data(void)
 			} else {
 				template_table[i].help_text = "";
 				return;
-			};
+			}
 			template_table[i].help_text = *++ptr ? ptr : "";
 
 			while (*ptr != '/' && *ptr) ptr++;
@@ -136,8 +136,8 @@ static void get_templates_data(void)
 				*ptr = '\0';
 			} else {
 				return;
-			};
-	};
+			}
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -243,14 +243,14 @@ Boolean init_templates_tool(Widget w)
 	if(!xpp_resources.templates || !*xpp_resources.templates) {
 		/* resource not set up */
 		return False;
-	};
+	}
 
 	get_templates_data();
 
 	if(!template_table_size) {	/* Couldn't parse anything */
 		ok_dialog(w, bad_templates_msg);
 		return False;
-	};
+	}
 
 	fbase = (template_table_size + 1) & ~0x01;
 
@@ -300,7 +300,7 @@ Boolean init_templates_tool(Widget w)
 			templates_cb,
 			(XtPointer) &(template_table[i].expansion) );
 
-	};
+	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up help and dismiss buttons in the lower part of tool:
@@ -383,7 +383,7 @@ static void templates_cb(
 		sprintf(m, "unexpected argument %p", cbdata);
 		msg("template handler", m);
 		return;
-	};
+	}
 
 	if(get_map_state(text_w) != IsViewable) {
 		beep();
@@ -397,7 +397,7 @@ static void templates_cb(
 	} else {
 		start = XmTextGetInsertionPosition(text_w);
 		XmTextInsert(text_w, start, *cbdata);
-	};
+	}
 
 	after = start + strlen (*cbdata);
 	XmTextSetInsertionPosition(text_w, after);

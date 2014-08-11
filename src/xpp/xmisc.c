@@ -102,7 +102,7 @@ void toggle_menu_item_sensitivity(Widget w, Cardinal i)
 		XmNnumChildren, &num_btns, NULL);
 	if (i < num_btns) {
 		XtSetSensitive(btns[i], !XtIsSensitive(btns[i]));
-	};
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -118,7 +118,7 @@ void set_menu_item_sensitivity(Widget w, Cardinal i, Boolean b)
 		XmNnumChildren, &num_btns, NULL);
 	if (i < num_btns) {
 		XtSetSensitive(btns[i], b);
-	};
+	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set_menu_item_label: given a menu w change the
@@ -138,7 +138,7 @@ void set_menu_item_label(Widget w, Cardinal i, char *lab)
 			XmNlabelString, str,
 			NULL);
 		XmStringFree(str);
-	};
+	}
 
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -161,13 +161,13 @@ void check_text_window_limit(Widget w, Cardinal max)
 
 	if(max < 1000) {
 		return;
-	};
+	}
 
 	siz = XmTextGetLastPosition(w);
 
 	if(siz <= max) {
 		return;
-	};
+	}
 
 	bytes_to_go = siz / 20;
 
@@ -177,11 +177,11 @@ void check_text_window_limit(Widget w, Cardinal max)
 		if(*p == '\n') {
 			break;
 		}
-	};
+	}
 
 	if(*p == '\n') {
 		bytes_to_go = p - text + 1;
-	};
+	}
 
 	sprintf(msg, fmt, max);
 
@@ -626,7 +626,7 @@ void text_show_position(
 		XmTextSetTopCharacter(text_w, pos);
 		XtVaGetValues(text_w, XmNrows, &nrows, NULL);
 		XmTextScroll(text_w, -(nrows / 2));
-	};
+	}
 	XmTextEnableRedisplay(text_w);
 }
 	
