@@ -385,7 +385,7 @@ static void type_char_cb(
 /*
  * On early versions of Motif, the next line worked OK with keyboardFocusPolicy
  * EXPLICIT (i.e., click-to-type), but not with POINTER (i.e., focus follows mouse)
- * (with POINTER it made the the keyboard focus stick in the text window regardless
+ * (with POINTER it made the keyboard focus stick in the text window regardless
  * of where the pointer was moved to). It seems to work OK in 21st century versions
  * of Motif (although there are a lot of OS/Window manager combinations to test).
  */
