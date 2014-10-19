@@ -50,13 +50,13 @@ static void c_format_msg(char *buf, char *msg, Cardinal line_len)
 			p1 = p2;
 		} else {
 			++cursor;
-		};
+		}
 		if(cursor >= line_len) {
 			if(*p1 == ' ') {
 				*p1 = '\n';
 				cursor = p2 - p1 - 1;
 			}
-		};
+		}
 		if(*p2 == ' ') {
 			p1 = p2;
 		}

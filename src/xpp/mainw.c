@@ -1188,7 +1188,7 @@ static void file_menu_op(int op, Boolean *success)
 				*success = False;
 			}
 		}
-		if(fname != NULL) {XtFree(fname);};
+		if(fname != NULL) {XtFree(fname);}
 		break;
 	case FILE_MENU_SAVE_AS:
 		old_fname = get_file_name();
@@ -1332,7 +1332,7 @@ static void file_menu_op(int op, Boolean *success)
 				}
 				unpause_undo(undo_ptr);
 			}
-		};
+		}
 		if(fname) {XtFree(fname);}
 		break;
 	case FILE_MENU_EMPTY_FILE:
@@ -1372,7 +1372,7 @@ static void file_menu_op(int op, Boolean *success)
 		break;
 	default:
 		break;
-	};
+	}
 }
 
 /*
@@ -1847,7 +1847,7 @@ static void cmd_menu_cb(
 	if(!application_alive() && i != CMD_MENU_RESTART) {
 		ok_dialog(root, not_running_message);
 		return;
-	};
+	}
 
 	switch(i) {
 	case CMD_MENU_EXECUTE:
@@ -1868,13 +1868,13 @@ static void cmd_menu_cb(
 	case CMD_MENU_KILL:
 		if(yes_no_dialog(root, kill_message, confirm_kill)) {
 			kill_application();
-		};
+		}
 		break;
 	case CMD_MENU_RESTART:
 		if(!application_alive()
 			|| yes_no_dialog(root, restart_message, confirm_restart)) {
 			restart_application();
-		};
+		}
 		break;
 	default:
 		break;

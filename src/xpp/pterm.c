@@ -79,7 +79,7 @@ defaults, then closes the control file descriptor, then duplicates the slave
 file descriptor to become the standard input, output and error channels and
 finally execs the application.
 
-There are several complications. The main one is that to to avoid the
+There are several complications. The main one is that to avoid the
 application starting to do output before xpp is listening, they need to
 synchronise. This is done by having the child process do a blocking
 read for a byte of data on its file descriptor, which the parent sends
