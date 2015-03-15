@@ -18,7 +18,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \usepackage{epsf}
 \makeindex
 
-\def\Title{UTF-8 and Unicode Support: Implementation }
+\def\Title{Unicode and UTF-8: Implementation }
 
 \def\Abstract{\begin{center}
 {\bf Abstract}\par\parbox{0.7\hsize}
@@ -84,6 +84,8 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \begin{description}
 \item[2015/03/13]
 First working draft.
+\item[2015/03/15]
+Updates after beginning to use the interfaces in anger.
 
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
@@ -114,9 +116,15 @@ See \cite{LEMMA1/HOL/DTD122}.
 
 =TEX
 =SML
-structure €Utf8› : Utf8 = struct
+structure €PPUnicode› : PPUnicode = struct
+=POLYML
+structure €Unicode› : WORD = Word32;
+=NJML
+structure €Unicode› : WORD = Word;
+=TEX
+=SML
 
-structure W = SML97BasisLibrary.Word;
+structure U = Unicode;
 structure C = SML97BasisLibrary.Char;
 structure S = SML97BasisLibrary.String;
 (*
@@ -124,25 +132,27 @@ structure S = SML97BasisLibrary.String;
 =SML
 *)
 
-val €max_code_point› : word = 0wx10FFFF;
+type €UNICODE› = U.word;
 
-fun €encode_utf8› (w : word) : string = (
-	(S.implode o map (C.chr o W.toInt)) (
+val €max_code_point› : UNICODE = 0wx10FFFF;
+
+fun €unicode_to_utf8› (w : UNICODE) : string = (
+	(S.implode o map (C.chr o U.toInt)) (
 	if	w <= 0wx7F	(* <= 7 bits *)
 	then	[	w]
 	else if	w <= 0wx7FF	(* <= 11 bits *)
-	then	[	W.orb(0wxC0, W.>>(w, 0wx6)),
-			W.orb(0wx80, W.andb(w, 0wx3F))]
+	then	[	U.orb(0wxC0, U.>>(w, 0wx6)),
+			U.orb(0wx80, U.andb(w, 0wx3F))]
 	else if	w <= 0wxFFFF	(* <= 16 bits *)
-	then	[	W.orb(0wxE0, W.>>(w, 0wxC)),
-			W.orb(0wx80, W.>>(W.andb(w, 0wxFC0), 0wx6)),
-			W.orb(0wx80, W.andb(w, 0wx3F))]
+	then	[	U.orb(0wxE0, U.>>(w, 0wxC)),
+			U.orb(0wx80, U.>>(U.andb(w, 0wxFC0), 0wx6)),
+			U.orb(0wx80, U.andb(w, 0wx3F))]
 	else if	w <= max_code_point (* <= 21 bits *)
-	then	[	W.orb(0wxF0, W.>>(w, 0wx12)),
-			W.orb(0wx80, W.>>(W.andb(w, 0wx3F000), 0wxC)),
-			W.orb(0wx80, W.>>(W.andb(w, 0wxFC0), 0wx6)),
-			W.orb(0wx80, W.andb(w, 0wx3F))]
-	else	fail "encode_utf8" 122001 [])
+	then	[	U.orb(0wxF0, U.>>(w, 0wx12)),
+			U.orb(0wx80, U.>>(U.andb(w, 0wx3F000), 0wxC)),
+			U.orb(0wx80, U.>>(U.andb(w, 0wxFC0), 0wx6)),
+			U.orb(0wx80, U.andb(w, 0wx3F))]
+	else	fail "unicode_to_utf8" 122001 [])
 );
 (*
 =TEX
@@ -150,18 +160,18 @@ The following slavishly implements the dictum of RFC3629 which outlaws
 encoding a code point in more bytes than are necessary.
 =SML
 *)
-fun €decode_utf8› (s : 'a -> char OPT * 'a) : 'a -> (word OPT * 'a) OPT = (fn st0 =>
+fun €utf8_to_unicode› (s : 'a -> char OPT * 'a) : 'a -> (UNICODE OPT * 'a) OPT = (fn st0 =>
 	let	fun invalid () = fail "" 0 [];
 		fun ws st = (
 			case s st of
-				(Value ch, st') => ((W.fromInt o C.ord) ch, st')
+				(Value ch, st') => ((U.fromInt o C.ord) ch, st')
 			| 	(Nil, _) => invalid ()
 		);
 		fun aux1 st (n, acc) i = (
 			if i < n
 			then	let	val (w, st') = ws st;
-				in	if	W.andb(w, 0wxC0) = 0wx80
-					then	aux1 st' (n, (W.<<(acc,0wx6) + W.andb(w, 0wx3F))) (i+1)
+				in	if	U.andb(w, 0wxC0) = 0wx80
+					then	aux1 st' (n, (U.<<(acc,0wx6) + U.andb(w, 0wx3F))) (i+1)
 					else	invalid ()
 				end
 			else (acc, st)
@@ -178,168 +188,187 @@ fun €decode_utf8› (s : 'a -> char OPT * 'a) : 'a -> (word OPT * 'a) OPT = (fn st
 			end
 		);
 		fun aux3 st1 w0 = aux2 st1 (
-			if	W.andb(w0, 0wx80) = 0wx00
+			if	U.andb(w0, 0wx80) = 0wx00
 			then	(1, w0)
-			else if	W.andb(w0, 0wxE0) = 0wxC0
-			then	(2, (W.andb(w0, W.notb 0wxC0)))
-			else if W.andb(w0, 0wxF0) = 0wxE0
-			then	(3, (W.andb(w0, W.notb 0wxE0)))
-			else if W.andb(w0, 0wxF8) = 0wxF0
-			then	(4, (W.andb(w0, W.notb 0wxF0)))
+			else if	U.andb(w0, 0wxE0) = 0wxC0
+			then	(2, (U.andb(w0, U.notb 0wxC0)))
+			else if U.andb(w0, 0wxF0) = 0wxE0
+			then	(3, (U.andb(w0, U.notb 0wxE0)))
+			else if U.andb(w0, 0wxF8) = 0wxF0
+			then	(4, (U.andb(w0, U.notb 0wxF0)))
 			else	invalid ()
 		);
 	in	case s st0 of
 			(Nil, st1) => Value(Nil, st1)
-		|	(Value ch, st1) => aux3 st1 ((W.fromInt o C.ord) ch)
+		|	(Value ch, st1) => aux3 st1 ((U.fromInt o C.ord) ch)
 	end	handle Fail _ => Nil
 );
-end (* of structure Utf8 *);
 (*
 =TEX
 =SML
 *)
-open Utf8;
+fun string_stream ((s, i) : string * int) : char OPT * (string * int) = (
+	if	i < size s
+	then	(Value (String.sub(s, i)), (s, i + 1))
+	else	(Nil, (s, i))
+);
+fun €utf8_string_to_unicode› (s : string) : UNICODE list = (
+	let	fun aux acc si = (
+			case utf8_to_unicode string_stream si of
+				Value (Value u, sj) => aux (u::acc) sj
+			|	Value (Nil, _) => rev acc
+			|	Nil => fail "utf8_string_to_unicode" 122002 []
+		);
+	in	aux [] (s, 0)
+	end
+);
 (*
 =TEX
 =SML
 *)
-structure €PPUnicode› : PPUnicode = struct
-structure W = SML97BasisLibrary.Word;
-structure C = SML97BasisLibrary.Char;
-structure S = SML97BasisLibrary.String;
+fun €file_stream› (strm : instream) : char OPT * instream = (
+	case input(strm, 1) of
+		""  => (Nil, strm)
+	|	c => ((Value o C.chr o ord) c, strm)
+);
+fun €utf8_input› (strm : instream) : UNICODE OPT = (
+	case utf8_to_unicode file_stream strm of
+		Nil => fail "utf8_input" 122002 []
+	|	Value(uo, _) => uo
+); 
 (*
 =TEX
 The basic translation scheme for individual {\Product} characters.
 =SML
 *)
-val €basic_pp_to_unicode_table› : (char * word) list = [
-	(#"\179",	0wx0000AC )	(* NOT SIGN *),
-	(#"\184",	0wx0000d7 )	(* MULTIPLICATION SIGN *),
-	(#"\135",	0wx000393 )	(* GREEK CAPITAL LETTER GAMMA *),
-	(#"\132",	0wx000394 )	(* GREEK CAPITAL LETTER DELTA *),
-	(#"\138",	0wx000398 )	(* GREEK CAPITAL LETTER THETA *),
-	(#"\140",	0wx00039b )	(* GREEK CAPITAL LETTER LAMDA *),
-	(#"\152",	0wx00039e )	(* GREEK CAPITAL LETTER XI *),
-	(#"\144",	0wx0003a0 )	(* GREEK CAPITAL LETTER PI *),
-	(#"\147",	0wx0003a3 )	(* GREEK CAPITAL LETTER SIGMA *),
-	(#"\149",	0wx0003a5 )	(* GREEK CAPITAL LETTER UPSILON *),
-	(#"\134",	0wx0003a6 )	(* GREEK CAPITAL LETTER PHI *),
-	(#"\153",	0wx0003a8 )	(* GREEK CAPITAL LETTER PSI *),
-	(#"\151",	0wx0003a9 )	(* GREEK CAPITAL LETTER OMEGA *),
-	(#"\193",	0wx0003b1 )	(* GREEK SMALL LETTER ALPHA *),
-	(#"\194",	0wx0003b2 )	(* GREEK SMALL LETTER BETA *),
-	(#"\199",	0wx0003b3 )	(* GREEK SMALL LETTER GAMMA *),
-	(#"\196",	0wx0003b4 )	(* GREEK SMALL LETTER DELTA *),
-	(#"\218",	0wx0003b6 )	(* GREEK SMALL LETTER ZETA *),
-	(#"\200",	0wx0003b7 )	(* GREEK SMALL LETTER ETA *),
-	(#"\202",	0wx0003b8 )	(* GREEK SMALL LETTER THETA *),
-	(#"\201",	0wx0003b9 )	(* GREEK SMALL LETTER IOTA *),
-	(#"\203",	0wx0003ba )	(* GREEK SMALL LETTER KAPPA *),
-	(#"\204",	0wx0003bb )	(* GREEK SMALL LETTER LAMDA *),
-	(#"\205",	0wx0003bc )	(* GREEK SMALL LETTER MU *),
-	(#"\206",	0wx0003bd )	(* GREEK SMALL LETTER NU *),
-	(#"\216",	0wx0003be )	(* GREEK SMALL LETTER XI *),
-	(#"\208",	0wx0003c0 )	(* GREEK SMALL LETTER PI *),
-	(#"\210",	0wx0003c1 )	(* GREEK SMALL LETTER RHO *),
-	(#"\211",	0wx0003c3 )	(* GREEK SMALL LETTER SIGMA *),
-	(#"\212",	0wx0003c4 )	(* GREEK SMALL LETTER TAU *),
-	(#"\213",	0wx0003c5 )	(* GREEK SMALL LETTER UPSILON *),
-	(#"\217",	0wx0003c6 )	(* GREEK SMALL LETTER PHI *),
-	(#"\209",	0wx0003c7 )	(* GREEK SMALL LETTER CHI *),
-	(#"\215",	0wx0003c9 )	(* GREEK SMALL LETTER OMEGA *),
-	(#"\198",	0wx0003d5 )	(* GREEK PHI SYMBOL *),
-	(#"\197",	0wx0003f5 )	(* GREEK LUNATE EPSILON SYMBOL *),
-	(#"\176",	0wx002588 )	(* FULL BLOCK *),
-	(#"\235",	0wx002040 )	(* CHARACTER TIE *),
-	(#"\214",	0wx002102 )	(* DOUBLE-STRUCK CAPITAL C *),
-	(#"\238",	0wx002115 )	(* DOUBLE-STRUCK CAPITAL N *),
-	(#"\240",	0wx002119 )	(* DOUBLE-STRUCK CAPITAL P *),
-	(#"\243",	0wx00211a )	(* DOUBLE-STRUCK CAPITAL Q *),
-	(#"\175",	0wx00211d )	(* DOUBLE-STRUCK CAPITAL R *),
-	(#"\250",	0wx002124 )	(* DOUBLE-STRUCK CAPITAL Z *),
-	(#"\173",	0wx002192 )	(* RIGHTWARDS ARROW *),
-	(#"\170",	0wx002194 )	(* LEFT RIGHT ARROW *),
-	(#"\234",	0wx002195 )	(* UP DOWN ARROW *),
-	(#"\231",	0wx002197 )	(* NORTH EAST ARROW *),
-	(#"\232",	0wx002198 )	(* SOUTH EAST ARROW *),
-	(#"\239",	0wx0021a0 )	(* RIGHTWARDS TWO HEADED ARROW *),
-	(#"\224",	0wx0021a3 )	(* RIGHTWARDS ARROW WITH TAIL *),
-	(#"\237",	0wx0021a6 )	(* RIGHTWARDS ARROW FROM BAR *),
-	(#"\249",	0wx0021be )	(* UPWARDS HARPOON WITH BARB RIGHTWARDS *),
-	(#"\236",	0wx0021bf )	(* UPWARDS HARPOON WITH BARB LEFTWARDS *),
-	(#"\227",	0wx0021d0 )	(* LEFTWARDS DOUBLE ARROW *),
-	(#"\180",	0wx0021d2 )	(* RIGHTWARDS DOUBLE ARROW *),
-	(#"\164",	0wx0021d4 )	(* LEFT RIGHT DOUBLE ARROW *),
-	(#"\223",	0wx0021f8 )	(* RIGHTWARDS ARROW WITH VERTICAL STROKE *),
-	(#"\159",	0wx0021fb )	(* RIGHTWARDS ARROW WITH DOUBLE VERTICAL STROKE *),
-	(#"\181",	0wx002200 )	(* FOR ALL *),
-	(#"\182",	0wx002203 )	(* THERE EXISTS *),
-	(#"\154",	0wx002205 )	(* EMPTY SET *),
-	(#"\141",	0wx002208 )	(* ELEMENT OF *),
-	(#"\142",	0wx002209 )	(* NOT AN ELEMENT OF *),
-	(#"\133",	0wx002218 )	(* RING OPERATOR *),
-	(#"\177",	0wx002227 )	(* LOGICAL AND *),
-	(#"\178",	0wx002228 )	(* LOGICAL OR *),
-	(#"\161",	0wx002229 )	(* INTERSECTION *),
-	(#"\192",	0wx00222a )	(* UNION *),
-	(#"\166",	0wx00225c )	(* DELTA EQUAL TO *),
-	(#"\189",	0wx002260 )	(* NOT EQUAL TO *),
-	(#"\233",	0wx002261 )	(* IDENTICAL TO *),
-	(#"\188",	0wx002264 )	(* LESS-THAN OR EQUAL TO *),
-	(#"\190",	0wx002265 )	(* GREATER-THAN OR EQUAL TO *),
-	(#"\160",	0wx002282 )	(* SUBSET OF *),
-	(#"\228",	0wx002283 )	(* SUPERSET OF *),
-	(#"\128",	0wx002286 )	(* SUBSET OF OR EQUAL TO *),
-	(#"\229",	0wx002287 )	(* SUPERSET OF OR EQUAL TO *),
-	(#"\195",	0wx002291 )	(* SQUARE IMAGE OF OR EQUAL TO *),
-	(#"\171",	0wx002295 )	(* CIRCLED PLUS *),
-	(#"\163",	0wx002296 )	(* CIRCLED MINUS *),
-	(#"\244",	0wx0022a2 )	(* RIGHT TACK *),
-	(#"\226",	0wx0022a5 )	(* UP TACK *),
-	(#"\165",	0wx0022c2 )	(* N-ARY INTERSECTION *),
-	(#"\222",	0wx0022c3 )	(* N-ARY UNION *),
-	(#"\137",	0wx0022ce )	(* CURLY LOGICAL OR *),
-	(#"\155",	0wx0022cf )	(* CURLY LOGICAL AND *),
-	(#"\172",	0wx00231c )	(* TOP LEFT CORNER *),
-	(#"\174",	0wx00231d )	(* TOP RIGHT CORNER *),
-	(#"\145",	0wx01f13c )	(* SQUARED LATIN CAPITAL LETTER M *),
-	(#"\148",	0wx01f143 )	(* SQUARED LATIN CAPITAL LETTER T *),
-	(#"\241",	0wx01f149 )	(* SQUARED LATIN CAPITAL LETTER Z *),
-	(#"\185",	0wx0024c8 )	(* CIRCLED LATIN CAPITAL LETTER S *),
-	(#"\252",	0wx002500 )	(* BOX DRAWINGS LIGHT HORIZONTAL *),
-	(#"\220",	0wx002502 )	(* BOX DRAWINGS LIGHT VERTICAL *),
-	(#"\255",	0wx00250c )	(* BOX DRAWINGS LIGHT DOWN AND RIGHT *),	
-	(#"\136",	0wx002514 )	(* BOX DRAWINGS LIGHT UP AND RIGHT *),
-	(#"\247",	0wx00251c )	(* BOX DRAWINGS LIGHT VERTICAL AND RIGHT *),
-	(#"\156",	0wx002550 )	(* BOX DRAWINGS DOUBLE HORIZONTAL *),
-	(#"\157",	0wx002552 )	(* BOX DRAWINGS DOWN SINGLE AND RIGHT DOUBLE *),
-	(#"\146",	0wx0025b7 )	(* WHITE RIGHT-POINTING TRIANGLE *),
-	(#"\242",	0wx0025c1 )	(* WHITE LEFT-POINTING TRIANGLE *),
-	(#"\251",	0wx0027e6 )	(* MATHEMATICAL LEFT WHITE SQUARE BRACKET *),
-	(#"\253",	0wx0027e7 )	(* MATHEMATICAL RIGHT WHITE SQUARE BRACKET *),
-	(#"\207",	0wx002900 )	(* RIGHTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE *),
-	(#"\254",	0wx002914 )	(* RIGHTWARDS ARROW WITH TAIL WITH VERTICAL STROKE *),
-	(#"\158",	0wx002915 )	(* RIGHTWARDS ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE *),
-	(#"\143",	0wx002916 )	(* RIGHTWARDS TWO-HEADED ARROW WITH TAIL *),
-	(#"\183",	0wx002981 )	(* Z NOTATION SPOT *),
-	(#"\186",	0wx002982 )	(* Z NOTATION TYPE COLON *),
-	(#"\168",	0wx002987 )	(* Z NOTATION LEFT IMAGE BRACKET *),
-	(#"\169",	0wx002988 )	(* Z NOTATION RIGHT IMAGE BRACKET *),
-	(#"\221",	0wx00298e )	(* RIGHT SQUARE BRACKET WITH TICK IN BOTTOM CORNER *),
-	(#"\219",	0wx00298f )	(* LEFT SQUARE BRACKET WITH TICK IN BOTTOM CORNER *),
-	(#"\130",	0wx002a04 )	(* N-ARY UNION OPERATOR WITH PLUS *),
-	(#"\187",	0wx002a3e )	(* Z NOTATION RELATIONAL COMPOSITION *),
-	(#"\225",	0wx002a64 )	(* Z NOTATION DOMAIN ANTIRESTRICTION *),
-	(#"\129",	0wx002a65 )	(* Z NOTATION RANGE ANTIRESTRICTION *),
-	(#"\167",	0wx003008 )	(* LEFT ANGLE BRACKET *),
-	(#"\162",	0wx003009 )	(* RIGHT ANGLE BRACKET *),
-	(#"\150",	0wx01d539 )	(* MATHEMATICAL DOUBLE-STRUCK CAPITAL B *),
-	(#"\230",	0wx01d53d )	(* MATHEMATICAL DOUBLE-STRUCK CAPITAL F *),
-	(#"\191",	0wx01d54a )	(* MATHEMATICAL DOUBLE-STRUCK CAPITAL S *),
-	(#"\131",	0wx01d54c )	(* MATHEMATICAL DOUBLE-STRUCK CAPITAL U *),
-	(#"\245",	0wx00208d )	(* SUBSCRIPT LEFT PARENTHESIS *),
-	(#"\246",	0wx00208e )	(* SUBSCRIPT RIGHT PARENTHESIS *),
-	(#"\248",	0wx00fe63 )	(* SMALL HYPHEN-MINUS *)
+val €basic_pp_to_unicode_table› : (char * UNICODE) list = [
+	(#"\u00B3",	0wx0000AC )	(* NOT SIGN *),
+	(#"\u00B8",	0wx0000d7 )	(* MULTIPLICATION SIGN *),
+	(#"\u0087",	0wx000393 )	(* GREEK CAPITAL LETTER GAMMA *),
+	(#"\u0084",	0wx000394 )	(* GREEK CAPITAL LETTER DELTA *),
+	(#"\u008A",	0wx000398 )	(* GREEK CAPITAL LETTER THETA *),
+	(#"\u008C",	0wx00039b )	(* GREEK CAPITAL LETTER LAMDA *),
+	(#"\u0098",	0wx00039e )	(* GREEK CAPITAL LETTER XI *),
+	(#"\u0090",	0wx0003a0 )	(* GREEK CAPITAL LETTER PI *),
+	(#"\u0093",	0wx0003a3 )	(* GREEK CAPITAL LETTER SIGMA *),
+	(#"\u0095",	0wx0003a5 )	(* GREEK CAPITAL LETTER UPSILON *),
+	(#"\u0086",	0wx0003a6 )	(* GREEK CAPITAL LETTER PHI *),
+	(#"\u0099",	0wx0003a8 )	(* GREEK CAPITAL LETTER PSI *),
+	(#"\u0097",	0wx0003a9 )	(* GREEK CAPITAL LETTER OMEGA *),
+	(#"\u00C1",	0wx0003b1 )	(* GREEK SMALL LETTER ALPHA *),
+	(#"\u00C2",	0wx0003b2 )	(* GREEK SMALL LETTER BETA *),
+	(#"\u00C7",	0wx0003b3 )	(* GREEK SMALL LETTER GAMMA *),
+	(#"\u00C4",	0wx0003b4 )	(* GREEK SMALL LETTER DELTA *),
+	(#"\u00DA",	0wx0003b6 )	(* GREEK SMALL LETTER ZETA *),
+	(#"\u00C8",	0wx0003b7 )	(* GREEK SMALL LETTER ETA *),
+	(#"\u00CA",	0wx0003b8 )	(* GREEK SMALL LETTER THETA *),
+	(#"\u00C9",	0wx0003b9 )	(* GREEK SMALL LETTER IOTA *),
+	(#"\u00CB",	0wx0003ba )	(* GREEK SMALL LETTER KAPPA *),
+	(#"\u00CC",	0wx0003bb )	(* GREEK SMALL LETTER LAMDA *),
+	(#"\u00CD",	0wx0003bc )	(* GREEK SMALL LETTER MU *),
+	(#"\u00CE",	0wx0003bd )	(* GREEK SMALL LETTER NU *),
+	(#"\u00D8",	0wx0003be )	(* GREEK SMALL LETTER XI *),
+	(#"\u00D0",	0wx0003c0 )	(* GREEK SMALL LETTER PI *),
+	(#"\u00D2",	0wx0003c1 )	(* GREEK SMALL LETTER RHO *),
+	(#"\u00D3",	0wx0003c3 )	(* GREEK SMALL LETTER SIGMA *),
+	(#"\u00D4",	0wx0003c4 )	(* GREEK SMALL LETTER TAU *),
+	(#"\u00D5",	0wx0003c5 )	(* GREEK SMALL LETTER UPSILON *),
+	(#"\u00D9",	0wx0003c6 )	(* GREEK SMALL LETTER PHI *),
+	(#"\u00D1",	0wx0003c7 )	(* GREEK SMALL LETTER CHI *),
+	(#"\u00D7",	0wx0003c9 )	(* GREEK SMALL LETTER OMEGA *),
+	(#"\u00C6",	0wx0003d5 )	(* GREEK PHI SYMBOL *),
+	(#"\u00C5",	0wx0003f5 )	(* GREEK LUNATE EPSILON SYMBOL *),
+	(#"\u00B0",	0wx002588 )	(* FULL BLOCK *),
+	(#"\u00EB",	0wx002040 )	(* CHARACTER TIE *),
+	(#"\u00D6",	0wx002102 )	(* DOUBLE-STRUCK CAPITAL C *),
+	(#"\u00EE",	0wx002115 )	(* DOUBLE-STRUCK CAPITAL N *),
+	(#"\u00F0",	0wx002119 )	(* DOUBLE-STRUCK CAPITAL P *),
+	(#"\u00F3",	0wx00211a )	(* DOUBLE-STRUCK CAPITAL Q *),
+	(#"\u00AF",	0wx00211d )	(* DOUBLE-STRUCK CAPITAL R *),
+	(#"\u00FA",	0wx002124 )	(* DOUBLE-STRUCK CAPITAL Z *),
+	(#"\u00AD",	0wx002192 )	(* RIGHTWARDS ARROW *),
+	(#"\u00AA",	0wx002194 )	(* LEFT RIGHT ARROW *),
+	(#"\u00EA",	0wx002195 )	(* UP DOWN ARROW *),
+	(#"\u00E7",	0wx002197 )	(* NORTH EAST ARROW *),
+	(#"\u00E8",	0wx002198 )	(* SOUTH EAST ARROW *),
+	(#"\u00EF",	0wx0021a0 )	(* RIGHTWARDS TWO HEADED ARROW *),
+	(#"\u00E0",	0wx0021a3 )	(* RIGHTWARDS ARROW WITH TAIL *),
+	(#"\u00ED",	0wx0021a6 )	(* RIGHTWARDS ARROW FROM BAR *),
+	(#"\u00F9",	0wx0021be )	(* UPWARDS HARPOON WITH BARB RIGHTWARDS *),
+	(#"\u00EC",	0wx0021bf )	(* UPWARDS HARPOON WITH BARB LEFTWARDS *),
+	(#"\u00E3",	0wx0021d0 )	(* LEFTWARDS DOUBLE ARROW *),
+	(#"\u00B4",	0wx0021d2 )	(* RIGHTWARDS DOUBLE ARROW *),
+	(#"\u00A4",	0wx0021d4 )	(* LEFT RIGHT DOUBLE ARROW *),
+	(#"\u00DF",	0wx0021f8 )	(* RIGHTWARDS ARROW WITH VERTICAL STROKE *),
+	(#"\u009F",	0wx0021fb )	(* RIGHTWARDS ARROW WITH DOUBLE VERTICAL STROKE *),
+	(#"\u00B5",	0wx002200 )	(* FOR ALL *),
+	(#"\u00B6",	0wx002203 )	(* THERE EXISTS *),
+	(#"\u009A",	0wx002205 )	(* EMPTY SET *),
+	(#"\u008D",	0wx002208 )	(* ELEMENT OF *),
+	(#"\u008E",	0wx002209 )	(* NOT AN ELEMENT OF *),
+	(#"\u0085",	0wx002218 )	(* RING OPERATOR *),
+	(#"\u00B1",	0wx002227 )	(* LOGICAL AND *),
+	(#"\u00B2",	0wx002228 )	(* LOGICAL OR *),
+	(#"\u00A1",	0wx002229 )	(* INTERSECTION *),
+	(#"\u00C0",	0wx00222a )	(* UNION *),
+	(#"\u00A6",	0wx00225c )	(* DELTA EQUAL TO *),
+	(#"\u00BD",	0wx002260 )	(* NOT EQUAL TO *),
+	(#"\u00E9",	0wx002261 )	(* IDENTICAL TO *),
+	(#"\u00BC",	0wx002264 )	(* LESS-THAN OR EQUAL TO *),
+	(#"\u00BE",	0wx002265 )	(* GREATER-THAN OR EQUAL TO *),
+	(#"\u00A0",	0wx002282 )	(* SUBSET OF *),
+	(#"\u00E4",	0wx002283 )	(* SUPERSET OF *),
+	(#"\u0080",	0wx002286 )	(* SUBSET OF OR EQUAL TO *),
+	(#"\u00E5",	0wx002287 )	(* SUPERSET OF OR EQUAL TO *),
+	(#"\u00C3",	0wx002291 )	(* SQUARE IMAGE OF OR EQUAL TO *),
+	(#"\u00AB",	0wx002295 )	(* CIRCLED PLUS *),
+	(#"\u00A3",	0wx002296 )	(* CIRCLED MINUS *),
+	(#"\u00F4",	0wx0022a2 )	(* RIGHT TACK *),
+	(#"\u00E2",	0wx0022a5 )	(* UP TACK *),
+	(#"\u00A5",	0wx0022c2 )	(* N-ARY INTERSECTION *),
+	(#"\u00DE",	0wx0022c3 )	(* N-ARY UNION *),
+	(#"\u0089",	0wx0022ce )	(* CURLY LOGICAL OR *),
+	(#"\u009B",	0wx0022cf )	(* CURLY LOGICAL AND *),
+	(#"\u00AC",	0wx00231c )	(* TOP LEFT CORNER *),
+	(#"\u00AE",	0wx00231d )	(* TOP RIGHT CORNER *),
+	(#"\u0091",	0wx01f13c )	(* SQUARED LATIN CAPITAL LETTER M *),
+	(#"\u0094",	0wx01f143 )	(* SQUARED LATIN CAPITAL LETTER T *),
+	(#"\u00F1",	0wx01f149 )	(* SQUARED LATIN CAPITAL LETTER Z *),
+	(#"\u00B9",	0wx0024c8 )	(* CIRCLED LATIN CAPITAL LETTER S *),
+	(#"\u00FC",	0wx002500 )	(* BOX DRAWINGS LIGHT HORIZONTAL *),
+	(#"\u00DC",	0wx002502 )	(* BOX DRAWINGS LIGHT VERTICAL *),
+	(#"\u00FF",	0wx00250c )	(* BOX DRAWINGS LIGHT DOWN AND RIGHT *),
+	(#"\u0088",	0wx002514 )	(* BOX DRAWINGS LIGHT UP AND RIGHT *),
+	(#"\u00F7",	0wx00251c )	(* BOX DRAWINGS LIGHT VERTICAL AND RIGHT *),
+	(#"\u009C",	0wx002550 )	(* BOX DRAWINGS DOUBLE HORIZONTAL *),
+	(#"\u009D",	0wx002552 )	(* BOX DRAWINGS DOWN SINGLE AND RIGHT DOUBLE *),
+	(#"\u0092",	0wx0025b7 )	(* WHITE RIGHT-POINTING TRIANGLE *),
+	(#"\u00F2",	0wx0025c1 )	(* WHITE LEFT-POINTING TRIANGLE *),
+	(#"\u00FB",	0wx0027e6 )	(* MATHEMATICAL LEFT WHITE SQUARE BRACKET *),
+	(#"\u00FD",	0wx0027e7 )	(* MATHEMATICAL RIGHT WHITE SQUARE BRACKET *),
+	(#"\u00CF",	0wx002900 )	(* RIGHTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE *),
+	(#"\u00FE",	0wx002914 )	(* RIGHTWARDS ARROW WITH TAIL WITH VERTICAL STROKE *),
+	(#"\u009E",	0wx002915 )	(* RIGHTWARDS ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE *),
+	(#"\u008F",	0wx002916 )	(* RIGHTWARDS TWO-HEADED ARROW WITH TAIL *),
+	(#"\u00B7",	0wx002981 )	(* Z NOTATION SPOT *),
+	(#"\u00BA",	0wx002982 )	(* Z NOTATION TYPE COLON *),
+	(#"\u00A8",	0wx002987 )	(* Z NOTATION LEFT IMAGE BRACKET *),
+	(#"\u00A9",	0wx002988 )	(* Z NOTATION RIGHT IMAGE BRACKET *),
+	(#"\u00DD",	0wx00298e )	(* RIGHT SQUARE BRACKET WITH TICK IN BOTTOM CORNER *),
+	(#"\u00DB",	0wx00298f )	(* LEFT SQUARE BRACKET WITH TICK IN BOTTOM CORNER *),
+	(#"\u0082",	0wx002a04 )	(* N-ARY UNION OPERATOR WITH PLUS *),
+	(#"\u00BB",	0wx002a3e )	(* Z NOTATION RELATIONAL COMPOSITION *),
+	(#"\u00E1",	0wx002a64 )	(* Z NOTATION DOMAIN ANTIRESTRICTION *),
+	(#"\u0081",	0wx002a65 )	(* Z NOTATION RANGE ANTIRESTRICTION *),
+	(#"\u00A7",	0wx003008 )	(* LEFT ANGLE BRACKET *),
+	(#"\u00A2",	0wx003009 )	(* RIGHT ANGLE BRACKET *),
+	(#"\u0096",	0wx01d539 )	(* MATHEMATICAL DOUBLE-STRUCK CAPITAL B *),
+	(#"\u00E6",	0wx01d53d )	(* MATHEMATICAL DOUBLE-STRUCK CAPITAL F *),
+	(#"\u00BF",	0wx01d54a )	(* MATHEMATICAL DOUBLE-STRUCK CAPITAL S *),
+	(#"\u0083",	0wx01d54c )	(* MATHEMATICAL DOUBLE-STRUCK CAPITAL U *),
+	(#"\u00F5",	0wx00208d )	(* SUBSCRIPT LEFT PARENTHESIS *),
+	(#"\u00F6",	0wx00208e )	(* SUBSCRIPT RIGHT PARENTHESIS *),
+	(#"\u00F8",	0wx00fe63 )	(* SMALL HYPHEN-MINUS *)
 ];
 (*
 =TEX
@@ -349,7 +378,7 @@ if there are circular dependencies here.)
 =SML
 *)
 val €pp_replacement› : (char * string) list = [
-	(#"\139",	"\235/" )
+	(#"\u008B",	"\235/" )
 ];
 (*
 =TEX
@@ -357,9 +386,9 @@ Efficient data structures: we use an array for {\Product} to Unicode and a searc
 for the opposite direction.
 =SML
 *)
-val €pp_to_unicode_array› : word list array = (
+val €pp_to_unicode_array› : UNICODE list array = (
 	let	fun basic_translate c = (
-			lassoc2 basic_pp_to_unicode_table(W.fromInt o C.ord)c
+			lassoc2 basic_pp_to_unicode_table(U.fromInt o C.ord)c
 		);
 		fun translate c = (
 			(map basic_translate o S.explode o lassoc3 pp_replacement) c
@@ -368,19 +397,19 @@ val €pp_to_unicode_array› : word list array = (
 	in	PPArray.arrayoflist (map (translate o C.chr) (interval 0 255))
 	end
 );
-val €word_order› : word ORDER = fn w1 => fn w2 => W.toInt w1 - W.toInt w2;
-val €unicode_to_pp_tree› : (word, char) SEARCH_TREE = 
-	list_st_merge (initial_search_tree word_order)
+val €unicode_order› : UNICODE ORDER = fn w1 => fn w2 => U.toInt w1 - U.toInt w2;
+val €unicode_to_pp_tree› : (UNICODE, char) SEARCH_TREE = 
+	list_st_merge (initial_search_tree unicode_order)
 		(map swap basic_pp_to_unicode_table @
-			map (fn i => (W.fromInt i, C.chr i)) (interval 0 127));
+			map (fn i => (U.fromInt i, C.chr i)) (interval 0 127));
 (*
 =TEX
 Entry points:
 =SML
 *)
-val €pp_to_unicode› : char -> word list =
+val €pp_to_unicode› : char -> UNICODE list =
 	(curry Array.sub pp_to_unicode_array o C.ord);
-val €unicode_to_pp› : word -> char OPT = switch st_lookup unicode_to_pp_tree;
+val €unicode_to_pp› : UNICODE -> char OPT = switch st_lookup unicode_to_pp_tree;
 (*
 =TEX
 =SML

@@ -2966,17 +2966,17 @@ treated in the same manner.
 Keywords enclosed by percent signs are converted to the corresponding
 pretty character if one is available.
 
-When operating on simple terminals pretty characters may not be
-generated, in these cases the translations are modified as follows.
-Pretty characters are not output, the keyword form is used instead.
 
-Temporarily, the flag controlling this will be defined here.
+The user can ask for the keyword form for non-ASCII symbols to be
+used rather than the extended character set. This results in purely
+ASCII output and is useful in contexts where the {\Product} extended
+character set or UTF-8 will not be displayed properly. 
+The flag controlling this is defined here.
 
-=SMLPLAIN SML
-val use_extended_chars = ref true;
-val _ =
-new_flag {name = "€use_extended_chars›",  control=use_extended_chars,
-	check=fun_true, default=fn () => true};
+=SML
+val €use_extended_chars› = ref true;
+val _ = new_flag {name = "use_extended_chars",  control = use_extended_chars,
+			check = fun_true, default = fn () => true};
 =TEX
 =SML
 fun €get_use_extended_chars_flag› (():unit) : bool = (
@@ -2984,6 +2984,38 @@ fun €get_use_extended_chars_flag› (():unit) : bool = (
 );
 =TEX
 
+The user can ask for non-ASCII symbols to be translated into UTF-8.
+=SML
+val €output_in_utf8› = ref false;
+val _ = new_flag {name = "output_in_utf8",  control = output_in_utf8,
+			check = fun_true, default = fn () => false};
+=TEX
+=SML
+val  €char_to_utf8› : string -> string =
+	implode o map unicode_to_utf8 o flat o map pp_to_unicode o SML97BasisLibrary.String.explode;
+=TEX
+A keyword whose name has the form {\tt x}{\it HHHHHH} where {\it HHHHHH} stands for a string
+of upper-case hexadecimal digits is translated into UTF-8 as the Unicode code point
+with numeric value given by {\it HHHHHH} (provided this value is greater than 0x7F and less
+than the maximum valid Unicode code point).
+=SML
+val kw = "x0022C3";
+val  €keyword_to_utf8› : string -> string OPT = (fn kw =>
+	let	fun is_uc_hexit c = ("0" <= c andalso c <= "9") orelse ("A" <= c andalso c <= "F");
+	in	if	size kw = 7
+		andalso	substring(kw, 0, 1) = "x"
+		andalso	all (tl(explode kw)) is_uc_hexit
+		then	case Unicode.fromString (substring(kw, 1, 6)) of
+				SOME v => (
+					if	0wx7f < v andalso v <= max_code_point
+					then	Value (unicode_to_utf8 v)
+					else	Nil
+				) | _ => Nil (* not possible *)
+		else	Nil
+	end
+);
+
+=TEX
 From observation of $PolyML.compiler$ it seems that no identifier or
 string is split over two or more calls of the writer function,
 therefore no memory is required\footnote{This may need to be
@@ -3053,21 +3085,24 @@ If the string ``{\tt \%Q\%}'' is seen then it must be output as
 					then	get_pc(prev ^ h, t)
 					else	(prev, false, h::t));
 
-	fun string_of_kw kw =
+	fun string_of_kw kw = (
 		if !use_extended_chars
-		then
-			case	PrettyNames.find_name kw
-			of Value(_, Value ch, _)	=> ch
-			| _				=> "%" ^ kw ^ "%"
-		else
-			"%" ^ kw ^ "%";
+		then	case PrettyNames.find_name kw
+			of Value(_, Value ch, _) => (
+				if not (!output_in_utf8) then ch else char_to_utf8 ch
+			) | _ => (
+				if not (!output_in_utf8) then "%" ^ kw ^ "%"
+				else	case keyword_to_utf8 kw of
+						Value s => s
+					|	Nil => "%" ^ kw ^ "%"
+			)
+		else	"%" ^ kw ^ "%"
+	);
 
 	fun string_of_extended_char ch =
 		if !use_extended_chars orelse ord ch < 128
-		then
-			ch
-		else
-			case	PrettyNames.find_char ch
+		then	if not (!output_in_utf8) then ch else char_to_utf8 ch
+		else	case	PrettyNames.find_char ch
 			of Value(kw::_, _, _)	=> "%" ^ kw ^ "%"
 			| _			=> ch;
 
@@ -3196,6 +3231,48 @@ fun €my_string_of_exn› (ex : exn) : string = (
 		Fail msg => get_message msg
 	|	Error msg => get_message msg
 	|	ex => string_of_exn ex
+);
+=TEX
+
+The user can ask for the input stream to be treated as UTF-8.
+=SML
+val €input_in_utf8› = ref false;
+val _ = new_flag {name = "input_in_utf8",  control = input_in_utf8,
+			check = fun_true, default = fn () => false};
+
+=TEX
+The following function inputs more characters from an input stream.
+If we are not processing a UTF-8 input stream, one character is input.
+If we are processing a UTF-8 input stream, we input one Unicode code point
+from the stream and convert it into the ProofPower representation (which
+will either be a single character or a keyword representing a code point that
+has no ProofPower single character equivalent.
+If invalid UTF-8 is encountered it issues a warning and then skips until it finds valid UTF-8
+or reaches end of stream.
+The strings in the list returned each comprise exactly one character:
+end of stream is signalled by an empty list.
+=SMLPLAIN SML
+fun €input_more› (caller : string, msg : int, insert : string) (istrm : instream) : string list = (
+	let	fun unicode_to_string cp = (
+			let	fun zeroes i = if i <= 0 then "" else "0" ^ zeroes (i-1);
+			val s = Unicode.toString cp;
+			in	zeroes (6 - size s) ^ s
+			end
+		);
+		fun aux () = (
+			if	(not o !) input_in_utf8
+			then	case input(istrm, 1) of
+					"" => []
+				|	ch => [ch]
+			else	(case utf8_input istrm of
+					Nil => []
+				|	Value cp => (
+						case unicode_to_pp cp of
+							Value ch => [SML97BasisLibrary.String.implode [ch]]
+						|	Nil => explode("%x" ^ unicode_to_string cp ^"%")				)) handle Fail _ => fail caller msg [fn () => insert]
+		);
+	in	aux ()
+	end		
 );
 =TEX
 \subsection{Reading From a File -- {\tt use_file}}
@@ -4107,5 +4184,4 @@ Note: The $sqsubseteq$ and $identical$ keywords need to be associated with speci
 \onecolumn
 
 \end{document}
-
 
