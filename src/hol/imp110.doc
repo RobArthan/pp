@@ -233,6 +233,8 @@ the \verb"%Q%" keyword to be dropped.
 \item[2014/07/23]
 Augmented old RCS version numbers in the changes history with dates.
 Dates will be used in place of version numbers in future.
+\item[2015/03/21]
+First working version with support for UTF-8 input and output.
 
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
@@ -3246,13 +3248,14 @@ If we are not processing a UTF-8 input stream, one character is input.
 If we are processing a UTF-8 input stream, we input one Unicode code point
 from the stream and convert it into the ProofPower representation (which
 will either be a single character or a keyword representing a code point that
-has no ProofPower single character equivalent.
+has no ProofPower single character equivalent).
 If invalid UTF-8 is encountered it issues a warning and then skips until it finds valid UTF-8
 or reaches end of stream.
 The strings in the list returned each comprise exactly one character:
 end of stream is signalled by an empty list.
 =SMLPLAIN SML
-fun €input_more› (caller : string, msg : int, insert : string) (istrm : instream) : string list = (
+fun €input_next› (caller : string, msg : int, file : string, line : int)
+		(istrm : instream) : string list = (
 	let	fun unicode_to_string cp = (
 			let	fun zeroes i = if i <= 0 then "" else "0" ^ zeroes (i-1);
 			val s = Unicode.toString cp;
@@ -3269,11 +3272,28 @@ fun €input_more› (caller : string, msg : int, insert : string) (istrm : instream
 				|	Value cp => (
 						case unicode_to_pp cp of
 							Value ch => [SML97BasisLibrary.String.implode [ch]]
-						|	Nil => explode("%x" ^ unicode_to_string cp ^"%")				)) handle Fail _ => fail caller msg [fn () => insert]
+						|	Nil => explode("%x" ^ unicode_to_string cp ^"%")				)) handle Fail _ => fail caller msg [fn () => file,
+								fn () => string_of_int line]
 		);
 	in	aux ()
 	end		
 );
+=TEX
+=SML
+fun €input_to_end_of_line› (caller : string, msg : int, file : string, line : int)
+	(istrm : instream) : string = (
+	let	val input_chars = input_next (caller, msg, file, line);
+		fun aux acc () = (
+			case input_chars istrm of
+				[] => (implode o rev o flat) acc
+			|	cs as ["\n"] => (implode o rev o flat) (cs :: acc)
+			|	cs => aux (cs::acc) ()
+		);
+	in	aux [] ()
+	end
+);
+=SML
+
 =TEX
 \subsection{Reading From a File -- {\tt use_file}}
 
@@ -3306,17 +3326,22 @@ let
 
 	val read_ahead : string list ref = ref nil;
 
+	val input_chars = input_next ("use_file", 5541, file, !line_number);
+
 	fun read_char () : string = (
-		case !read_ahead
-		of nil =>	input(cur_in, 1)
-		| h :: t =>	(read_ahead := t; h)
+		case !read_ahead of
+			[] =>	(
+				case input_chars cur_in of
+					[] => ""
+				|	h :: t => (read_ahead := t; h)
+		) |	h :: t => (read_ahead := t; h)
 	);
 
 	fun look_ahead_char () : string = (
-		case !read_ahead
-		of nil =>	let	val ch = input(cur_in, 1)
-				in	(read_ahead := [ch]; ch) end
-		| h :: _ =>	h
+		let	val ch = read_char ();
+		in	read_ahead := (ch :: !read_ahead);
+			ch
+		end
 	);
 
 	fun €f_advance› () : string = (
@@ -3542,9 +3567,9 @@ new_string_control{name="prompt2", control=prompt2,
 =SMLPLAIN SML
 	val cur_prompt : string ref = ref(!prompt1);
 
-	val console_last : string ref = ref "\n";
+	val prompt_for_more : bool ref = ref true;
 	fun issue_prompt() : unit = (
-		if !console_last = "\n"
+		if !prompt_for_more
 		then	(output(std_out, !cur_prompt); ExtendedIO.flush_out std_out)
 		else	()
 	);
@@ -3581,30 +3606,36 @@ the terminal type ahead buffer into the look ahead buffer.
 
 =SMLPLAIN SML
 local
+	val input_chars = input_next ("use_terminal", 5540, "", 0);
 	fun read_next_character () = (
 		issue_prompt();
-		let	val last = input(std_in, 1);
-		in	console_last := last;
+		case input_chars std_in of
+			[] => (prompt_for_more := true; "")
+		|	h :: t => (
+				read_ahead := t;
+				prompt_for_more := h = "\n";
 =POLYML
-			if last <> "\n"
-			then	(cur_prompt := !prompt2; last)
-			else
+				if (not o !) prompt_for_more
+				then	(cur_prompt := !prompt2; h)
+				else
 =SML
-				last
-		end
+					h
+		)
 	);
 in
 	fun read_char () : string = (
-		case !read_ahead
-		of nil =>	read_next_character()
-		| h :: t =>	(read_ahead := t; h)
+		case !read_ahead of 
+			[] => read_next_character()
+		|	h :: t => (read_ahead := t; h)
 	);
 
 	fun look_ahead_char () : string = (
-		case !read_ahead
-		of nil =>	let	val ch = read_next_character()
-				in	(read_ahead := [ch]; ch) end
-		| h :: _ =>	h
+		case !read_ahead of
+			[] =>	let	val ch = read_next_character();
+				in	read_ahead := ch :: !read_ahead;
+					ch
+				end
+		|	h :: _ =>	h
 	);
 end;
 =TEX
@@ -3734,14 +3765,14 @@ in
 	then
 		(
 			cur_prompt := !prompt1;
-			console_last := "\n"
+			prompt_for_more := true
 		)
 	else
 		(
 			use_terminal_is_active := true;
 			abandoning := false;
 			cur_prompt := !prompt1;
-			console_last := "\n";
+			prompt_for_more := true;
 			use_term_loop ();
 
 			use_terminal_is_active := false
@@ -3758,7 +3789,7 @@ The PolyML input output system has a `type ahead' buffer which is normally
 invisible, however when questions are to be asked of the user at the terminal
 the type ahead buffer must be emptied before reading the users answer.
 Failing to empty the buffer may mean the wrong text being taken as the
-answer, and that text
+answer.
 
 Recording the contents of the type ahead buffer is only performed
 on terminals, do nothing for other type of input.
@@ -3768,36 +3799,32 @@ fun €ask_at_terminal› (prompt:string) : string = (
 let
 	fun read_terminal_type_ahead_buffer  () : unit = (
 	let
+		val input_chars = input_next ("ask_at_terminal", 5540, "", 1);
 		fun aux prev_ch = (
 			if ExtendedIO.can_input(std_in, 1)
-			then
-				aux((input(std_in, 1)) :: prev_ch)
-			else
-				prev_ch
+			then	aux((input_chars std_in) @ prev_ch)
+			else	prev_ch
 		);
-
-		val typed_ahead = aux nil;
+		val typed_ahead = aux [];
 	in
-		case typed_ahead
-		of last ::_ => console_last := last
+		case typed_ahead of
+			last ::_ => prompt_for_more := last = "\n"
 		| _ => ();
-		read_ahead := (!read_ahead) @ (rev typed_ahead)
+		read_ahead := !read_ahead @ (rev typed_ahead)
 	end
 	);
+	val input_reply = input_to_end_of_line ("ask_at_terminal", 5540, "", 1);
 in
 	if  !use_terminal_is_active
-	then
-		if ExtendedIO.is_term_in std_in
+	then	if ExtendedIO.is_term_in std_in
 		then
 			(	read_terminal_type_ahead_buffer();
 				output(std_out, prompt);
 				ExtendedIO.flush_out std_out;
-				ExtendedIO.input_line std_in
+				input_reply std_in
 			)
-		else
-			fail "ask_at_terminal" 5013 []
-	else
-		fail "ask_at_terminal" 5012 []
+		else	fail "ask_at_terminal" 5013 []
+	else	fail "ask_at_terminal" 5012 []
 
 end) (* of ask_at_terminal *);
 =TEX
