@@ -622,7 +622,25 @@ not yet have the proper set of pretty characters.  To direct attention
 to the characters which are not correctly handled details will be
 obtained by examining the above list whilst the list produced remains
 non-empty some characters need attention.
-
+=TEX
+We simulate the effect of the user adding the Unicode keyword form for each pretty character
+using the following function.
+It does no hamr if the user actually does add the Unicode keyword form as well.
+=SML
+fun €char_of_unicode_keyword› (s : string) : string OPT = (
+	if	size s <> 7
+	orelse	String.sub (s, 0) <> #"x"
+	then	Nil
+	else	case Unicode.fromString(substring(s, 1, 6)) of
+			NONE => Nil
+		|	SOME cp =>
+				if	cp <= 0wx7f
+				then	Nil
+				else	case unicode_to_pp cp of
+						Value c => Value((chr o SML97BasisLibrary.Char.ord) c)
+					|	Nil => Nil
+);
+=TEX
 =SMLPLAIN SML
 in (* local for add_new_symbols, find_name and find_char *)
 
@@ -670,15 +688,20 @@ in
 	char_dict := new_chars
 end);
 =TEX
-
 =SMLPLAIN SML
-fun €find_name› (name:string) : PRETTY_NAME OPT = (
-	e_lookup name (!name_dict)
-);
 
 fun €find_char› (char:string) : PRETTY_NAME OPT = (
 	e_lookup char (!char_dict)
-)
+);
+
+
+fun €find_name› (name:string) : PRETTY_NAME OPT = (
+	case e_lookup name (!name_dict) of
+		pn as Value _ => pn
+	|	Nil => case char_of_unicode_keyword name of
+				Value c => find_char c
+			|	Nil => Nil
+);
 
 end  (*  of local for add_new_symbols, find_name and find_char *);
 =TEX
@@ -2992,16 +3015,53 @@ val €output_in_utf8› = ref false;
 val _ = new_flag {name = "output_in_utf8",  control = output_in_utf8,
 			check = fun_true, default = fn () => false};
 =TEX
+
+The user can selectively disable support for some Unicode code points:
+=SML
+val €unsupported_unicode_glyphs› : UNICODE list ref = ref [];
+val €set_unsupported_unicode_glyphs› : UNICODE list -> UNICODE list = (fn cps =>
+	let	fun check cp = (
+			if	cp <= 0wx7f
+			then	fail "set_unsupported_unicode_glyphs" 5542
+						[fn () => Unicode.toString cp]
+			else if unicode_to_pp cp = Nil
+			then	fail "set_unsupported_unicode_glyphs" 5543
+						[fn () => Unicode.toString cp]
+			else	()
+		);
+		val _ = app check cps;
+		val old = !unsupported_unicode_glyphs;
+	in	unsupported_unicode_glyphs := cps;
+		old
+	end
+);
+=SMLPLAIN SML
+fun €unicode_to_keyword› (cp : UNICODE) : string = (
+	let	fun zeroes i = if i <= 0 then "" else "0" ^ zeroes (i-1);
+		val s = Unicode.toString cp;
+	in	"%x" ^ zeroes (6 - size s) ^ s ^"%"
+	end
+);
+=TEX
+=SML
+fun €translate_unsupported› (cp : UNICODE) : UNICODE list = (
+	if	cp mem !unsupported_unicode_glyphs
+	then	(map (Unicode.fromInt o ord) o explode o unicode_to_keyword) cp
+	else	[cp]
+);
+=TEX
 =SML
 val  €char_to_utf8› : string -> string =
-	implode o map unicode_to_utf8 o flat o map pp_to_unicode o SML97BasisLibrary.String.explode;
+	implode o
+	map unicode_to_utf8 o
+	flat o map translate_unsupported o flat o
+	map pp_to_unicode o SML97BasisLibrary.String.explode;
 =TEX
 A keyword whose name has the form {\tt x}{\it HHHHHH} where {\it HHHHHH} stands for a string
 of upper-case hexadecimal digits is translated into UTF-8 as the Unicode code point
 with numeric value given by {\it HHHHHH} (provided this value is greater than 0x7F and less
 than the maximum valid Unicode code point).
 =SML
-val kw = "x0022C3";
 val  €keyword_to_utf8› : string -> string OPT = (fn kw =>
 	let	fun is_uc_hexit c = ("0" <= c andalso c <= "9") orelse ("A" <= c andalso c <= "F");
 	in	if	size kw = 7
@@ -3253,16 +3313,10 @@ If invalid UTF-8 is encountered it issues a warning and then skips until it find
 or reaches end of stream.
 The strings in the list returned each comprise exactly one character:
 end of stream is signalled by an empty list.
-=SMLPLAIN SML
+=SML
 fun €input_next› (caller : string, msg : int, file : string, line : int)
 		(istrm : instream) : string list = (
-	let	fun unicode_to_string cp = (
-			let	fun zeroes i = if i <= 0 then "" else "0" ^ zeroes (i-1);
-			val s = Unicode.toString cp;
-			in	zeroes (6 - size s) ^ s
-			end
-		);
-		fun aux () = (
+	let			fun aux () = (
 			if	(not o !) input_in_utf8
 			then	case input(istrm, 1) of
 					"" => []
@@ -3272,7 +3326,7 @@ fun €input_next› (caller : string, msg : int, file : string, line : int)
 				|	Value cp => (
 						case unicode_to_pp cp of
 							Value ch => [SML97BasisLibrary.String.implode [ch]]
-						|	Nil => explode("%x" ^ unicode_to_string cp ^"%")				)) handle Fail _ => fail caller msg [fn () => file,
+						|	Nil => explode(unicode_to_keyword cp)				)) handle Fail _ => fail caller msg [fn () => file,
 								fn () => string_of_int line]
 		);
 	in	aux ()
