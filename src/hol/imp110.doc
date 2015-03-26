@@ -235,6 +235,9 @@ Augmented old RCS version numbers in the changes history with dates.
 Dates will be used in place of version numbers in future.
 \item[2015/03/21]
 First working version with support for UTF-8 input and output.
+\item[2015/03/26]
+Factored out common functions into Reader/Writer.
+Added {\it use\_utf8\_string}.
 
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
@@ -636,7 +639,7 @@ fun €char_of_unicode_keyword› (s : string) : string OPT = (
 		|	SOME cp =>
 				if	cp <= 0wx7f
 				then	Nil
-				else	case unicode_to_pp cp of
+				else	case basic_unicode_to_pp cp of
 						Value c => Value((chr o SML97BasisLibrary.Char.ord) c)
 					|	Nil => Nil
 );
@@ -3024,7 +3027,7 @@ val €set_unsupported_unicode_glyphs› : UNICODE list -> UNICODE list = (fn cps =>
 			if	cp <= 0wx7f
 			then	fail "set_unsupported_unicode_glyphs" 5542
 						[fn () => Unicode.toString cp]
-			else if unicode_to_pp cp = Nil
+			else if basic_unicode_to_pp cp = Nil
 			then	fail "set_unsupported_unicode_glyphs" 5543
 						[fn () => Unicode.toString cp]
 			else	()
@@ -3033,13 +3036,6 @@ val €set_unsupported_unicode_glyphs› : UNICODE list -> UNICODE list = (fn cps =>
 		val old = !unsupported_unicode_glyphs;
 	in	unsupported_unicode_glyphs := cps;
 		old
-	end
-);
-=SMLPLAIN SML
-fun €unicode_to_keyword› (cp : UNICODE) : string = (
-	let	fun zeroes i = if i <= 0 then "" else "0" ^ zeroes (i-1);
-		val s = Unicode.toString cp;
-	in	"%x" ^ zeroes (6 - size s) ^ s ^"%"
 	end
 );
 =TEX
@@ -3214,22 +3210,10 @@ this first argument.
 				val dd3 = ord d3 - ord_0;
 				val ch = (dd1 * 10 + dd2) * 10 + dd3;
 				val chr_ch = chr ch;
-				val opt_str =
+				val rep_str =
 					if ch > 127
-					then
-						if !use_extended_chars
-						then
-							Value chr_ch
-						else
-							case PrettyNames.find_char chr_ch
-							of Value(kw::_, _, _) =>
-								Value("%" ^ kw ^ "%")
-							| _ => Nil
-					else
-						Nil;
-				val rep_str =	case opt_str
-						of Value str => str
-						| Nil => implode["\\", d1, d2, d3]
+					then	string_of_extended_char chr_ch
+					else	implode["\\", d1, d2, d3];
 			in
 				rep_str::(aux_str t)
 			end
@@ -3309,14 +3293,14 @@ If we are processing a UTF-8 input stream, we input one Unicode code point
 from the stream and convert it into the ProofPower representation (which
 will either be a single character or a keyword representing a code point that
 has no ProofPower single character equivalent).
-If invalid UTF-8 is encountered it issues a warning and then skips until it finds valid UTF-8
-or reaches end of stream.
+If invalid UTF-8 is encountered it raises an exception.
+Caller may choose to catch this exception and try again with the rest of the stream.
 The strings in the list returned each comprise exactly one character:
 end of stream is signalled by an empty list.
 =SML
 fun €input_next› (caller : string, msg : int, file : string, line : int)
 		(istrm : instream) : string list = (
-	let			fun aux () = (
+	let	fun aux () = (
 			if	(not o !) input_in_utf8
 			then	case input(istrm, 1) of
 					"" => []
@@ -3324,9 +3308,8 @@ fun €input_next› (caller : string, msg : int, file : string, line : int)
 			else	(case utf8_input istrm of
 					Nil => []
 				|	Value cp => (
-						case unicode_to_pp cp of
-							Value ch => [SML97BasisLibrary.String.implode [ch]]
-						|	Nil => explode(unicode_to_keyword cp)				)) handle Fail _ => fail caller msg [fn () => file,
+						(explode o unicode_to_pp) cp
+				)) handle Fail _ => fail caller msg [fn () => file,
 								fn () => string_of_int line]
 		);
 	in	aux ()
@@ -3542,7 +3525,10 @@ in
 end);
 =TEX
 }
-
+=SML
+val €use_utf8_string› : string -> unit = 
+	use_string o implode o map unicode_to_pp o utf8_string_to_unicode;
+=TEX
 %********************************************************************
 
 \subsection{Reading from a Terminal -- {\tt use_terminal}}
