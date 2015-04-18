@@ -1,0 +1,67 @@
+ProofPower Development
+======================
+
+Files
+=====
+
+The  top-level of the git repository contains
+the following versioned files.
+
+- LICENSE.md - the GPL
+- NOTES.md - these notes
+- README.md - the README file for the repo
+- dev_env - shell environment set-up for developers
+- src - parent for the source directories for the packages
+- tools - tools, mainly for building releases
+
+Once you get started, the directory will also contain one or
+both of the following unversioned directories:
+
+- bld - the installation directory for your work in progress
+- rel - parent for release directories and tarballs
+
+Set-up
+=====
+
+The following assumes your ProofPower git repository is
+in $HOME/git/pp. If not, then make the obvious changes.
+Nothing should depend on the name used for the repository directory.
+
+If you are developing ProofPower, you will spend most of your
+time in the subdirectory of src for the package you are working
+on. Before you do this you will need to set up your shell
+environment and install the packages you need in $HOME/git/pp/bld.
+
+First, in $HOME/git/pp, have a look at dev_env to see what it does.
+You may well want to make changes to make the PATH variable
+it sets up suit your needs. When you are happy with it, source it:
+
+    . dev_env
+
+It is useful to know the dependencies between the packages.
+
+- pptex has no dependencies
+- dev depends on pptex (but only for typesetting the documentation)
+- xpp depends on pptex (but only for typesetting the documentation)
+- hol depends on dev
+- zed depends on hol
+- daz depends on zed
+
+Note also that you will probably want to use xpp while you are developing
+any of hol, zed or daz. It will typically be easier to install it
+in $HOME/git/pp/bld rather than having another ProofPower installation on
+your PATH.
+
+Now visit each of the package directories in turn and build the inst
+target using the package make file. This will build a ProofPower
+installation directory in $HOME/git/pp. You could just build your package
+and the ones it depends on, but I usually do the lot:
+
+    for p in pptex xpp dev hol zed daz
+    do
+        cd $HOME/git/pp/src/$p
+        make -f $p.mkf inst
+    done
+
+Now go to your package directory and do your stuff, using the
+inst target to recompile.
