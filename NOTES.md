@@ -52,10 +52,10 @@ any of hol, zed or daz. It will typically be easier to install it
 in $HOME/git/pp/bld rather than having another ProofPower installation on
 your PATH.
 
-Now visit each of the package directories in turn and build the inst
-target using the package make file. This will build a ProofPower
-installation directory in $HOME/git/pp. You could just build your package
-and the ones it depends on, but I usually do the lot:
+Now visit each of the package directories in turn in some order respecting the
+above dependencies and build the inst target using the package make file. This
+will build a ProofPower installation directory in $HOME/git/pp. You could just
+build your package and the ones it depends on, but I usually do the lot:
 
     for p in pptex xpp dev hol zed daz
     do
@@ -64,7 +64,12 @@ and the ones it depends on, but I usually do the lot:
     done
 
 Now go to your package directory and do your stuff, using the
-inst target to recompile.
+inst target to recompile. For hol, zed and daz you can also
+use the bininst target which saves a bit of time by not
+regenerating the documents. Run the test suite for the package
+by making the target test, e.g., in hol:
+
+    make -f hol.mkf test
 
 tools directory
 ======
@@ -81,3 +86,5 @@ This will create the installation directory and the tarball for
 the release as children of $HOME/bgit/pp/rel.
 make_rel has other parameters that are for use when including
 the ProofPower repository as a submodule of another repo.
+
+Rob Arthan (rda@lemma-one.com) 18 April 2015
