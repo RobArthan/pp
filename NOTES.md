@@ -65,3 +65,19 @@ and the ones it depends on, but I usually do the lot:
 
 Now go to your package directory and do your stuff, using the
 inst target to recompile.
+
+tools directory
+======
+
+The tools directory is where you build releases. It also contains
+other odds and ends, currently just comprising a blank Lemma 1 document.
+
+You construct a release in $HOME/git/tools using make_rel.
+In simple use you just run it with the version number as parameter:
+
+    make_rel 1.1w53
+
+This will create the installation directory and the tarball for
+the release as children of $HOME/bgit/pp/rel.
+make_rel has other parameters that are for use when including
+the ProofPower repository as a submodule of another repo.
