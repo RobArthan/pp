@@ -1,8 +1,7 @@
-ProofPower Development
-======================
+# ProofPower Developer Notes
 
-Files
-=====
+
+## Files
 
 The  top-level of the git repository contains
 the following versioned files.
@@ -20,8 +19,8 @@ both of the following unversioned directories:
 - bld - the installation directory for your work in progress
 - rel - parent for release directories and tarballs
 
-Set-up
-=====
+## Set-up
+
 
 The following assumes your ProofPower git repository is
 in $HOME/git/pp. If not, then make the obvious changes.
@@ -53,7 +52,7 @@ in $HOME/git/pp/bld rather than having another ProofPower installation on
 your PATH.
 
 Now visit each of the package directories in turn in some order respecting the
-above dependencies and build the inst target using the package make file. This
+above dependencies and build the `inst` target using the package make file. This
 will build a ProofPower installation directory in $HOME/git/pp. You could just
 build your package and the ones it depends on, but I usually do the lot:
 
@@ -64,15 +63,22 @@ build your package and the ones it depends on, but I usually do the lot:
     done
 
 Now go to your package directory and do your stuff, using the
-inst target to recompile. For hol, zed and daz you can also
-use the bininst target which saves a bit of time by not
-regenerating the documents. Run the test suite for the package
+`inst` target to recompile. For hol, zed and daz you can also
+use the `bininst` target which saves a bit of time by not regenerating the documents. You will generally need to clean the package directory first. E.g.,
+
+    make -f hol.mkf clean
+    make -f hol.mkf bininst
+
+(You could also use `git clean -xf` to do the clean, but it is more aggressive in what it removes. In particular, the `clean` targets will not delete files with `.txt` or `.sh` extensions or unknown files with no extension, so you can safely use such file names for temporarty working data or scripts.)
+
+Run the test suite for the package
 by making the target test, e.g., in hol:
 
     make -f hol.mkf test
 
-tools directory
-======
+
+## tools directory
+
 
 The tools directory is where you build releases. It also contains
 other odds and ends, currently just comprising a blank Lemma 1 document.
