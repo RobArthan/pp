@@ -93,4 +93,8 @@ the release as children of $HOME/bgit/pp/rel.
 make_rel has other parameters that are for use when including
 the ProofPower repository as a submodule of another repo.
 
+Releases should be tagged with their version number:
+
+    git tag -a 1.1w53
+
 Rob Arthan (rda@lemma-one.com) 18 April 2015
