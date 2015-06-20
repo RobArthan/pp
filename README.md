@@ -7,7 +7,7 @@ ProofPower is distributed as an open source product under the GNU GPL.
 
 ProofPower is also known as OpenProofPower.
 
-See [the ProofPower web pages](http://www.lemma-one.com/ProofPower) for
+See [the ProofPower web pages](http://www.lemma-one.com/ProofPower/index/index.html) for
 more information.
 
 (c) Copyright Lemma 1 Ltd.
