@@ -192,6 +192,10 @@ Note: the fix is tested in \cite{LEMMA/IED/INT008}.
 
 \item[2015/04/17]
 Ported to Lemma 1 document template.
+
+\item[2015/08/03]
+Added more aggressive rollback function.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -2186,55 +2190,85 @@ fun ÛcheckpointÝ (cp_thy : string) : CHECKPOINT = (
 	end
 );
 =TEX
-Now for {\it rollback}. In the function  {\it rec\_del} the outermost handler
+Now for {\it rollback} and {\tt rollback1}. In the function  {\it rec\_del} the outermost handler
 is for the {\it get\_descendants} call and is trapping the situation where
 the theory has already been deleted by an earlier call.
 =SML
-fun ÛrollbackÝ (cp : CHECKPOINT) : unit = (
-	let	fun check_internal_name ({name, int_name, ...} : CP_INFO) = (
-			let	val new_int_name = get_internal_theory_name "rollback" name
+fun Ûrollback_auxÝ (caller : string) (force : bool) (cp : CHECKPOINT) : unit = (
+	let	val (cp_thy, infos) = dest_checkpoint cp;
+		fun check_internal_names (acc :  string list)
+			({name, int_name, ...} :: more : CP_INFO list) = (
+			let	val new_int_name = get_internal_theory_name caller name
 					handle Fail _ => int_name;
-			in	if	int_name <>  new_int_name
-				then 	fail "rollback" 12020 [fn () => name]
-				else	()
+			in	if	int_name <> new_int_name
+				then	if	not force orelse name = cp_thy
+					then 	fail caller 12020 [fn () => name]
+					else	check_internal_names (name :: acc) more
+				else	check_internal_names acc more
 			end
-		);
+		) | check_internal_names acc [] = acc;
+		fun children_blocking_deletions (acc : string list)
+			 ({name, int_name, level, ...} :: more: CP_INFO list) = (
+			let	val new_level =
+					(#current_level o #contents o pp'get_theory_info) int_name
+					handle Fail _ => level;
+			in	if new_level = level
+				then children_blocking_deletions acc more
+				else children_blocking_deletions (get_children name cup acc) more
+			end
+		) | children_blocking_deletions acc [] = acc;
 		fun rec_del thy = (
 			let	val _ = unlock_theory thy handle Fail _ => ();
 				val thys = get_descendants thy less thy;
 			in	map rec_del thys;
 				delete_theory thy
 				handle Fail _ =>
-				comment "rollback" 12015
+				comment caller 12015
 				[fn () => thy]
 			end	handle Fail _ => ()
 		);
-		val (cp_thy, infos) = dest_checkpoint cp;
-		val _ = map check_internal_name infos;
 		val old_descs = map #name infos;
 		val new_descs = get_descendants cp_thy
 			handle Fail _ =>
-			(comment "rollback" 12016 [fn  () => cp_thy]; []);
+			(comment caller 12016 [fn  () => cp_thy]; []);
 		fun get_ancs thy = (
 			get_ancestors thy
 			handle Fail _ =>
-			(comment "rollback" 12016 [fn () => thy]; [])
+			(comment caller 12016 [fn () => thy]; [])
 		);
 		val ancs = flat (map get_ancs old_descs);
+		val children_to_delete =
+			case children_blocking_deletions (check_internal_names [] infos) infos of
+				[] => []
+			|	cthys => (
+				if force
+				then (comment caller 12018
+					[fn () => case cthys of [_] => "theory" | _ => "theories",
+					 fn () => format_list (fn t => t) cthys ", ",
+					 fn () => cp_thy];
+					cthys)
+				else  fail caller 12018
+					[fn () => case cthys of [_] => "theory" | _ => "theories",
+					 fn () => format_list (fn t => t) cthys ", ",
+					 fn () => cp_thy]);
+		val infos' = infos drop (fn {name, ...} => name mem children_to_delete);
 	in	case new_descs of
 			[] => ()
 		|	_ =>
-	let	val to_delete = new_descs diff ancs;
+	let	val to_delete = children_to_delete cup (new_descs diff ancs);
 		val _ = open_theory cp_thy
-			handle ex => pass_on ex "open_theory" "rollback";
-		val _ = map rec_del to_delete;
-		fun restore ({name, int_name, level, thms, read_only = false, user_data, ...} : CP_INFO ) = (
+			handle ex => pass_on ex "open_theory" caller;
+		val _ = app rec_del to_delete;
+		fun restore ({name, int_name, level, thms, read_only, user_data, ...} : CP_INFO ) = (
+			if read_only andalso not force
+			then	()
+			else
 			let	val _ = open_theory name;
 				val _ = unlock_theory name handle Fail _ => ();
 				val {user_data = ud,...} = pp'get_theory int_name;
 				val _ = delete_to_level {
 					do_warn = false,
-					caller = "rollback",
+					caller = caller,
 					target = name,
 					level = level+1} ;
 				val new_thms = flat (map fst (get_thms name));
@@ -2243,17 +2277,21 @@ fun ÛrollbackÝ (cp : CHECKPOINT) : unit = (
 			in	map del_thm thms_to_go;
 				ud := user_data
 			end	handle  Fail msg =>
-				comment "rollback" 12017 [
+				comment caller 12017 [
 					fn  () => name,
 					fn () =>  get_message_text msg]
 
-		) | restore {read_only = true, ...} = ();
-		val _ = app restore infos;
+		);
+		val _ = app restore infos';
 		val _ = open_theory cp_thy;
 	in	()
 	end
 	end
 );
+=TEX
+=SML
+val ÛrollbackÝ : CHECKPOINT -> unit = rollback_aux "rollback" false; 
+val Ûrollback1Ý : CHECKPOINT -> unit = rollback_aux "rollback1" true; 
 =TEX
 \section{STATE MANAGEMENT}
 =SML
