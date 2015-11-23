@@ -212,6 +212,10 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported to Lemma 1 document template.
+\item[2015/11/21]
+Added {\it slrp\_main}. The shell script {\tt slrp} now uses {\it slrp\_main} and passes the parameter
+attributes in via environmental variables.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -2981,6 +2985,45 @@ fun ÛslrpÝ {
 );
 =TEX
 =SML
+fun Ûget_boolÝ (var : string) : bool = (
+	ExtendedIO.get_env var = "true"
+);
+=TEX
+=SML
+fun Ûget_natÝ (var : string) : int = (
+	(nat_of_string o ExtendedIO.get_env) var handle Fail _ => 0
+);
+=TEX
+=SML
+fun Ûget_stringÝ (var : string) : string = (
+	ExtendedIO.get_env var
+);
+=TEX
+=SML
+fun Ûget_string_optÝ (var : string) : string OPT = (
+	case ExtendedIO.get_env var of
+		"" => Nil
+	|	s => Value s
+);
+=TEX
+=SML
+val Ûslrp_mainÝ : unit -> unit = (fn () => 
+	slrp{
+	in_file		= get_string "SLRPINFILE",
+	out_file	= get_string "SLRPOUTFILE",
+	eos		= get_string "SLRPEOS",
+	quote_con	= get_string_opt "SLRPQUOTECON",
+	name_con	= get_string_opt "SLRPNAMECON",
+	log_file	= get_string "SLRPLOGFILE",
+	log_level	= get_nat "SLRPLOGLEVEL",
+	slr_only	= get_bool "SLRPSLRONLY",
+	timings		= get_bool "SLRPTIMINGS",
+	generic		= get_bool "SLRPGENERIC",
+	reductions_file	= get_string_opt "SLRPREDUCTIONSFILE",
+	brief_interface	= get_bool "SLRPBRIEFINTERFACE"}
+);
+=TEX
+=SML
 end; (* of structure Slrp *)
 =TEX
 \subsection{Shell Interface}
@@ -2991,13 +3034,15 @@ end; (* of structure Slrp *)
 if test -z "$PROGNAME"
 then
 	PROGNAME=`basename $0`
-	USAGE="$PROGNAME [-l log_level] [-g] [-h] [-b] -e eos_class -f grammar_file"
+	USAGE="$PROGNAME [-l log_level] [-g] [-h] [-b] [-q quote_con] [-n name_con] [-r] -e eos_class -f grammar_file"
 fi
 LOGLEVEL=2
 EOS=LCEos
 INFILE=
-QUOTECONSUPPLIED=n
-NAMECONSUPPLIED=n
+QUOTECON=""
+QUOTECONSUPPLIED=false
+NAMECON=""
+NAMECONSUPPLIED=false
 SLRONLY=false
 TIMINGS=false
 GENERIC=false
@@ -3006,13 +3051,13 @@ BRIEFINTERFACE=false
 while getopts l:e:f:grbsq:tn: arg
 do
 	case $arg in
-		q)	QUOTECONSUPPLIED=y; QUOTECON=$OPTARG ;;
+		q)	QUOTECONSUPPLIED=true; QUOTECON=$OPTARG ;;
 		e)	EOS=$OPTARG ;;
 		f)	INFILE=$OPTARG ;;
 		g)	GENERIC=true ;;
 		r)	SEPARATEREDUCTIONS=true ;;
 		b)	BRIEFINTERFACE=true ;;		
-		n)	NAMECONSUPPLIED=y; NAMECON=$OPTARG ;;
+		n)	NAMECONSUPPLIED=true; NAMECON=$OPTARG ;;
 		l)	LOGLEVEL=$OPTARG ;;
 		s)	SLRONLY=true ;;
 		t)	TIMINGS=true
@@ -3030,79 +3075,29 @@ then
 fi
 if	test `expr "$LOGLEVEL" : "[0-9]*$"` -eq 0
 then
+	echo "$PROGNAME: usage: $USAGE"
 	echo "$PROGNAME: the -l option must be a number"	
 	exit 1
 fi
+if	[ "$QUOTECONSUPPLIED" = true -a "$QUOTECON" = "" ]
+then
+	echo "$PROGNAME: usage: $USAGE"
+	echo "$PROGNAME: if -q is supplied, the string quote_con must not be empty"	
+fi
+if	[ "$NAMECONSUPPLIED" = true -a "$NAMECON" = "" ]
+then
+	echo "$PROGNAME: usage: $USAGE"
+	echo "$PROGNAME: if -n is supplied, the string name_con must not be empty"	
+fi
 DIR=`dirname $INFILE`
 BASE=`basename $INFILE .txt`
-OUTFILE=$DIR/$BASE.sml
-if 	$SEPARATEREDUCTIONS
-then	REDFILE='Value "'$DIR/$BASE'.red.sml"'
-else	REDFILE=Nil
+OUTFILE="$DIR/$BASE.sml"
+if 	[ $SEPARATEREDUCTIONS = true ]
+then	REDUCTIONSFILE="$DIR/$BASE.red.sml"
+else	REDUCTIONSFILE=""
 fi
-LOGFILE=$DIR/$BASE.log
-if	test "$QUOTECONSUPPLIED" = n
-then	if	test "$NAMECONSUPPLIED" = n
-	then	ML="(Slrp.slrp{\
-			in_file=\"$INFILE\",\
-			out_file=\"$OUTFILE\",\
-			eos=\"$EOS\",\
-			quote_con=Nil,\
-			name_con=Nil,\
-			log_file=\"$LOGFILE\",\
-			log_level=$LOGLEVEL,\
-			slr_only=$SLRONLY,\
-			timings=$TIMINGS,\
-			generic=$GENERIC,\
-			reductions_file=$REDFILE,\
-			brief_interface=$BRIEFINTERFACE}; PPCompiler.exit 0)\
-			handle _ => PPCompiler.exit 1;"
-	else	ML="(Slrp.slrp{\
-			in_file=\"$INFILE\",\
-			out_file=\"$OUTFILE\",\
-			eos=\"$EOS\",\
-			quote_con=Nil,\
-			name_con=Value \"$NAMECON\",\
-			log_file=\"$LOGFILE\",\
-			log_level=$LOGLEVEL,\
-			slr_only=$SLRONLY,\
-			timings=$TIMINGS,\
-			generic=$GENERIC,\
-			reductions_file=$REDFILE,\
-			brief_interface=$BRIEFINTERFACE}; PPCompiler.exit 0)\
-			handle _ => PPCompiler.exit 1;"
-	fi
-else	if	test "$NAMECONSUPPLIED" = n
-	then	ML="(Slrp.slrp{\
-		in_file=\"$INFILE\",\
-		out_file=\"$OUTFILE\",\
-		eos=\"$EOS\",\
-		quote_con=Value \"$QUOTECON\",\
-		name_con=Nil,\
-		log_file=\"$LOGFILE\",\
-		log_level=$LOGLEVEL,\
-		slr_only=$SLRONLY,\
-		timings=$TIMINGS,\
-		generic=$GENERIC,\
-		reductions_file=$REDFILE,\
-		brief_interface=$BRIEFINTERFACE}; PPCompiler.exit 0)\
-		handle _ => PPCompiler.exit 1;"
-	else	ML="(Slrp.slrp{\
-		in_file=\"$INFILE\",\
-		out_file=\"$OUTFILE\",\
-		eos=\"$EOS\",\
-		quote_con=Value \"$QUOTECON\",\
-		name_con=Value \"$NAMECON\",\
-		log_file=\"$LOGFILE\",\
-		log_level=$LOGLEVEL,\
-		slr_only=$SLRONLY,\
-		timings=$TIMINGS,\
-		generic=$GENERIC,\
-		reductions_file=$REDFILE,\
-		brief_interface=$BRIEFINTERFACE}; PPCompiler.exit 0)\
-		handle _ => PPCompiler.exit 1;"
-	fi
-fi
+LOGFILE="$DIR/$BASE.log"
+ML="Slrp.slrp_main();"
 =POLYDUMPMORE slrp
 COMPILER=${PPCOMPILER:-POLYML}
 =NJMLDUMPMORE slrp
@@ -3123,7 +3118,20 @@ else
 	exit 1
 fi
 DBNAME=`findfile slrpdb.$HEAP_SUFFIX $PATH`
-echo $ML | $RUNML$DBNAME
+echo $ML | \
+SLRPINFILE="$INFILE" \
+SLRPOUTFILE="$OUTFILE" \
+SLRPEOS="$EOS" \
+SLRPQUOTECON="$QUOTECON" \
+SLRPNAMECON="$NAMECON" \
+SLRPLOGFILE="$LOGFILE" \
+SLRPLOGLEVEL="$LOGLEVEL" \
+SLRPSLRONLY="$SLRONLY" \
+SLRPTIMINGS="$TIMINGS" \
+SLRPGENERIC="$GENERIC" \
+SLRPREDUCTIONSFILE="$REDUCTIONSFILE" \
+SLRPBRIEFINTERFACE="$BRIEFINTERFACE" \
+$RUNML$DBNAME
 =TEX
 =SH
 chmod +x slrp
