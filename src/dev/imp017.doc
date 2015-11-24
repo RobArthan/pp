@@ -215,7 +215,9 @@ Ported to Lemma 1 document template.
 \item[2015/11/21]
 Added {\it slrp\_main}. The shell script {\tt slrp} now uses {\it slrp\_main} and passes the parameter
 attributes in via environmental variables.
-
+\item[2015/11/24]
+Now does what is necessary to build a stand-alone binary.
+This works with Poly/ML, SML/NJ and MLton.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -3008,23 +3010,46 @@ fun Ûget_string_optÝ (var : string) : string OPT = (
 =TEX
 =SML
 val Ûslrp_mainÝ : unit -> unit = (fn () => 
-	slrp{
-	in_file		= get_string "SLRPINFILE",
-	out_file	= get_string "SLRPOUTFILE",
-	eos		= get_string "SLRPEOS",
-	quote_con	= get_string_opt "SLRPQUOTECON",
-	name_con	= get_string_opt "SLRPNAMECON",
-	log_file	= get_string "SLRPLOGFILE",
-	log_level	= get_nat "SLRPLOGLEVEL",
-	slr_only	= get_bool "SLRPSLRONLY",
-	timings		= get_bool "SLRPTIMINGS",
-	generic		= get_bool "SLRPGENERIC",
-	reductions_file	= get_string_opt "SLRPREDUCTIONSFILE",
-	brief_interface	= get_bool "SLRPBRIEFINTERFACE"}
+	(	slrp{
+			in_file		= get_string "SLRPINFILE",
+			out_file	= get_string "SLRPOUTFILE",
+			eos		= get_string "SLRPEOS",
+			quote_con	= get_string_opt "SLRPQUOTECON",
+			name_con	= get_string_opt "SLRPNAMECON",
+			log_file	= get_string "SLRPLOGFILE",
+			log_level	= get_nat "SLRPLOGLEVEL",
+			slr_only	= get_bool "SLRPSLRONLY",
+			timings		= get_bool "SLRPTIMINGS",
+			generic		= get_bool "SLRPGENERIC",
+			reductions_file	= get_string_opt "SLRPREDUCTIONSFILE",
+			brief_interface	= get_bool "SLRPBRIEFINTERFACE"};
+		OS.Process.exit OS.Process.success)
+	handle
+		SlrpError _ => ()
+	|	ex => (
+		TextIO.output(TextIO.stdErr, 
+			exnName ex ^ ": " ^ exnMessage ex ^ "\n");
+		OS.Process.exit OS.Process.failure
+	)
 );
 =TEX
 =SML
 end; (* of structure Slrp *)
+=TEX
+\subsection{Compiler Interface}
+For Poly/ML we just export a binary with {\it slrp\_main} as its entry point.
+=POLYML
+PolyML.export("slrp-bin", Slrp.slrp_main);
+=TEX
+For SML/NJ, we export a binary that invokes {\it slrp\_main} ignoring
+any command line arguments. The response value below is a dummy to make the
+command typecheck, since {\it slrp\_main} always calls {\it OS.Process.exit}.
+=NJML
+SMLofNJ.exportFn("slrp-bin", fn _ => (Slrp.slrp_main(); OS.Process.success));
+=TEX
+For MLton, we just call {\it slrp\_main} here.
+=MLTON
+val _ = Slrp.slrp_main();
 =TEX
 \subsection{Shell Interface}
 =DUMP slrp
@@ -3097,28 +3122,9 @@ then	REDUCTIONSFILE="$DIR/$BASE.red.sml"
 else	REDUCTIONSFILE=""
 fi
 LOGFILE="$DIR/$BASE.log"
-ML="Slrp.slrp_main();"
-=POLYDUMPMORE slrp
-COMPILER=${PPCOMPILER:-POLYML}
 =NJMLDUMPMORE slrp
-COMPILER=${PPCOMPILER:-SMLNJ}
+eval `.arch-n-opsys`
 =DUMPMORE slrp
-if test "$COMPILER" = POLYML
-then
-	RUNML="slrp-ml $MLFLAGS "
-	HEAP_SUFFIX=polydb
-elif test "$COMPILER" = SMLNJ
-then
-	RUNML="sml $MLFLAGS @SMLload="
-	eval `.arch-n-opsys`
-else
-	echo "$PROGNAME: environment variable PPCOMPILER is" \
-		 "$COMPILER"\
-		"but should be POLYML or SMLNJ" >&2
-	exit 1
-fi
-DBNAME=`findfile slrpdb.$HEAP_SUFFIX $PATH`
-echo $ML | \
 SLRPINFILE="$INFILE" \
 SLRPOUTFILE="$OUTFILE" \
 SLRPEOS="$EOS" \
@@ -3131,7 +3137,13 @@ SLRPTIMINGS="$TIMINGS" \
 SLRPGENERIC="$GENERIC" \
 SLRPREDUCTIONSFILE="$REDUCTIONSFILE" \
 SLRPBRIEFINTERFACE="$BRIEFINTERFACE" \
-$RUNML$DBNAME
+=POLYDUMPMORE slrp
+slrp-bin
+=TEX
+=NJMLDUMPMORE slrp
+sml "@SMLload=slrp-bin.$HEAP_SUFFIX"
+=MLTONDUMPMORE slrp
+slrp-bin
 =TEX
 =SH
 chmod +x slrp
