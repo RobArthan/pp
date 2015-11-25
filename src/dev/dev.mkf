@@ -24,7 +24,7 @@ default:
 	@echo " "
 	@echo "Various environment variables influence the behaviour:"
 	@echo " "
-	@echo "    PPCOMPILER  - compiler to use (POLYML or SMLNJ)"
+	@echo "    PPCOMPILER  - compiler to use (POLYML, SMLNJ or MLTON)"
 	@echo "    PPTARGETDIR - target installation directory"
 	@echo "                  (../../bld if not set)"
 	@echo "    PPVER       - product version"
@@ -43,62 +43,8 @@ SHORTNAME=dev
 VERSION=$(shell echo $${PPVER:-`cat version  2>/dev/null || echo XXX.YYY.ZZZ`})
 RELDIR=$(shell echo "$${PPTARGETDIR:-../../bld}")
 PRODUCT=$(PRODNAME)-$(PPVER)
-CWD=$(shell pwd)
-HAVERCS=$(shell (test -d RCS && echo y ) || echo n)
+YEAR=$(shell date +%Y)
 
-# database names
-SLRPDBNAME=	slrpdb
-SLRPDB=		$(SLRPDBNAME).$(HEAP_SUFFIX)
-
-# Compiler specifics:
-ifeq ($(PPCOMPILER), POLYML)
-# Architecture type (used as a file-name suffix for images by NJML)
-HEAP_SUFFIX=		"polydb"
-# Directory for the poly stuff:
-POLYHOME=$(shell echo $${PPPOLYHOME:-/usr/local})
-POLYLIBDIR=$(POLYHOME)/lib
-LD_RUN_PATH=$(shell echo $${PPLD_RUN_PATH:-$(POLYLIBDIR)})
-# Commands to build the empty database
-EXPORT="PolyML.commit();"
-SLRPSTARTMLCMD=	val product_version : string = \"$(VERSION)\";\
-	val copyright : string = \"Copyright (c) Lemma 1 Ltd. 2008\";\
-	use\"dtd108.sml\"; use\"imp108.sml\";
-SLRPMAKEDBCMD=	PPBuild.pp'save_name := \"$(SLRPDBNAME)\";\
-	PPBuild.pp'save ();
-SLRPSTARTCMD= \
- 	{	{ echo "$(SLRPSTARTMLCMD)" | poly ; } && \
-		{ polyc $(POLYLINKFLAGS) -o slrp-ml pp-ml.o || \
-		  LD_RUN_PATH=$(LD_RUN_PATH) \
-			c++ $(POLYLINKFLAGS) -o slrp-ml pp-ml.o \
-				-L$(POLYLIBDIR) -lpolymain -lpolyml ; } && \
-		{ echo "$(SLRPMAKEDBCMD)" | slrp-ml ; }	}
-# Command to run ML
-RUNML="slrp-ml"
-MLDBPFX=""
-SLRPDRIVER=slrp-ml
-# Command to garbage-collect the database
-DBGC="slrp-ml"
-DBGCARG="-c"
-else
-ifeq ($(PPCOMPILER), SMLNJ)
-# Architecture type (used as a file-name suffix for images by NJML)
-HEAP_SUFFIX=		$(shell eval `.arch-n-opsys`; echo $$HEAP_SUFFIX)
-# Commands to build the empty database
-SLRPSTARTMLCMD=	val product_version : string = \"$(VERSION)\";\
-	val copyright : string = \"Copyright (c) Lemma 1 Ltd. 2008\";\
-	use\"dtd108.sml\"; use\"imp108.sml\"; \
-	PPBuild.pp'save_name := \"$(SLRPDBNAME)\"; \
-	SMLofNJ.exportML \"$(SLRPDBNAME)\";
-SLRPSTARTCMD= echo "$(SLRPSTARTMLCMD)" | sml
-SLRPDRIVER=
-# Command to run ML
-RUNML="sml"
-MLDBPFX="@SMLload="
-# Command to garbage-collect the database
-DBGC="echo"
-DBGCARG="database garbage collection not needed with SML/NJ"
-endif
-endif
 # Distinctive tag for binary distribution file
 BINTAG=$(shell eval `make -s -f dev.mkf arch-os; arch-os`; echo $$ARCH-$$OS-$$PPCOMPILER | dd conv=lcase 2>/dev/null)
 
@@ -106,14 +52,21 @@ SHELLSCRIPTS = slrp
 
 
 # SLRP Parser Generator
-SLRPDOCS=     dtd018.doc imp018.doc\
-		dtd017.doc imp017.doc\
-		dtd118.doc imp118.doc
+SLRPSUPPDOCS= dtd108.doc imp108.doc
+SLRPSUPPDOCS+=dtd002.doc imp002.doc
+SLRPSUPPDOCS+=dtd001.doc imp001.doc
 
-SLRPSMLFILES=	dtd108.sml imp108.sml \
-		dtd002.sml imp002.sml \
-		dtd001.sml imp001.sml \
-		$(SLRPDOCS:.doc=.sml)
+SLRPGENDOCS= dtd018.doc imp018.doc
+SLRPGENDOCS+=dtd017.doc imp017.doc
+
+SLRPEXTRADOCS= dtd118.doc imp118.doc
+
+SLRPGENSMLFILES= $(SLRPSUPPDOCS:.doc=.sml)
+SLRPGENSMLFILES+=$(SLRPGENDOCS:.doc=.sml)
+
+SLRPSMLFILES= $(SLRPSUPPDOCS:.doc=.sml)
+SLRPSMLFILES+=$(SLRPGENDOCS:.doc=.sml)
+SLRPSMLFILES+=$(SLRPEXTRADOCS:.doc=.sml)
 
 # Detailed Design and implementation of the IED test harness
 TESTHARNESSDOCS=	dtd013.doc imp013.doc
@@ -161,25 +114,6 @@ PACKINGLIST+= mtreport.sh
 # so that they don't need the transfig package)
 DISTPACKINGLIST=$(PACKINGLIST) usr032a.eps
 
-######################################################################
-#
-# Dependencies - determining the order of compilation
-#
-######################################################################
-
-dtd002.ldd: imp108.ldd
-imp002.ldd: dtd002.ldd
-dtd001.ldd: imp002.ldd
-imp001.ldd: dtd001.ldd
-dtd018.ldd: imp001.ldd
-imp018.ldd: dtd018.ldd
-dtd017.ldd: imp018.ldd
-imp017.ldd: dtd017.ldd
-dtd118.ldd: imp018.ldd
-imp118.ldd: dtd118.ldd
-
-arch-os: dtd108.doc
-	docsml -f hol.svf dtd108.doc
 
 ######################################################################
 #
@@ -214,11 +148,14 @@ dtd118a.doc: dtd118.doc
 	
 ######################################################################
 #
-#	Building the SLR Parser Generator
+#	Building the SLR Parser Generator binary
 #
 ######################################################################
 
-$(SLRPDB): imp017.ldd imp118.ldd
+slrp-header.sml: slrp-header.sml.template
+	sed -e '/VERSION/s/VERSION/$(PPVER)/' \
+		-e '/YEAR/s/YEAR/$(YEAR)/' \
+			<slrp-header.sml.template >slrp-header.sml
 
 dtd002.sml \
 imp002.sml : dtd002.doc imp002.doc hol.svf
@@ -229,13 +166,46 @@ imp002.sml : dtd002.doc imp002.doc hol.svf
 	mv dtd002.sml.tmp dtd002.sml
 
 
+ifeq ($(PPCOMPILER), POLYML)
+#
+SLRP_BIN=slrp-bin
+TESTML=poly
+slrp-bin: slrp-header.sml $(SLRPGENSMLFILES)
+	echo "use\"polyml-build.sml\";" | poly
+	polyc slrp-bin.o
+#
+else
+ifeq ($(PPCOMPILER), SMLNJ)
+#
+HEAP_SUFFIX=$(shell eval `.arch-n-opsys`; echo $$HEAP_SUFFIX)
+SLRP_BIN=slrp-bin.$(HEAP_SUFFIX)
+TESTML=sml
+slrp-bin: $(SLRP_BIN)
+$(SLRP_BIN): slrp-header.sml $(SLRPGENSMLFILES)
+	echo "use\"smlnj-build.sml\";" | sml
+#
+else # MLton is the only other supported compiler:
+#
+SLRP_BIN=slrp-bin
+TESTML=poly
+slrp-bin: slrp-header.sml $(SLRPGENSMLFILES)
+	mlton -output slrp-bin mlton-build.mlb
+#
+endif
+endif
+
 ######################################################################
 #
-#	Building the shell scripts
+#	Building the shell script
 #
 ######################################################################
 
-slrp: imp017.sml
+slrp.template slrp-header.sml.template: imp017.doc
+	docsml imp017
+
+slrp: slrp.template
+	sed -e '/^MLCOMPILER=/s/=.*/=$(PPCOMPILER)/' < slrp.template > slrp
+	chmod +x slrp
 
 ######################################################################
 #
@@ -243,12 +213,9 @@ slrp: imp017.sml
 #
 ######################################################################
 
-mdt017.sml:	slrp $(SLRPDB)
-
-test:	$(TESTTTDS) $(SLRPDB) mtreport
+test:	$(TESTTTDS) mtreport
 	@grep 'module' $(TESTTTDS)
 	mtreport $(TESTTTDS)
-
 
 mdt118.ttd: pascal.grm.sml \
 	c.grm.sml \
@@ -294,10 +261,10 @@ docdir: reldir
 srcdir:	reldir
 	[ -d   "$(RELDIR)"/src ] || mkdir "$(RELDIR)"/src
 
-build: $(SLRPDB) $(SHELLSCRIPTS)
+build: $(SLRP_BIN) $(SHELLSCRIPTS)
 
-binrel: bindir $(SLRPDRIVER) $(SLRPDB) $(SHELLSCRIPTS) arch-os
-	cp $(SLRPDRIVER) $(SLRPDB) "$(RELDIR)"/bin
+binrel: bindir $(SLRPDRIVER) $(SLRP_BIN) $(SHELLSCRIPTS) arch-os
+	cp $(SLRPDRIVER) $(SLRP_BIN) "$(RELDIR)"/bin
 	cp $(SHELLSCRIPTS) "$(RELDIR)"/bin
 	cp arch-os "$(RELDIR)"/bin
 	chmod -R a-w "$(RELDIR)"
@@ -324,6 +291,7 @@ srcrel: srcdir $(DISTPACKINGLIST)
 #
 #	Tidying Up
 #
+# N.b., this deletes ALL files whose name begins with "slrp-bin"
 ######################################################################
 
 clean:
@@ -331,34 +299,18 @@ clean:
 	rm -f *.grm.txt *.grm.log *.grm.red.sml *.log *.run *.polydb
 	rm -f *.dvi *.ldd1 *.aux *.bbl *.blg *.dvi *.idx *.lof *.toc *.sid
 	rm -f arch-os dtd018a.* slrp slrp-ml usr032a.eps wrk077.[123].* *.ttd
-	rm -f dtd017[ab].* dtd118a.* *.sml mtreport *.o *.c *.ada *.java		rm -f *.tok *.p *.brax
+	rm -f dtd017[ab].* dtd118a.* *.sml mtreport *.o *.c *.ada *.java
+	rm -f *.tok *.p *.brax slrp-bin* *.template *.mlb
 
 ######################################################################
 #
-#	Rules for compiling ML
-#		- two specific ones for the portability infrastructure
-#		  then a generic one for the rest.
+#	Rules for processing doc files and derivatives thereof
 #
 ######################################################################
 
-dtd108.ldd imp108.ldd $(SLRPDRIVER): dtd108.sml imp108.sml
-	$(SLRPSTARTCMD)  > dtd108.ldd
-	@echo "See dtd108.ldd" > imp108.ldd
-
-%.ldd: %.sml
-	@rm -f $@ $*.err 2>/dev/null
-	@echo "Compiling (code)" $<
-	@echo "PPCompiler.gc_messages false; PPBuild.pp'load \"$<\";"\
-	        | $(RUNML) $(MLFLAGS) $(MLDBPFX)$(SLRPDB) > $*.err
-	@echo "+++ Compiled $<: OK (Compilation Run Complete) +++" >> $*.err
-	@mv $*.err $@
-
-%.ttd: %.sml $(TESTHARNESSSMLS)
-	@rm -f $@ $.err 2>/dev/null
+%.ttd: %.sml $(TESTHARNESSSMLS) $(SLRPSMLFILES)
 	@echo "Compiling (test)" $<
-	@echo "PPBuild.pp'use \"$<\"; PPCompiler.exit 0;" \
-		| $(RUNML) $(MLFLAGS) $(MLDBPFX)$(SLRPDB) > $*.err
-	@mv $*.err $@
+	@echo "use \"$<\";" | $(TESTML) >$*.ttd
 
 %.sml: %.doc hol.svf
 	docsml -f hol.svf $*
