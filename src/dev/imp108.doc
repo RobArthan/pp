@@ -149,6 +149,9 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported to Lemma 1 document template.
+
+\item[2016/01/09]
+Now uses the Poly/ML {\tt addPrettyPrinter} function rather than the obsolescent {\tt install\_pp}.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -455,10 +458,11 @@ val Ûprint_depthÝ : int -> unit =
 =TEX
 =NJML
 type 'a ÛPP_SPECÝ = string list * (PrettyPrint.stream -> 'a -> unit);
+=TEX
+For Poly/ML as we are only supporting pretty-printing of monotypes here, we instantiate the type variable
+that is used to handle the arguments of polymorphic types to {\tt unit}.
 =POLYML
-type 'a PP_SPEC =
-	(string -> unit) * (int * bool -> unit) * (int * int -> unit) * (unit -> unit)
-		-> int -> unit -> 'a -> unit;
+type 'a PP_SPEC = (int -> unit -> 'a -> PolyML.pretty);
 =TEX
 =NJML
 fun Ûinstall_ppÝ ((path, pp) : 'a PP_SPEC) : unit = (
@@ -484,7 +488,45 @@ fun make_pp (path : string list)
     end
 );
 =POLYML
-(fn funs => fn _ => fn _ => fn obj => pprint funs obj);
+(	fn _ => fn () => fn v =>
+	let	fun moan s = TextIO.output(TextIO.stdOut,
+			"Error in pretty-printer: " ^  s ^ "\n");
+		open PolyML;
+		val stk : pretty list ref = ref [];
+		fun add_entry p = (
+			case !stk of 
+				[] =>
+				stk := [p]
+			|	(PrettyBlock(i, b, c, ps) :: more) =>
+				stk := PrettyBlock(i, b, c, ps @ [p]) :: more
+			|	other => (
+				moan "missing begin"
+			)
+		);
+		val add_string : string -> unit = add_entry o PrettyString;
+		fun begin_block (i : int, b : bool) : unit = (
+			stk := PrettyBlock (i, b, [], []) :: !stk
+		);
+		val add_break : int * int -> unit = add_entry o PrettyBreak;
+		fun end_block (() : unit) : unit = (
+			case !stk of
+				(p as PrettyBlock _) :: more => (
+				stk := more;
+				add_entry p
+			) |	other => (
+				moan "end with no matching begin"
+			)
+		);		
+	in	pprint (add_string, begin_block, add_break, end_block) v;
+		case !stk of
+			[] => PrettyBlock(0, false, [], [])
+		|	[p] => p
+		|	ps => (
+			moan "begin with no matching end";
+			PrettyBlock(0, false, [], ps)
+		)
+	end
+);
 =SML
 val Ûgc_messagesÝ : bool -> unit =
 =NJML
