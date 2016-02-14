@@ -16,7 +16,7 @@ This is a list of example git command lines each with a potted explanation.
 * Pull changes from the remote:  
     `git pull`
 
-* Add local changes prior to commit (this stages a snapshot of the current state into the index of uncommitted changes):
+* Add local changes prior to commit (stages a snapshot of the current state into the index of uncommitted changes):
     `git add dtd001.doc`
 
 * Show diffs between (a) committed state and (b) current state:  
@@ -31,10 +31,10 @@ This is a list of example git command lines each with a potted explanation.
 * Commit changes (prompts for message):  
      `git commit`
 
-* Push changes to remote. This will fail if you have changed files that have been changed remotely since you last pulled changes. If it fails, pull the changes: there will be merge conflicts which you need to resolve. i.e., you need to change the conflicted files to be as you want them to be, add them and then commit:  
+* Push changes to remote. (This will fail if you have changed files that have been changed remotely since you last pulled changes. If it fails, pull the changes: there will be merge conflicts which you need to resolve. i.e., you need to change the conflicted files to be as you want them to be, add them and then commit.):  
     `git push`
 
-* View change log (with diffs, drop "-p" for just the log):
+* View change log (with diffs, drop "-p" for just the log):  
     `git log -p:  `
 
 * Create an annotated tag for a specified commit (prompts for message):  
@@ -58,8 +58,8 @@ This is a list of example git command lines each with a potted explanation.
 * To delete an upstream branch:  
     `git push origin :fix-3.1w6`
 
-* To merge changes into current branch. 
-In case of conflicts, edit files to resolve conflicts (i.e., change the conflicted files to be as you want them to be), add them and then commit.:  
+* To merge changes into current branch 
+(In case of conflicts, resolve them by changing the conflicted files to be as you want them to be, add them and then commit.):  
     `git merge fix-3.1w6`
 
 ----
