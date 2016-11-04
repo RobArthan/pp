@@ -205,15 +205,20 @@ USR.sty: usr024.doc usr024.sml usr024_data.tex
 
 entities.sml: htmlmathml.json
 	printf "val entity_table = tl [(\"\", 0wx0)" >  entities.sml
-	perl -ne '/^\s*("[^"]*"):\s*"\\u([^"\\]*)",?\s*$$/ && print ",\n\t\($$1, 0wx$$2\)"' htmlmathml.json >> entities.sml
+	perl -ne '/^\s*(\"[^"]*\"):\s*"\\u([^"\\]*)",?\s*$$/ && print ",\n\t\($$1, 0wx$$2\)"' htmlmathml.json >> entities.sml
 	printf "\n];\n" >> entities.sml
 
 entities.h: htmlmathml.json
-	printf "val entity_table = tl [(\"\", 0wx0)" >  entities.h
-	perl -ne '/^\s*("[^"]*"):\s*"\\u([^"\\]*)",?\s*$$/ && print ",\n\t\($$1, 0wx$$2\)"' htmlmathml.json >> entities.sml
-	printf "\n];\n" >> entities.h
+	printf "typedef int unicode;\n" >  entities.h
+	printf "typedef struct {\n" >>  entities.h
+	printf "	const char *pp_string;\n" >>  entities.h
+	printf "	unicode code_point;} ent_to_unicode_entry;\n" >>  entities.h
+	printf "#define ENT_TO_UNICODE_LEN 2025\n" >>  entities.h
+	printf "static ent_to_unicode_entry entity_table [ENT_TO_UNICODE_LEN] = {\n\t{\"\",0wx0000}" >>  entities.h
+	perl -ne '/^\s*("[^"]*"):\s*"\\u([^"\\]*)",?\s*$$/ && print ",\n\t\{$$1, 0wx$$2\}"' htmlmathml.json >> entities.h
+	printf "\n};\n" >> entities.h
 
-imp122.ldd: entities.sml
+imp122.ldd: entities.sml entities.h
 
 ######################################################################
 #
@@ -230,68 +235,33 @@ imp122.ldd: entities.sml
 
 # Compiler specifics:
 ifeq ($(PPCOMPILER), POLYML)
-# Architecture type (used as a file-name suffix for images by NJML)
-HEAP_SUFFIX=		polydb
 # Directories for the poly stuff:
 POLYHOME=$(shell echo $${PPPOLYHOME:-/usr/local})
 POLYLIBDIR=$(POLYHOME)/lib
-# Commands to build the empty database
-HOLSTARTMLCMD= \
-	val system_version : string = \"$(VERSION)\";\
-	val build_date : Date.date = Date.fromTimeLocal(Time.now());\
+# Command to run ML
+RUNML="poly"
+else
+ifeq ($(PPCOMPILER), SMLNJ)
+# Command to run ML
+RUNML="sml"
+endif
+endif
+
+# sml for generating headers
+PPUTF8SMLFILES=dtd108.sml imp108.sml dtd001.sml imp001.sml dtd002.sml imp002.sml
+PPUTF8SMLFILES+=dtd122.sml imp122.sml dtd123.sml imp123.sml
+
+$(PPUTF8SMLFILES): %.sml : %.doc sieve
+		   sieve sml < $*.doc > $*.sml
+
+PPUTF8CMD= \
 	use\"dtd108.sml\"; use\"imp108.sml\"; \
 	use\"dtd002.sml\"; use\"imp002.sml\"; \
 	use\"dtd001.sml\"; use\"imp001.sml\"; \
 	use\"dtd122.sml\"; use\"imp122.sml\"; \
 	use\"imp123.sml\";
-HOLMAKEDBCMD=	PPBuild.pp'save ();
-HOLSTARTCMD= \
-	{	{ echo "$(HOLSTARTMLCMD)" | poly ; } && \
-		{ polyc $(POLYLINKFLAGS) -o pp-ml pp-ml.o ; } && \
-		{ echo "$(HOLMAKEDBCMD)" | pp-ml ; } }
-# Command to run ML
-RUNML="pp-ml"
-MLDBPFX=""
-# Command to garbage-collect the database
-DBGC="pp-ml"
-DBGCARG="-c"
-# Any programs we make that need exporting
-MLPROGS=pp-ml
-else
-ifeq ($(PPCOMPILER), SMLNJ)
-# Architecture type (used as a file-name suffix for images by NJML)
-HEAP_SUFFIX=		$(shell eval `.arch-n-opsys`; echo $$HEAP_SUFFIX)
-# Commands to build the empty database
-HOLSTARTMLCMD= \
-	val system_version : string = \"$(VERSION)\";\
-	val build_date : Date.date = Date.fromTimeLocal(Time.now());\
-	use\"dtd108.sml\"; use\"imp108.sml\"; \
-	use\"dtd002.sml\"; use\"imp002.sml\"; \
-	use\"dtd001.sml\"; use\"imp001.sml\"; \
-	use\"dtd122.sml\"; use\"imp122.sml\"; \
-	use\"dtd123.sml\"; use\"imp123.sml\"; \
-	SMLofNJ.exportML \"$(HOLDBNAME)\";
-HOLSTARTCMD= echo "$(HOLSTARTMLCMD)" | sml
-# Command to run ML
-RUNML="sml"
-MLDBPFX="@SMLload="
-# Command to garbage-collect the database
-DBGC="echo"
-DBGCARG="database garbage collection not needed with SML/NJ"
-# Any programs we make that need exporting
-MLPROGS=
-endif
-endif
-# database names
-HOLDBNAME=	hol
-HOLDB=		$(HOLDBNAME).$(HEAP_SUFFIX)
-HOLDBLDD=	$(HOLDBNAME).ldd
 
-
-PPUTF8SMLFILES=dtd108.sml imp108.sml dtd001.sml imp001.sml dtd002.sml imp002.sml
-PPUTF8SMLFILES+=dtd122.sml imp122.sml dtd123.sml imp123.sml
-
-bld: pputf8 utf8pp
+bld: pputf8 utf8pp entities.sml entities.h
 
 pputf8: pputf8.o
 	$(CC) $(CFLAGS) -o pputf8 pputf8.o
@@ -303,18 +273,8 @@ pputf8.o: imp123.sml pputf8tab.h
 
 utf8pp.o: imp123.sml utf8pptab.h
 
-pputf8tab.h utf8pptab.h: dtd123.sml $(HOLDBLDD)
-#	cat imp123.sml | $(RUNML) $(HOLDB)
-
-$(HOLDBLDD): $(PPUTF8SMLFILES)
-	rm -f $(HOLDB)
-	@echo Compiling {dtd,imp}{108,002,001,122,123}.sml, 
-	$(HOLSTARTCMD) > dtd108.ldd0
-	@echo "See dtd108.ldd0" > imp108.ldd0
-	chmod u+wr $(HOLDB)
-	@touch $(HOLDBLDD)
-	@touch dtd108.ldd0 imp108.ldd dtd001.ldd imp001.ldd dtd002.ldd imp002.ldd
-	@touch dtd122.ldd imp122.ldd dtd123.ldd imp123.ldd
+pputf8tab.h utf8pptab.h: $(IMP100SCRIPTS) $(PPUTF8SMLFILES)
+	@echo "$(PPUTF8CMD)" | $(RUNML) > pputf8.ldd
 
 ######################################################################
 #
@@ -395,7 +355,7 @@ clean:
 		docdvi docpr docsml doctch doctds \
 		$(PPTEXBINRELEASE) $(PPTEXETCRELEASE) \
 		USR.sty hol1.sty imp096.c imp096.sieveview \
-		findfile.c pptex_common
+		findfile.c pptex_common entities.sml entities.h
 
 ######################################################################
 #
@@ -404,7 +364,7 @@ clean:
 ######################################################################
 
 %.sml: %.doc
-	docsml $*
+	sieve sml < $*.doc > $*.sml
 
 %.tex: %.doc
 	doctex $*
