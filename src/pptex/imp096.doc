@@ -950,6 +950,42 @@ grumble(char *fmt,
 
 \subsection{Keyword Information}
 
+The changes for support of {\tt utf-8} result in the keyword file being used to record UNICODE code points instead of extended character codes, with a separate fixed mapping between extended characters and UNICODE code points generated as .h files at pptex build time by dtd096 using the utf8 structure in imp122, and then included into the sieve program.
+
+
+\HOLindex_Entry{uni_to_pp_entry_cmp}
+\HOLindex_Entry{uni_to_kw}
+\HOLindex_Entry{uni_to_pp}
+=SIEVE_PROG
+*/
+int uni_to_pp_entry_cmp(const void *buf1, const void *buf2)
+{
+	const unicode_to_pp_entry *u1 = buf1, *u2 = buf2;
+	return  u1->code_point - u2->code_point;
+}
+
+const char *uni_to_kw(unicode code_point)
+{
+	static char buf[10];
+	sprintf(buf, "%%x%06X%%", code_point);
+	return buf;
+}
+
+/* This procedure needs to be upgraded to supply named keywords */
+
+const char *uni_to_pp(unicode cp)
+{	
+	unicode_to_pp_entry key, *search_result;
+	key.code_point = cp;
+	search_result = bsearch(&key, unicode_to_pp,
+		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), uni_to_pp_entry_cmp);
+	return search_result != 0 ?
+		search_result->pp_char :
+		uni_to_kw(cp);
+}
+/*
+=TEX
+
 Definitions of extended characters and percent keywords used by
 sieve.
 
@@ -967,9 +1003,10 @@ characters.
 =SIEVE_PROG
 */
 struct keyword_information{
+	unicode uni;		/* the UNICODE code point, -1 => none */
 	short ech;		/* extended character code, -1 => none */
 	short orig_kind;	/* As read from keyword file */
-	short act_kind;	/* allowing for KW_SAMEAS */
+	short act_kind;		/* allowing for KW_SAMEAS */
 #define KW_NOT_SET 0
 #define KW_SIMPLE 1
 #define KW_INDEX 2
@@ -981,9 +1018,9 @@ struct keyword_information{
 #define KW_WHITE 8
 	char *name;		/* The keyword */
 	char *macro;		/* Equivalent macro, or NULL */
-	regex_t *tex_arg;		/* R.E. defining the TeX argument of this keyword, if non-null */
+	regex_t *tex_arg;	/* R.E. defining the TeX argument of this keyword, if non-null */
 	char tex_arg_sense;	/* How to interpret the R.E. */
-#define KW_RE_MATCH 0	/* The argument must match the R.E. */
+#define KW_RE_MATCH 0		/* The argument must match the R.E. */
 #define KW_RE_DELIMITER 1	/* The argument is delimited by something that matches the R.E. */
 };
 /*
@@ -1005,7 +1042,7 @@ binary search of the keyword names.
 \HOLindexEntry{keyword..kw_information}
 =SIEVE_PROG
 */
-#define MAX_KEYWORDS 1000
+#define MAX_KEYWORDS 4000
 #define MAX_KW_LEN 50
 
 struct kw_information {
@@ -1013,6 +1050,10 @@ struct kw_information {
 	int max_kw_len;
 	struct keyword_information *char_code[256];
 		/*	Char codes are set to NULL in "initialize", they are
+			set to their proper values by "conclude_keywordfile".
+		*/
+	struct keyword_information *unicode_code[MAX_KEYWORDS];
+		/*	Unicode codes are set to NULL in "initialize", they are
 			set to their proper values by "conclude_keywordfile".
 		*/
 	struct keyword_information keyword[MAX_KEYWORDS];
@@ -1034,6 +1075,7 @@ arguments.
 void
 add_new_keyword(
 	char *name,
+	unicode uni,
 	int code,
 	int kind,
 	char *macro,
@@ -2479,7 +2521,7 @@ initialize(void)
 	for(i=0; i<256; i++)
 		kwi.char_code[i] = NULL;
 
-	add_new_keyword("%%", -1, KW_SIMPLE, "\\%", NULL, 0);
+	add_new_keyword("%%", -1, -1, KW_SIMPLE, "\\%", NULL, 0);
 
 	SET_DIRECTIVE_CHAR('%');
 	SET_DIRECTIVE_CHAR('=');
@@ -3160,6 +3202,40 @@ get_char_code(char *line, int *value)
 	}
 }
 /*
+
+\HOLindexEntry{get_char_unicode}
+{\tt get_char_unicode} : Extract a character unicode code point from {\tt line}, if a
+code is obtained then return 1 and set {\tt value} to the code found.
+If no code found then return 0 and set "value" to 0.
+
+Unicode code points are one of:  hex with a leading "0x" or "0X"; octal
+with a leading "0"; or decimal numbers.  They must be in the
+range~$-1\sb{10}$ to~$ffffff\sb{16}$.
+
+=SIEVE_PROG
+*/
+int
+get_char_unicode(char *line, unicode *value)
+{
+	int ch = -1;		/* -1 ==> not a valid code */
+
+	int scan_ans;
+	int len;
+
+	scan_ans = sscanf(line, "%i%n", &ch, &len);
+
+	if(scan_ans != 1 || len != strlen(line))
+		ch = -1;
+
+	if(ch >= -1 && ch <= 0xFFFFFF) {
+		*value = ch;
+		return(1);
+	} else {
+		*value = 0;
+		return(0);
+	}
+}
+/*
 =TEX
 A keyword may be defined to have a {\TeX} argument, given as a regular expression
 following a {\#} sign not escaped by a backslash in the macro part of the keyword file line.
@@ -3362,7 +3438,7 @@ read_keyword_file(char *name)
 				}
 			}
 
-			add_new_keyword(strdup(def_kw), -1, KW_SAMEAS_UNKNOWN,
+			add_new_keyword(strdup(def_kw), -1, -1, KW_SAMEAS_UNKNOWN,
 				strdup(code_kw_str), NULL, 0);
 		} else {
 
@@ -3385,7 +3461,7 @@ read_keyword_file(char *name)
 
 			get_tex_arg(macro, &tex_arg, &tex_arg_sense);
 
-			add_new_keyword(strdup(def_kw), code, kind,
+			add_new_keyword(strdup(def_kw), code,  code, kind,
 				macro != NULL && macro[0] != '\0'
 			?	strdup(macro)
 			:	(char*)NULL,
