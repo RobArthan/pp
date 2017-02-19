@@ -40,7 +40,7 @@ it sets up suit your needs. When you are happy with it, source it:
 It is useful to know the dependencies between the packages.
 
 - pptex has no dependencies
-- dev depends on pptex (but only for typesetting the documentation)
+- dev depends on pptex
 - xpp depends on pptex
 - hol depends on dev
 - zed depends on hol
