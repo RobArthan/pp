@@ -41,7 +41,7 @@ It is useful to know the dependencies between the packages.
 
 - pptex has no dependencies
 - dev depends on pptex (but only for typesetting the documentation)
-- xpp depends on pptex (but only for typesetting the documentation)
+- xpp depends on pptex
 - hol depends on dev
 - zed depends on hol
 - daz depends on zed
