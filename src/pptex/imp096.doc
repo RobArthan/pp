@@ -225,6 +225,15 @@ each program, the {\tt main} function for {\tt findfile} is enclosed in
 a C comment so that is not compiled as part of {\tt sieve}, it is
 also enclosed in directives so that it may be extracted to create the
 {\tt findfile} program.
+C code for handling utf-8 and UNICODE is also included and separately
+extracted so that it may be used also in xpp, and is also enclosed in
+comments so that it is ignored when this source is compiled as C, and
+later extracted by sieve.
+The first version of this is extracted by a version of sieve which does
+not support utf8, and is then added to the repository so that it does
+not need to be extracted for first compilation of sieve.
+When this code is amended, it is important to check that sieve is
+working OK before comitting the new version into the repository.
 
 Full processing of the file holding the source text of this document
 requires a view file which contains the text in
@@ -269,6 +278,8 @@ This document has the following textual categories.
 	of this document.
 
 \item{SIEVE_PROG} for the {\tt sieve} program.
+
+\item{UTF8_MODULE} for a module of unicode/utf8 facilities shared with xpp..
 
 \item{FINDFILE_PROG} for the {\tt findfile} program.
 
@@ -340,6 +351,11 @@ of the file and thus prevent this document being properly processed.
 		cat verbatim
 		echonl \end{GFTXQ}
 	
+	=UTF8_MODULE tex
+		echonl \begin{GFTXQ}{utf8 module}
+		cat verbatim
+		echonl \end{GFTXQ}
+	
 	=SIEVE_PROG  tex
 		echonl \begin{GFTXQ}{sieve program}
 		cat verbatim
@@ -359,6 +375,7 @@ of the file and thus prevent this document being properly processed.
 	# For the sieveview view everything except the view file is discarded
 	
 	=TEX			sieveview	ignore
+	=UTF8_MODULE	sieveview	ignore
 	=SIEVE_PROG	sieveview	ignore
 	=FINDFILE_PROG	sieveview	ignore
 	=FIND_FILE_FUN	sieveview	ignore
@@ -367,11 +384,21 @@ of the file and thus prevent this document being properly processed.
 		filter sed -e 's/^	//'
 	
 	
+	# For the utf8_module view everything except UTF8_MODULE is discarded
+	
+	=TEX			utf8_module	ignore
+	=SIEVEVIEW	utf8_module	ignore
+	=UTF8_MODULE	utf8_module	cat
+	=SIEVE_PROG	utf8_module	ignore
+	=FINDFILE_PROG	utf8_module	ignore
+	=FIND_FILE_FUN	utf8_module	ignore
+	
 	# For the sieve program view everything except sieve and the find_file
 	# utility are discarded
 	
 	=TEX			sieve_prog	ignore
 	=SIEVEVIEW	sieve_prog	ignore
+	=UTF8_MODULE	sieve_prog	ignore
 	=SIEVE_PROG	sieve_prog	cat
 	=FINDFILE_PROG	sieve_prog	ignore
 	=FIND_FILE_FUN	sieve_prog	cat
@@ -418,6 +445,273 @@ the indexing mechanism of the other documents --- in fact it is this
 program that enables this indexing mechanism to be used.  Thus the
 index of this document contains approximate page numbers for each
 declared item, some index entries may be one page early.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{UTF8 MODULE}
+
+\subsection{Identification}
+
+Note that all the code here is within the C comment when the source
+file as whole is compiled, and must not therefore contain an
+end-of-comment symbol.
+
+The include file unicodepptab.h is automatically generated from some ML
+code. It contains an array of records each containing a Unicode code
+point (represented as a signed int) and the corresponding ProofPower character.
+The array is sorted by * the code point and we do the associative lookup with bsearch.
+
+=UTF8_MODULE
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "unicodepptab.h"
+#include "ppunicodetab.h"
+#include "pputf8.h"
+int unicodepp_error = 0;
+int line;
+=TEX
+=UTF8_MODULE
+int unicode_to_pp_entry_cmp(const void *buf1, const void *buf2)
+{
+	const unicode_to_pp_entry *u1 = buf1, *u2 = buf2;
+	return  u1->code_point - u2->code_point;
+}
+=TEX
+=UTF8_MODULE
+const char *unicode_to_kw(unicode code_point)
+{
+	static char buf[10];
+	sprintf(buf, "%%x%06X%%", code_point);
+	return buf;
+}
+=TEX
+=UTF8_MODULE
+const char unicode2ppi(unicode cp)
+{	
+	unicode_to_pp_entry key, *search_result;
+	key.code_point = cp;
+	search_result = bsearch(&key, unicode_to_pp,
+		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), unicode_to_pp_entry_cmp);
+	return (search_result=NULL) ? (char) 0 : search_result -> pp_char;
+}
+const char *unicode2ppk(unicode cp)
+{	
+	unicode_to_pp_entry key;
+	char search_result;
+	key.code_point = cp;
+	search_result = unicode2ppi(cp);
+	return (search_result=(char)0) ? NULL : unicode_to_kw(cp);
+}
+=TEX
+If invalid UTF-8 is found, output an error message and skip to
+the next new line.
+=UTF8_MODULE
+unicode invalid_unicode(void)
+{
+	int whatgot;
+	fprintf(stderr, "utf8pp: line %d: invalid utf-8 input\n", line);
+	unicodepp_error = 1;
+	whatgot = getchar();
+	while(whatgot != '\n' && whatgot != EOF) {
+		whatgot = getchar();
+	}
+	if(whatgot == '\n') {
+		line += 1;
+	}
+	return whatgot & 0xff;
+}
+=TEX
+=UTF8_MODULE
+unicode get_code_point(void)
+{
+	int whatgot, r, l;
+	whatgot = getchar();
+	if(whatgot == EOF) { return 0; }
+	if(whatgot == '\n') { line += 1; }
+	r = whatgot & 0xff;
+	if(r <= 0x7f) { return r; }
+	l = 0;
+	while(r & 0x80) {
+		r = (r & 0x7f) << 1;
+		l += 1;
+	}
+	if(l > 4) { return invalid_unicode(); }
+	r = r >> l;
+	while(--l) {
+		whatgot = getchar();
+		if(whatgot == EOF || ((whatgot & 0xc0) != 0x80)) {
+			return invalid_unicode();
+		}
+		r = (r << 6) | (whatgot & 0x3f);
+	}
+	return r;
+}
+=TEX
+=UTF8_MODULE
+void do_unicode_to_pp(void)
+{
+	unicode cp;
+	const char *pp_string;
+	cp = get_code_point();
+	while(cp) {
+		pp_string = unicode2ppk(cp);
+		printf("%s", pp_string);
+		cp = get_code_point();
+	}
+}
+=TEX
+=IGNORE
+void usage(void)
+{
+	printf("utf8pp"
+		": convert UTF-8 to ProofPower extended character format\n");
+	printf("utf8pp: usage: unicodepp < input_file > output_file\n");
+}
+=TEX
+=IGNORE
+int main (int argc, char *argv[])
+{
+	line = 1;
+	if(argc == 1) {
+		do_unicode_to_pp();
+		return ferror(stdin) || ferror(stdout) || unicodepp_error;
+	} else {
+		usage();
+		return 0;
+	}
+}
+=TEX
+=UTF8_MODULE
+=TEX
+=UTF8_MODULE
+enum {	S_INITIAL,
+	S_HAVE_PERCENT,
+	S_HAVE_X,
+	S_HAVE_HEXIT_1,
+	S_HAVE_HEXIT_2,
+	S_HAVE_HEXIT_3,
+	S_HAVE_HEXIT_4,
+	S_HAVE_HEXIT_5,
+	S_HAVE_HEXIT_6,
+	S_HAVE_KEYWORD};
+
+typedef char bool;
+
+enum {False = 0, True = 1};
+=TEX
+=UTF8_MODULE
+static bool is_uc_hexit(char ch)
+{
+	return ('0' <= ch && ch <= '9') || ('A' <= ch && ch <= 'F');
+}
+=TEX
+=UTF8_MODULE
+static bool is_percent(char ch)
+{
+	return ch == '%';
+}
+=TEX
+=UTF8_MODULE
+static bool is_x(char ch)
+{
+	return ch == 'x';
+}
+=TEX
+=UTF8_MODULE
+static void do_chars(int len, char *cs)
+{
+	while(len--) {
+		printf("%s", pp_to_unicode[(int)*cs++ & 0xff]);
+	}
+}
+=TEX
+=UTF8_MODULE
+static bool do_keyword(unsigned u)
+{
+	if(u <= 0x7f) {
+		return False;
+	} else if (u <= 0x7ff) {
+		putchar(0xc0u | (u >> 6u));
+		putchar(0x80u | (u & 0x3fu));
+		return True;
+	} else if (u <= 0xffff) {
+		putchar(0xe0u | (u >> 12u));
+		putchar(0x80u | ((u & 0xfc0u) >> 6u));
+		putchar(0x80u | (u & 0x3fu));
+		return True;
+	} else if (u <= 0x10ffffu) {
+		putchar(0xf0u | (u >> 18u));
+		putchar(0x80u | ((u & 0x3f000u) >> 12u));
+		putchar(0x80u | ((u & 0xfc0u) >> 6u));
+		putchar(0x80u | (u & 0x3fu));
+		return True;
+	} else {
+		return False;
+	}
+}
+=TEX
+=UTF8_MODULE
+#define STEP(TST, ST) \
+	if((TST)(whatgot)) {\
+		state = (ST);\
+	} else {\
+		do_chars(l, buf);\
+		l = 0;\
+		state = S_INITIAL;\
+	};\
+	break;
+=TEX
+=UTF8_MODULE
+static void do_pp_to_unicode (void)
+{
+	int whatgot, state, l;
+	char buf[9];
+	unsigned u;
+	l = 0;
+	state = S_INITIAL;
+	while ((whatgot = getchar()) != EOF) {
+		buf[l++] = whatgot;
+		switch(state) {
+			case S_INITIAL:      STEP(is_percent,  S_HAVE_PERCENT);
+			case S_HAVE_PERCENT: STEP(is_x,              S_HAVE_X);
+			case S_HAVE_X:       STEP(is_uc_hexit, S_HAVE_HEXIT_1);
+			case S_HAVE_HEXIT_1: STEP(is_uc_hexit, S_HAVE_HEXIT_2);
+			case S_HAVE_HEXIT_2: STEP(is_uc_hexit, S_HAVE_HEXIT_3);
+			case S_HAVE_HEXIT_3: STEP(is_uc_hexit, S_HAVE_HEXIT_4);
+			case S_HAVE_HEXIT_4: STEP(is_uc_hexit, S_HAVE_HEXIT_5);
+			case S_HAVE_HEXIT_5: STEP(is_uc_hexit, S_HAVE_HEXIT_6);
+			case S_HAVE_HEXIT_6: STEP(is_percent,  S_HAVE_KEYWORD);
+		}
+		if(state == S_HAVE_KEYWORD) {
+			sscanf(&buf[2], "%6X", &u);
+			if(!do_keyword(u)) { do_chars(l, buf); }
+			l = 0;
+			state = S_INITIAL;
+		}
+	}
+}
+=TEX
+=IGNORE
+static void usage(void)
+{
+	printf("pputf8"
+		": convert ProofPower extended character format to UTF-8\n");
+	printf("usage: pputf8 < input_file > output_file\n");
+}
+=TEX
+=IGNORE
+int main (int argc, char *argv[])
+{
+	if(argc == 1) {
+		do_pp_to_unicode();
+		return ferror(stdin) || ferror(stdout);
+	} else {
+		usage();
+		return 0;
+	}
+}
+=TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
@@ -469,6 +763,7 @@ char *coprlemma1 =
 #include <unistd.h>
 #include "ppunicodetab.h"
 #include "unicodepptab.h"
+#include "pputf8.h"
 #ifdef __CYGWIN__
 #include <locale.h>
 #endif
@@ -973,15 +1268,14 @@ const char *uni_to_kw(unicode code_point)
 
 /* This procedure needs to be upgraded to supply named keywords */
 
-const char *uni_to_pp(unicode cp)
+const int uni_to_pp(unicode cp)
 {	
 	unicode_to_pp_entry key, *search_result;
 	key.code_point = cp;
+	if (cp<128) return cp;
 	search_result = bsearch(&key, unicode_to_pp,
 		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), uni_to_pp_entry_cmp);
-	return search_result != 0 ?
-		search_result->pp_char :
-		uni_to_kw(cp);
+	return search_result != NULL ? (unsigned char)search_result->pp_char : -1;
 }
 /*
 =TEX
@@ -1026,7 +1320,7 @@ struct keyword_information{
 /*
 =TEX
 
-Information about keywords is gather into a single structure {\tt
+Information about keywords is gathered into a single structure {\tt
 kw_information}, this structure is statically allocated.  It holds data
 about each keyword sorted by keyword and by character code.  The two
 {\tt keyword_information} structures refer to the same data items
@@ -1076,7 +1370,6 @@ void
 add_new_keyword(
 	char *name,
 	unicode uni,
-	int code,
 	int kind,
 	char *macro,
 	regex_t * tex_arg,
@@ -1112,13 +1405,18 @@ add_new_keyword(
 	kwi.num_keywords++;
 
 	ki->name = name;
-	ki->ech = code;
+	ki->ech = uni_to_pp(uni);
+	ki->uni = uni;
 	ki->orig_kind = orig_kind;
 	ki->act_kind = kind;
 	ki->macro = macro;
 	ki-> tex_arg = tex_arg;
 	ki-> tex_arg_sense = tex_arg_sense;
 
+	if (debug & D_SHOW_KEYWORD_TABLE) {
+	   PRINTF("add_keyword: %s ext: %d uni %x\n", name, ki->ech, uni);
+	};
+	
 	if(kwi.num_keywords>1 && strcmp(kwi.keyword[kwi.num_keywords-1].name,
 				name) < 0) {
 		grumble1("keywords unsorted", &keyword_F, true);
@@ -1191,6 +1489,7 @@ show_one_keyword(struct keyword_information *ki)
 {
 	PRINTF("(%p)",		ki);
 	PRINTF(" ech=%4d",		ki->ech);
+	PRINTF(" uni=%8x",		ki->uni);
 	PRINTF("  ty=");
 	show_kw_kind(ki->act_kind);
 	if(ki->act_kind != ki->orig_kind) {
@@ -2521,7 +2820,7 @@ initialize(void)
 	for(i=0; i<256; i++)
 		kwi.char_code[i] = NULL;
 
-	add_new_keyword("%%", -1, -1, KW_SIMPLE, "\\%", NULL, 0);
+	add_new_keyword("%%", -1, KW_SIMPLE, "\\%", NULL, 0);
 
 	SET_DIRECTIVE_CHAR('%');
 	SET_DIRECTIVE_CHAR('=');
@@ -3175,8 +3474,11 @@ code is obtained then return 1 and set {\tt value} to the code found.
 If no code found then return 0 and set "value" to 0.
 
 Character codes are one of:  hex with a leading "0x" or "0X"; octal
-with a leading "0"; or decimal numbers.  They must be in the
-range~$-1\sb{10}$ to~$255\sb{10}$.
+with a leading "0"; or decimal numbers.
+Character codes are now expected to be UNICODE code points.
+They must be in the range~$-1\sb{10}$ to~$xFFFFFF\sb{16}$ (this needs to be refined a bit).
+
+
 
 =SIEVE_PROG
 */
@@ -3193,7 +3495,7 @@ get_char_code(char *line, int *value)
 	if(scan_ans != 1 || len != strlen(line))
 		ch = -1;
 
-	if(ch >= -1 && ch <= 255) {
+	if(ch >= -1 && ch <= 0xFFFFFF) {
 		*value = ch;
 		return(1);
 	} else {
@@ -3438,11 +3740,11 @@ read_keyword_file(char *name)
 				}
 			}
 
-			add_new_keyword(strdup(def_kw), -1, -1, KW_SAMEAS_UNKNOWN,
+			add_new_keyword(strdup(def_kw), -1, KW_SAMEAS_UNKNOWN,
 				strdup(code_kw_str), NULL, 0);
 		} else {
 
-			if(!get_char_code(code_kw_str, &code)) {
+			if(!get_char_unicode(code_kw_str, &code)) {
 				grumble1("unreadable or out of range char code",
 					&keyword_F, true);
 				continue;					/* CONTINUE */
@@ -3461,7 +3763,7 @@ read_keyword_file(char *name)
 
 			get_tex_arg(macro, &tex_arg, &tex_arg_sense);
 
-			add_new_keyword(strdup(def_kw), code,  code, kind,
+			add_new_keyword(strdup(def_kw), code, kind,
 				macro != NULL && macro[0] != '\0'
 			?	strdup(macro)
 			:	(char*)NULL,
