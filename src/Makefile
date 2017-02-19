@@ -25,6 +25,6 @@ daz.ldd:	zed.ldd
 	cd daz; make -f daz.mkf clean; make -f daz.mkf inst
 	touch daz.ldd
 
-lsb:
+list:
 	ls -lR ../bld/bin ../bld/db
 
