@@ -463,14 +463,244 @@ The array is sorted by * the code point and we do the associative lookup with bs
 
 =UTF8_MODULE
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
+#include <signal.h>
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <regex.h>
+#include <unistd.h>
 #include "unicodepptab.h"
 #include "ppunicodetab.h"
-#include "pputf8.h"
 int unicodepp_error = 0;
 int line;
+char * program_name = "";
 =TEX
+
+\subsection{Diagnostics}
+
+Several diagnostic outputs are provided, they are controlled by the
+{\tt-d} command option which sets the {\tt utf8_debug} flag.
+These outputs are written to the standard output.
+
+\HOLindexEntry{debug}
+\HOLindexEntry{D_\ldots}
+=UTF8_MODULE
+int debug = 0;
+#define D_SHOW_KEYWORD_TABLE 2
+#define D_GET_KW 128
+=IGNORE
+#define D_INIT_TABLES 4
+#define D_READ_SOURCE_LINE 8
+#define D_DECODE_DIR_LINE 16
+#define D_ACTIONS 32
+#define D_SHOW_FULL_SIEVE_TABLE 64
+#define D_OPEN_OUTPUT 256
+#define D_MAIN_CONVERT_CH 512
+#define D_PROCESS_LINE 1024
+#define D_EXPAND 2048
+#define D_READ_STEER_LINE 4096
+#define D_8192 8192
+=TEX
+
+\subsection{Error Reporting}
+
+A standard style of error message starts with the text provided by {\tt
+error_top} which does not output any newline characters.
+Simple error messages may be produced using the function given after {\tt
+error_top}, more complex cases use {\tt fprintf}.
+The program attempts to check its own processing, any detected problems
+are reported via function {\tt internal_error}.
+
+\HOLindexEntry{file_data}
+\HOLindexEntry{name..file_data}
+\HOLindexEntry{line_no..file_data}
+\HOLindexEntry{grumbles..file_data}
+\HOLindexEntry{fp..file_data}
+\HOLindexEntry{cur_line..file_data}
+\HOLindexEntry{EXIT}
+
+=UTF8_MODULE
+#define FPRINTF (void)fprintf
+#define PRINTF (void)printf
+#define PUTC (void)putc
+#define MAX_LINE_LEN 1024
+#define NOT_FOUND (-1)
+
+struct file_data{
+	char *name;
+	char *file_name;
+	int line_no;
+	int grumbles;
+	FILE *fp;
+	char cur_line[MAX_LINE_LEN+1];
+};
+
+void
+EXIT(int n)
+{
+	if(debug) FPRINTF(stderr, "%s: exiting with code %d\n", program_name, n);
+
+	if(n != 0) n = 1;
+
+	(void)exit(n);
+}
+
+typedef char bool;
+
+enum {False = 0, True = 1};
+
+#define bool short
+#define true 1
+#define false 0
+=TEX
+
+{\tt grumble1} and {\tt grumble} : Print warning messages about a
+particular file.  Arguments {\tt fmt} and {\tt msg} give the
+message to print where {\tt fmt} is used as a format specifier to
+{\tt fprintf} and {\tt msg} is a simple character string.
+Argument {\tt file_F} gives the file identity.
+When argument {\tt show_line} is true the line number in the file and
+the line are printed.
+
+\HOLindexEntry{grumble\ldots}
+=UTF8_MODULE
+void
+grumble1(char *msg,
+	struct file_data *file_F,
+	int show_line)
+{
+	FPRINTF(stderr, "%s", program_name);
+	if(show_line) {
+		FPRINTF(stderr, ": line %d of %s", file_F->line_no, file_F->name);
+		if(file_F->file_name != 0) FPRINTF(stderr, " %s", file_F->file_name);
+	}
+	FPRINTF(stderr, ": %s\n", msg);
+	if(show_line) FPRINTF(stderr, "\t%s\n", file_F->cur_line);
+
+	file_F->grumbles ++;
+}
+
+void
+grumble(char *fmt,
+	char *msg,
+	struct file_data *file_F,
+	int show_line)
+{
+	FPRINTF(stderr, "%s", program_name);
+	if(show_line) {
+		FPRINTF(stderr, ": line %d of %s", file_F->line_no, file_F->name);
+		if(file_F->file_name != 0) FPRINTF(stderr, " %s", file_F->file_name);
+	}
+	PUTC(':', stderr);
+	PUTC(' ', stderr);
+	FPRINTF(stderr, fmt, msg);
+	PUTC('\n', stderr);
+	if(show_line) FPRINTF(stderr, "\t%s\n", file_F->cur_line);
+
+	file_F->grumbles ++;
+}
+=TEX
+
+\HOLindexEntry{error\ldots}
+\HOLindexEntry{internal_error}
+
+=UTF8_MODULE
+void
+error_top(void)
+{
+	FPRINTF(stderr, "%s: ", program_name);
+}
+
+void
+error1(char *msg)
+{
+	error_top();
+	FPRINTF(stderr, "%s", msg);
+	PUTC('\n', stderr);
+}
+
+void
+error(char *fmt, char *msg)
+{
+	error_top();
+	FPRINTF(stderr, fmt, msg);
+	PUTC('\n', stderr);
+}
+
+void
+internal_error(char *fmt, char *msg)
+{
+	FPRINTF(stderr, "%s: possible internal error\n  ", program_name);
+	FPRINTF(stderr, fmt, msg);
+	PUTC('\n', stderr);
+}
+=TEX
+\HOLindexEntry{print_unix_error}
+\HOLindexEntry{unix_error1}
+\HOLindexEntry{unix_error}
+=UTF8_MODULE
+void
+print_unix_error1(int eno)
+{
+	char *msg = strerror(eno);
+
+	if(msg != NULL) {
+		FPRINTF(stderr, "\n\t%s\n", msg);
+	} else {
+		FPRINTF(stderr, "\n	unix error code: %d\n", eno);
+	}
+}
+
+void
+unix_error1(char *msg)
+{
+	extern int errno;
+	int save_errno = errno;
+
+	error_top();
+	FPRINTF(stderr, "%s", msg);
+
+	print_unix_error1(save_errno);
+}
+
+void
+unix_error(char *fmt, char *msg)
+{
+	extern int errno;
+	int save_errno = errno;
+
+	error_top();
+	FPRINTF(stderr, fmt, msg);
+
+	print_unix_error1(save_errno);
+}
+=TEX
+
+{\tt malloc_and_check} : Memory is allocated for various purposes, this
+routine allocates and checks that the allocation succeeded.  Parameter
+{\tt err} holds a code number indicating which part of the program
+wanted the memory
+
+\HOLindexEntry{malloc_and_check}
+=UTF8_MODULE
+void *
+malloc_and_check(unsigned size, int err)
+{
+	void * area;
+
+	area = malloc(size);
+
+	if(area == NULL) {
+		error1("cannot allocate work area");
+		EXIT(err);
+	}
+
+	return(area);
+}
+=TEX
+
 =UTF8_MODULE
 int unicode_to_pp_entry_cmp(const void *buf1, const void *buf2)
 {
@@ -583,8 +813,6 @@ int main (int argc, char *argv[])
 }
 =TEX
 =UTF8_MODULE
-=TEX
-=UTF8_MODULE
 enum {	S_INITIAL,
 	S_HAVE_PERCENT,
 	S_HAVE_X,
@@ -596,30 +824,27 @@ enum {	S_INITIAL,
 	S_HAVE_HEXIT_6,
 	S_HAVE_KEYWORD};
 
-typedef char bool;
-
-enum {False = 0, True = 1};
 =TEX
 =UTF8_MODULE
-static bool is_uc_hexit(char ch)
+bool is_uc_hexit(char ch)
 {
 	return ('0' <= ch && ch <= '9') || ('A' <= ch && ch <= 'F');
 }
 =TEX
 =UTF8_MODULE
-static bool is_percent(char ch)
+bool is_percent(char ch)
 {
 	return ch == '%';
 }
 =TEX
 =UTF8_MODULE
-static bool is_x(char ch)
+bool is_x(char ch)
 {
 	return ch == 'x';
 }
 =TEX
 =UTF8_MODULE
-static void do_chars(int len, char *cs)
+void do_chars(int len, char *cs)
 {
 	while(len--) {
 		printf("%s", pp_to_unicode[(int)*cs++ & 0xff]);
@@ -627,7 +852,7 @@ static void do_chars(int len, char *cs)
 }
 =TEX
 =UTF8_MODULE
-static bool do_keyword(unsigned u)
+bool do_keyword(unsigned u)
 {
 	if(u <= 0x7f) {
 		return False;
@@ -663,7 +888,7 @@ static bool do_keyword(unsigned u)
 	break;
 =TEX
 =UTF8_MODULE
-static void do_pp_to_unicode (void)
+void do_pp_to_unicode (void)
 {
 	int whatgot, state, l;
 	char buf[9];
@@ -693,7 +918,7 @@ static void do_pp_to_unicode (void)
 }
 =TEX
 =IGNORE
-static void usage(void)
+void usage(void)
 {
 	printf("pputf8"
 		": convert ProofPower extended character format to UTF-8\n");
@@ -713,31 +938,641 @@ int main (int argc, char *argv[])
 }
 =TEX
 
+\subsection{Keyword Information}
+
+The changes for support of {\tt utf-8} result in the keyword file being used to record UNICODE code points instead of extended character codes, with a separate fixed mapping between extended characters and UNICODE code points generated as .h files at pptex build time by dtd096 using the utf8 structure in imp122, and then included into the sieve program.
+
+
+\HOLindex_Entry{uni_to_pp_entry_cmp}
+\HOLindex_Entry{uni_to_kw}
+\HOLindex_Entry{uni_to_pp}
+=UTF8_MODULE
+int uni_to_pp_entry_cmp(const void *buf1, const void *buf2)
+{
+	const unicode_to_pp_entry *u1 = buf1, *u2 = buf2;
+	return  u1->code_point - u2->code_point;
+}
+
+const char *uni_to_kw(unicode code_point)
+{
+	static char buf[10];
+	sprintf(buf, "%%x%06X%%", code_point);
+	return buf;
+}
+=TEX
+This procedure needs to be upgraded to supply named keywords
+=UTF8_MODULE
+const int uni_to_pp(unicode cp)
+{	
+	unicode_to_pp_entry key, *search_result;
+	key.code_point = cp;
+	if (cp<128) return cp;
+	search_result = bsearch(&key, unicode_to_pp,
+		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), uni_to_pp_entry_cmp);
+	return search_result != NULL ? (unsigned char)search_result->pp_char : -1;
+}
+=TEX
+Definitions of extended characters and percent keywords used by
+sieve.
+
+\subsection{Input File Controls}
+
+For each of the files read during the sieving process various data is
+held.
+
+An attempt is made to read the whole of the view file and the keyword
+file issuing complaints as they read, these faults are counted so that
+if any were found the program will stop.  All faults should be reported
+via function {\tt grumble} or {\tt grumble1}, additional information
+may be output using {\tt fprintf}.
+
+Need to hold details of all the extended characters and their
+equivalent keywords.  Each keyword is held with its enclosing percent
+characters.
+
+\HOLindexEntry{keyword_F}
+\HOLindexEntry{keyword_information}
+\HOLindexEntry{ech..keyword_information}
+\HOLindexEntry{orig_kind..keyword_information}
+\HOLindexEntry{act_kind..keyword_information}
+\HOLindexEntry{name..keyword_information}
+\HOLindexEntry{macro..keyword_information}
+\HOLindexEntry{KW_\ldots}
+=UTF8_MODULE
+struct file_data keyword_F = 	{ "keyword file", 0, 0, 0 };
+
+struct keyword_information{
+	unicode uni;		
+	short ech;		
+	short orig_kind;	
+	short act_kind;
+=TEX
+uni = the UNICODE code point, -1 => none
+
+ech =  extended character code, -1 => none
+
+orig$\_$kind = As read from keyword file
+
+act_kind = allowing for KW_SAMEAS
+=UTF8_MODULE
+#define KW_NOT_SET 0
+#define KW_SIMPLE 1
+#define KW_INDEX 2
+#define KW_SAMEAS 3
+#define KW_SAMEAS_UNKNOWN 4
+#define KW_DIRECTIVE 5
+#define KW_START_DIR 6
+#define KW_VERB_ALONE 7
+#define KW_WHITE 8
+	char *name;		
+	char *macro;	
+	regex_t *tex_arg;
+	char tex_arg_sense;
+#define KW_RE_MATCH 0	
+#define KW_RE_DELIMITER 1
+};
+=TEX
+*name = The keyword
+
+*macro = Equivalent macro, or NULL
+
+*tex_arg = R.E. defining the TeX argument of this keyword, if non-null
+
+tex_arg_sense = How to interpret the R.E.
+
+KW_RE_MATCH = The argument must match the R.E.
+
+KW_RE_DELIMITER = The argument is delimited by something that matches the R.E.
+
+Information about keywords is gathered into a single structure {\tt
+kw_information}, this structure is statically allocated.  It holds data
+about each keyword sorted by keyword and by character code.  The two
+{\tt keyword_information} structures refer to the same data items
+allowing fast access via character code and fairly fast access via a
+binary search of the keyword names.
+
+\HOLindexEntry{MAX_KEYWORDS}
+\HOLindexEntry{MAX_KW_LEN}
+\HOLindexEntry{kw_information}
+\HOLindexEntry{num_keywords..kw_information}
+\HOLindexEntry{max_kw_len..kw_information}
+\HOLindexEntry{char_code..kw_information}
+\HOLindexEntry{keyword..kw_information}
+=UTF8_MODULE
+#define MAX_KEYWORDS 4000
+#define MAX_KW_LEN 50
+
+struct kw_information {
+	int num_keywords;
+	int max_kw_len;
+	struct keyword_information *char_code[256];
+=TEX
+Char codes are set to NULL in "initialize", they are set to their proper values by "conclude_keywordfile".
+=UTF8_MODULE
+	struct keyword_information *unicode_code[MAX_KEYWORDS];
+=TEX
+Unicode codes are set to NULL in "initialize", they are set to their proper values by "conclude_keywordfile".
+=UTF8_MODULE
+	struct keyword_information keyword[MAX_KEYWORDS];
+} kwi = {0, 0,};
+=TEX
+
+\HOLindexEntry{add_new_keyword}
+{\tt add_new_keyword} : Add details of a new keyword.
+It is caller's responsibility to have allocated space that will
+not be overwritten later for the string and regular expression
+arguments.
+
+=UTF8_MODULE
+void
+add_new_keyword(
+	char *name,
+	unicode uni,
+	int kind,
+	char *macro,
+	regex_t * tex_arg,
+	char tex_arg_sense)
+{
+	struct keyword_information *ki;
+	int len = strlen(name);
+	int orig_kind = kind;
+
+	if(kwi.num_keywords >= MAX_KEYWORDS) {
+		error1("too many keywords");
+		EXIT(29);
+	}
+
+	if(len > MAX_KW_LEN) {
+		grumble1("keyword too long", &keyword_F, true);
+	}
+
+	if(len > kwi.max_kw_len) kwi.max_kw_len = len;
+
+	if(kind == KW_SAMEAS_UNKNOWN) {
+		int len2 = strlen(macro);
+		orig_kind = KW_SAMEAS;
+
+		if(len2 > MAX_KW_LEN) {
+			grumble1("sameas keyword too long", &keyword_F, true);
+		}
+
+		if(len2 > kwi.max_kw_len) kwi.max_kw_len = len2;
+	}
+
+	ki = &kwi.keyword[kwi.num_keywords];
+	kwi.num_keywords++;
+
+	ki->name = name;
+	ki->ech = uni_to_pp(uni);
+	ki->uni = uni;
+	ki->orig_kind = orig_kind;
+	ki->act_kind = kind;
+	ki->macro = macro;
+	ki-> tex_arg = tex_arg;
+	ki-> tex_arg_sense = tex_arg_sense;
+
+	if (debug & D_SHOW_KEYWORD_TABLE) {
+	   PRINTF("add_keyword: %s ext: %d uni %x\n", name, ki->ech, uni);
+	};
+	
+	if(kwi.num_keywords>1 && strcmp(kwi.keyword[kwi.num_keywords-1].name,
+				name) < 0) {
+		grumble1("keywords unsorted", &keyword_F, true);
+	}
+}
+=TEX
+
+\HOLindexEntry{find_keyword}
+{\tt find_keyword} : Look up the keyword {\tt str} which includes the
+opening and closing `{\tt\%}' signs.  If found return its index,
+otherwise return {\tt NOT_FOUND}.
+
+Do the work with a binary search through the keyword list.
+
+=UTF8_MODULE
+int
+find_keyword(char *kw)
+{
+	int lower_end = 0;
+	int top_end = kwi.num_keywords - 1;
+
+	while (lower_end <= top_end) {
+		int middle = (lower_end + top_end) / 2;
+		int posn = strcmp(kw, kwi.keyword[middle].name);
+
+		if(posn == 0) return(middle);
+
+		if(posn < 0)	top_end = middle - 1;
+		else		lower_end = middle + 1;
+	}
+
+	return(NOT_FOUND);
+}
+=TEX
+
+\HOLindexEntry{show_kw_kind}
+=UTF8_MODULE
+void
+show_kw_kind(int kind)
+{
+	char * kwty = NULL;
+	switch (kind) {
+	case KW_NOT_SET:			kwty = "not-set";		break;
+	case KW_SIMPLE:			kwty = "simple";		break;
+	case KW_INDEX:			kwty = "index";		break;
+	case KW_SAMEAS:			kwty = "sameas";		break;
+	case KW_SAMEAS_UNKNOWN:	kwty = "sameas-?";		break;
+	case KW_DIRECTIVE:		kwty = "directive";		break;
+	case KW_START_DIR:		kwty = "startdirective";	break;
+	case KW_VERB_ALONE:		kwty = "verbalone";		break;
+	case KW_WHITE:			kwty = "white";		break;
+	default:									break;
+	}
+
+	if(kwty == NULL) PRINTF("?(%d)", kind);
+	else PRINTF("%s", kwty);
+}
+=TEX
+
+\HOLindexEntry{show_one_keyword}
+=UTF8_MODULE
+void
+show_one_keyword(struct keyword_information *ki)
+{
+	PRINTF("(%p)",		ki);
+	PRINTF(" ech=%4d",		ki->ech);
+	PRINTF(" uni=%8x",		ki->uni);
+	PRINTF("  ty=");
+	show_kw_kind(ki->act_kind);
+	if(ki->act_kind != ki->orig_kind) {
+		PRINTF("(was=");
+		show_kw_kind(ki->orig_kind);
+		PUTC(')', stdout);
+	}
+	PRINTF("  name=(%ld)",		(long)strlen(ki->name));
+	PRINTF("'%s'",			ki->name);
+	PRINTF("  macro='%s'\n",	ki->macro ? ki->macro : "(None)");
+}
+=TEX
+
+\HOLindexEntry{show_one_indexed_keyword}
+=UTF8_MODULE
+void
+show_one_indexed_keyword(int kwindex)
+{
+	if(kwindex>=0 && kwindex<kwi.num_keywords) {
+		(void)printf("%4d  ", kwindex);
+		show_one_keyword(&(kwi.keyword[kwindex]));
+	} else {
+		(void)printf("%4d  not a valid keyword index\n", kwindex);
+	}
+
+}
+=TEX
+
+\HOLindexEntry{show_keywords}
+{\tt show_keywords} : Extended characters and keywords are held in a
+structure which may be displayed with this function.
+
+=UTF8_MODULE
+void
+show_keywords(void)
+{
+	int i;
+
+	(void)printf("Characters and keywords\n\t%d  keywords\n",
+		kwi.num_keywords);
+	(void)printf("\t%d  max keyword length\n", kwi.max_kw_len);
+
+	for(i=0; i<kwi.num_keywords; i++) {
+		show_one_indexed_keyword(i);
+	}
+}
+=TEX
+
+\HOLindexEntry{compare_keyword_information}
+When sorting keyword entries with "qsort(3)" we need an
+element comparator.
+
+=UTF8_MODULE
+int
+compare_keyword_information(
+	const void *vp1,
+	const void *vp2)
+{
+	const struct keyword_information *kw1 = vp1;
+	const struct keyword_information *kw2 = vp2;
+	return(kw1->name == NULL || kw2->name == NULL
+		? -1 : strcmp(kw1->name, kw2->name));
+}
+=TEX
+
+
+\HOLindexEntry{initialise_keyword_information}
+
+=UTF8_MODULE
+void initialise_keyword_information(void) {
+        int i;
+	for(i=0; i<MAX_KEYWORDS; i++)
+		kwi.keyword[i].orig_kind =
+		kwi.keyword[i].act_kind =
+			KW_NOT_SET;
+=TEX
+The "kwi.char_code"s are cleared here, they are not properly initialised until "conclude_keywordfile".
+=UTF8_MODULE
+	for(i=0; i<256; i++)
+		kwi.char_code[i] = NULL;
+
+	add_new_keyword("%%", -1, KW_SIMPLE, "\\%", NULL, 0);
+};
+=TEX
+
+\subsection{Character Flags} \label{CharacterFlags}
+
+A series of flags, one for each character code is held.  Values are set
+and found by masking against the appropriate element.  The array is
+structured giving several flags per character to allow for future
+expansion.  Each flag has 0 as its default value.
+
+The first two flags are used to help to quickly identify directive
+lines in the source text.  If the first character of any source text
+line has the {\tt DIRECTIVE_CHAR} flag set then it is potentially a
+directive line, further testing is required.  If the first character is
+an equals~``{\tt=}'' or is a directive character then the line is a
+directive line.  If the first character is a percent~``{\tt\%}'' we may
+have a directive line, in this case to avoid needing to always extract
+and test the keyword we see if the second character is that of a
+directive keyword by seeing if the {\tt SND_CHAR_DIR_KW} flag is set.
+These flags are initialized with~``{\tt=}'' and~``{\tt\%}'' having the
+their {\tt DIRECTIVE_CHAR} flag set.  As directive characters and
+keywords are read the appropriate flags are set.
+
+\HOLindexEntry{character_flags}
+\HOLindexEntry{DIRECTIVE_CHAR}
+\HOLindexEntry{IS_DIRECTIVE_CHAR}
+\HOLindexEntry{SET_DIRECTIVE_CHAR}
+\HOLindexEntry{SND_CHAR_DIR_KW}
+\HOLindexEntry{IS_SND_CHAR_DIR_KW}
+\HOLindexEntry{SET_SND_CHAR_DIR_KW}
+\HOLindexEntry{VERB_ALONE_CH}
+\HOLindexEntry{IS_VERB_ALONE_CH}
+\HOLindexEntry{SET_VERB_ALONE_CH}
+=UTF8_MODULE
+unsigned char character_flags[256];
+
+#define DIRECTIVE_CHAR 1
+#define IS_DIRECTIVE_CHAR(qq) (character_flags[(qq)&0xFF] & DIRECTIVE_CHAR)
+#define SET_DIRECTIVE_CHAR(qq) character_flags[(qq)&0xFF] |= DIRECTIVE_CHAR
+
+#define SND_CHAR_DIR_KW 2
+#define IS_SND_CHAR_DIR_KW(qq) (character_flags[(qq)&0xFF] & SND_CHAR_DIR_KW)
+#define SET_SND_CHAR_DIR_KW(qq) character_flags[(qq)&0xFF] |= SND_CHAR_DIR_KW
+
+#define VERB_ALONE_CH 4
+#define IS_VERB_ALONE_CH(qq) (character_flags[(qq)&0xFF] & VERB_ALONE_CH)
+#define SET_VERB_ALONE_CH(qq) character_flags[(qq)&0xFF] |= VERB_ALONE_CH
+=TEX
+
+The remaining flags are available for future expansion.
+
+\subsection{Conclude Keyword File}
+
+\HOLindexEntry{conclude_keywordfile}
+{\tt conclude_keywordfile} : Complete the initializations of the
+keyword file and make some simple validations of the tables
+made from it.
+
+=UTF8_MODULE
+void
+conclude_keywordfile(void)
+{
+	int i;
+	int dump_keywords = 0;
+	int stop_prog = 0;
+=TEX
+First sort the keywords so that the "find_keyword" below works.
+
+Could check here whether keywords are in order.
+If they are properly ordered then the sort below is unnecessary.
+
+	if(strcmp(kwi.keyword[i-1].name, cur_ki->name) >= 0) {\\
+		unsorted = 1;\\
+	}\\
+=UTF8_MODULE
+	qsort((char*)kwi.keyword,
+			kwi.num_keywords,
+			sizeof(struct keyword_information),
+			compare_keyword_information);
+=TEX
+
+Now process the "sameas" keywords and build the "kwi.char_code" array.
+=UTF8_MODULE
+	for(i=1; i<kwi.num_keywords; i++) {
+		struct keyword_information *cur_ki = &kwi.keyword[i];
+
+		switch(cur_ki->orig_kind) {
+		case KW_SAMEAS :
+		case KW_SAMEAS_UNKNOWN : {
+				int copy_from_index = find_keyword(cur_ki->macro);
+
+				if(copy_from_index == NOT_FOUND) {
+					grumble("no keyword the same as '%s'",
+						cur_ki->macro, &keyword_F, false);
+					dump_keywords = 1;
+				} else {
+					struct keyword_information *copy_from
+						= &kwi.keyword[copy_from_index];
+
+					free(cur_ki->macro);
+
+					cur_ki->orig_kind = KW_SAMEAS;
+					cur_ki->act_kind = copy_from->orig_kind;
+					cur_ki->ech = copy_from->ech;
+					cur_ki->macro = copy_from->macro;
+
+					if(cur_ki->act_kind == KW_SAMEAS ||
+							cur_ki->act_kind ==
+								KW_SAMEAS_UNKNOWN) {
+						grumble("unresolved sameas for keyword '%s'",
+							cur_ki->name, &keyword_F, false);
+						dump_keywords = 1;
+					}
+				}
+			}
+			break;
+
+		case KW_SIMPLE :
+		case KW_INDEX :
+		case KW_DIRECTIVE :
+		case KW_START_DIR :
+		case KW_VERB_ALONE :
+		case KW_WHITE :
+			if(cur_ki->ech != -1) {
+				if(kwi.char_code[cur_ki->ech] == NULL)
+					kwi.char_code[cur_ki->ech] = cur_ki;
+				else {
+					grumble("conflicting char codes for keyword '%s'",
+						cur_ki->name, &keyword_F, false);
+					FPRINTF(stderr,
+						"\tchar code %d already has keyword '%s'\n",
+						cur_ki->ech,
+						kwi.char_code[cur_ki->ech]->name);
+					dump_keywords = 1;
+				}
+			}
+
+			break;
+
+		case KW_NOT_SET :
+			break;
+		default:
+			internal_error("unknown entry in keyword database", "");
+			dump_keywords = 1;
+			stop_prog = 1;
+		}
+
+		if(cur_ki->ech == -1 && cur_ki->macro == NULL) {
+			grumble1("macro required when char code is -1", &keyword_F, false);
+			dump_keywords = 1;
+		}
+	}
+
+	for(i=1; i<kwi.num_keywords; i++) {
+		struct keyword_information *cur_ki = &kwi.keyword[i];
+
+		switch(cur_ki->act_kind) {
+		case KW_START_DIR:
+		case KW_DIRECTIVE:
+			if(cur_ki->ech != -1)
+				SET_DIRECTIVE_CHAR(cur_ki->ech);
+			else
+				grumble("no extended char with directive keyword '%s'",
+						cur_ki->name, &keyword_F, false);
+
+			if(cur_ki->name[1] != '\0' && cur_ki->name[1] != '%')
+				SET_SND_CHAR_DIR_KW(cur_ki->name[1]);
+			break;
+
+		case KW_VERB_ALONE:
+			if(cur_ki->ech != -1)
+				SET_VERB_ALONE_CH(cur_ki->ech);
+			else
+				grumble("no extended char with directive keyword '%s'",
+						cur_ki->name, &keyword_F, false);
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	if(dump_keywords || (debug & D_SHOW_KEYWORD_TABLE))
+		show_keywords();
+
+	if(stop_prog) EXIT(22);	
+}
+=TEX
+
+\HOLindexEntry{get_hol_kw}
+{\tt get_hol_kw} : Examines characters from {\tt str} to form a percent
+keyword.  The opening `{\tt\%}' is guaranteed to be the first character
+of {\tt str}.  A keyword is defined to be a `{\tt\%}' character
+followed by zero or more non-white and non-`{\tt\%}' characters
+followed by another `{\tt\%}' character.  A further restriction is the
+maximum length of keywords.
+
+If a well-formed keyword is found set its length which includes both
+`{\tt\%}' characters into argument {\tt len}, otherwise set argument
+{\tt len} to zero and return {\tt NOT_FOUND}.
+
+If the well-formed keyword is known then return its index in the
+keyword array.
+
+If the well-formed keyword is not known then return {\tt NOT_FOUND}.
+
+If the flag {\tt warn} is set issue a warning message against the {\tt
+file_F} file for unknown or mal-formed keywords.
+
+=UTF8_MODULE
+int
+get_hol_kw(char *str,
+	int * len,
+	int warn,
+	struct file_data *file_F)
+{
+	int kwlen = 0;
+	int ch;
+	int ans;
+
+	char kw[MAX_KW_LEN+1];
+
+	kw[kwlen++] = '%';
+=TEX
+We know the first char is a '%'.
+=UTF8_MODULE
+	while(			kwlen<=kwi.max_kw_len
+			&&	(ch = str[kwlen]) != '\0'
+			&&	ch != '%'
+			&&	isascii(ch)
+			&&	isgraph(ch)
+	) {
+		kw[kwlen++] = ch;
+	}
+
+	kw[kwlen] = '\0';
+
+	if(ch != '%') {
+		*len = 0;
+		ans = NOT_FOUND;
+		kw[MAX_KW_LEN / 4] = '\0';
+
+		if(warn) {
+			grumble("mal-formed keyword starting with %s", kw, file_F, true);
+		}
+	} else {
+		kw[kwlen++] = '%';
+		kw[kwlen] = '\0';
+=TEX
+Now look up the keyword.
+=UTF8_MODULE
+		if(kwlen>kwi.max_kw_len) {
+			*len = 0;
+			ans = NOT_FOUND;
+			kw[MAX_KW_LEN / 4] = '\0';
+		} else {
+			int kwindex = find_keyword(kw);
+
+			*len = kwlen;
+			ans = kwindex;
+		}
+
+		if(ans<0 && warn) {
+=TEX
+Well-formed but unknown keyword.
+=UTF8_MODULE
+grumble("unknown keyword: %s", kw, file_F, true);
+		}
+	}
+
+	if(debug & D_GET_KW) {
+		(void)printf("get_hol_kw: index=%d  len=%d  anslen=%d  kw=\"%s\"\n",
+			ans, kwlen, *len, kw);
+	}
+
+
+	return(ans);
+}
+=TEX
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
 \section{SIEVE PROGRAM}
 
-\subsection{Identification}
+
+\subsection{Initial Declarations}
 
 Note that the end of comment symbol below completes the C~comment that
 contains all of the introductory material in this document.
-
-=SIEVE_PROG
-*/
-char *program_name = "sieve";
-char *coprlemma1 =
-#ifdef VERSION
-	VERSION
-#else
-	"XXX.YYYwZZZ"
-#endif
-     " Copyright Lemma 1 Ltd.";
-
-;
-/*
-=TEX
-
-\subsection{Initial Declarations}
 
 \HOLindexEntry{bool}
 \HOLindexEntry{true}
@@ -761,21 +1596,13 @@ char *coprlemma1 =
 #include <errno.h>
 #include <regex.h>
 #include <unistd.h>
-#include "ppunicodetab.h"
-#include "unicodepptab.h"
-#include "pputf8.h"
+#include "utf8module.h"
 #ifdef __CYGWIN__
 #include <locale.h>
 #endif
 
-#define bool short
-#define true 1
-#define false 0
-
 #define MAX_CAT (80+1)
-#define MAX_LINE_LEN 1024
 #define MAX_ACTION 20
-
 #define NOT_FOUND (-1)
 
 #define STEER_FILE "sieveview"
@@ -786,6 +1613,21 @@ char *coprlemma1 =
 #define PPENVDEBUG "PPENVDEBUG"
 #define SLASH_ETC "/etc"
 
+/*
+=TEX
+
+\subsection{Identification}
+
+=SIEVE_PROG
+*/
+
+char *coprlemma1 =
+#ifdef VERSION
+	VERSION
+#else
+	"XXX.YYYwZZZ"
+#endif
+     " Copyright Lemma 1 Ltd.";
 /*
 =TEX
 
@@ -824,15 +1666,6 @@ Mostly we have declare before use, but there are a few exceptions!
 
 =SIEVE_PROG
 */
-struct file_data{
-	char *name;
-	char *file_name;
-	int line_no;
-	int grumbles;
-	FILE *fp;
-	char cur_line[MAX_LINE_LEN+1];
-};
-
 void main_convert(
 	char *in_line,
 	int flags,
@@ -857,15 +1690,12 @@ Several diagnostic outputs are provided, they are controlled by the
 {\tt-d} command option which sets the {\tt debug} flag.
 These outputs are written to the standard output.
 
-\HOLindexEntry{debug}
 \HOLindexEntry{debug_data}
 \HOLindexEntry{flag..debug}
 \HOLindexEntry{purpose..debug}
 \HOLindexEntry{D_\ldots}
 =SIEVE_PROG
 */
-int debug = 0;
-
 struct debug_data{
 	int flag;
 	char *purpose;
@@ -947,7 +1777,7 @@ all codes below this are used.
 
 To check the usage of these error codes the following commands are useful.
 
-sed	-e '/EXIT([0-9][0-9]*)/\!d' \
+sed	-e '/([0-9][0-9]*)/\!d' \
 	-e 's=^[^E]*==' \
 	-e 's=	*''/\* EXIT \*''/==' \
 	-e 's/(\([0-9])\)/( \1/' \
@@ -959,20 +1789,6 @@ sed	-e '/EXIT([0-9][0-9]*)/\!d' \
 awk '{{while(l<$1) {printf "%4d\n", (l++)} }; printf "%4d %4d\n", (l++), $1}' \
 	zz1 > zz1a
 
-=TEX
-\HOLindexEntry{EXIT}
-=SIEVE_PROG
-*/
-void
-EXIT(int n)
-{
-	if(debug) FPRINTF(stderr, "%s: exiting with code %d\n", program_name, n);
-
-	if(n != 0) n = 1;
-
-	(void)exit(n);
-}
-/*
 =TEX
 
 \HOLindexEntry{usage}
@@ -989,117 +1805,6 @@ usage(void)
 /*
 =TEX
 
-A standard style of error message starts with the text provided by {\tt
-error_top} which does not output any newline characters.
-Simple error messages may be produced using the function given after {\tt
-error_top}, more complex cases use {\tt fprintf}.
-The program attempts to check its own processing, any detected problems
-are reported via function {\tt internal_error}.
-
-\HOLindexEntry{error\ldots}
-\HOLindexEntry{internal_error}
-=SIEVE_PROG
-*/
-void
-error_top(void)
-{
-	FPRINTF(stderr, "%s: ", program_name);
-}
-
-void
-error1(char *msg)
-{
-	error_top();
-	FPRINTF(stderr, "%s", msg);
-	PUTC('\n', stderr);
-}
-
-void
-error(char *fmt, char *msg)
-{
-	error_top();
-	FPRINTF(stderr, fmt, msg);
-	PUTC('\n', stderr);
-}
-
-void
-internal_error(char *fmt, char *msg)
-{
-	FPRINTF(stderr, "%s: possible internal error\n  ", program_name);
-	FPRINTF(stderr, fmt, msg);
-	PUTC('\n', stderr);
-}
-/*
-=TEX
-\HOLindexEntry{print_unix_error}
-\HOLindexEntry{unix_error1}
-\HOLindexEntry{unix_error}
-=SIEVE_PROG
-*/
-
-void
-print_unix_error1(int eno)
-{
-	char *msg = strerror(eno);
-
-	if(msg != NULL) {
-		FPRINTF(stderr, "\n\t%s\n", msg);
-	} else {
-		FPRINTF(stderr, "\n	unix error code: %d\n", eno);
-	}
-}
-
-void
-unix_error1(char *msg)
-{
-	extern int errno;
-	int save_errno = errno;
-
-	error_top();
-	FPRINTF(stderr, "%s", msg);
-
-	print_unix_error1(save_errno);
-}
-
-void
-unix_error(char *fmt, char *msg)
-{
-	extern int errno;
-	int save_errno = errno;
-
-	error_top();
-	FPRINTF(stderr, fmt, msg);
-
-	print_unix_error1(save_errno);
-}
-
-/*
-=TEX
-
-{\tt malloc_and_check} : Memory is allocated for various purposes, this
-routine allocates and checks that the allocation succeeded.  Parameter
-{\tt err} holds a code number indicating which part of the program
-wanted the memory
-
-\HOLindexEntry{malloc_and_check}
-=SIEVE_PROG
-*/
-void *
-malloc_and_check(unsigned size, int err)
-{
-	void * area;
-
-	area = malloc(size);
-
-	if(area == NULL) {
-		error1("cannot allocate work area");
-		EXIT(err);						/* EXIT */
-	}
-
-	return(area);
-}
-/*
-=TEX
 
 \HOLindexEntry{handle_sigpipe}
 =SIEVE_PROG
@@ -1165,400 +1870,18 @@ they refer to.  A few are declared here.
 /*
 =TEX
 
-\subsection{Input File Controls}
+\subsection{Input Files}
 
-For each of the files read during the sieving process various data is
-held.
+The input file controls are now located in the utf8module, so that it can use them in processing the keyword file.
+They are also used in the sieve program for the view file and the main (standard) input stream.
 
-An attempt is made to read the whole of the view file and the keyword
-file issuing complaints as they read, these faults are counted so that
-if any were found the program will stop.  All faults should be reported
-via function {\tt grumble} or {\tt grumble1}, additional information
-may be output using {\tt fprintf}.
-
-\HOLindexEntry{file_data}
-\HOLindexEntry{name..file_data}
-\HOLindexEntry{line_no..file_data}
-\HOLindexEntry{grumbles..file_data}
-\HOLindexEntry{fp..file_data}
-\HOLindexEntry{cur_line..file_data}
 \HOLindexEntry{view_F}
-\HOLindexEntry{keyword_F}
 \HOLindexEntry{main_F}
 =SIEVE_PROG
 */
 
 struct file_data view_F = 		{ "view file", 0, 0, 0 };
-struct file_data keyword_F = 	{ "keyword file", 0, 0, 0 };
 struct file_data main_F = 		{ "standard input", 0, 0, 0 };
-/*
-=TEX
-
-{\tt grumble1} and {\tt grumble} : Print warning messages about a
-particular file.  Arguments {\tt fmt} and {\tt msg} give the
-message to print where {\tt fmt} is used as a format specifier to
-{\tt fprintf} and {\tt msg} is a simple character string.
-Argument {\tt file_F} gives the file identity.
-When argument {\tt show_line} is true the line number in the file and
-the line are printed.
-
-\HOLindexEntry{grumble\ldots}
-=SIEVE_PROG
-*/
-void
-grumble1(char *msg,
-	struct file_data *file_F,
-	int show_line)
-{
-	FPRINTF(stderr, "%s", program_name);
-	if(show_line) {
-		FPRINTF(stderr, ": line %d of %s", file_F->line_no, file_F->name);
-		if(file_F->file_name != 0) FPRINTF(stderr, " %s", file_F->file_name);
-	}
-	FPRINTF(stderr, ": %s\n", msg);
-	if(show_line) FPRINTF(stderr, "\t%s\n", file_F->cur_line);
-
-	file_F->grumbles ++;
-}
-
-void
-grumble(char *fmt,
-	char *msg,
-	struct file_data *file_F,
-	int show_line)
-{
-	FPRINTF(stderr, "%s", program_name);
-	if(show_line) {
-		FPRINTF(stderr, ": line %d of %s", file_F->line_no, file_F->name);
-		if(file_F->file_name != 0) FPRINTF(stderr, " %s", file_F->file_name);
-	}
-	PUTC(':', stderr);
-	PUTC(' ', stderr);
-	FPRINTF(stderr, fmt, msg);
-	PUTC('\n', stderr);
-	if(show_line) FPRINTF(stderr, "\t%s\n", file_F->cur_line);
-
-	file_F->grumbles ++;
-}
-/*
-=TEX
-
-\subsection{Keyword Information}
-
-The changes for support of {\tt utf-8} result in the keyword file being used to record UNICODE code points instead of extended character codes, with a separate fixed mapping between extended characters and UNICODE code points generated as .h files at pptex build time by dtd096 using the utf8 structure in imp122, and then included into the sieve program.
-
-
-\HOLindex_Entry{uni_to_pp_entry_cmp}
-\HOLindex_Entry{uni_to_kw}
-\HOLindex_Entry{uni_to_pp}
-=SIEVE_PROG
-*/
-int uni_to_pp_entry_cmp(const void *buf1, const void *buf2)
-{
-	const unicode_to_pp_entry *u1 = buf1, *u2 = buf2;
-	return  u1->code_point - u2->code_point;
-}
-
-const char *uni_to_kw(unicode code_point)
-{
-	static char buf[10];
-	sprintf(buf, "%%x%06X%%", code_point);
-	return buf;
-}
-
-/* This procedure needs to be upgraded to supply named keywords */
-
-const int uni_to_pp(unicode cp)
-{	
-	unicode_to_pp_entry key, *search_result;
-	key.code_point = cp;
-	if (cp<128) return cp;
-	search_result = bsearch(&key, unicode_to_pp,
-		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), uni_to_pp_entry_cmp);
-	return search_result != NULL ? (unsigned char)search_result->pp_char : -1;
-}
-/*
-=TEX
-
-Definitions of extended characters and percent keywords used by
-sieve.
-
-Need to hold details of all the extended characters and their
-equivalent keywords.  Each keyword is held with its enclosing percent
-characters.
-
-\HOLindexEntry{keyword_information}
-\HOLindexEntry{ech..keyword_information}
-\HOLindexEntry{orig_kind..keyword_information}
-\HOLindexEntry{act_kind..keyword_information}
-\HOLindexEntry{name..keyword_information}
-\HOLindexEntry{macro..keyword_information}
-\HOLindexEntry{KW_\ldots}
-=SIEVE_PROG
-*/
-struct keyword_information{
-	unicode uni;		/* the UNICODE code point, -1 => none */
-	short ech;		/* extended character code, -1 => none */
-	short orig_kind;	/* As read from keyword file */
-	short act_kind;		/* allowing for KW_SAMEAS */
-#define KW_NOT_SET 0
-#define KW_SIMPLE 1
-#define KW_INDEX 2
-#define KW_SAMEAS 3
-#define KW_SAMEAS_UNKNOWN 4
-#define KW_DIRECTIVE 5
-#define KW_START_DIR 6
-#define KW_VERB_ALONE 7
-#define KW_WHITE 8
-	char *name;		/* The keyword */
-	char *macro;		/* Equivalent macro, or NULL */
-	regex_t *tex_arg;	/* R.E. defining the TeX argument of this keyword, if non-null */
-	char tex_arg_sense;	/* How to interpret the R.E. */
-#define KW_RE_MATCH 0		/* The argument must match the R.E. */
-#define KW_RE_DELIMITER 1	/* The argument is delimited by something that matches the R.E. */
-};
-/*
-=TEX
-
-Information about keywords is gathered into a single structure {\tt
-kw_information}, this structure is statically allocated.  It holds data
-about each keyword sorted by keyword and by character code.  The two
-{\tt keyword_information} structures refer to the same data items
-allowing fast access via character code and fairly fast access via a
-binary search of the keyword names.
-
-\HOLindexEntry{MAX_KEYWORDS}
-\HOLindexEntry{MAX_KW_LEN}
-\HOLindexEntry{kw_information}
-\HOLindexEntry{num_keywords..kw_information}
-\HOLindexEntry{max_kw_len..kw_information}
-\HOLindexEntry{char_code..kw_information}
-\HOLindexEntry{keyword..kw_information}
-=SIEVE_PROG
-*/
-#define MAX_KEYWORDS 4000
-#define MAX_KW_LEN 50
-
-struct kw_information {
-	int num_keywords;
-	int max_kw_len;
-	struct keyword_information *char_code[256];
-		/*	Char codes are set to NULL in "initialize", they are
-			set to their proper values by "conclude_keywordfile".
-		*/
-	struct keyword_information *unicode_code[MAX_KEYWORDS];
-		/*	Unicode codes are set to NULL in "initialize", they are
-			set to their proper values by "conclude_keywordfile".
-		*/
-	struct keyword_information keyword[MAX_KEYWORDS];
-} kwi = {
-	0,	/* num_keywords */
-	0,	/* max_kw_len */
-};
-/*
-=TEX
-
-\HOLindexEntry{add_new_keyword}
-{\tt add_new_keyword} : Add details of a new keyword.
-It is caller's responsibility to have allocated space that will
-not be overwritten later for the string and regular expression
-arguments.
-
-=SIEVE_PROG
-*/
-void
-add_new_keyword(
-	char *name,
-	unicode uni,
-	int kind,
-	char *macro,
-	regex_t * tex_arg,
-	char tex_arg_sense)
-{
-	struct keyword_information *ki;
-	int len = strlen(name);
-	int orig_kind = kind;
-
-	if(kwi.num_keywords >= MAX_KEYWORDS) {
-		error1("too many keywords");
-		EXIT(29);							/* EXIT */
-	}
-
-	if(len > MAX_KW_LEN) {
-		grumble1("keyword too long", &keyword_F, true);
-	}
-
-	if(len > kwi.max_kw_len) kwi.max_kw_len = len;
-
-	if(kind == KW_SAMEAS_UNKNOWN) {
-		int len2 = strlen(macro);
-		orig_kind = KW_SAMEAS;
-
-		if(len2 > MAX_KW_LEN) {
-			grumble1("sameas keyword too long", &keyword_F, true);
-		}
-
-		if(len2 > kwi.max_kw_len) kwi.max_kw_len = len2;
-	}
-
-	ki = &kwi.keyword[kwi.num_keywords];
-	kwi.num_keywords++;
-
-	ki->name = name;
-	ki->ech = uni_to_pp(uni);
-	ki->uni = uni;
-	ki->orig_kind = orig_kind;
-	ki->act_kind = kind;
-	ki->macro = macro;
-	ki-> tex_arg = tex_arg;
-	ki-> tex_arg_sense = tex_arg_sense;
-
-	if (debug & D_SHOW_KEYWORD_TABLE) {
-	   PRINTF("add_keyword: %s ext: %d uni %x\n", name, ki->ech, uni);
-	};
-	
-	if(kwi.num_keywords>1 && strcmp(kwi.keyword[kwi.num_keywords-1].name,
-				name) < 0) {
-		grumble1("keywords unsorted", &keyword_F, true);
-	}
-}
-/*
-=TEX
-
-\HOLindexEntry{find_keyword}
-{\tt find_keyword} : Look up the keyword {\tt str} which includes the
-opening and closing `{\tt\%}' signs.  If found return its index,
-otherwise return {\tt NOT_FOUND}.
-
-Do the work with a binary search through the keyword list.
-
-=SIEVE_PROG
-*/
-int
-find_keyword(char *kw)
-{
-	int lower_end = 0;
-	int top_end = kwi.num_keywords - 1;
-
-	while (lower_end <= top_end) {
-		int middle = (lower_end + top_end) / 2;
-		int posn = strcmp(kw, kwi.keyword[middle].name);
-
-		if(posn == 0) return(middle);				/* RETURN */
-
-		if(posn < 0)	top_end = middle - 1;	/* kw before ...name */
-		else		lower_end = middle + 1;	/* kw after ...name */
-	}
-
-	return(NOT_FOUND);
-}
-/*
-=TEX
-
-\HOLindexEntry{show_kw_kind}
-=SIEVE_PROG
-*/
-void
-show_kw_kind(int kind)
-{
-	char * kwty = NULL;
-	switch (kind) {
-	case KW_NOT_SET:			kwty = "not-set";		break;
-	case KW_SIMPLE:			kwty = "simple";		break;
-	case KW_INDEX:			kwty = "index";		break;
-	case KW_SAMEAS:			kwty = "sameas";		break;
-	case KW_SAMEAS_UNKNOWN:	kwty = "sameas-?";		break;
-	case KW_DIRECTIVE:		kwty = "directive";		break;
-	case KW_START_DIR:		kwty = "startdirective";	break;
-	case KW_VERB_ALONE:		kwty = "verbalone";		break;
-	case KW_WHITE:			kwty = "white";		break;
-	default:									break;
-	}
-
-	if(kwty == NULL) PRINTF("?(%d)", kind);
-	else PRINTF("%s", kwty);
-}
-/*
-=TEX
-
-\HOLindexEntry{show_one_keyword}
-=SIEVE_PROG
-*/
-void
-show_one_keyword(struct keyword_information *ki)
-{
-	PRINTF("(%p)",		ki);
-	PRINTF(" ech=%4d",		ki->ech);
-	PRINTF(" uni=%8x",		ki->uni);
-	PRINTF("  ty=");
-	show_kw_kind(ki->act_kind);
-	if(ki->act_kind != ki->orig_kind) {
-		PRINTF("(was=");
-		show_kw_kind(ki->orig_kind);
-		PUTC(')', stdout);
-	}
-	PRINTF("  name=(%ld)",		(long)strlen(ki->name));
-	PRINTF("'%s'",			ki->name);
-	PRINTF("  macro='%s'\n",	ki->macro ? ki->macro : "(None)");
-}
-/*
-=TEX
-
-\HOLindexEntry{show_one_indexed_keyword}
-=SIEVE_PROG
-*/
-void
-show_one_indexed_keyword(int kwindex)
-{
-	if(kwindex>=0 && kwindex<kwi.num_keywords) {
-		(void)printf("%4d  ", kwindex);
-		show_one_keyword(&(kwi.keyword[kwindex]));
-	} else {
-		(void)printf("%4d  not a valid keyword index\n", kwindex);
-	}
-
-}
-/*
-=TEX
-
-\HOLindexEntry{show_keywords}
-{\tt show_keywords} : Extended characters and keywords are held in a
-structure which may be displayed with this function.
-
-=SIEVE_PROG
-*/
-void
-show_keywords(void)
-{
-	int i;
-
-	(void)printf("Extended characters and keywords\n\t%d  keywords\n",
-		kwi.num_keywords);
-	(void)printf("\t%d  max keyword length\n", kwi.max_kw_len);
-
-	for(i=0; i<kwi.num_keywords; i++) {
-		show_one_indexed_keyword(i);
-	}
-}
-/*
-=TEX
-
-\HOLindexEntry{compare_keyword_information}
-When sorting keyword entries with "qsort(3)" we need an
-element comparator.
-
-=SIEVE_PROG
-*/
-int
-compare_keyword_information(
-	const void *vp1,
-	const void *vp2)
-{
-	const struct keyword_information *kw1 = vp1;
-	const struct keyword_information *kw2 = vp2;
-	return(kw1->name == NULL || kw2->name == NULL
-		? -1 : strcmp(kw1->name, kw2->name));
-}
 /*
 =TEX
 
@@ -1695,7 +2018,7 @@ read_line(char *line, int max, struct file_data *file_F)
 		error_top();
 		FPRINTF(stderr, "line %d of %s too long\n",
 			file_F->line_no, file_F->name);
-		EXIT(4);							/* EXIT */
+		EXIT(4);
 	}
 
 	line[i] = '\0';
@@ -1754,7 +2077,6 @@ These flags are initialized with~``{\tt=}'' and~``{\tt\%}'' having the
 their {\tt DIRECTIVE_CHAR} flag set.  As directive characters and
 keywords are read the appropriate flags are set.
 
-\HOLindexEntry{character_flags}
 \HOLindexEntry{DIRECTIVE_CHAR}
 \HOLindexEntry{IS_DIRECTIVE_CHAR}
 \HOLindexEntry{SET_DIRECTIVE_CHAR}
@@ -1766,7 +2088,6 @@ keywords are read the appropriate flags are set.
 \HOLindexEntry{SET_VERB_ALONE_CH}
 =SIEVE_PROG
 */
-unsigned char character_flags[256];
 
 #define DIRECTIVE_CHAR 1
 #define IS_DIRECTIVE_CHAR(qq) (character_flags[(qq)&0xFF] & DIRECTIVE_CHAR)
@@ -2767,7 +3088,7 @@ expand_macro(
 					"unexpected '$%c' in action %d of\n",
 					ch, di->cur_act_index);
 				print_table_entry(di->tab, stderr);
-				EXIT(24);					/* EXIT */
+				EXIT(24);	
 			}
 		} else {
 			out_line[outp++] = ch;
@@ -2777,7 +3098,7 @@ expand_macro(
 
 	if(outp >= lenout_line-1) {
 		error("macro expansion line length overflow, source line '%s'", in_line);
-		EXIT(27);							/* EXIT */
+		EXIT(27);						
 	}
 
 	out_line[outp++] = '\0';
@@ -2810,24 +3131,14 @@ initialize(void)
 #endif
 	for(i=1; i<256; i++) character_flags[i] = 0;
 
-	for(i=0; i<MAX_KEYWORDS; i++)
-		kwi.keyword[i].orig_kind =
-		kwi.keyword[i].act_kind =
-			KW_NOT_SET;
-
-	/* The "kwi.char_code"s are cleared here, they are not properly
-		initialised until "conclude_keywordfile". */
-	for(i=0; i<256; i++)
-		kwi.char_code[i] = NULL;
-
-	add_new_keyword("%%", -1, KW_SIMPLE, "\\%", NULL, 0);
+	initialise_keyword_information();
 
 	SET_DIRECTIVE_CHAR('%');
 	SET_DIRECTIVE_CHAR('=');
 
 	if(copy_PrNN(pr_test, 0) != PrNN_SIZE) {
 		internal_error("copy_PrNN", "");
-		EXIT(32);							/* EXIT */
+		EXIT(32);						
 	}
 
 	/* Make sure that various flags are OK */
@@ -2842,7 +3153,7 @@ initialize(void)
 
 		if((used_flags & not_or_flags) != 0) {
 			internal_error("Flag values faulty", "");
-			EXIT(36);						/* EXIT */
+			EXIT(36);					
 		}
 	}
 }
@@ -2893,143 +3204,7 @@ check_program_initializations(void)
 	}
 
 	if(stop_prog)
-		EXIT(21);							/* EXIT */
-}
-/*
-=TEX
-
-\HOLindexEntry{conclude_keywordfile}
-{\tt conclude_keywordfile} : Complete the initializations of the
-keyword file and make some simple validations of the tables
-made from it.
-
-=SIEVE_PROG
-*/
-void
-conclude_keywordfile(void)
-{
-	int i;
-	int dump_keywords = 0;
-	int stop_prog = 0;
-
-	/* First sort the keywords so that the "find_keyword" below works */
-
-/* Could check here whether keywords are in order.  If they are properly
-		ordered then the sort below is unnecessary.
-	if(strcmp(kwi.keyword[i-1].name, cur_ki->name) >= 0) {
-		unsorted = 1;
-	}
-*/
-	qsort((char*)kwi.keyword,
-			kwi.num_keywords,
-			sizeof(struct keyword_information),
-			compare_keyword_information);
-
-	/* Now process the "sameas" keywords and build the "kwi.char_code" array. */
-
-	for(i=1; i<kwi.num_keywords; i++) {
-		struct keyword_information *cur_ki = &kwi.keyword[i];
-
-		switch(cur_ki->orig_kind) {
-		case KW_SAMEAS :
-		case KW_SAMEAS_UNKNOWN : {
-				int copy_from_index = find_keyword(cur_ki->macro);
-
-				if(copy_from_index == NOT_FOUND) {
-					grumble("no keyword the same as '%s'",
-						cur_ki->macro, &keyword_F, false);
-					dump_keywords = 1;
-				} else {
-					struct keyword_information *copy_from
-						= &kwi.keyword[copy_from_index];
-
-					free(cur_ki->macro);
-
-					cur_ki->orig_kind = KW_SAMEAS;
-					cur_ki->act_kind = copy_from->orig_kind;
-					cur_ki->ech = copy_from->ech;
-					cur_ki->macro = copy_from->macro;
-
-					if(cur_ki->act_kind == KW_SAMEAS ||
-							cur_ki->act_kind ==
-								KW_SAMEAS_UNKNOWN) {
-						grumble("unresolved sameas for keyword '%s'",
-							cur_ki->name, &keyword_F, false);
-						dump_keywords = 1;
-					}
-				}
-			}
-			break;							/* BREAK */
-
-		case KW_SIMPLE :
-		case KW_INDEX :
-		case KW_DIRECTIVE :
-		case KW_START_DIR :
-		case KW_VERB_ALONE :
-		case KW_WHITE :
-			if(cur_ki->ech != -1) {
-				if(kwi.char_code[cur_ki->ech] == NULL)
-					kwi.char_code[cur_ki->ech] = cur_ki;
-				else {
-					grumble("conflicting char codes for keyword '%s'",
-						cur_ki->name, &keyword_F, false);
-					FPRINTF(stderr,
-						"\tchar code %d already has keyword '%s'\n",
-						cur_ki->ech,
-						kwi.char_code[cur_ki->ech]->name);
-					dump_keywords = 1;
-				}
-			}
-
-			break;							/* BREAK */
-
-		case KW_NOT_SET :
-			break;							/* BREAK */
-		default:
-			internal_error("unknown entry in keyword database", "");
-			dump_keywords = 1;
-			stop_prog = 1;
-		}
-
-		if(cur_ki->ech == -1 && cur_ki->macro == NULL) {
-			grumble1("macro required when char code is -1", &keyword_F, false);
-			dump_keywords = 1;
-		}
-	}
-
-	for(i=1; i<kwi.num_keywords; i++) {
-		struct keyword_information *cur_ki = &kwi.keyword[i];
-
-		switch(cur_ki->act_kind) {
-		case KW_START_DIR:
-		case KW_DIRECTIVE:
-			if(cur_ki->ech != -1)
-				SET_DIRECTIVE_CHAR(cur_ki->ech);
-			else
-				grumble("no extended char with directive keyword '%s'",
-						cur_ki->name, &keyword_F, false);
-
-			if(cur_ki->name[1] != '\0' && cur_ki->name[1] != '%')
-				SET_SND_CHAR_DIR_KW(cur_ki->name[1]);
-			break;
-
-		case KW_VERB_ALONE:
-			if(cur_ki->ech != -1)
-				SET_VERB_ALONE_CH(cur_ki->ech);
-			else
-				grumble("no extended char with directive keyword '%s'",
-						cur_ki->name, &keyword_F, false);
-			break;
-
-		default:
-			break;
-		}
-	}
-
-	if(dump_keywords || (debug & D_SHOW_KEYWORD_TABLE))
-		show_keywords();
-
-	if(stop_prog) EXIT(22);							/* EXIT */
+		EXIT(21);
 }
 /*
 =TEX
@@ -4003,94 +4178,6 @@ complete_actions(dir_info *di)
 
 \subsection{Auxiliaries For Source File Line Processing}
 
-\HOLindexEntry{get_hol_kw}
-{\tt get_hol_kw} : Examines characters from {\tt str} to form a percent
-keyword.  The opening `{\tt\%}' is guaranteed to be the first character
-of {\tt str}.  A keyword is defined to be a `{\tt\%}' character
-followed by zero or more non-white and non-`{\tt\%}' characters
-followed by another `{\tt\%}' character.  A further restriction is the
-maximum length of keywords.
-
-If a well-formed keyword is found set its length which includes both
-`{\tt\%}' characters into argument {\tt len}, otherwise set argument
-{\tt len} to zero and return {\tt NOT_FOUND}.
-
-If the well-formed keyword is known then return its index in the
-keyword array.
-
-If the well-formed keyword is not known then return {\tt NOT_FOUND}.
-
-If the flag {\tt warn} is set issue a warning message against the {\tt
-file_F} file for unknown or mal-formed keywords.
-
-=SIEVE_PROG
-*/
-int
-get_hol_kw(char *str,
-	int * len,
-	int warn,
-	struct file_data *file_F)
-{
-	int kwlen = 0;
-	int ch;
-	int ans;
-
-	char kw[MAX_KW_LEN+1];
-
-	kw[kwlen++] = '%';  /* We know the first char is a '%' */
-
-	while(			kwlen<=kwi.max_kw_len
-			&&	(ch = str[kwlen]) != '\0'
-			&&	ch != '%'
-			&&	isascii(ch)
-			&&	isgraph(ch)
-	) {
-		kw[kwlen++] = ch;
-	}
-
-	kw[kwlen] = '\0';
-
-	if(ch != '%') {
-		*len = 0;
-		ans = NOT_FOUND;
-		kw[MAX_KW_LEN / 4] = '\0';
-
-		if(warn) {
-			grumble("mal-formed keyword starting with %s", kw, file_F, true);
-		}
-	} else {
-		kw[kwlen++] = '%';
-		kw[kwlen] = '\0';
-
-		/* Now look up the keyword */
-
-		if(kwlen>kwi.max_kw_len) {
-			*len = 0;
-			ans = NOT_FOUND;
-			kw[MAX_KW_LEN / 4] = '\0';
-		} else {
-			int kwindex = find_keyword(kw);
-
-			*len = kwlen;
-			ans = kwindex;
-		}
-
-		if(ans<0 && warn) {
-			/* Well-formed but unknown keyword */
-			grumble("unknown keyword: %s", kw, file_F, true);
-		}
-	}
-
-	if(debug & D_GET_KW) {
-		(void)printf("get_hol_kw: index=%d  len=%d  anslen=%d  kw=\"%s\"\n",
-			ans, kwlen, *len, kw);
-	}
-
-
-	return(ans);
-}
-/*
-=TEX
 
 \HOLindexEntry{copy_PrNN}
 \label{FunCopyPrNN}
@@ -5398,7 +5485,7 @@ main(int argc, char **argv)
 	limits.num_keyword_files = 0;
 	keyword_files[limits.num_keyword_files++] = KEYWORD_FILE;
 	program_name = argv[0];
-
+	
 	initialize();
 
 	check_program_initializations();
