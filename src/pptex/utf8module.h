@@ -73,6 +73,8 @@ void show_one_indexed_keyword(int kwindex);
 void show_keywords(void);
 int compare_keyword_information(const void *vp1, const void *vp2);
 void initialise_keyword_information(void);
+char *find_steering_file(char *name, char *file_type);
+void read_keyword_file(char *name);
 void conclude_keywordfile(void);
 
 #define MAX_LINE_LEN 1024
@@ -98,6 +100,8 @@ grumble(char *fmt,
 	char *msg,
 	struct file_data *file_F,
 	int show_line);
+void message1(char *msg);
+void message(char *fmt, char *msg);
 int get_hol_kw(char *str,
 	int * len,
 	int warn,

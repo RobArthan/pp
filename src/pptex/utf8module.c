@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <ctype.h>
+#include <pwd.h>
 #include <string.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -7,14 +8,244 @@
 #include <errno.h>
 #include <regex.h>
 #include <unistd.h>
+#include <pwd.h>
+#include <sys/types.h>
+#include <sys/param.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "unicodepptab.h"
 #include "ppunicodetab.h"
+
+#define VoidStrcpy(a,b) { if(a != NULL) (void)strcpy(a, b); }
+#define Strcpy(a,b) ((a != NULL) ? strcpy(a, b) : NULL)
+
+#define PPHOME "PPHOME"
+#define PPETCPATH "PPETCPATH"
+#define PPENVDEBUG "PPENVDEBUG"
+#define SLASH_ETC "/etc"
+
+/*
+\subsection{String Utilities}
+
+{\tt skip_space} : Return a pointer to the first non space like character
+in "str".
+*/
+
+char *
+skip_space(char *str)
+{
+	char *p = str;
+
+	if(p != NULL) {
+		while( isascii(*p) && isspace(*p) ) {
+			++p;
+		}
+	}
+	return(p);
+}
+
+/*
+{\tt find_space} : Return a pointer to the first space like character
+in "str".
+*/
+		     
+char *
+find_space(char *str)
+{
+	char *p = str;
+
+	if(p != NULL) {
+		while( (*p) && !(isascii(*p) && isspace(*p)) ) {
+			++p;
+		}
+	}
+	return(p);
+}
+
+/*
+{\tt string_n_copy} : Copy a string of at most {\tt n} characters, but
+stop at an earlier null character.  Append a null character to the
+resultant string.  Thus the result string may occupy {\tt n+1}
+characters.  This routine is very similar to the library routine {\tt
+strncpy} but: (1)~it does not pad the result string with nulls; (2)~it
+guarantees the result is null terminated; and, (3)~it does not return
+any value.
+*/
+
+void
+string_n_copy(char *dest, char *source, int n)
+{
+	while((n--)>0 && *source) {
+		*(dest++) = *(source++);
+	}
+	*dest = '\0';
+}
+/*
+
+{\tt split_at_space} : Split the given string into two by overwriting
+the first white space character in the argument with a null,
+effectively leaving the argument as the first word of string.  Then,
+skip further white space characters returning a pointer to the first
+non-space character.  If the argument does not have any spaces then
+nothing is overwritten and the value returned is a pointer to the null
+character at the end of the string.
+
+*/
+char *
+split_at_space(char *str)
+{
+	char *p = find_space(str);
+
+	if(p != NULL && *p) {
+		*p = '\0';
+		p = skip_space(p+1);
+	}
+	return(p);
+}
+/*
+
+{\tt str_match} : Compares the two strings.  If the first string is a prefix of
+the second string then the length of the first string is returned.
+Otherwise 0 is returned.
+*/
+
+int
+str_match(char *prefix, char *str)
+{
+	int i = 0;
+
+	while(prefix[i] != '\0' && str[i] != '\0' && prefix[i] == str[i]) {
+		i++;
+	}
+
+	return( prefix[i] == '\0' ? i : 0 );
+}
+
+extern struct passwd *getpwnam(const char *name);
+
+char *
+tilde_expand(char *name)
+{
+	char uname[9]; /* usernames longer than 8 chars truncated */
+	char *insert_str, *res;
+	char *p, *q;
+	int res_len, insert_len;
+	struct passwd *pw;
+	if(*name != '~') {
+	    return(Strcpy((char*)malloc((unsigned)strlen(name)+1), name));
+	};
+	for(q = uname, p=name+1; p - name < 8 && *p && *p != '/'; ++p) {
+	    *q++ = *p;
+	};
+	*q = 0;
+	if(*uname) { /* A name has been supplied */
+	    pw = getpwnam(uname);
+	    if(pw == NULL) {
+		return(NULL);
+	    };
+	    insert_str = pw->pw_dir;
+	} else if((insert_str=getenv("HOME")) == NULL){
+	    return(NULL);
+	};
+	insert_len = strlen(insert_str);
+	res_len = insert_len + strlen(p);
+	if((res=(char*)malloc((unsigned)res_len))==NULL){
+	    return(NULL);
+	};
+	VoidStrcpy(res, insert_str);
+	VoidStrcpy(res+insert_len, p);
+	*(res+res_len) = 0;
+	return(res);
+}
+
+char *
+dirname(char *name)
+{
+	struct stat buf;
+	char *ans;
+	char *slash;
+	if(name == NULL) {
+	    return(NULL);
+	};
+	ans = tilde_expand(name);
+	if(ans == NULL) return(NULL);
+
+	if(stat(ans, &buf) || !S_ISDIR(buf.st_mode)) {
+		if((slash=strrchr(ans, '/')) == NULL){
+		    slash = ans;
+		};
+		*slash = 0;
+	};
+	return(ans);
+}
+
+int
+file_exists(char *name, int is_reg)
+{
+	struct stat st;
+	return((name != NULL) && !stat(name, &st) && (!is_reg ||S_ISREG(st.st_mode)));
+}
+
+char *
+find_file(char *name, char *dirs, int is_reg)
+{
+	char *dir;
+	char *buf;
+	char *mydirs;
+	int name_len = strlen(name);
+	int dir_len;
+	char *path_entry;
+
+	if(name[0] == '/') {
+		return(name);
+	};
+
+	if(dirs == NULL || (mydirs = (char*)malloc((unsigned)strlen(dirs)+1)) == NULL) {
+		return(NULL);
+	};
+
+	VoidStrcpy(mydirs, dirs);
+	path_entry = strtok(mydirs, ":");
+	while(path_entry != NULL) {
+	    dir = dirname(path_entry);
+	    if(dir != NULL) {
+		dir_len = strlen(dir);
+		if((buf = (char*)malloc((unsigned)dir_len+name_len+2)) == NULL) {
+			return(NULL);
+		};
+		VoidStrcpy(buf, dir);
+		*(buf+dir_len) = '/';
+		VoidStrcpy(buf+dir_len+1, name);
+		if(file_exists(buf, is_reg)) {
+			return(buf);
+		};
+		free(buf);
+	    }
+	    path_entry = strtok((char*)NULL, ":");
+	};
+	return(NULL);
+}
+
 int unicodepp_error = 0;
 int line;
 char * program_name = "";
 int debug = 0;
+
+#define D_SHOW_SIEVE_TABLE 1
 #define D_SHOW_KEYWORD_TABLE 2
+#define D_INIT_TABLES 4
+#define D_READ_SOURCE_LINE 8
+#define D_DECODE_DIR_LINE 16
+#define D_ACTIONS 32
+#define D_SHOW_FULL_SIEVE_TABLE 64
 #define D_GET_KW 128
+#define D_OPEN_OUTPUT 256
+#define D_MAIN_CONVERT_CH 512
+#define D_PROCESS_LINE 1024
+#define D_EXPAND 2048
+#define D_READ_STEER_LINE 4096
+#define D_8192 8192
+
 #define FPRINTF (void)fprintf
 #define PRINTF (void)printf
 #define PUTC (void)putc
@@ -29,6 +260,34 @@ struct file_data{
 	FILE *fp;
 	char cur_line[MAX_LINE_LEN+1];
 };
+
+/*
+\subsection{Sizes of Data Areas Used}
+
+The `{\tt-l}' option causes various numbers about sizes of data
+structures to be printed.  The variable part of this information is
+gathered here.  A structure is used just to reduce the number of global
+names.  These values are printed by function $list_limits$.
+
+Many of the limiting values are declared near the data structures
+they refer to.  A few are declared here.
+*/
+
+struct limits{
+	int opt_list;
+	int file_name_area;
+	int non_copy_length;
+	int process_line_len;
+	int filter_len;
+	int view_file;
+	int keyword_file;
+	int source_file;
+	int num_keyword_files;
+} limits = {
+	0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+#define MAX_KEYWORD_FILES 20
 
 void
 EXIT(int n)
@@ -145,6 +404,19 @@ unix_error(char *fmt, char *msg)
 	FPRINTF(stderr, fmt, msg);
 
 	print_unix_error1(save_errno);
+}
+void
+message1(char *msg)
+{
+	(void)fputs(msg, stdout);
+	(void)fputs("\n", stdout);
+}
+
+void
+message(char *fmt, char *msg)
+{
+	(void)printf(fmt, msg);
+	(void)fputs("\n", stdout);
 }
 void *
 malloc_and_check(unsigned size, int err)
@@ -346,6 +618,40 @@ const int uni_to_pp(unicode cp)
 		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), uni_to_pp_entry_cmp);
 	return search_result != NULL ? (unsigned char)search_result->pp_char : -1;
 }
+/*
+
+{\tt get_char_unicode} : Extract a character unicode code point from {\tt line}, if a
+code is obtained then return 1 and set {\tt value} to the code found.
+If no code found then return 0 and set "value" to 0.
+
+Unicode code points are one of:  hex with a leading "0x" or "0X"; octal
+with a leading "0"; or decimal numbers.  They must be in the
+range~$-1\sb{10}$ to~$ffffff\sb{16}$.
+
+*/
+
+int
+get_char_unicode(char *line, unicode *value)
+{
+	int ch = -1;		/* -1 ==> not a valid code */
+
+	int scan_ans;
+	int len;
+
+	scan_ans = sscanf(line, "%i%n", &ch, &len);
+
+	if(scan_ans != 1 || len != strlen(line))
+		ch = -1;
+
+	if(ch >= -1 && ch <= 0xFFFFFF) {
+		*value = ch;
+		return(1);
+	} else {
+		*value = 0;
+		return(0);
+	}
+}
+
 struct file_data keyword_F = 	{ "keyword file", 0, 0, 0 };
 
 struct keyword_information{
@@ -379,6 +685,7 @@ struct kw_information {
 	struct keyword_information *unicode_code[MAX_KEYWORDS];
 	struct keyword_information keyword[MAX_KEYWORDS];
 } kwi = {0, 0,};
+
 void
 add_new_keyword(
 	char *name,
@@ -535,6 +842,60 @@ void initialise_keyword_information(void) {
 
 	add_new_keyword("%%", -1, KW_SIMPLE, "\\%", NULL, 0);
 };
+
+
+/*
+A keyword may be defined to have a {\TeX} argument, given as a regular expression
+following a {\#} sign not escaped by a backslash in the macro part of the keyword file line.
+The  following function checks for this regular expression, replaces the {\#} sign by a null
+terminator and compiles the regular expression (into a malloced buffer). The return
+value is a pointer to the compiled regular expression or null, if there is no {\TeX} argument.
+*/
+
+void
+get_tex_arg(char *macro, regex_t **tex_arg, char *tex_arg_sense)
+{
+	char *p = macro;
+	char escaped = false;
+	int error_code;
+	int cflags = REG_EXTENDED;
+	while(*p) {
+		if(escaped) {
+			escaped = false;
+		} else if (*p == '\\') {
+			escaped = true;
+		} else if (*p == '#') {
+			break;
+		}
+		p += 1;
+	}
+	if(*p == '#') {
+		*p = '\0';
+		p += 1;
+		if(*p == '-') {
+			*tex_arg_sense = KW_RE_DELIMITER;
+			p += 1;
+		} else {
+			*tex_arg_sense = KW_RE_MATCH;
+		}
+		*tex_arg = malloc_and_check(sizeof(regex_t), 108);
+		error_code = regcomp(*tex_arg, p, cflags);
+		if(error_code != 0) {
+			char *errbuf;
+			int errbufsize = regerror(error_code, *tex_arg, 0, 0);
+			errbuf = malloc_and_check(errbufsize, 109);
+			(void) regerror(error_code, *tex_arg, errbuf, errbufsize);
+			grumble(" error in regular expression: %s", errbuf,
+				&keyword_F, true);
+			free(errbuf);
+			free(*tex_arg);
+			*tex_arg = 0;
+		}
+	} else {
+		*tex_arg =0;
+	}	
+}
+
 unsigned char character_flags[256];
 
 #define DIRECTIVE_CHAR 1
@@ -548,6 +909,234 @@ unsigned char character_flags[256];
 #define VERB_ALONE_CH 4
 #define IS_VERB_ALONE_CH(qq) (character_flags[(qq)&0xFF] & VERB_ALONE_CH)
 #define SET_VERB_ALONE_CH(qq) character_flags[(qq)&0xFF] |= VERB_ALONE_CH
+char *
+find_steering_file(char *name, char *file_type)
+{
+	char *result, *pp_env_debug;
+	char *pp_home, *pp_home_etc;
+
+	if(file_exists(name, 1) || *name == '/') {
+		result = name;
+	} else if(file_exists(result = find_file(name, getenv(PPETCPATH), 1), 1)) {
+		;
+	} else {
+		pp_home = getenv(PPHOME);
+		if(pp_home == NULL) {
+			error("cannot find file '%s'", name);
+			EXIT(26);							/* EXIT */
+		}
+		pp_home_etc = (char*)malloc(strlen(pp_home) + strlen(SLASH_ETC) + 1);
+		strcpy(pp_home_etc, pp_home);
+		strcat(pp_home_etc, SLASH_ETC);
+		if(!file_exists(result = find_file(name, pp_home_etc, 1), 1)) {
+			error("cannot find file '%s'", name);
+			EXIT(26);							/* EXIT */
+		}
+		free((void*)pp_home_etc);		
+	}
+
+	if( (pp_env_debug = getenv (PPENVDEBUG)) && pp_env_debug[0] != 0) {
+		fprintf(stderr, "sieve: using %s %s\n", file_type, result);
+	}
+
+	return result;
+}
+
+/*
+{\tt read_line} : Reads a line into a buffer, checking that the line
+isn't too long and returning the number of characters read, i.e., the
+number of characters stored in argument {\tt line} but excluding the
+trailing null.
+*/
+
+int
+read_line(char *line, int max, struct file_data *file_F)
+{
+	int whatgot;
+	int i = 0;
+
+	while(i < max && (whatgot = getc(file_F->fp)) != '\n' && whatgot != EOF) {
+		line[i++] = whatgot;
+	}
+
+	if(i >= max) {
+		error_top();
+		FPRINTF(stderr, "line %d of %s too long\n",
+			file_F->line_no, file_F->name);
+		EXIT(4);
+	}
+
+	line[i] = '\0';
+
+	return(i);
+}
+
+/*
+{\tt read_steering_line} : Read a steering file line, possibly escaped
+over several input lines.  The argument {\tt line_no} is incremented
+for each line read.
+*/
+
+void
+read_steering_line(char *line, struct file_data *file_F)
+{
+	int len_so_far = 0;
+	int len_read = 0;
+	do{
+		(file_F->line_no) ++;
+		len_read = read_line(line + len_so_far,
+			MAX_LINE_LEN - len_so_far, file_F) - 1;
+		len_so_far += len_read;
+	} while( (len_read > 0) && (line[len_so_far] == '\\') );
+
+	(void)strcpy(file_F->cur_line, line);
+
+	if(debug & D_READ_STEER_LINE) {
+		(void)printf("%s %d: %s\n", file_F->name,
+			file_F->line_no, file_F->cur_line);
+	}
+}
+
+void
+read_keyword_file(char *name)
+{
+	char line[MAX_LINE_LEN+1];
+	char * actname;
+
+	actname = find_steering_file(name, "keyword file");
+
+	if( (keyword_F.fp = fopen(actname, "r")) == NULL ) {
+		unix_error("cannot open keyword file '%s'", actname);
+		EXIT(25);							/* EXIT */
+	}
+
+	if(debug) message("Processing keyword file '%s'", actname);
+	keyword_F.file_name = actname;
+	keyword_F.line_no = 0;
+
+	while( (!feof(keyword_F.fp)) && (!ferror(keyword_F.fp)) ) {
+		char * def_kw;
+		char * kind_str;
+		int kind;
+		char * code_kw_str;
+		int code;
+		char * macro;
+		regex_t * tex_arg;
+		char tex_arg_sense;
+
+		read_steering_line(line, &keyword_F);
+
+		if(limits.opt_list) {
+			int len = strlen(line);
+			if(len > limits.keyword_file)
+				limits.keyword_file = len;
+		}
+
+		def_kw = skip_space(line);
+
+		if(def_kw == NULL || def_kw[0] == '\0' || def_kw[0] == '#') {
+			/* Comment line, ignore it */
+			continue;						/* CONTINUE */
+		}
+
+		kind_str = split_at_space(def_kw);
+
+		{	int len_m_1 = strlen(def_kw)-1;
+
+			if(def_kw[len_m_1] == '"') def_kw[len_m_1] = '%';
+
+			if(def_kw[0] != '%' || def_kw[len_m_1] != '%') {
+				grumble1("missing '%%' on keyword", &keyword_F, true);
+				continue;					/* CONTINUE */
+			}
+		}
+
+		if(kind_str == NULL) {
+			grumble1("no keyword kind", &keyword_F, true);
+			continue;						/* CONTINUE */
+		}
+
+		code_kw_str = split_at_space(kind_str);
+
+		if(code_kw_str == NULL) {
+			grumble1("no code or second keyword", &keyword_F, true);
+			continue;						/* CONTINUE */
+		}
+
+		macro = split_at_space(code_kw_str);
+
+		if	(strcmp(kind_str, "simple") == 0) kind = KW_SIMPLE;
+		else if	(strcmp(kind_str, "index") == 0) kind = KW_INDEX;
+		else if	(strcmp(kind_str, "directive") == 0) kind = KW_DIRECTIVE;
+		else if	(strcmp(kind_str, "startdirective") == 0) kind = KW_START_DIR;
+		else if	(strcmp(kind_str, "sameas") == 0) kind = KW_SAMEAS;
+		else if	(strcmp(kind_str, "verbalone") == 0) kind = KW_VERB_ALONE;
+		else if	(strcmp(kind_str, "white") == 0) kind = KW_WHITE;
+		else {
+			grumble("unknown keyword kind: %s",
+				kind_str, &keyword_F, true);
+			continue;						/* CONTINUE */
+		}
+
+		if(kind == KW_SAMEAS) {
+			if(macro == NULL || macro[0] == '\0') {
+				/* OK */
+			} else {
+				grumble("unexpected text \"%s\" with sameas keyword", macro,
+					&keyword_F, true);
+				continue;					/* CONTINUE */
+			}
+
+			{	int len_m_1 = strlen(code_kw_str)-1;
+	
+				if(code_kw_str[len_m_1] == '"') code_kw_str[len_m_1] = '%';
+	
+				if(code_kw_str[0] != '%' || code_kw_str[len_m_1] !='%') {
+					grumble1("missing '%%' on sameas keyword",
+						&keyword_F, true);
+					continue;				/* CONTINUE */
+				}
+			}
+
+			add_new_keyword(strdup(def_kw), -1, KW_SAMEAS_UNKNOWN,
+				strdup(code_kw_str), NULL, 0);
+		} else {
+
+			if(!get_char_unicode(code_kw_str, &code)) {
+				grumble1("unreadable or out of range char code",
+					&keyword_F, true);
+				continue;					/* CONTINUE */
+			}
+
+			if(find_keyword(def_kw) != NOT_FOUND) {
+				grumble1("duplicate keyword", &keyword_F, true);
+				continue;					/* CONTINUE */
+			}
+
+			if((kind == KW_DIRECTIVE || kind == KW_START_DIR)
+					&& code == -1) {
+				grumble1("char code for directive is '-1'", &keyword_F, true);
+				continue;					/* CONTINUE */
+			}
+
+			get_tex_arg(macro, &tex_arg, &tex_arg_sense);
+
+			add_new_keyword(strdup(def_kw), code, kind,
+				macro != NULL && macro[0] != '\0'
+			?	strdup(macro)
+			:	(char*)NULL,
+				tex_arg,
+				tex_arg_sense);
+		}
+	}
+
+	keyword_F.file_name = 0;
+	if(fclose(keyword_F.fp) != 0) {
+		unix_error1("i/o error reported on close file operation");
+		EXIT(8);							/* EXIT */
+	};
+}
+
 void
 conclude_keywordfile(void)
 {
@@ -622,7 +1211,7 @@ conclude_keywordfile(void)
 			stop_prog = 1;
 		}
 
-		if(cur_ki->ech == -1 && cur_ki->macro == NULL) {
+		if(cur_ki->ech == -1 && cur_ki->uni == -1 && cur_ki->macro == NULL) {
 			grumble1("macro required when char code is -1", &keyword_F, false);
 			dump_keywords = 1;
 		}
