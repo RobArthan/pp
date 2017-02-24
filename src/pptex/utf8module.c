@@ -609,6 +609,13 @@ const char *uni_to_kw(unicode code_point)
 	sprintf(buf, "%%x%06X%%", code_point);
 	return buf;
 }
+
+/*
+uni_to_pp converts a unicode code point to either an ascii character
+(if < 128) or a ProofPower extended character (128-255) if possible.
+Otherwise returns -1.
+*/
+
 const int uni_to_pp(unicode cp)
 {	
 	unicode_to_pp_entry key, *search_result;
@@ -627,6 +634,7 @@ If no code found then return 0 and set "value" to 0.
 Unicode code points are one of:  hex with a leading "0x" or "0X"; octal
 with a leading "0"; or decimal numbers.  They must be in the
 range~$-1\sb{10}$ to~$ffffff\sb{16}$.
+(this check can be made tighter)
 
 */
 
@@ -689,6 +697,7 @@ struct kw_information {
 void
 add_new_keyword(
 	char *name,
+	int ech,
 	unicode uni,
 	int kind,
 	char *macro,
@@ -725,7 +734,7 @@ add_new_keyword(
 	kwi.num_keywords++;
 
 	ki->name = name;
-	ki->ech = uni_to_pp(uni);
+	ki->ech = ech;
 	ki->uni = uni;
 	ki->orig_kind = orig_kind;
 	ki->act_kind = kind;
@@ -733,6 +742,7 @@ add_new_keyword(
 	ki-> tex_arg = tex_arg;
 	ki-> tex_arg_sense = tex_arg_sense;
 
+	
 	if (debug & D_SHOW_KEYWORD_TABLE) {
 	   PRINTF("add_keyword: %s ext: %d uni %x\n", name, ki->ech, uni);
 	};
@@ -742,6 +752,7 @@ add_new_keyword(
 		grumble1("keywords unsorted", &keyword_F, true);
 	}
 }
+
 int
 find_keyword(char *kw)
 {
@@ -760,6 +771,26 @@ find_keyword(char *kw)
 
 	return(NOT_FOUND);
 }
+int
+
+find_unicode_kwi(unicode uni)
+{
+	int lower_end = 0;
+	int top_end = kwi.num_keywords - 1;
+
+	while (lower_end <= top_end) {
+		int middle = (lower_end + top_end) / 2;
+		int posn = kwi.unicode_code[middle]->uni - uni;
+
+		if(posn == 0) return(middle);
+
+		if(posn < 0)	top_end = middle - 1;
+		else		lower_end = middle + 1;
+	}
+
+	return(NOT_FOUND);
+}
+
 void
 show_kw_kind(int kind)
 {
@@ -780,6 +811,7 @@ show_kw_kind(int kind)
 	if(kwty == NULL) PRINTF("?(%d)", kind);
 	else PRINTF("%s", kwty);
 }
+
 void
 show_one_keyword(struct keyword_information *ki)
 {
@@ -797,6 +829,7 @@ show_one_keyword(struct keyword_information *ki)
 	PRINTF("'%s'",			ki->name);
 	PRINTF("  macro='%s'\n",	ki->macro ? ki->macro : "(None)");
 }
+
 void
 show_one_indexed_keyword(int kwindex)
 {
@@ -808,6 +841,7 @@ show_one_indexed_keyword(int kwindex)
 	}
 
 }
+
 void
 show_keywords(void)
 {
@@ -821,6 +855,7 @@ show_keywords(void)
 		show_one_indexed_keyword(i);
 	}
 }
+
 int
 compare_keyword_information(
 	const void *vp1,
@@ -831,16 +866,29 @@ compare_keyword_information(
 	return(kw1->name == NULL || kw2->name == NULL
 		? -1 : strcmp(kw1->name, kw2->name));
 }
+
+int
+compare_keyword_unicode(
+	const void *vp1,
+	const void *vp2)
+{
+	const struct keyword_information *kw1 = vp1;
+	const struct keyword_information *kw2 = vp2;
+	return(kw2->uni - kw1->uni);
+}
+
 void initialise_keyword_information(void) {
         int i;
-	for(i=0; i<MAX_KEYWORDS; i++)
+	for(i=0; i<MAX_KEYWORDS; i++) {
 		kwi.keyword[i].orig_kind =
-		kwi.keyword[i].act_kind =
-			KW_NOT_SET;
+		kwi.keyword[i].act_kind = KW_NOT_SET;
+		kwi.unicode_code[i] = NULL;
+	};
+
 	for(i=0; i<256; i++)
 		kwi.char_code[i] = NULL;
 
-	add_new_keyword("%%", -1, KW_SIMPLE, "\\%", NULL, 0);
+	add_new_keyword("%%", -1, -1, KW_SIMPLE, "\\%", NULL, 0);
 };
 
 
@@ -909,6 +957,7 @@ unsigned char character_flags[256];
 #define VERB_ALONE_CH 4
 #define IS_VERB_ALONE_CH(qq) (character_flags[(qq)&0xFF] & VERB_ALONE_CH)
 #define SET_VERB_ALONE_CH(qq) character_flags[(qq)&0xFF] |= VERB_ALONE_CH
+
 char *
 find_steering_file(char *name, char *file_type)
 {
@@ -1020,6 +1069,7 @@ read_keyword_file(char *name)
 		int kind;
 		char * code_kw_str;
 		int code;
+		int ech;
 		char * macro;
 		regex_t * tex_arg;
 		char tex_arg_sense;
@@ -1098,7 +1148,7 @@ read_keyword_file(char *name)
 				}
 			}
 
-			add_new_keyword(strdup(def_kw), -1, KW_SAMEAS_UNKNOWN,
+			add_new_keyword(strdup(def_kw), -1, -1, KW_SAMEAS_UNKNOWN,
 				strdup(code_kw_str), NULL, 0);
 		} else {
 
@@ -1108,20 +1158,22 @@ read_keyword_file(char *name)
 				continue;					/* CONTINUE */
 			}
 
+			ech = uni_to_pp(code);
+			
 			if(find_keyword(def_kw) != NOT_FOUND) {
 				grumble1("duplicate keyword", &keyword_F, true);
 				continue;					/* CONTINUE */
 			}
 
 			if((kind == KW_DIRECTIVE || kind == KW_START_DIR)
-					&& code == -1) {
-				grumble1("char code for directive is '-1'", &keyword_F, true);
+					&& ech == -1) {
+				grumble1("ascii/ext code for directive is '-1'", &keyword_F, true);
 				continue;					/* CONTINUE */
 			}
 
 			get_tex_arg(macro, &tex_arg, &tex_arg_sense);
 
-			add_new_keyword(strdup(def_kw), code, kind,
+			add_new_keyword(strdup(def_kw), ech, code, kind,
 				macro != NULL && macro[0] != '\0'
 			?	strdup(macro)
 			:	(char*)NULL,
@@ -1147,6 +1199,10 @@ conclude_keywordfile(void)
 			kwi.num_keywords,
 			sizeof(struct keyword_information),
 			compare_keyword_information);
+	qsort((char*)kwi.unicode_code,
+			kwi.num_keywords,
+			sizeof(struct keyword_information),
+			compare_keyword_unicode);
 	for(i=1; i<kwi.num_keywords; i++) {
 		struct keyword_information *cur_ki = &kwi.keyword[i];
 
@@ -1200,7 +1256,22 @@ conclude_keywordfile(void)
 					dump_keywords = 1;
 				}
 			}
-
+		  /*
+       		    int kwipos = unicodekwi(cur_ki->uni);
+		    if(kwipos != NOT_FOUND){
+			    if(kwi.unicode_code[kwipos] == NULL)
+					kwi.char_code[cur_ki->ech] = cur_ki;
+				else {
+					grumble("conflicting unicode codes for keyword '%s'",
+						cur_ki->name, &keyword_F, false);
+					FPRINTF(stderr,
+						"\tchar code %d already has keyword '%s'\n",
+						cur_ki->ech,
+						kwi.char_code[cur_ki->ech]->name);
+					dump_keywords = 1;
+				}
+			}
+		  */
 			break;
 
 		case KW_NOT_SET :
