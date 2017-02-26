@@ -1,6 +1,18 @@
-/* From: imp096.doc   @(#) 94/04/06 1.3 imp096.doc
+/* Originally from: imp096.doc but now maintained as findfile.c,
+with the main functionality share with sieve and xpp through
+utf8module.c
 
+Program findfile basically just calls the {\tt find_file} function (in utf8module).
+For greater generality it allows more than one path argument and searches them
+in turn until the file name is found.
+
+A common idiom of use from within a shell script will be
+
+\begin{verbatim}
+        sed -f `findfile sedscript $PATH $0`
+\end{verbatim}
 */
+
 #define FPRINTF (void)fprintf
 #define PRINTF (void)printf
 #define PUTC (void)putc
@@ -18,174 +30,31 @@
 #include <regex.h>
 #include "utf8module.h"
 #ifndef SIEVE_PROG
-int
-is_sym_link(char *name)
-{
-	struct stat st;
-	if(name == NULL || lstat(name, &st)) {
-		return 0;
-	}
-	return S_ISLNK(st.st_mode);
-}
+
 /*
-*/
-int
-is_dir(char *name)
-{
-	struct stat st;
-	if(name == NULL || lstat(name, &st)) {
-		return 0;
-	}
-	return S_ISDIR(st.st_mode);
-}
-/*
+====
+main
+====
+There are two usages for two somewhat separate functions:
+
+With no options, the first command line argument is taken as the name of a file to be sought in the list
+of search options given by the remaining arguments (of which there must be at least one),
+the file name is printed on standard output (or just the original argument if not found) and
+the result code is set to 0 if the resulting file exists.
+
+With the ``{\tt -r}'' option, the remaining arguments are a list of file names and the output
+is a list of lines each containing the result of recursively expanding any symbolic links in each file name.
+If one of the resulting file names does not exist to
+call {\tt stat} on it, then the unexpanded name is printed out and the program stops with result code set to 1.
+
+A ``{\tt --}'' option may be supplied to indicate that the next argument (typically, ``{\tt -r}'') is to
+be interpreted as a name not an option.
+
+In the above, a file is taken to exist if it exists as a regular file (or a symbolic link to a regular
+file) and the user has enough access
+to read its file attributes and it is not a broken symbolic link.
 */
 
-void
-split_file_name(char *name, char **dir, char **base)
-{
-	int name_len, dir_len;
-	if (name == NULL) {
-		*dir = NULL;
-		*base = NULL;
-		return;
-	}
-	name_len = strlen(name);
-	for(dir_len = name_len - 1; dir_len >= 0; dir_len -= 1) {
-		if(name[dir_len] == '/') {
-			*dir = (char*) malloc(dir_len + 2);
-			*base = (char*) malloc(name_len - dir_len);
-			strncpy(*dir, name, dir_len);
-			if(dir_len > 0) {
-				(*dir)[dir_len] = 0;
-			} else {
-				strcpy(*dir, "/");
-			}
-			strcpy(*base, &name[dir_len+1]);
-			return;
-		}
-	}
-	*dir = (char*) malloc(1);
-	(*dir)[0] = 0;
-	*base = (char*) malloc(name_len + 1);
-	strcpy(*base, name);
-}
-/*
-*/
-char *
-read_link(char *name)
-{
-	char *buf;
-	int count, bufsiz;
-	bufsiz = 20;
-	buf = (char*) malloc(bufsiz);
-	do {
-		bufsiz *= 2;
-		buf = (char*)realloc(buf, bufsiz);
-		count = readlink(name, buf, bufsiz - 1);
-		if(count < 0) {
-			free(buf);
-			return NULL;
-		}
-	} while(count == bufsiz - 1);
-	buf[count] = 0;
-	return buf;
-}
-/*
-*/
-#define MAX_LINKS 100
-#ifdef MAXPATHLEN
-#	if	MAX_PATH_LEN < 50000
-#	define	MAX_FILE_NAME_LEN MAXPATHLEN
-#	endif
-#else
-#	define	MAX_FILE_NAME_LEN 50000
-#endif
-char *
-get_real_name (char * name)
-{
-	char *dir, *base, *cur_name, *res, buf[MAX_FILE_NAME_LEN+2];
-	int orig_cwd;
-	int loops;
-	orig_cwd = open(".", 0, 0);
-	if(orig_cwd < 0) {
-		return NULL;
-	}
-	cur_name = (char*) malloc(strlen(name) + 1);
-	strcpy(cur_name, name);
-	for(loops = 0; loops < MAX_LINKS; loops += 1) {
-		if(is_dir(cur_name)) {
-			dir = cur_name;
-			base  = (char*) malloc(1);
-			*base = 0;
-			if(chdir(dir)) {
-				fchdir(orig_cwd);
-				close(orig_cwd);
-				free(dir);
-				free(base);
-				return NULL;
-			}
-			break;
-		}
-		split_file_name(cur_name, &dir, &base);
-		free(cur_name);
-		cur_name = NULL;
-		if(dir == NULL) {
-			return NULL;
-		}
-		if(*dir) {
-			if(chdir(dir)) {
-				fchdir(orig_cwd);
-				close(orig_cwd);
-				free(dir);
-				free(base);
-				return NULL;
-			}
-		}
-		if(!is_sym_link(base)) {
-			free(dir);
-			dir = NULL;
-			break;
-		}
-		cur_name = read_link(base);
-		if(cur_name == NULL) {
-			free(dir);
-			free(base);
-			return NULL;
-		}
-	}
-	if(cur_name != NULL) {
-		free(cur_name);
-	}
-	buf[MAX_FILE_NAME_LEN+1] = 0;
-	if(	loops == MAX_LINKS
-	||	getcwd(buf, MAX_FILE_NAME_LEN) == NULL
-	||	strlen(buf) == MAX_FILE_NAME_LEN+1) {
-		if(dir) {
-			free(dir);
-		}
-		if(base) {
-			free(base);
-		}
-		fchdir(orig_cwd);
-		close(orig_cwd);
-		return NULL;
-	}
-	res = (char*) malloc(strlen(buf) + strlen(base) + 2);
-	strcpy(res, buf);
-	if(strcmp(buf, "/") && *base) {
-		strcat(res, "/");
-	}
-	strcat(res, base);
-	fchdir(orig_cwd);
-	close(orig_cwd);
-	return res;
-}
-/*
-*/
-
-
-#ifndef NO_FINDFILE_MAIN
 char *coprlemma1_ff =
 #ifdef VERSION
 	VERSION
@@ -193,8 +62,9 @@ char *coprlemma1_ff =
 	"XXX.YYYwZZZ"
 #endif
      " Copyright Lemma 1 Ltd.";
+
 extern char *find_file(char *name, char *dirs, int is_reg);
-#include<stdio.h>
+
 void	exit(int status);
 
 int
@@ -258,7 +128,3 @@ main(int argc, char **argv)
 }
 
 #endif
-#endif
-/*
-*/
-

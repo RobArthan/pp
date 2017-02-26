@@ -16,20 +16,17 @@
 #include "unicodepptab.h"
 #include "ppunicodetab.h"
 
-#define VoidStrcpy(a,b) { if(a != NULL) (void)strcpy(a, b); }
-#define Strcpy(a,b) ((a != NULL) ? strcpy(a, b) : NULL)
-
 #define PPHOME "PPHOME"
 #define PPETCPATH "PPETCPATH"
 #define PPENVDEBUG "PPENVDEBUG"
 #define SLASH_ETC "/etc"
 
 /*
-\subsection{String Utilities}
+================
+String Utilities
+================
 
-{\tt skip_space} : Return a pointer to the first non space like character
-in "str".
-*/
+ Return a pointer to the first non space like character in "str" */
 
 char *
 skip_space(char *str)
@@ -121,7 +118,27 @@ str_match(char *prefix, char *str)
 	return( prefix[i] == '\0' ? i : 0 );
 }
 
+/*
+========
+findfile
+========
+*/
+
+#define VoidStrcpy(a,b) { if(a != NULL) (void)strcpy(a, b); }
+#define Strcpy(a,b) ((a != NULL) ? strcpy(a, b) : NULL)
+
 extern struct passwd *getpwnam(const char *name);
+
+/*
+------------
+tilde_expand
+------------
+Returns a string, an initial `~' followed
+by a user name is replaced by that user's home directory and an initial
+`~' followed by  `/' (or end of string) by the value of
+the shell variable {\tt HOME}.  This approximates the C-shell
+convention.
+*/
 
 char *
 tilde_expand(char *name)
@@ -179,12 +196,230 @@ dirname(char *name)
 	return(ans);
 }
 
+/*
+-----------
+file_exists
+-----------
+Returns 0 if the file name does not exist or if
+name is a NULL pointer, 1 otherwise.
+The file is taken to exist if it exists (as a regular file or a link to same if is_reg is non-zero) and
+the user has enough access rights to find that out using stat.
+*/
+
 int
 file_exists(char *name, int is_reg)
 {
 	struct stat st;
 	return((name != NULL) && !stat(name, &st) && (!is_reg ||S_ISREG(st.st_mode)));
 }
+/*
+-----------
+is_sym_link
+-----------
+Returns 0 if the file name does not refer to a symbolic link or if
+name is a NULL pointer, 1 otherwise.
+*/
+
+int
+is_sym_link(char *name)
+{
+	struct stat st;
+	if(name == NULL || lstat(name, &st)) {
+		return 0;
+	}
+	return S_ISLNK(st.st_mode);
+}
+/*
+------
+is_dir
+------
+Returns 0 if the file name does not refer to a directory or if
+name is a NULL pointer, 1 otherwise.
+*/
+int
+is_dir(char *name)
+{
+	struct stat st;
+	if(name == NULL || lstat(name, &st)) {
+		return 0;
+	}
+	return S_ISDIR(st.st_mode);
+}
+/*
+---------------
+split_file_name
+---------------
+split a file name into directory name and base name.
+*/
+
+void
+split_file_name(char *name, char **dir, char **base)
+{
+	int name_len, dir_len;
+	if (name == NULL) {
+		*dir = NULL;
+		*base = NULL;
+		return;
+	}
+	name_len = strlen(name);
+	for(dir_len = name_len - 1; dir_len >= 0; dir_len -= 1) {
+		if(name[dir_len] == '/') {
+			*dir = (char*) malloc(dir_len + 2);
+			*base = (char*) malloc(name_len - dir_len);
+			strncpy(*dir, name, dir_len);
+			if(dir_len > 0) {
+				(*dir)[dir_len] = 0;
+			} else {
+				strcpy(*dir, "/");
+			}
+			strcpy(*base, &name[dir_len+1]);
+			return;
+		}
+	}
+	*dir = (char*) malloc(1);
+	(*dir)[0] = 0;
+	*base = (char*) malloc(name_len + 1);
+	strcpy(*base, name);
+}
+/*
+---------
+read_link
+---------
+like the system call readlink, but handling the memory allocation.
+*/
+char *
+read_link(char *name)
+{
+	char *buf;
+	int count, bufsiz;
+	bufsiz = 20;
+	buf = (char*) malloc(bufsiz);
+	do {
+		bufsiz *= 2;
+		buf = (char*)realloc(buf, bufsiz);
+		count = readlink(name, buf, bufsiz - 1);
+		if(count < 0) {
+			free(buf);
+			return NULL;
+		}
+	} while(count == bufsiz - 1);
+	buf[count] = 0;
+	return buf;
+}
+/*
+-------------
+get_real_name
+-------------
+from a file name potentially containing symbolic links find the real name of the parent directory of the file;
+if base_name is not NULL return the real file base name in it too.
+Apparently there are portability problems with the MAXPATHLEN symbol (it can in principle be much too large to use as an array size or argument to malloc or it may not be defined).
+The code below also tries hard to defend itself against the somewhat loosely specified behaviour when
+the buffer is too small.
+*/
+#define MAX_LINKS 100
+#ifdef MAXPATHLEN
+#	if	MAX_PATH_LEN < 50000
+#	define	MAX_FILE_NAME_LEN MAXPATHLEN
+#	endif
+#else
+#	define	MAX_FILE_NAME_LEN 50000
+#endif
+char *
+get_real_name (char * name)
+{
+	char *dir, *base, *cur_name, *res, buf[MAX_FILE_NAME_LEN+2];
+	int orig_cwd;
+	int loops;
+	orig_cwd = open(".", 0, 0);
+	if(orig_cwd < 0) {
+		return NULL;
+	}
+	cur_name = (char*) malloc(strlen(name) + 1);
+	strcpy(cur_name, name);
+	for(loops = 0; loops < MAX_LINKS; loops += 1) {
+		if(is_dir(cur_name)) {
+			dir = cur_name;
+			base  = (char*) malloc(1);
+			*base = 0;
+			if(chdir(dir)) {
+				fchdir(orig_cwd);
+				close(orig_cwd);
+				free(dir);
+				free(base);
+				return NULL;
+			}
+			break;
+		}
+		split_file_name(cur_name, &dir, &base);
+		free(cur_name);
+		cur_name = NULL;
+		if(dir == NULL) {
+			return NULL;
+		}
+		if(*dir) {
+			if(chdir(dir)) {
+				fchdir(orig_cwd);
+				close(orig_cwd);
+				free(dir);
+				free(base);
+				return NULL;
+			}
+		}
+		if(!is_sym_link(base)) {
+			free(dir);
+			dir = NULL;
+			break;
+		}
+		cur_name = read_link(base);
+		if(cur_name == NULL) {
+			free(dir);
+			free(base);
+			return NULL;
+		}
+	}
+	if(cur_name != NULL) {
+		free(cur_name);
+	}
+	buf[MAX_FILE_NAME_LEN+1] = 0;
+	if(	loops == MAX_LINKS
+	||	getcwd(buf, MAX_FILE_NAME_LEN) == NULL
+	||	strlen(buf) == MAX_FILE_NAME_LEN+1) {
+		if(dir) {
+			free(dir);
+		}
+		if(base) {
+			free(base);
+		}
+		fchdir(orig_cwd);
+		close(orig_cwd);
+		return NULL;
+	}
+	res = (char*) malloc(strlen(buf) + strlen(base) + 2);
+	strcpy(res, buf);
+	if(strcmp(buf, "/") && *base) {
+		strcat(res, "/");
+	}
+	strcat(res, base);
+	fchdir(orig_cwd);
+	close(orig_cwd);
+	return res;
+}
+
+/*
+---------
+find_file
+---------
+Treats dirs as a list of directory names
+separated by colons and attempts to find the file given by name in that
+list of directories.  If a file name rather than a directory name is
+encountered in dirs then the name of the directory containing that file is used.  A pointer to a string held containing the first such name for
+which a file is found.  If no such file is found {\tt NULL} is returned.
+All file names are expanded using the C-shell's tilde convention before
+use and the expanded name is returned.
+If is_reg is non-zero, require the found file to be a regular file (i.e., not a directory, but could be
+*/
+
+
 
 char *
 find_file(char *name, char *dirs, int is_reg)
@@ -226,6 +461,17 @@ find_file(char *name, char *dirs, int is_reg)
 	return(NULL);
 }
 
+/*
+================
+Diagnostic Flags 
+================
+
+This is the full set of flags originally in sieve because some of
+them are relevant to keyword file processing.
+This arrangement to be slimmed down and made compatible with xpp
+diagnostic flags in some way.
+*/
+
 int unicodepp_error = 0;
 int line;
 char * program_name = "";
@@ -262,7 +508,9 @@ struct file_data{
 };
 
 /*
-\subsection{Sizes of Data Areas Used}
+========================
+Sizes of Data Areas Used
+========================
 
 The `{\tt-l}' option causes various numbers about sizes of data
 structures to be printed.  The variable part of this information is
@@ -292,11 +540,11 @@ struct limits{
 void
 EXIT(int n)
 {
-	if(debug) FPRINTF(stderr, "%s: exiting with code %d\n", program_name, n);
+  if(debug) FPRINTF(stderr, "%s: exiting with code %d\n", program_name, n);
 
-	if(n != 0) n = 1;
+  if(n != 0) n = 1;
 
-	(void)exit(n);
+  (void)exit(n);
 }
 
 typedef char bool;
@@ -306,6 +554,13 @@ enum {False = 0, True = 1};
 #define bool short
 #define true 1
 #define false 0
+
+/*
+========================
+Messages and Diagnostics
+========================
+*/
+
 void
 grumble1(char *msg,
 	struct file_data *file_F,
@@ -432,18 +687,36 @@ malloc_and_check(unsigned size, int err)
 
 	return(area);
 }
+
+/*
+=========================
+UNICODE and utf8 handling
+=========================
+
+-----------------------
+Unicode <-> ext mapping
+-----------------------
+
+Compare unicode code points in the unicode to pp table */
+
 int unicode_to_pp_entry_cmp(const void *buf1, const void *buf2)
 {
 	const unicode_to_pp_entry *u1 = buf1, *u2 = buf2;
 	return  u1->code_point - u2->code_point;
 }
-const char *unicode_to_kw(unicode code_point)
+
+/* Convert a unicode code point to a hexadecimal in percents */
+
+const char *unicode_to_hex(unicode code_point)
 {
 	static char buf[10];
 	sprintf(buf, "%%x%06X%%", code_point);
 	return buf;
 }
-const char unicode2ppi(unicode cp)
+
+/* Translate a unicode code point to the corresponding pp ext char (if there is one) */
+
+const char unicode_to_ext(unicode cp)
 {	
 	unicode_to_pp_entry key, *search_result;
 	key.code_point = cp;
@@ -451,18 +724,48 @@ const char unicode2ppi(unicode cp)
 		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), unicode_to_pp_entry_cmp);
 	return (search_result=NULL) ? (char) 0 : search_result -> pp_char;
 }
-const char *unicode2ppk(unicode cp)
+
+/* Translate a unicode code point to pp ext char or else to hex in oercents */
+
+const char *unicode_to_ppk(unicode cp)
 {	
 	unicode_to_pp_entry key;
 	char search_result;
 	key.code_point = cp;
-	search_result = unicode2ppi(cp);
-	return (search_result=(char)0) ? NULL : unicode_to_kw(cp);
+	search_result = unicode_to_ext(cp);
+	return (search_result=(char)0) ? NULL : unicode_to_hex(cp);
 }
+
+/*
+-------------------------------------
+Translations involving named keywords
+-------------------------------------
+*/
+
+/* Find the keyword information for a unicode code point (if any)
+
+const *keyword_information unicode_to_kwi(unicode cp)
+{	
+	unicode_to_pp_entry key, *search_result;
+	key.code_point = cp;
+	search_result = bsearch(&key, unicode_to_pp,
+		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), unicode_to_pp_entry_cmp);
+	return (search_result=NULL) ? (char) 0 : search_result -> pp_char;
+}
+
+Convert a unicode code point to a keyword in percents */
+
+const char *unicode_to_kw(unicode code_point)
+{
+	static char buf[10];
+	sprintf(buf, "%%x%06X%%", code_point);
+	return buf;
+}
+
 unicode invalid_unicode(void)
 {
 	int whatgot;
-	fprintf(stderr, "utf8pp: line %d: invalid utf-8 input\n", line);
+	fprintf(stderr, "%s: line %d: invalid utf-8 input\n", program_name, line);
 	unicodepp_error = 1;
 	whatgot = getchar();
 	while(whatgot != '\n' && whatgot != EOF) {
@@ -473,6 +776,7 @@ unicode invalid_unicode(void)
 	}
 	return whatgot & 0xff;
 }
+
 unicode get_code_point(void)
 {
 	int whatgot, r, l;
@@ -503,7 +807,7 @@ void do_unicode_to_pp(void)
 	const char *pp_string;
 	cp = get_code_point();
 	while(cp) {
-		pp_string = unicode2ppk(cp);
+		pp_string = unicode_to_ppk(cp);
 		printf("%s", pp_string);
 		cp = get_code_point();
 	}
@@ -588,6 +892,7 @@ void do_pp_to_unicode (void)
 			case S_HAVE_HEXIT_4: STEP(is_uc_hexit, S_HAVE_HEXIT_5);
 			case S_HAVE_HEXIT_5: STEP(is_uc_hexit, S_HAVE_HEXIT_6);
 			case S_HAVE_HEXIT_6: STEP(is_percent,  S_HAVE_KEYWORD);
+
 		}
 		if(state == S_HAVE_KEYWORD) {
 			sscanf(&buf[2], "%6X", &u);
@@ -601,13 +906,6 @@ int uni_to_pp_entry_cmp(const void *buf1, const void *buf2)
 {
 	const unicode_to_pp_entry *u1 = buf1, *u2 = buf2;
 	return  u1->code_point - u2->code_point;
-}
-
-const char *uni_to_kw(unicode code_point)
-{
-	static char buf[10];
-	sprintf(buf, "%%x%06X%%", code_point);
-	return buf;
 }
 
 /*
@@ -625,6 +923,7 @@ const int uni_to_pp(unicode cp)
 		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), uni_to_pp_entry_cmp);
 	return search_result != NULL ? (unsigned char)search_result->pp_char : -1;
 }
+
 /*
 
 {\tt get_char_unicode} : Extract a character unicode code point from {\tt line}, if a
@@ -660,6 +959,12 @@ get_char_unicode(char *line, unicode *value)
 	}
 }
 
+/*
+=======================
+Keyword File Processing
+=======================
+*/
+
 struct file_data keyword_F = 	{ "keyword file", 0, 0, 0 };
 
 struct keyword_information{
@@ -687,12 +992,13 @@ struct keyword_information{
 #define MAX_KW_LEN 50
 
 struct kw_information {
-	int num_keywords;
-	int max_kw_len;
-	struct keyword_information *char_code[256];
-	struct keyword_information *unicode_code[MAX_KEYWORDS];
-	struct keyword_information keyword[MAX_KEYWORDS];
-} kwi = {0, 0,};
+  int num_keywords;
+  int num_unicodes;
+  int max_kw_len;
+  struct keyword_information *char_code[256];
+  struct keyword_information *unicode_code[MAX_KEYWORDS];
+  struct keyword_information keyword[MAX_KEYWORDS];
+} kwi = {0, 0, 0};
 
 void
 add_new_keyword(
@@ -719,18 +1025,22 @@ add_new_keyword(
 
 	if(len > kwi.max_kw_len) kwi.max_kw_len = len;
 
+	ki = &kwi.keyword[kwi.num_keywords];
+
 	if(kind == KW_SAMEAS_UNKNOWN) {
-		int len2 = strlen(macro);
-		orig_kind = KW_SAMEAS;
-
-		if(len2 > MAX_KW_LEN) {
-			grumble1("sameas keyword too long", &keyword_F, true);
-		}
-
-		if(len2 > kwi.max_kw_len) kwi.max_kw_len = len2;
+	  int len2 = strlen(macro);
+	  orig_kind = KW_SAMEAS;
+	  
+	  if(len2 > MAX_KW_LEN) {
+	    grumble1("sameas keyword too long", &keyword_F, true);
+	  }
+	  /* not convinced this should be done if len2 > MAX_KW_LEN (rbj) */
+	  if(len2 > kwi.max_kw_len) kwi.max_kw_len = len2;
+	}
+	else {
+	  kwi.unicode_code[kwi.num_unicodes++] = ki;
 	}
 
-	ki = &kwi.keyword[kwi.num_keywords];
 	kwi.num_keywords++;
 
 	ki->name = name;
@@ -739,8 +1049,8 @@ add_new_keyword(
 	ki->orig_kind = orig_kind;
 	ki->act_kind = kind;
 	ki->macro = macro;
-	ki-> tex_arg = tex_arg;
-	ki-> tex_arg_sense = tex_arg_sense;
+	ki->tex_arg = tex_arg;
+	ki->tex_arg_sense = tex_arg_sense;
 
 	
 	if (debug & D_SHOW_KEYWORD_TABLE) {
@@ -752,6 +1062,9 @@ add_new_keyword(
 		grumble1("keywords unsorted", &keyword_F, true);
 	}
 }
+
+/* given a reference to a keyword this function finds the keyword informatino
+   for that keyword, returning its index in array kwi.keyword */
 
 int
 find_keyword(char *kw)
@@ -771,12 +1084,15 @@ find_keyword(char *kw)
 
 	return(NOT_FOUND);
 }
-int
 
+/* given a unicode code point this function finds the keyword informatino
+   for that keyword, returning its index in array kwi.unicode_code */
+
+int
 find_unicode_kwi(unicode uni)
 {
 	int lower_end = 0;
-	int top_end = kwi.num_keywords - 1;
+	int top_end = kwi.num_unicodes - 1;
 
 	while (lower_end <= top_end) {
 		int middle = (lower_end + top_end) / 2;
@@ -787,7 +1103,6 @@ find_unicode_kwi(unicode uni)
 		if(posn < 0)	top_end = middle - 1;
 		else		lower_end = middle + 1;
 	}
-
 	return(NOT_FOUND);
 }
 
@@ -856,6 +1171,9 @@ show_keywords(void)
 	}
 }
 
+/* this function, given two references to keyword_information
+   compares the keyword names */
+
 int
 compare_keyword_information(
 	const void *vp1,
@@ -866,6 +1184,9 @@ compare_keyword_information(
 	return(kw1->name == NULL || kw2->name == NULL
 		? -1 : strcmp(kw1->name, kw2->name));
 }
+
+/* this function, given two references to keyword_information
+   compares the unicode code points */
 
 int
 compare_keyword_unicode(
@@ -1322,6 +1643,7 @@ conclude_keywordfile(void)
 
 	if(stop_prog) EXIT(22);	
 }
+
 int
 get_hol_kw(char *str,
 	int * len,

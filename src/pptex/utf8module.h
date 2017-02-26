@@ -8,6 +8,22 @@ typedef struct {
 #define UNICODE_TO_PP_LEN 128
 unicode_to_pp_entry unicode_to_pp [UNICODE_TO_PP_LEN];
 
+/* String Utilities */
+char * skip_space(char *str);
+char * find_space(char *str);
+void string_n_copy(char *dest, char *source, int n);
+char * split_at_space(char *str);
+int str_match(char *prefix, char *str);
+
+/* find file */
+char * tilde_expand(char *name);
+int file_exists(char *name, int is_reg);
+int is_sym_link(char *name);
+int is_dir(char *name);
+void split_file_name(char *name, char **dir, char **base);
+char * read_link(char *name);
+char * get_real_name (char * name);
+
 void EXIT(int n);
 void error_top(void);
 void error1(char *msg);
@@ -30,10 +46,10 @@ void do_pp_to_unicode(void);
 #define MAX_KEYWORDS 4000
 #define MAX_KW_LEN 50
 struct keyword_information{
-       unicode uni;
-	short ech;
-	short orig_kind;
-	short act_kind;
+  unicode uni; /* unicode code point, -1 => none */
+  short ech;   /* extended character code, -1 => none */
+  short orig_kind; /* as read from keyword file */
+  short act_kind;  /* allowing for KW_SAMEAS */
 #define KW_NOT_SET 0
 #define KW_SIMPLE 1
 #define KW_INDEX 2
@@ -51,11 +67,12 @@ struct keyword_information{
 #define KW_RE_DELIMITER 1	/* The argument is delimited by something that matches the R.E. */
 };
 struct kw_information {
-	int num_keywords;
-	int max_kw_len;
-	struct keyword_information *char_code[256];
-	struct keyword_information *unicode_code[MAX_KEYWORDS];
-	struct keyword_information keyword[MAX_KEYWORDS];
+  int num_keywords;
+  int num_unicodes;
+  int max_kw_len;
+  struct keyword_information *char_code[256];
+  struct keyword_information *unicode_code[MAX_KEYWORDS];
+  struct keyword_information keyword[MAX_KEYWORDS];
 };
 
 struct kw_information kwi;
@@ -74,8 +91,6 @@ void show_keywords(void);
 int compare_keyword_information(const void *vp1, const void *vp2);
 void initialise_keyword_information(void);
 char *find_steering_file(char *name, char *file_type);
-void read_keyword_file(char *name);
-void conclude_keywordfile(void);
 
 #define MAX_LINE_LEN 1024
 struct file_data{
@@ -87,6 +102,24 @@ struct file_data{
 	char cur_line[MAX_LINE_LEN+1];
 };
 extern struct file_data keyword_F;
+int read_line(char *line, int max, struct file_data *file_F);
+void read_keyword_file(char *name);
+void conclude_keywordfile(void);
+
+struct limits{
+	int opt_list;
+	int file_name_area;
+	int non_copy_length;
+	int process_line_len;
+	int filter_len;
+	int view_file;
+	int keyword_file;
+	int source_file;
+	int num_keyword_files;
+} limits;
+
+#define MAX_KEYWORD_FILES 20
+
 extern char *program_name;
 extern int debug;
 

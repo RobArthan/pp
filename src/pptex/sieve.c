@@ -117,12 +117,7 @@ char *coprlemma1 =
 	"XXX.YYYwZZZ"
 #endif
      " Copyright Lemma 1 Ltd.";
-/*
-=TEX
 
-\HOLindexEntry{FPRINTF}
-=CALWAYS
-*/
 #define FPRINTF (void)fprintf
 #define PRINTF (void)printf
 #define PUTC (void)putc
