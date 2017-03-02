@@ -21,6 +21,13 @@
 #define PPENVDEBUG "PPENVDEBUG"
 #define SLASH_ETC "/etc"
 
+typedef char bool;
+enum {False = 0, True = 1};
+
+#define bool short
+#define true 1
+#define false 0
+
 /*
 ================
 String Utilities
@@ -42,8 +49,10 @@ skip_space(char *str)
 }
 
 /*
-{\tt find_space} : Return a pointer to the first space like character
-in "str".
+----------
+find_space
+----------
+Return a pointer to the first space like character in "str".
 */
 		     
 char *
@@ -59,8 +68,25 @@ find_space(char *str)
 	return(p);
 }
 
+bool is_uc_hexit(char ch)
+{
+	return ('0' <= ch && ch <= '9') || ('A' <= ch && ch <= 'F');
+}
+
+bool is_percent(char ch)
+{
+	return ch == '%';
+}
+bool is_x(char ch)
+{
+	return ch == 'x';
+}
+
 /*
-{\tt string_n_copy} : Copy a string of at most {\tt n} characters, but
+-------------
+string_n_copy
+-------------
+Copy a string of at most {\tt n} characters, but
 stop at an earlier null character.  Append a null character to the
 resultant string.  Thus the result string may occupy {\tt n+1}
 characters.  This routine is very similar to the library routine {\tt
@@ -78,8 +104,10 @@ string_n_copy(char *dest, char *source, int n)
 	*dest = '\0';
 }
 /*
-
-{\tt split_at_space} : Split the given string into two by overwriting
+--------------
+split_at_space
+--------------
+Split the given string into two by overwriting
 the first white space character in the argument with a null,
 effectively leaving the argument as the first word of string.  Then,
 skip further white space characters returning a pointer to the first
@@ -100,8 +128,10 @@ split_at_space(char *str)
 	return(p);
 }
 /*
-
-{\tt str_match} : Compares the two strings.  If the first string is a prefix of
+---------
+str_match
+---------
+Compares the two strings.  If the first string is a prefix of
 the second string then the length of the first string is returned.
 Otherwise 0 is returned.
 */
@@ -499,12 +529,14 @@ int debug = 0;
 #define NOT_FOUND (-1)
 
 struct file_data{
-	char *name;
-	char *file_name;
-	int line_no;
-	int grumbles;
-	FILE *fp;
-	char cur_line[MAX_LINE_LEN+1];
+  char *name;
+  char *file_name;
+  int line_no;
+  int grumbles;
+  FILE *fp;
+  char cur_line[MAX_LINE_LEN+1];
+  bool utf8;
+  unicode code_line[MAX_LINE_LEN+1];
 };
 
 /*
@@ -547,13 +579,6 @@ EXIT(int n)
   (void)exit(n);
 }
 
-typedef char bool;
-
-enum {False = 0, True = 1};
-
-#define bool short
-#define true 1
-#define false 0
 
 /*
 ========================
@@ -688,276 +713,6 @@ malloc_and_check(unsigned size, int err)
 	return(area);
 }
 
-/*
-=========================
-UNICODE and utf8 handling
-=========================
-
------------------------
-Unicode <-> ext mapping
------------------------
-
-Compare unicode code points in the unicode to pp table */
-
-int unicode_to_pp_entry_cmp(const void *buf1, const void *buf2)
-{
-	const unicode_to_pp_entry *u1 = buf1, *u2 = buf2;
-	return  u1->code_point - u2->code_point;
-}
-
-/* Convert a unicode code point to a hexadecimal in percents */
-
-const char *unicode_to_hex(unicode code_point)
-{
-	static char buf[10];
-	sprintf(buf, "%%x%06X%%", code_point);
-	return buf;
-}
-
-/* Translate a unicode code point to the corresponding pp ext char (if there is one) */
-
-const char unicode_to_ext(unicode cp)
-{	
-	unicode_to_pp_entry key, *search_result;
-	key.code_point = cp;
-	search_result = bsearch(&key, unicode_to_pp,
-		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), unicode_to_pp_entry_cmp);
-	return (search_result=NULL) ? (char) 0 : search_result -> pp_char;
-}
-
-/* Translate a unicode code point to pp ext char or else to hex in oercents */
-
-const char *unicode_to_ppk(unicode cp)
-{	
-	unicode_to_pp_entry key;
-	char search_result;
-	key.code_point = cp;
-	search_result = unicode_to_ext(cp);
-	return (search_result=(char)0) ? NULL : unicode_to_hex(cp);
-}
-
-/*
--------------------------------------
-Translations involving named keywords
--------------------------------------
-*/
-
-/* Find the keyword information for a unicode code point (if any)
-
-const *keyword_information unicode_to_kwi(unicode cp)
-{	
-	unicode_to_pp_entry key, *search_result;
-	key.code_point = cp;
-	search_result = bsearch(&key, unicode_to_pp,
-		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), unicode_to_pp_entry_cmp);
-	return (search_result=NULL) ? (char) 0 : search_result -> pp_char;
-}
-
-Convert a unicode code point to a keyword in percents */
-
-const char *unicode_to_kw(unicode code_point)
-{
-	static char buf[10];
-	sprintf(buf, "%%x%06X%%", code_point);
-	return buf;
-}
-
-unicode invalid_unicode(void)
-{
-	int whatgot;
-	fprintf(stderr, "%s: line %d: invalid utf-8 input\n", program_name, line);
-	unicodepp_error = 1;
-	whatgot = getchar();
-	while(whatgot != '\n' && whatgot != EOF) {
-		whatgot = getchar();
-	}
-	if(whatgot == '\n') {
-		line += 1;
-	}
-	return whatgot & 0xff;
-}
-
-unicode get_code_point(void)
-{
-	int whatgot, r, l;
-	whatgot = getchar();
-	if(whatgot == EOF) { return 0; }
-	if(whatgot == '\n') { line += 1; }
-	r = whatgot & 0xff;
-	if(r <= 0x7f) { return r; }
-	l = 0;
-	while(r & 0x80) {
-		r = (r & 0x7f) << 1;
-		l += 1;
-	}
-	if(l > 4) { return invalid_unicode(); }
-	r = r >> l;
-	while(--l) {
-		whatgot = getchar();
-		if(whatgot == EOF || ((whatgot & 0xc0) != 0x80)) {
-			return invalid_unicode();
-		}
-		r = (r << 6) | (whatgot & 0x3f);
-	}
-	return r;
-}
-void do_unicode_to_pp(void)
-{
-	unicode cp;
-	const char *pp_string;
-	cp = get_code_point();
-	while(cp) {
-		pp_string = unicode_to_ppk(cp);
-		printf("%s", pp_string);
-		cp = get_code_point();
-	}
-}
-enum {	S_INITIAL,
-	S_HAVE_PERCENT,
-	S_HAVE_X,
-	S_HAVE_HEXIT_1,
-	S_HAVE_HEXIT_2,
-	S_HAVE_HEXIT_3,
-	S_HAVE_HEXIT_4,
-	S_HAVE_HEXIT_5,
-	S_HAVE_HEXIT_6,
-	S_HAVE_KEYWORD};
-
-bool is_uc_hexit(char ch)
-{
-	return ('0' <= ch && ch <= '9') || ('A' <= ch && ch <= 'F');
-}
-bool is_percent(char ch)
-{
-	return ch == '%';
-}
-bool is_x(char ch)
-{
-	return ch == 'x';
-}
-void do_chars(int len, char *cs)
-{
-	while(len--) {
-		printf("%s", pp_to_unicode[(int)*cs++ & 0xff]);
-	}
-}
-bool do_keyword(unsigned u)
-{
-	if(u <= 0x7f) {
-		return False;
-	} else if (u <= 0x7ff) {
-		putchar(0xc0u | (u >> 6u));
-		putchar(0x80u | (u & 0x3fu));
-		return True;
-	} else if (u <= 0xffff) {
-		putchar(0xe0u | (u >> 12u));
-		putchar(0x80u | ((u & 0xfc0u) >> 6u));
-		putchar(0x80u | (u & 0x3fu));
-		return True;
-	} else if (u <= 0x10ffffu) {
-		putchar(0xf0u | (u >> 18u));
-		putchar(0x80u | ((u & 0x3f000u) >> 12u));
-		putchar(0x80u | ((u & 0xfc0u) >> 6u));
-		putchar(0x80u | (u & 0x3fu));
-		return True;
-	} else {
-		return False;
-	}
-}
-#define STEP(TST, ST) \
-	if((TST)(whatgot)) {\
-		state = (ST);\
-	} else {\
-		do_chars(l, buf);\
-		l = 0;\
-		state = S_INITIAL;\
-	};\
-	break;
-void do_pp_to_unicode (void)
-{
-	int whatgot, state, l;
-	char buf[9];
-	unsigned u;
-	l = 0;
-	state = S_INITIAL;
-	while ((whatgot = getchar()) != EOF) {
-		buf[l++] = whatgot;
-		switch(state) {
-			case S_INITIAL:      STEP(is_percent,  S_HAVE_PERCENT);
-			case S_HAVE_PERCENT: STEP(is_x,              S_HAVE_X);
-			case S_HAVE_X:       STEP(is_uc_hexit, S_HAVE_HEXIT_1);
-			case S_HAVE_HEXIT_1: STEP(is_uc_hexit, S_HAVE_HEXIT_2);
-			case S_HAVE_HEXIT_2: STEP(is_uc_hexit, S_HAVE_HEXIT_3);
-			case S_HAVE_HEXIT_3: STEP(is_uc_hexit, S_HAVE_HEXIT_4);
-			case S_HAVE_HEXIT_4: STEP(is_uc_hexit, S_HAVE_HEXIT_5);
-			case S_HAVE_HEXIT_5: STEP(is_uc_hexit, S_HAVE_HEXIT_6);
-			case S_HAVE_HEXIT_6: STEP(is_percent,  S_HAVE_KEYWORD);
-
-		}
-		if(state == S_HAVE_KEYWORD) {
-			sscanf(&buf[2], "%6X", &u);
-			if(!do_keyword(u)) { do_chars(l, buf); }
-			l = 0;
-			state = S_INITIAL;
-		}
-	}
-}
-int uni_to_pp_entry_cmp(const void *buf1, const void *buf2)
-{
-	const unicode_to_pp_entry *u1 = buf1, *u2 = buf2;
-	return  u1->code_point - u2->code_point;
-}
-
-/*
-uni_to_pp converts a unicode code point to either an ascii character
-(if < 128) or a ProofPower extended character (128-255) if possible.
-Otherwise returns -1.
-*/
-
-const int uni_to_pp(unicode cp)
-{	
-	unicode_to_pp_entry key, *search_result;
-	key.code_point = cp;
-	if (cp<128) return cp;
-	search_result = bsearch(&key, unicode_to_pp,
-		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), uni_to_pp_entry_cmp);
-	return search_result != NULL ? (unsigned char)search_result->pp_char : -1;
-}
-
-/*
-
-{\tt get_char_unicode} : Extract a character unicode code point from {\tt line}, if a
-code is obtained then return 1 and set {\tt value} to the code found.
-If no code found then return 0 and set "value" to 0.
-
-Unicode code points are one of:  hex with a leading "0x" or "0X"; octal
-with a leading "0"; or decimal numbers.  They must be in the
-range~$-1\sb{10}$ to~$ffffff\sb{16}$.
-(this check can be made tighter)
-
-*/
-
-int
-get_char_unicode(char *line, unicode *value)
-{
-	int ch = -1;		/* -1 ==> not a valid code */
-
-	int scan_ans;
-	int len;
-
-	scan_ans = sscanf(line, "%i%n", &ch, &len);
-
-	if(scan_ans != 1 || len != strlen(line))
-		ch = -1;
-
-	if(ch >= -1 && ch <= 0xFFFFFF) {
-		*value = ch;
-		return(1);
-	} else {
-		*value = 0;
-		return(0);
-	}
-}
 
 /*
 =======================
@@ -1063,7 +818,11 @@ add_new_keyword(
 	}
 }
 
-/* given a reference to a keyword this function finds the keyword informatino
+/*
+------------
+find_keyword
+------------
+given a reference to a keyword this function finds the keyword informatino
    for that keyword, returning its index in array kwi.keyword */
 
 int
@@ -1082,27 +841,6 @@ find_keyword(char *kw)
 		else		lower_end = middle + 1;
 	}
 
-	return(NOT_FOUND);
-}
-
-/* given a unicode code point this function finds the keyword informatino
-   for that keyword, returning its index in array kwi.unicode_code */
-
-int
-find_unicode_kwi(unicode uni)
-{
-	int lower_end = 0;
-	int top_end = kwi.num_unicodes - 1;
-
-	while (lower_end <= top_end) {
-		int middle = (lower_end + top_end) / 2;
-		int posn = kwi.unicode_code[middle]->uni - uni;
-
-		if(posn == 0) return(middle);
-
-		if(posn < 0)	top_end = middle - 1;
-		else		lower_end = middle + 1;
-	}
 	return(NOT_FOUND);
 }
 
@@ -1171,7 +909,11 @@ show_keywords(void)
 	}
 }
 
-/* this function, given two references to keyword_information
+/*
+---------------------------
+compare_keyword_information
+---------------------------
+this function, given two references to keyword_information
    compares the keyword names */
 
 int
@@ -1185,7 +927,11 @@ compare_keyword_information(
 		? -1 : strcmp(kw1->name, kw2->name));
 }
 
-/* this function, given two references to keyword_information
+/*
+---------------------------
+compare_keyword_information
+---------------------------
+this function, given two references to keyword_information
    compares the unicode code points */
 
 int
@@ -1212,8 +958,47 @@ void initialise_keyword_information(void) {
 	add_new_keyword("%%", -1, -1, KW_SIMPLE, "\\%", NULL, 0);
 };
 
+/*
+----------------
+get_char_unicode
+----------------
+Extract a character unicode code point from {\tt line}, if a
+code is obtained then return 1 and set {\tt value} to the code found.
+If no code found then return 0 and set "value" to 0.
+
+Unicode code points are one of:  hex with a leading "0x" or "0X"; octal
+with a leading "0"; or decimal numbers.  They must be in the
+range~$-1\sb{10}$ to~$ffffff\sb{16}$.
+(this check can be made tighter)
+
+*/
+
+int
+get_char_unicode(char *line, unicode *value)
+{
+	int ch = -1;		/* -1 ==> not a valid code */
+
+	int scan_ans;
+	int len;
+
+	scan_ans = sscanf(line, "%i%n", &ch, &len);
+
+	if(scan_ans != 1 || len != strlen(line))
+		ch = -1;
+
+	if(ch >= -1 && ch <= 0xFFFFFF) {
+		*value = ch;
+		return(1);
+	} else {
+		*value = 0;
+		return(0);
+	}
+}
 
 /*
+-----------
+get_tex_arg
+-----------
 A keyword may be defined to have a {\TeX} argument, given as a regular expression
 following a {\#} sign not escaped by a backslash in the macro part of the keyword file line.
 The  following function checks for this regular expression, replaces the {\#} sign by a null
@@ -1313,7 +1098,10 @@ find_steering_file(char *name, char *file_type)
 }
 
 /*
-{\tt read_line} : Reads a line into a buffer, checking that the line
+---------
+read_line
+---------
+Reads a line into a buffer, checking that the line
 isn't too long and returning the number of characters read, i.e., the
 number of characters stored in argument {\tt line} but excluding the
 trailing null.
@@ -1342,7 +1130,10 @@ read_line(char *line, int max, struct file_data *file_F)
 }
 
 /*
-{\tt read_steering_line} : Read a steering file line, possibly escaped
+------------------
+read_steering_line
+------------------
+Read a steering file line, possibly escaped
 over several input lines.  The argument {\tt line_no} is incremented
 for each line read.
 */
@@ -1366,6 +1157,32 @@ read_steering_line(char *line, struct file_data *file_F)
 			file_F->line_no, file_F->cur_line);
 	}
 }
+
+int uni_to_pp_entry_cmp(const void *buf1, const void *buf2)
+{
+	const unicode_to_pp_entry *u1 = buf1, *u2 = buf2;
+	return  u1->code_point - u2->code_point;
+}
+
+/*
+---------
+uni_to_pp
+---------
+converts a unicode code point to either an ascii character
+(if < 128) or a ProofPower extended character (128-255) if possible.
+Otherwise returns -1.
+*/
+
+const int uni_to_pp(unicode cp)
+{	
+	unicode_to_pp_entry key, *search_result;
+	key.code_point = cp;
+	if (cp<128) return cp;
+	search_result = bsearch(&key, unicode_to_pp,
+		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), uni_to_pp_entry_cmp);
+	return search_result != NULL ? (unsigned char)search_result->pp_char : -1;
+}
+
 
 void
 read_keyword_file(char *name)
@@ -1657,7 +1474,7 @@ get_hol_kw(char *str,
 	char kw[MAX_KW_LEN+1];
 
 	kw[kwlen++] = '%';
-	while(			kwlen<=kwi.max_kw_len
+	while(			kwlen<=MAX_KW_LEN
 			&&	(ch = str[kwlen]) != '\0'
 			&&	ch != '%'
 			&&	isascii(ch)
@@ -1702,4 +1519,349 @@ grumble("unknown keyword: %s", kw, file_F, true);
 
 
 	return(ans);
+}
+
+/*
+=========================
+UNICODE and utf8 handling
+=========================
+
+-----------------------
+Unicode <-> ext mapping
+-----------------------
+
+Convert a unicode code point to a hexadecimal in percents */
+
+const char *unicode_to_hex(unicode code_point)
+{
+	static char buf[10];
+	sprintf(buf, "%%x%06X%%", code_point);
+	return buf;
+}
+
+/*
+-------------------------------
+Using Unicode <-> pp ext tables
+-------------------------------
+These are the tables unicode_to_pp and pp_to_unicode,
+included as unicodepptab.h and ppunicodetab.h
+*/
+
+/* Compare unicode code points in the unicode to pp table.
+Used in binary search. 
+*/
+
+int unicode_to_pp_entry_cmp(const void *buf1, const void *buf2)
+{
+	const unicode_to_pp_entry *u1 = buf1, *u2 = buf2;
+	return  u1->code_point - u2->code_point;
+}
+
+/* Translate a unicode code point to the corresponding pp ext char (if there is one),
+otherwise, return 0 */
+
+const char unicode_to_ext(unicode cp)
+{	
+	unicode_to_pp_entry key, *search_result;
+	key.code_point = cp;
+	search_result = bsearch(&key, unicode_to_pp,
+		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), unicode_to_pp_entry_cmp);
+	return (search_result=NULL) ? (char) 0 : search_result -> pp_char;
+}
+
+/* Translate a unicode code point to pp ext char or else to hex in percents */
+
+const char *unicode_to_ppk(unicode cp)
+{	
+	char search_result;
+	search_result = unicode_to_ext(cp);
+	return (search_result=(char)0) ? NULL : unicode_to_hex(cp);
+}
+
+/*
+-------------------------------------
+Translations involving named keywords
+-------------------------------------
+*/
+
+/* given a unicode code point this function finds the keyword informatino
+   for that code point, returning its index in array kwi.unicode_code */
+
+int
+find_unicode_kwi(unicode uni)
+{
+	int lower_end = 0;
+	int top_end = kwi.num_unicodes - 1;
+
+	while (lower_end <= top_end) {
+		int middle = (lower_end + top_end) / 2;
+		int posn = kwi.unicode_code[middle]->uni - uni;
+
+		if(posn == 0) return(middle);
+
+		if(posn < 0)	top_end = middle - 1;
+		else		lower_end = middle + 1;
+	}
+	return(NOT_FOUND);
+}
+
+
+/* Compare unicode code points in the keyword_information table.
+Used in binary search. */
+
+int kwi_unicode_cmp(const void *buf1, const void *buf2)
+{
+	const struct keyword_information *u1 = buf1, *u2 = buf2;
+	return  u1->uni - u2->uni;
+}
+
+/* Find the keyword information for a unicode code point (if any) */
+
+struct keyword_information *unicode_to_kwi(unicode cp)
+{	
+  struct keyword_information key;
+  struct keyword_information *search_result;
+  key.uni = cp;
+  search_result = bsearch(&key, kwi.unicode_code,
+			  kwi.num_unicodes, sizeof(search_result), compare_keyword_unicode);
+  return search_result;
+}
+
+/*
+Convert a unicode code point to a keyword in percents.
+*/
+
+const char *unicode_to_kw(unicode code_point)
+{
+  struct keyword_information *kwi = unicode_to_kwi(code_point);  
+  return (kwi = NULL) ? unicode_to_hex(code_point) : kwi->name;
+}
+
+/* Convert unicode code point to ascii or a percent named keyword
+   or to a percent hex code */ 
+
+const char *unicode_to_kwa(unicode code_point)
+{
+  static char ascii[2];
+  if (code_point <= 0x7F) {
+    ascii[0] = (unsigned char) code_point;
+    ascii[1] = 0;
+    return ascii;
+  }
+  else return unicode_to_kw (code_point);
+}
+
+
+/* This function is used to report an error in a utf8 input stream.
+   It also skips to the next newline or to EOF.  */
+
+unicode invalid_unicode(void)
+{
+	int whatgot;
+	fprintf(stderr, "%s: line %d: invalid utf-8 input\n", program_name, line);
+	unicodepp_error = 1;
+	whatgot = getchar();
+	while(whatgot != '\n' && whatgot != EOF) {
+		whatgot = getchar();
+	}
+	if(whatgot == '\n') {
+		line += 1;
+	}
+	return whatgot & 0xff;
+}
+
+/* Read a single unicode code point from a utf8 stdin */
+
+unicode get_code_point(void)
+{
+	int whatgot, r, l;
+	whatgot = getchar();
+	if(whatgot == EOF) { return 0; }
+	if(whatgot == '\n') { line += 1; }
+	r = whatgot & 0xff;
+	if(r <= 0x7f) { return r; }
+	l = 0;
+	while(r & 0x80) {
+		r = (r & 0x7f) << 1;
+		l += 1;
+	}
+	if(l > 4) { return invalid_unicode(); }
+	r = r >> l;
+	while(--l) {
+		whatgot = getchar();
+		if(whatgot == EOF || ((whatgot & 0xc0) != 0x80)) {
+			return invalid_unicode();
+		}
+		r = (r << 6) | (whatgot & 0x3f);
+	}
+	return r;
+}
+
+/* this procedure transcribed a utf8 input stream to a ProofPower
+   ext output stream.  If an input is ascii it goes straight through.
+   If it corresponds to an extended character then that extended
+   character goes out, otherwise an hex code in percents is output.
+*/
+
+void do_unicode_to_ppe(void)
+{
+	unicode cp;
+	const char *pp_string;
+	cp = get_code_point();
+	while(cp) {
+		pp_string = unicode_to_ppk(cp);
+		printf("%s", pp_string);
+		cp = get_code_point();
+	}
+}
+
+/* this procedure transcribed a utf8 input stream to a ProofPower
+   ascii output stream.  If an input is ascii it goes straight through.
+   If it corresponds to a named keyword then that percent keyword goes out,
+   otherwise a hex code in percents is output.
+*/
+
+void do_unicode_to_ppa(void)
+{
+	unicode cp;
+	const char *pp_string;
+	cp = get_code_point();
+	while(cp) {
+		pp_string = unicode_to_kwa(cp);
+		printf("%s", pp_string);
+		cp = get_code_point();
+	}
+}
+
+enum {	S_INITIAL,
+	S_HAVE_PERCENT,
+	S_HAVE_X,
+	S_HAVE_HEXIT_1,
+	S_HAVE_HEXIT_2,
+	S_HAVE_HEXIT_3,
+	S_HAVE_HEXIT_4,
+	S_HAVE_HEXIT_5,
+	S_HAVE_HEXIT_6,
+	S_HAVE_KEYWORD};
+
+void do_chars(int len, char *cs)
+{
+	while(len--) {
+		printf("%s", pp_to_unicode[(int)*cs++ & 0xff]);
+	}
+}
+
+/*
+----------
+do_keyword
+----------
+This procedure writes to the standard output a utf8 coded unicode code point,
+returning the value True, unless its unsigned is ascii
+or is greater than 0x10FFFF, in which case it returns False without output.
+*/ 
+
+bool do_keyword(unsigned u)
+{
+	if(u <= 0x7f) {
+		return False;
+	} else if (u <= 0x7ff) {
+		putchar(0xc0u | (u >> 6u));
+		putchar(0x80u | (u & 0x3fu));
+		return True;
+	} else if (u <= 0xffff) {
+		putchar(0xe0u | (u >> 12u));
+		putchar(0x80u | ((u & 0xfc0u) >> 6u));
+		putchar(0x80u | (u & 0x3fu));
+		return True;
+	} else if (u <= 0x10ffffu) {
+		putchar(0xf0u | (u >> 18u));
+		putchar(0x80u | ((u & 0x3f000u) >> 12u));
+		putchar(0x80u | ((u & 0xfc0u) >> 6u));
+		putchar(0x80u | (u & 0x3fu));
+		return True;
+	} else {
+		return False;
+	}
+}
+
+/*
+-------------------
+output_utf8_unicode
+-------------------
+(like do_keyword except that if you give it ascii it outputs it)
+This procedure writes to the standard output a utf8 coded unicode code point,
+returning the value True, unless it is greater than 0x10FFFF,
+in which case it returns False without output.
+*/ 
+
+bool output_utf8_unicode(unsigned u)
+{
+	if(u <= 0x7f) {
+	  putchar(u);
+	  return True;
+	} else if (u <= 0x7ff) {
+		putchar(0xc0u | (u >> 6u));
+		putchar(0x80u | (u & 0x3fu));
+		return True;
+	} else if (u <= 0xffff) {
+		putchar(0xe0u | (u >> 12u));
+		putchar(0x80u | ((u & 0xfc0u) >> 6u));
+		putchar(0x80u | (u & 0x3fu));
+		return True;
+	} else if (u <= 0x10ffffu) {
+		putchar(0xf0u | (u >> 18u));
+		putchar(0x80u | ((u & 0x3f000u) >> 12u));
+		putchar(0x80u | ((u & 0xfc0u) >> 6u));
+		putchar(0x80u | (u & 0x3fu));
+		return True;
+	} else {
+		return False;
+	}
+}
+
+/*
+----------------
+do_pp_to_unicode
+----------------
+Translate from ProofPower ascii/ext format to utf8 ecoded unicode.
+*/
+
+#define STEP(TST, ST)				\
+	if((TST)(whatgot)) {\
+		state = (ST);\
+	} else {\
+		do_chars(l, buf);\
+		l = 0;\
+		state = S_INITIAL;\
+	};\
+	break;
+
+void do_pp_to_unicode (void)
+{
+	int whatgot, state, l;
+	char buf[9];
+	unsigned u;
+	l = 0;
+	state = S_INITIAL;
+	while ((whatgot = getchar()) != EOF) {
+		buf[l++] = whatgot;
+		switch(state) {
+			case S_INITIAL:      STEP(is_percent,  S_HAVE_PERCENT);
+			case S_HAVE_PERCENT: STEP(is_x,              S_HAVE_X);
+			case S_HAVE_X:       STEP(is_uc_hexit, S_HAVE_HEXIT_1);
+			case S_HAVE_HEXIT_1: STEP(is_uc_hexit, S_HAVE_HEXIT_2);
+			case S_HAVE_HEXIT_2: STEP(is_uc_hexit, S_HAVE_HEXIT_3);
+			case S_HAVE_HEXIT_3: STEP(is_uc_hexit, S_HAVE_HEXIT_4);
+			case S_HAVE_HEXIT_4: STEP(is_uc_hexit, S_HAVE_HEXIT_5);
+			case S_HAVE_HEXIT_5: STEP(is_uc_hexit, S_HAVE_HEXIT_6);
+			case S_HAVE_HEXIT_6: STEP(is_percent,  S_HAVE_KEYWORD);
+
+		}
+		if(state == S_HAVE_KEYWORD) {
+			sscanf(&buf[2], "%6X", &u);
+			if(!do_keyword(u)) { do_chars(l, buf); }
+			l = 0;
+			state = S_INITIAL;
+		}
+	}
 }

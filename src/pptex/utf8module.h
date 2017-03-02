@@ -8,6 +8,13 @@ typedef struct {
 #define UNICODE_TO_PP_LEN 128
 unicode_to_pp_entry unicode_to_pp [UNICODE_TO_PP_LEN];
 
+typedef char bool;
+enum {False = 0, True = 1};
+
+#define bool short
+#define true 1
+#define false 0
+
 /* String Utilities */
 char * skip_space(char *str);
 char * find_space(char *str);
@@ -94,15 +101,18 @@ char *find_steering_file(char *name, char *file_type);
 
 #define MAX_LINE_LEN 1024
 struct file_data{
-	char *name;
-	char *file_name;
-	int line_no;
-	int grumbles;
-	FILE *fp;
-	char cur_line[MAX_LINE_LEN+1];
+  char *name;
+  char *file_name;
+  int line_no;
+  int grumbles;
+  FILE *fp;
+  char cur_line[MAX_LINE_LEN+1];
+  bool utf8;
+  unicode code_line[MAX_LINE_LEN+1];
 };
 extern struct file_data keyword_F;
 int read_line(char *line, int max, struct file_data *file_F);
+void read_steering_line(char *line, struct file_data *file_F);
 void read_keyword_file(char *name);
 void conclude_keywordfile(void);
 
@@ -140,11 +150,5 @@ int get_hol_kw(char *str,
 	int warn,
 	struct file_data *file_F);
 extern unsigned char character_flags[256];
-typedef char bool;
-enum {False = 0, True = 1};
-
-#define bool short
-#define true 1
-#define false 0
 
 #endif

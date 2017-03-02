@@ -1,6 +1,25 @@
 # This makefile is a convenience during testing, allowing to check a
 # complete build in the order pptex, dev, xpp, hol, zed, daz.
 
+# default make target, gives a list of more useful targets
+default:
+	@echo "The following are the generally useful targets:"
+	@echo " "
+	@echo "make dir.ldd	(does cd dir; make -f dir.mkf clean, inst)"
+	@echo "make clean	(rm *.ldd)"
+	@echo "make all	(xpp.ldd daz.ldd, list db bin dirs)"
+	@echo "make rebuild	(clkean, all)"
+
+env:
+	. ../dev_env
+
+all: xpp.ldd daz.ldd list
+
+clean:
+	-rm *ldd
+
+rebuild: clean all
+
 pptex.ldd:
 	cd pptex; make -f pptex.mkf clean; make -f pptex.mkf inst
 	touch pptex.ldd
@@ -27,4 +46,3 @@ daz.ldd:	zed.ldd
 
 list:
 	ls -lR ../bld/bin ../bld/db
-

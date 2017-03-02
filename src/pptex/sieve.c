@@ -25,14 +25,10 @@ the findfile program (which may be found in findfile.c).
 
 Most of the master source texts on the FST project are held in
 ``document'' files that contain a mixture of narrative text, \LaTeX{}
-commands and program text written in various languages.  This document
-is an example, it contains narrative, C~language program code and a
-small amount of other text.  The purpose of the {\tt sieve} program,
+commands and program text written in various languages.
+The purpose of the {\tt sieve} program,
 is to sieve out (also termed: strip out)
 various parts of the document for various purposes.
-This sieving obtains a particular ``view'' of the document; these
-include the view that \LaTeX{} needs when formatting the document, the
-C~view needed when compiling, and so on.
 
 \subsubsection{Dependencies}
 
@@ -68,12 +64,9 @@ Implement support for utf8 file and unicode characters
 
 \section{SIEVE PROGRAM}
 
-
 \subsection{Initial Declarations}
-
-Note that the end of comment symbol below completes the C~comment that
-contains all of the introductory material in this document.
 */
+
 #define SIEVE_PROG
 
 #include <stdio.h>
@@ -172,10 +165,6 @@ Several diagnostic outputs are provided, they are controlled by the
 {\tt-d} command option which sets the {\tt debug} flag.
 These outputs are written to the standard output.
 
-\HOLindexEntry{debug_data}
-\HOLindexEntry{flag..debug}
-\HOLindexEntry{purpose..debug}
-\HOLindexEntry{D_\ldots}
 =SIEVE_PROG
 */
 struct debug_data{
@@ -220,16 +209,10 @@ source of the fault, these are printed using function {\tt EXIT}.
 Successful completion of sieving also completes via this routine,
 but with a code of zero.
 
-=IGNORE
 EXIT codes are allocated sequentially starting at 0.
 The next free error code is
 41
 all codes below this are used.
-
-=TEX
-
-\HOLindexEntry{usage}
-=SIEVE_PROG
 */
 void
 usage(void)
@@ -241,7 +224,6 @@ usage(void)
 }
 /*
 =TEX
-
 
 \HOLindexEntry{handle_sigpipe}
 =SIEVE_PROG
@@ -272,10 +254,6 @@ init_signals(void)
 
 The input file controls are now located in the utf8module, so that it can use them in processing the keyword file.
 They are also used in the sieve program for the view file and the main (standard) input stream.
-
-\HOLindexEntry{view_F}
-\HOLindexEntry{main_F}
-=SIEVE_PROG
 */
 
 struct file_data view_F = 		{ "view file", 0, 0, 0 };
@@ -302,17 +280,6 @@ directive keyword by seeing if the {\tt SND_CHAR_DIR_KW} flag is set.
 These flags are initialized with~``{\tt=}'' and~``{\tt\%}'' having the
 their {\tt DIRECTIVE_CHAR} flag set.  As directive characters and
 keywords are read the appropriate flags are set.
-
-\HOLindexEntry{DIRECTIVE_CHAR}
-\HOLindexEntry{IS_DIRECTIVE_CHAR}
-\HOLindexEntry{SET_DIRECTIVE_CHAR}
-\HOLindexEntry{SND_CHAR_DIR_KW}
-\HOLindexEntry{IS_SND_CHAR_DIR_KW}
-\HOLindexEntry{SET_SND_CHAR_DIR_KW}
-\HOLindexEntry{VERB_ALONE_CH}
-\HOLindexEntry{IS_VERB_ALONE_CH}
-\HOLindexEntry{SET_VERB_ALONE_CH}
-=SIEVE_PROG
 */
 
 #define DIRECTIVE_CHAR 1
@@ -336,9 +303,6 @@ The remaining flags are available for future expansion.
 Associated with some of the actions there are a number
 of options available.
 
-\HOLindexEntry{options_available}
-\HOLindexEntry{name..options_available}
-\HOLindexEntry{flag..options_available}
 =SIEVE_PROG
 */
 typedef struct{
@@ -348,15 +312,12 @@ typedef struct{
 /*
 =TEX
 
-\HOLindexEntry{OPT_\ldots}
 The {\tt flags} may take one of the following values.
 
 \begin{itemize}
 
 \item Lines are to be processed for the verbatim-like formal text
 	environments.  This flag implies {\tt OPT_LATEX} and {\tt OPT_CHAR}.
-
-=SIEVE_PROG
 */
 #define OPT_VERBATIM 1
 /*
@@ -472,8 +433,6 @@ The {\tt flags} may take one of the following values.
 Now do some checking that these flags are well-defined.
 Other checks are made in the startup function, {\tt initialize}.
 
-\HOLindexEntry{AND_FLAGS}
-\HOLindexEntry{OR_FLAGS}
 =SIEVE_PROG
 */
 #define AND_FLAGS	(	OPT_CHAR \
@@ -512,7 +471,6 @@ Other checks are made in the startup function, {\tt initialize}.
 The options are gathered together with their keywords for function {\tt
 get_options} below.
 
-\HOLindexEntry{cat_options}
 =SIEVE_PROG
 */
 options_available cat_options[] = {
@@ -542,15 +500,12 @@ options_available arg_options[] = {
 	{NULL, 0}
 };
 /*
-=TEX
 
-\HOLindexEntry{get_options}
 {\tt get_options} : Reads the text of argument {\tt filt} looking for
 any option keywords from argument {\tt opts}.  The flag values for each
 keyword found are logically ORed to form the result value.  Any
 characters that are not keywords indicate errors.
 
-=SIEVE_PROG
 */
 int
 get_options(options_available *opts, char *filt)
@@ -660,28 +615,6 @@ entries in the array must be sorted on the {\tt name} field so that
 function {\tt find_action} works.  This ordering is checked in function
 {\tt check\-_program\-_initializations}.
 
-\HOLindexEntry{actions_available}
-\HOLindexEntry{name::actions_available}
-\HOLindexEntry{arg_type::actions_available}
-\HOLindexEntry{copy_action::actions_available}
-\HOLindexEntry{code::actions_available}
-\HOLindexEntry{options::actions_available}
-\HOLindexEntry{ARGS_NO}
-\HOLindexEntry{ARGS_YES}
-\HOLindexEntry{ARGS_OPT}
-\HOLindexEntry{UNKNOWN_ACT}
-\HOLindexEntry{IGNORE_ACT}
-\HOLindexEntry{CAT_ACT}
-\HOLindexEntry{ECHO_ACT}
-\HOLindexEntry{ECHONL_ACT}
-\HOLindexEntry{FILTER_ACT}
-\HOLindexEntry{NL_ACT}
-\HOLindexEntry{ML_STRING_ACT}
-\HOLindexEntry{APPEND_ACT}
-\HOLindexEntry{WRITE_ACT}
-\HOLindexEntry{ARGS_SET_UP}
-\HOLindexEntry{ARG_ACTIONS}
-\HOLindexEntry{NUM_ACTIONS}
 =SIEVE_PROG
 */
 struct actions_available{
@@ -839,18 +772,6 @@ typedef struct{
 	char *op_file;
 } cat_filt_action;
 /*
-=TEX
-
-\HOLindexEntry{cat_filt}
-\HOLindexEntry{cat..cat_filt}
-\HOLindexEntry{num_actions..cat_filt}
-\HOLindexEntry{cfa..cat_filt}
-\HOLindexEntry{is_one_liner..cat_filt}
-\HOLindexEntry{has_copy_action..cat_filt}
-\HOLindexEntry{min_args..cat_filt}
-\HOLindexEntry{max_args..cat_filt}
-\HOLindexEntry{extra_flags..cat_filt}
-=SIEVE_PROG
 */
 typedef    struct{
 	    char *cat;
@@ -1071,19 +992,6 @@ holds the arguments from the directive line plus indexes into the table
 of known categories.  The arguments are numbered~1~to~9, additionally
 argument~0 refers to the directive name.
 
-\HOLindexEntry{dir_info}
-\HOLindexEntry{num_dl_args::dir_info}
-\HOLindexEntry{cat::dir_info}
-\HOLindexEntry{dl_words::dir_info}
-\HOLindexEntry{dl_line::dir_info}
-\HOLindexEntry{dir_line::dir_info}
-\HOLindexEntry{table_index::dir_info}
-\HOLindexEntry{cur_act_index::dir_info}
-\HOLindexEntry{tab::dir_info}
-\HOLindexEntry{current_action::dir_info}
-\HOLindexEntry{cur_fp::dir_info}
-\HOLindexEntry{cur_fp_class::dir_info}
-\HOLindexEntry{FP_\ldots}
 =SIEVE_PROG
 */
 #define MAX_DIR_ARGS 9
@@ -1114,11 +1022,6 @@ typedef struct{
 #define FP_OTHERFILE 3
 } dir_info;
 /*
-=TEX
-
-\HOLindexEntry{init_directive_line}
-\HOLindexEntry{dump_dir_info}
-=SIEVE_PROG
 */
 void
 init_directive_line(dir_info *di)
@@ -1229,9 +1132,10 @@ copy_macro_arg(
 }
 /*
 =TEX
-
-\HOLindexEntry{expand_macro}
-{\tt expand_macro} : Expand the text of {\tt in_line} into the area {\tt
+------------
+expand_macro
+------------
+Expand the text of {\tt in_line} into the area {\tt
 out_line} which is {\tt lenout_line} characters long.  The macro
 parameters are found in {\tt di}.
 
@@ -1879,7 +1783,7 @@ with a leading "0"; or decimal numbers.
 Character codes are now expected to be UNICODE code points.
 They must be in the range~$-1\sb{10}$ to~$xFFFFFF\sb{16}$ (this needs to be refined a bit).
 
-
+NOTE: this is not in use.
 
 =SIEVE_PROG
 */
@@ -2132,8 +2036,6 @@ complete_actions(dir_info *di)
 \subsection{Auxiliaries For Source File Line Processing}
 
 
-\HOLindexEntry{copy_PrNN}
-\label{FunCopyPrNN}
 {\tt copy_PrNN} : Writes the characters `\verb|\Pr|$\cal NN$\verb|{}|'
 starting at {\tt str} where the `$\cal NN$' is the hexadecimal value of
 `{\tt code~\&~0xFF}' but the hexadecimal digits are encoded 0=>`{\tt
@@ -2196,7 +2098,6 @@ copy_string(char *source, char *dest, int max)
 /*
 =TEX
 
-\HOLindexEntry{copy_keyword}
 {\tt copy_keyword} :  Copies the keyword {\tt kw} read from the input
 string into the {\tt dest} string for up to {\tt max} characters.
 Return the number of characters written to {\tt dest}.  The keyword is
@@ -2229,15 +2130,17 @@ copy_keyword(
 	return(outp);
 }
 /*
-=TEX
-
-\subsection{Source File Line Processing}
+===========================
+Source File Line Processing
+===========================
 
 These routines are called by function {\tt process_line} to
 perform the various manipulations of the non-directive lines.
 
-\HOLindexEntry{mlstring}
-{\tt mlstring} :  Convert input argument to a Standard ML string, but
+--------
+mlstring
+--------
+Convert input argument to a Standard ML string, but
 without the enclosing string quotes, write the result to the given
 output stream.  Convert pretty characters to their decimal form, e.g.,
 the byte value decimal \verb|234| is written as the characters
@@ -2246,8 +2149,6 @@ the byte value decimal \verb|234| is written as the characters
 of this routine) convert even numbered ``~\verb|`|~'' characters (as
 counted when read) into ``~\verb|'|~''characters.  Other characters are
 left unchanged.
-
-=SIEVE_PROG
 */
 void
 mlstring(char *line, FILE    *fp)
@@ -2286,26 +2187,25 @@ mlstring(char *line, FILE    *fp)
 	PUTC('\n', fp);
 }
 /*
-=TEX
-
-\HOLindexEntry{main_convert}
-{\tt main_convert} : Provides the conversion routine used for most things.
+------------
+main_convert
+------------
+Provides the conversion routine used for most things.
 If it is called with no flags set it just copies the text through
 unchanged.
 
 Various conversions are supported, they are described with the
 definitions of the options flags in section~\ref{ActionOptions}.
 
-\HOLindexEntry{MAIN_LEEWAY}
+MAIN_LEEWAY
+-----------
 To avoid complicating the code below by excessive testing of
 overflowing the line length macro {\tt MAIN_LEEWAY} allows a little
 leeway for adding a few single characters.  The value allows at least
 the number of characters that the conversions below may create.
 
-\HOLindexEntry{MAX_TEX_ARG_NESTING}
 {\tt MAX_TEX_ARG_NESTING} defines the length of the stack containing arguments
 for {\TeX}.
-=SIEVE_PROG
 */
 #define MAIN_LEEWAY (MAX_KW_LEN+5)
 #define MAX_TEX_ARG_NESTING (16)
@@ -2664,15 +2564,15 @@ main_convert(
 }
 /*
 =TEX
-
-\subsection{Sieving Routines}
-
-\HOLindexEntry{process_line}
-{\tt process_line} : Handles each non-directive line, it selects the
+================
+Sieving Routines
+================
+------------
+process_line
+------------
+Handles each non-directive line, it selects the
 appropriate type of processing.  Function {\tt sieve} is in overall control of
 the sieving phase of the program.
-
-=SIEVE_PROG
 */
 void
 process_line(char *line, dir_info *di)
@@ -2736,15 +2636,14 @@ process_line(char *line, dir_info *di)
 }
 /*
 =TEX
-
-\HOLindexEntry{set_up_for_copy_action}
-{\tt set_up_for_copy_action} :  After decoding a directive line set up
+----------------------
+set_up_for_copy_action
+----------------------
+After decoding a directive line set up
 the copying action.  The actual copying is done via {\tt process_line}
 which is called for the non-directive lines.  A main activity here is
 to set up the pipe for a filter or the output for write or appending.
 These are set into the given {\tt di}.
-
-=SIEVE_PROG
 */
 void
 set_up_for_copy_action(dir_info *di)
@@ -2814,13 +2713,12 @@ set_up_for_copy_action(dir_info *di)
 }
 /*
 =TEX
-
-\HOLindexEntry{set_up_new_category}
-{\tt set_up_new_category} : Update the directive information in {\tt
+-------------------
+set_up_new_category
+-------------------
+Update the directive information in {\tt
 di} ready to process a new category whose name, arguments, etc., are
 given in {\tt di}.
-
-=SIEVE_PROG
 */
 void
 set_up_new_category(dir_info *di)
@@ -2894,11 +2792,9 @@ set_up_new_category(dir_info *di)
 	}
 }
 /*
-=TEX
-
-\subsection{Directive Line Decoding}
-
-\HOLindexEntry{decode_directive_line}
+---------------------
+decode_directive_line
+---------------------
 {\tt decode_directive_line} :  Return 0 if the line is not a directive
 line.  If it is a directive line then split it into its component
 pieces, which comprise the category and some arguments.  The last
@@ -2932,8 +2828,6 @@ The category name is built as follows.
 	plus the word immediately after it.
 
 \end{itemize}
-
-=SIEVE_PROG
 */
 int
 decode_directive_line(
@@ -3124,13 +3018,11 @@ decode_directive_line(
 	return(1);
 }
 /*
-=TEX
-
-\HOLindexEntry{is_same_directive}
-{\tt is_same_directive} : Return 1 if the decoded directive
+-----------------
+is_same_directive
+-----------------
+Return 1 if the decoded directive
 lines are the same, 0 otherwise.
-
-=SIEVE_PROG
 */
 int
 is_same_directive(dir_info *old, dir_info *new)
@@ -3149,11 +3041,10 @@ is_same_directive(dir_info *old, dir_info *new)
 }
 /*
 =TEX
-
-\subsection{Main Sieve Function}
-
-\HOLindexEntry{main_sieve}
-{\tt main_sieve} : Read standard input and process it according to the
+----------
+main_sieve
+----------
+Read standard input and process it according to the
 steering and keyword files already read.
 
 The first block of text is of an ignored category.
@@ -3163,8 +3054,6 @@ sign, (2) a directive character or (3) a directive keyword.  If one of
 these three starting sequences is found the line is regarded as a
 directive line, then if the directive is not specified in the
 view file an error is reported.
-
-=SIEVE_PROG
 */
 void
 main_sieve(void)
@@ -3200,7 +3089,6 @@ main_sieve(void)
 			/* Check if it is the same as the current directive.
 				"Same" means that the category and all of
 				its arguments are identical */
-
 
 			if(is_same_directive(c_di, next_di)) { /* no change */
 				if(debug & D_DECODE_DIR_LINE)
@@ -3239,14 +3127,10 @@ main_sieve(void)
 	complete_actions(c_di);
 }
 /*
-=TEX
-
-\subsection{View File Reading Functions}
-
-\HOLindexEntry{read_view_file}
-{\tt read_view_file} : Read the body of the steering file.
-
-=SIEVE_PROG
+--------------
+read_view_file
+--------------
+Read the body of the steering file.
 */
 void
 read_view_file(char *name)
@@ -3380,12 +3264,12 @@ read_view_file(char *name)
 	};
 }
 /*
-=TEX
-
-\subsection{Printing the Sizes of Data Areas Used}
-
-\HOLindexEntry{list_limits}
-=SIEVE_PROG
+=====================================
+Printing the Sizes of Data Areas Used
+=====================================
+-----------
+list_limits
+-----------
 */
 void
 list_limits(void)
@@ -3421,12 +3305,9 @@ list_limits(void)
 #undef LLL
 }
 /*
-=TEX
-
-\subsection{Main Function for Sieve}
-
-\HOLindexEntry{main}
-=SIEVE_PROG
+----
+main
+----
 */
 int
 main(int argc, char **argv)
@@ -3547,32 +3428,5 @@ main(int argc, char **argv)
 	EXIT(0);								/* EXIT */
 
     }
-/*
-=TEX
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\newpage
-\section{FIND FILE FUNCTION}
 
-To implement find file a number of auxiliary functions are needed.
-
-First some useful general declarations.
-
-\HOLindexEntry{VoidStrcpy}
-\HOLindexEntry{Strcpy}
-=FIND_FILE_FUN
-*/
-#include <pwd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/param.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-
-#define VoidStrcpy(a,b) { if(a != NULL) (void)strcpy(a, b); }
-#define Strcpy(a,b) ((a != NULL) ? strcpy(a, b) : NULL)
-
-extern struct passwd *getpwnam(const char *name);
