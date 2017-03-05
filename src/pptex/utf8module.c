@@ -449,8 +449,6 @@ use and the expanded name is returned.
 If is_reg is non-zero, require the found file to be a regular file (i.e., not a directory, but could be
 */
 
-
-
 char *
 find_file(char *name, char *dirs, int is_reg)
 {
@@ -720,6 +718,8 @@ Keyword File Processing
 =======================
 */
 
+bool utf8_stdin = False; /* this is set True by -u flag in sieve */
+
 struct file_data keyword_F = 	{ "keyword file", 0, 0, 0 };
 
 struct keyword_information{
@@ -755,6 +755,14 @@ struct kw_information {
   struct keyword_information keyword[MAX_KEYWORDS];
 } kwi = {0, 0, 0};
 
+/*
+---------------
+add_new_keyword
+---------------
+This procedure adds a new entry into the keyword table.
+
+*/
+
 void
 add_new_keyword(
 	char *name,
@@ -789,7 +797,6 @@ add_new_keyword(
 	  if(len2 > MAX_KW_LEN) {
 	    grumble1("sameas keyword too long", &keyword_F, true);
 	  }
-	  /* not convinced this should be done if len2 > MAX_KW_LEN (rbj) */
 	  if(len2 > kwi.max_kw_len) kwi.max_kw_len = len2;
 	}
 	else {
@@ -823,7 +830,8 @@ add_new_keyword(
 find_keyword
 ------------
 given a reference to a keyword this function finds the keyword informatino
-   for that keyword, returning its index in array kwi.keyword */
+   for that keyword, returning its index in array kwi.keyword
+*/
 
 int
 find_keyword(char *kw)
@@ -914,7 +922,8 @@ show_keywords(void)
 compare_keyword_information
 ---------------------------
 this function, given two references to keyword_information
-   compares the keyword names */
+   compares the keyword names
+*/
 
 int
 compare_keyword_information(
@@ -932,7 +941,8 @@ compare_keyword_information(
 compare_keyword_information
 ---------------------------
 this function, given two references to keyword_information
-   compares the unicode code points */
+   compares the unicode code points
+*/
 
 int
 compare_keyword_unicode(
@@ -962,15 +972,15 @@ void initialise_keyword_information(void) {
 ----------------
 get_char_unicode
 ----------------
-Extract a character unicode code point from {\tt line}, if a
-code is obtained then return 1 and set {\tt value} to the code found.
+Extract an ascii representation of a unicode code point from {\tt line},
+if a code is obtained then return 1 and set {\tt value} to the code found.
 If no code found then return 0 and set "value" to 0.
 
-Unicode code points are one of:  hex with a leading "0x" or "0X"; octal
-with a leading "0"; or decimal numbers.  They must be in the
-range~$-1\sb{10}$ to~$ffffff\sb{16}$.
-(this check can be made tighter)
-
+Unicode code points are represented as an ascii literal which is one of:
+1. hex with a leading "x";
+2. octal with a leading "0"
+3. decimal numbers.
+They must be in the range -1 to 10ffff\sb{16}.
 */
 
 int
@@ -986,9 +996,39 @@ get_char_unicode(char *line, unicode *value)
 	if(scan_ans != 1 || len != strlen(line))
 		ch = -1;
 
-	if(ch >= -1 && ch <= 0xFFFFFF) {
+	if(ch >= -1 && ch <= 0x10FFFF) {
 		*value = ch;
 		return(1);
+	} else {
+		*value = 0;
+		return(0);
+	}
+}
+
+/*
+-------------------
+get_percent_unicode
+-------------------
+This procedure processes the hexadecimal literals permitted in percemts
+representing unicode code points.
+Only hex is permitted, and it must be prefixed by "#x" (not "0x").
+
+*/
+int
+get_percent_unicode(char *line, unicode *value)
+{
+	int ch = -1;		/* -1 ==> not a valid code */
+
+	int scan_ans;
+	int len;
+
+	scan_ans = sscanf(line, "%%#x%X%%%n", &ch, &len);
+
+	if(scan_ans != 1) ch = -1;
+
+	if(ch >= 1 && ch <= 0x10FFFF) {
+		*value = ch;
+		return(len);
 	} else {
 		*value = 0;
 		return(0);
@@ -1098,9 +1138,9 @@ find_steering_file(char *name, char *file_type)
 }
 
 /*
----------
-read_line
----------
+----------------
+simple_read_line
+----------------
 Reads a line into a buffer, checking that the line
 isn't too long and returning the number of characters read, i.e., the
 number of characters stored in argument {\tt line} but excluding the
@@ -1108,26 +1148,25 @@ trailing null.
 */
 
 int
-read_line(char *line, int max, struct file_data *file_F)
+simple_read_line(char *line, int max_len, struct file_data *file_F)
 {
 	int whatgot;
 	int i = 0;
 
-	while(i < max && (whatgot = getc(file_F->fp)) != '\n' && whatgot != EOF) {
+	while(i < max_len && (whatgot = getc(file_F->fp)) != '\n' && whatgot != EOF) {
 		line[i++] = whatgot;
 	}
 
-	if(i >= max) {
+	if(i >= max_len) {
 		error_top();
 		FPRINTF(stderr, "line %d of %s too long\n",
 			file_F->line_no, file_F->name);
 		EXIT(4);
 	}
-
 	line[i] = '\0';
-
 	return(i);
 }
+
 
 /*
 ------------------
@@ -1145,7 +1184,7 @@ read_steering_line(char *line, struct file_data *file_F)
 	int len_read = 0;
 	do{
 		(file_F->line_no) ++;
-		len_read = read_line(line + len_so_far,
+		len_read = simple_read_line(line + len_so_far,
 			MAX_LINE_LEN - len_so_far, file_F) - 1;
 		len_so_far += len_read;
 	} while( (len_read > 0) && (line[len_so_far] == '\\') );
@@ -1183,6 +1222,13 @@ const int uni_to_pp(unicode cp)
 	return search_result != NULL ? (unsigned char)search_result->pp_char : -1;
 }
 
+/*
+-----------------
+read_keyword_file
+-----------------
+
+Read a keyword file creating from it the keyword_information in kwi.
+*/
 
 void
 read_keyword_file(char *name)
@@ -1327,6 +1373,24 @@ read_keyword_file(char *name)
 	};
 }
 
+/*
+---------------------
+conclude_keywordfile
+---------------------
+This procedure completes the keyword_information after all the keyword files
+have been read.
+
+It sorts the indexes which allow for lookup by keyword name and unicode code
+point using binary search.
+It then looks through the table doing various checks or completions.
+This includes:
+1. Resolves 'sameas' keywords if possible, by copying the keyword information for
+   the keyword referred to.
+2. filling in the index by extended character code, rejecting multiple keywords
+   for any single extended character.
+
+*/
+
 void
 conclude_keywordfile(void)
 {
@@ -1350,7 +1414,7 @@ conclude_keywordfile(void)
 				int copy_from_index = find_keyword(cur_ki->macro);
 
 				if(copy_from_index == NOT_FOUND) {
-					grumble("no keyword the same as '%s'",
+					grumble("undeclared keyword '%s' referred to by sameas",
 						cur_ki->macro, &keyword_F, false);
 					dump_keywords = 1;
 				} else {
@@ -1367,7 +1431,7 @@ conclude_keywordfile(void)
 					if(cur_ki->act_kind == KW_SAMEAS ||
 							cur_ki->act_kind ==
 								KW_SAMEAS_UNKNOWN) {
-						grumble("unresolved sameas for keyword '%s'",
+						grumble("unresolved 'sameas' for keyword '%s' (keyword referred to is also 'sameas')",
 							cur_ki->name, &keyword_F, false);
 						dump_keywords = 1;
 					}
@@ -1461,6 +1525,14 @@ conclude_keywordfile(void)
 	if(stop_prog) EXIT(22);	
 }
 
+/*
+----------
+get_hol_kw
+----------
+This function may be used to look up a named keyword returning the position
+of the relevant entry in kwi.keyword.
+*/
+
 int
 get_hol_kw(char *str,
 	int * len,
@@ -1502,7 +1574,6 @@ get_hol_kw(char *str,
 			kw[MAX_KW_LEN / 4] = '\0';
 		} else {
 			int kwindex = find_keyword(kw);
-
 			*len = kwlen;
 			ans = kwindex;
 		}
@@ -1540,14 +1611,18 @@ const char *unicode_to_hex(unicode code_point)
 }
 
 /*
--------------------------------
+===============================
 Using Unicode <-> pp ext tables
--------------------------------
+===============================
+
 These are the tables unicode_to_pp and pp_to_unicode,
 included as unicodepptab.h and ppunicodetab.h
-*/
 
-/* Compare unicode code points in the unicode to pp table.
+----------------------
+unicode_to_pp_entry_cm
+----------------------
+
+Compare unicode code points in the unicode to pp table.
 Used in binary search. 
 */
 
@@ -1582,10 +1657,13 @@ const char *unicode_to_ppk(unicode cp)
 -------------------------------------
 Translations involving named keywords
 -------------------------------------
-*/
+----------------
+find_unicode_kwi
+----------------
 
-/* given a unicode code point this function finds the keyword informatino
-   for that code point, returning its index in array kwi.unicode_code */
+Given a unicode code point this function finds the keyword informatino
+for that code point, returning its index in array kwi.unicode_code.
+*/
 
 int
 find_unicode_kwi(unicode uni)
@@ -1615,7 +1693,12 @@ int kwi_unicode_cmp(const void *buf1, const void *buf2)
 	return  u1->uni - u2->uni;
 }
 
-/* Find the keyword information for a unicode code point (if any) */
+/*
+--------------
+unicode_to_kwi
+--------------
+Find the keyword information for a unicode code point (if any).
+*/
 
 struct keyword_information *unicode_to_kwi(unicode cp)
 {	
@@ -1628,6 +1711,9 @@ struct keyword_information *unicode_to_kwi(unicode cp)
 }
 
 /*
+-------------
+unicode_to_kw
+-------------
 Convert a unicode code point to a keyword in percents.
 */
 
@@ -1637,8 +1723,12 @@ const char *unicode_to_kw(unicode code_point)
   return (kwi = NULL) ? unicode_to_hex(code_point) : kwi->name;
 }
 
-/* Convert unicode code point to ascii or a percent named keyword
-   or to a percent hex code */ 
+/* 
+--------------
+unicode_to_kwa
+--------------
+Convert unicode code point to ascii or a percent named keyword
+or to a percent hex code */ 
 
 const char *unicode_to_kwa(unicode code_point)
 {
@@ -1651,6 +1741,31 @@ const char *unicode_to_kwa(unicode code_point)
   else return unicode_to_kw (code_point);
 }
 
+/*
+----------------
+code_line_to_ext
+----------------
+This procedure takes a line input which has been translated into unicode
+code points into the ProofPower extended character set.
+
+*/
+void code_line_to_ext(struct file_data *file_F){
+  int op=0;
+  unicode *codes;
+  char *line;
+  codes = file_F->code_line;
+  line = file_F->cur_line;
+  while (*codes !=0 && op < MAX_LINE_LEN){
+    const char *r;
+    r = unicode_to_kwa(*codes);
+    while (*r !=0 && op < MAX_LINE_LEN) {
+      *line = *r;
+      line++;
+      r++;
+    };
+    codes++;
+    *line = 0;};
+};
 
 /* This function is used to report an error in a utf8 input stream.
    It also skips to the next newline or to EOF.  */
@@ -1658,7 +1773,7 @@ const char *unicode_to_kwa(unicode code_point)
 unicode invalid_unicode(void)
 {
 	int whatgot;
-	fprintf(stderr, "%s: line %d: invalid utf-8 input\n", program_name, line);
+	FPRINTF(stderr, "%s: line %d: invalid utf-8 input\n", program_name, line);
 	unicodepp_error = 1;
 	whatgot = getchar();
 	while(whatgot != '\n' && whatgot != EOF) {
@@ -1670,38 +1785,213 @@ unicode invalid_unicode(void)
 	return whatgot & 0xff;
 }
 
-/* Read a single unicode code point from a utf8 stdin */
 
-unicode get_code_point(void)
+/*
+------------------
+extract_code_point
+------------------
+
+Read a single unicode code point from a buffer in utf8.
+The parameters are the address of the buffer and a pointer to a displacement,
+which will be updated to point after the unicode character provided that
+there is valid utf8 encoded unicode character at that point.
+
+The value returned is the unicode code point or else zero.
+*/
+
+unicode extract_code_point(char *buff, int *pos)
 {
-	int whatgot, r, l;
-	whatgot = getchar();
-	if(whatgot == EOF) { return 0; }
-	if(whatgot == '\n') { line += 1; }
-	r = whatgot & 0xff;
-	if(r <= 0x7f) { return r; }
-	l = 0;
-	while(r & 0x80) {
-		r = (r & 0x7f) << 1;
-		l += 1;
-	}
-	if(l > 4) { return invalid_unicode(); }
-	r = r >> l;
-	while(--l) {
-		whatgot = getchar();
-		if(whatgot == EOF || ((whatgot & 0xc0) != 0x80)) {
-			return invalid_unicode();
-		}
-		r = (r << 6) | (whatgot & 0x3f);
-	}
-	return r;
+  int r, l;
+  int whatgot = buff[*pos];
+  
+  r = whatgot & 0xff;
+  if(r <= 0x7f) { pos += 1; return r; }
+  l = 0;
+  while(r & 0x80) {
+    r = (r & 0x7f) << 1;
+    l += 1;
+  }
+  if(l > 4) { return invalid_unicode(); }
+  r = r >> l;
+  while(--l) {
+    whatgot = line[pos+4-l];
+    if((whatgot & 0xc0) != 0x80) {
+      return invalid_unicode();
+    }
+    r = (r << 6) | (whatgot & 0x3f);
+  }
+  return r;
 }
 
-/* this procedure transcribed a utf8 input stream to a ProofPower
-   ext output stream.  If an input is ascii it goes straight through.
-   If it corresponds to an extended character then that extended
-   character goes out, otherwise an hex code in percents is output.
+/*
+------------------
+utf8_line_to_codes
+------------------
+This procedure, given a line of utf8 encoded unicode will
+convert the line into an array of unicode code points.
+
+It should be passed the address of the utf8, which is required
+to be a null terminated string, and the address of a unicode array,
+which will also be null terminated when the procedure exits.
+The return value is the number of code points resulting.
 */
+
+int utf8_line_to_codes(char line[], unicode codes[]){
+  int ip = 0;
+  int op = 0;
+  int code = 0;
+  codes[op]=1;
+  while(ip < MAX_LINE_LEN && line[ip] != 0 && codes[op] != 0){
+    code = extract_code_point(line, &ip);
+    if (code != 0) {codes[op++] = code;}
+    else {return invalid_unicode();}
+  };
+  return op;
+};
+
+
+/*
+--------------------
+read_line_as_unicode
+--------------------
+Read a line into file_F.cur_line.
+If the line 
+*/
+
+int read_line_as_unicode(struct file_data *file_F){
+  int r;
+  r = simple_read_line(file_F->cur_line, MAX_LINE_LEN, file_F);
+  if (r && file_F->utf8){
+    utf8_line_to_codes(file_F->cur_line, file_F->code_line);    
+  };
+  return r;
+};
+
+/*
+----------------
+read_line_as_ext
+----------------
+Reads a line into a the file cur_line buffer, and then,
+if the file is flagged as utf8 convert from utf8 to
+the ProofPower extended character encoding.
+
+If the utf8 flag is set in the file_data, the line is read first as
+characters into cur_line, then decoded into unicode code points 
+into file_data.code_line and is then translated back
+into cur_line using ProofPower extended character set where possible,
+then named percent keywords, then hexadecimal percent keywords as a
+last resort.
+*/
+
+int read_line_as_ext(struct file_data *file_F){
+  int r = True;
+  if (file_F->utf8){
+    if ((r = read_line_as_unicode(file_F))){code_line_to_ext(file_F);}
+    else {return r;};    
+  }
+  else {r = simple_read_line(file_F->cur_line, MAX_LINE_LEN, file_F);};
+  return r;
+};
+/*
+----------------------
+output_unicode_as_utf8
+----------------------
+(like do_keyword except that if you give it ascii it outputs it)
+This procedure writes to a file a utf8 coded unicode code point,
+returning the value True, unless it is greater than 0x10FFFF,
+in which case it returns False without output.
+*/ 
+
+bool output_unicode_as_utf8(unicode u, FILE *file)
+{
+	if(u <= 0x7f) {
+	  fputc(u, file);
+	  return True;
+	} else if (u <= 0x7ff) {
+	  fputc(0xc0u | (u >> 6u), file);
+	  fputc(0x80u | (u & 0x3fu), file);
+		return True;
+	} else if (u <= 0xffff) {
+		fputc(0xe0u | (u >> 12u), file);
+		fputc(0x80u | ((u & 0xfc0u) >> 6u), file);
+		fputc(0x80u | (u & 0x3fu), file);
+		return True;
+	} else if (u <= 0x10ffffu) {
+		fputc(0xf0u | (u >> 18u), file);
+		fputc(0x80u | ((u & 0x3f000u) >> 12u), file);
+		fputc(0x80u | ((u & 0xfc0u) >> 6u), file);
+		fputc(0x80u | (u & 0x3fu), file);
+		return True;
+	} else {
+		return False;
+	}
+}
+
+/*
+-----------------------
+output_unicode_sequence
+-----------------------
+Outputs to a file in utf8 a zero terminated sequence of unicode code points.
+*/
+
+void output_unicode_sequence(unicode *line, FILE *file){
+  unicode *p;
+  p = line;
+  while (*p != 0){
+    output_unicode_as_utf8(*p, file);
+    p++;
+  };
+}
+
+/*
+----------------------
+convert_ext_to_unicode
+----------------------
+Takes a string of characters which is coded in the extended ascii,
+admitting percent enclosed keyword names or hexadecimal unicode codes,
+and sets a unicode parameter to the corresponding unicode code point,
+returning the number of characters in the source which expressed the
+code value. 
+
+int convert_ext_to_unicode(char *line, unicode *uni){
+  if (*line = '%') {
+  }
+  else {
+  if }
+}
+
+--------------------------
+convert_ext_seq_to_unicode
+--------------------------
+Takes a null terminated string of characters which are either asscii,
+or ProofPower extended characters, or perent enclosed keyword names
+(declared in the current keyword files) or percent enclosed ascii
+hexadecimal unicode code points and converst them to a null terminated
+array of unicode code points. 
+*/
+
+/*
+===============================
+from pputf8 - temporary
+===============================
+
+These functions read and write to stdin and stdout directly,
+and are here just until their functionality is incorporated
+into facilities which work from and to buffers.
+
+-----------------
+do_unicode_to_ppe
+-----------------
+
+this procedure transcribes a utf8 input stream to a ProofPower
+ext output stream.  If an input is ascii it goes straight through.
+If it corresponds to an extended character then that extended
+character goes out, otherwise an hex code in percents is output.
+*/
+
+unicode get_code_point (){
+  return 0;
+};
 
 void do_unicode_to_ppe(void)
 {
@@ -1715,7 +2005,7 @@ void do_unicode_to_ppe(void)
 	}
 }
 
-/* this procedure transcribed a utf8 input stream to a ProofPower
+/* this procedure transcribes a utf8 input stream to a ProofPower
    ascii output stream.  If an input is ascii it goes straight through.
    If it corresponds to a named keyword then that percent keyword goes out,
    otherwise a hex code in percents is output.
@@ -1744,87 +2034,19 @@ enum {	S_INITIAL,
 	S_HAVE_HEXIT_6,
 	S_HAVE_KEYWORD};
 
+/*
+----------------
+do_hex_to_unicode
+----------------
+Translate from ProofPower ascii/ext format to utf8 ecoded unicode.
+*/
+
 void do_chars(int len, char *cs)
 {
 	while(len--) {
 		printf("%s", pp_to_unicode[(int)*cs++ & 0xff]);
 	}
 }
-
-/*
-----------
-do_keyword
-----------
-This procedure writes to the standard output a utf8 coded unicode code point,
-returning the value True, unless its unsigned is ascii
-or is greater than 0x10FFFF, in which case it returns False without output.
-*/ 
-
-bool do_keyword(unsigned u)
-{
-	if(u <= 0x7f) {
-		return False;
-	} else if (u <= 0x7ff) {
-		putchar(0xc0u | (u >> 6u));
-		putchar(0x80u | (u & 0x3fu));
-		return True;
-	} else if (u <= 0xffff) {
-		putchar(0xe0u | (u >> 12u));
-		putchar(0x80u | ((u & 0xfc0u) >> 6u));
-		putchar(0x80u | (u & 0x3fu));
-		return True;
-	} else if (u <= 0x10ffffu) {
-		putchar(0xf0u | (u >> 18u));
-		putchar(0x80u | ((u & 0x3f000u) >> 12u));
-		putchar(0x80u | ((u & 0xfc0u) >> 6u));
-		putchar(0x80u | (u & 0x3fu));
-		return True;
-	} else {
-		return False;
-	}
-}
-
-/*
--------------------
-output_utf8_unicode
--------------------
-(like do_keyword except that if you give it ascii it outputs it)
-This procedure writes to the standard output a utf8 coded unicode code point,
-returning the value True, unless it is greater than 0x10FFFF,
-in which case it returns False without output.
-*/ 
-
-bool output_utf8_unicode(unsigned u)
-{
-	if(u <= 0x7f) {
-	  putchar(u);
-	  return True;
-	} else if (u <= 0x7ff) {
-		putchar(0xc0u | (u >> 6u));
-		putchar(0x80u | (u & 0x3fu));
-		return True;
-	} else if (u <= 0xffff) {
-		putchar(0xe0u | (u >> 12u));
-		putchar(0x80u | ((u & 0xfc0u) >> 6u));
-		putchar(0x80u | (u & 0x3fu));
-		return True;
-	} else if (u <= 0x10ffffu) {
-		putchar(0xf0u | (u >> 18u));
-		putchar(0x80u | ((u & 0x3f000u) >> 12u));
-		putchar(0x80u | ((u & 0xfc0u) >> 6u));
-		putchar(0x80u | (u & 0x3fu));
-		return True;
-	} else {
-		return False;
-	}
-}
-
-/*
-----------------
-do_pp_to_unicode
-----------------
-Translate from ProofPower ascii/ext format to utf8 ecoded unicode.
-*/
 
 #define STEP(TST, ST)				\
 	if((TST)(whatgot)) {\
@@ -1836,7 +2058,7 @@ Translate from ProofPower ascii/ext format to utf8 ecoded unicode.
 	};\
 	break;
 
-void do_pp_to_unicode (void)
+unicode hex_to_unicode (char *line, int *len)
 {
 	int whatgot, state, l;
 	char buf[9];
@@ -1859,7 +2081,7 @@ void do_pp_to_unicode (void)
 		}
 		if(state == S_HAVE_KEYWORD) {
 			sscanf(&buf[2], "%6X", &u);
-			if(!do_keyword(u)) { do_chars(l, buf); }
+			if(/*!do_keyword(u)*/False) { do_chars(l, buf); }
 			l = 0;
 			state = S_INITIAL;
 		}

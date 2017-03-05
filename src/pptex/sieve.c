@@ -96,11 +96,11 @@ Implement support for utf8 file and unicode characters
 #define SLASH_ETC "/etc"
 
 /*
-=TEX
+
 
 \subsection{Identification}
 
-=SIEVE_PROG
+
 */
 
 char *coprlemma1 =
@@ -115,12 +115,12 @@ char *coprlemma1 =
 #define PRINTF (void)printf
 #define PUTC (void)putc
 /*
-=TEX
+
 
 \HOLindexEntry{PrNN_SIZE}
 Macro {\tt PrNN_SIZE} is described with function {\tt copy_PrNN} in section~\ref{FunCopyPrNN}.
 
-=SIEVE_PROG
+
 */
 #define PrNN_SIZE 7
 
@@ -135,11 +135,11 @@ char * getenv(const char *name);
 void	exit(int status);
 
 /*
-=TEX
+
 
 Mostly we have declare before use, but there are a few exceptions!
 
-=SIEVE_PROG
+
 */
 void main_convert(
 	char *in_line,
@@ -148,16 +148,16 @@ void main_convert(
 	int lenout_line,
 	struct file_data *file_F);
 /*
-=TEX
+
 
 Global variables used in argument processing.
 
 \HOLindexEntry{view_option}
-=SIEVE_PROG
+
 */
 char view_option[MAX_LINE_LEN+1];
 /*
-=TEX
+
 
 \subsection{Diagnostics}
 
@@ -165,7 +165,7 @@ Several diagnostic outputs are provided, they are controlled by the
 {\tt-d} command option which sets the {\tt debug} flag.
 These outputs are written to the standard output.
 
-=SIEVE_PROG
+
 */
 struct debug_data{
 	int flag;
@@ -200,7 +200,7 @@ struct debug_data{
 #define D_8192 8192
 };
 /*
-=TEX
+
 \subsection{Error and Warning Messages}
 
 Various error and warning messages are written to the standard error
@@ -223,10 +223,10 @@ usage(void)
     FPRINTF(stderr, "%s version: %s\n", program_name, coprlemma1);
 }
 /*
-=TEX
+
 
 \HOLindexEntry{handle_sigpipe}
-=SIEVE_PROG
+
 */
 /*ARGSUSED*/
 void
@@ -236,10 +236,10 @@ handle_sigpipe(int sig)
 	EXIT(6);
 }
 /*
-=TEX
+
 
 \HOLindexEntry{init_signals}
-=SIEVE_PROG
+
 */
 void
 init_signals(void)
@@ -247,7 +247,7 @@ init_signals(void)
 	(void)signal(SIGPIPE, handle_sigpipe);
 }
 /*
-=TEX
+
 
 
 \subsection{Input Files}
@@ -259,7 +259,7 @@ They are also used in the sieve program for the view file and the main (standard
 struct file_data view_F = 		{ "view file", 0, 0, 0 };
 struct file_data main_F = 		{ "standard input", 0, 0, 0 };
 /*
-=TEX
+
 
 \subsection{Character Flags} \label{CharacterFlags}
 
@@ -294,7 +294,7 @@ keywords are read the appropriate flags are set.
 #define IS_VERB_ALONE_CH(qq) (character_flags[(qq)&0xFF] & VERB_ALONE_CH)
 #define SET_VERB_ALONE_CH(qq) character_flags[(qq)&0xFF] |= VERB_ALONE_CH
 /*
-=TEX
+
 
 The remaining flags are available for future expansion.
 
@@ -303,14 +303,14 @@ The remaining flags are available for future expansion.
 Associated with some of the actions there are a number
 of options available.
 
-=SIEVE_PROG
+
 */
 typedef struct{
 	char *name;
 	int flag;
 } options_available;
 /*
-=TEX
+
 
 The {\tt flags} may take one of the following values.
 
@@ -321,119 +321,119 @@ The {\tt flags} may take one of the following values.
 */
 #define OPT_VERBATIM 1
 /*
-=TEX
+
 
 \item Text is to be processed for the verbatim-like formal text
 	environments, only with this flag set are the LaTeX conversions
 	applied.  This option is automatically set with {\tt
 	OPT_VERBATIM}.
 
-=SIEVE_PROG
+
 */
 #define OPT_LATEX 1024
 /*
-=TEX
-
-\item Percent keywords are to be understood.
-
-=SIEVE_PROG
+Percent keywords are to be understood.
 */
 #define OPT_KW 2
 /*
-=TEX
-
-\item Convert extended characters, but not percent keywords, to their
+Convert extended characters, but not percent keywords, to their
 	\LaTeX{} form.  This option is automatically set with {\tt
 	OPT_VERBATIM}.
-
-=SIEVE_PROG
 */
 #define OPT_CHAR 4
 /*
-=TEX
+
 
 \item Modifies options {\tt OPT_KW} and {\tt OPT_VERBATIM} so that
 	extended characters and percent keywords for indexing are
 	deleted.
 
-=SIEVE_PROG
+
 */
 #define OPT_DELINDEX 8
 /*
-=TEX
+
 
 \item Extended characters, but not percent keywords, are converted to
 	their Standard ML string form.  This option is not compatible
 	with {\tt OPT_KW} or {\tt OPT_VERBATIM}.
 
-=SIEVE_PROG
+
 */
 #define OPT_ML_CHAR 16
 /*
-=TEX
+
 
 \item Issue a warning message when unknown keywords are
 	found.  Only meaningful when {\tt OPT_KW} is set.
 
-=SIEVE_PROG
+
 */
 #define OPT_WARN_KW 32
 /*
-=TEX
+
 
 \item Convert unknown keywords to a call on the \LaTeX{} macro
 	\verb|\UnknownKeyword|.  Only meaningful when {\tt OPT_KW} and
 	{\tt OPT_VERBATIM} are set.
 
-=SIEVE_PROG
+
 */
 #define OPT_FLAG_KW 64
 /*
-=TEX
+
 
 \item Lines containing at least one character of type {\tt verbalone}
 	plus any number of {\tt white} characters have a reduced
 	verbatim-like processing where the line ends are not marked.
 
-=SIEVE_PROG
+
 */
 #define OPT_VERB_ALONE 128
 /*
-=TEX
+
 
 \item Where possible keywords are converted to their corresponding
 	extended character.
 
-=SIEVE_PROG
+
 */
 #define OPT_CONV_KW 256
 /*
-=TEX
+
 
 \item Convert extended characters of class {\tt white} to a
 	space character.  When {\tt OPT_KW} is set also convert the
 	keywords.
 
-=SIEVE_PROG
+
 */
 #define OPT_WHITE 512
 /*
-=TEX
+
 
 \item Convert extended characters to keywords.
 
-=SIEVE_PROG
+
 */
 #define OPT_CONV_EXT 2048
 /*
-=TEX
+
+
+\item Convert extended characters to keywords.
+
+
+*/
+#define OPT_UTF8_OUT 4096
+/*
+
 
 \end{itemize}
 
 Now do some checking that these flags are well-defined.
 Other checks are made in the startup function, {\tt initialize}.
 
-=SIEVE_PROG
+
 */
 #define AND_FLAGS	(	OPT_CHAR \
 			&	OPT_CONV_KW \
@@ -447,6 +447,7 @@ Other checks are made in the startup function, {\tt initialize}.
 			&	OPT_WARN_KW \
 			&	OPT_WHITE \
 			&	OPT_CONV_EXT \
+			&	OPT_UTF8_OUT \
 			)
 #define OR_FLAGS	(	OPT_CHAR \
 			|	OPT_CONV_KW \
@@ -460,39 +461,41 @@ Other checks are made in the startup function, {\tt initialize}.
 			|	OPT_WARN_KW \
 			|	OPT_WHITE \
 			|	OPT_CONV_EXT \
+			|	OPT_UTF8_OUT \
 			)
 
 #if AND_FLAGS != 0
 	Faulty setting of flags;
 #endif
 /*
-=TEX
+-----------------
+options_available
+-----------------
+The options are gathered together with their keywords for function
+get_options below.
 
-The options are gathered together with their keywords for function {\tt
-get_options} below.
-
-=SIEVE_PROG
 */
 options_available cat_options[] = {
-	{"delindex", OPT_DELINDEX},
-	{"kw", OPT_KW},
+	{"char", OPT_CHAR},
 	{"convkw", OPT_CONV_KW | OPT_KW},
 	{"convext", OPT_CONV_EXT},
-	{"char", OPT_CHAR},
+	{"delindex", OPT_DELINDEX},
+	{"kw", OPT_KW},
+	{"kwflag", OPT_FLAG_KW},
+	{"kwwarn", OPT_WARN_KW},
 	{"latex", OPT_LATEX | OPT_CHAR},
 	{"mlchar", OPT_ML_CHAR},
-	{"verbatim", OPT_VERBATIM | OPT_LATEX | OPT_CHAR},
 	{"verbalone", OPT_VERB_ALONE},
-	{"kwwarn", OPT_WARN_KW},
-	{"kwflag", OPT_FLAG_KW},
+	{"utf8out", OPT_UTF8_OUT},
+	{"verbatim", OPT_VERBATIM | OPT_LATEX | OPT_CHAR},
 	{"white", OPT_WHITE},
 	{NULL, 0}
 };
 /*
-=TEX
+-----------
+arg_options
+-----------
 
-\HOLindexEntry{arg_options}
-=SIEVE_PROG
 */
 options_available arg_options[] = {
 	{"delindex", OPT_DELINDEX},
@@ -500,8 +503,10 @@ options_available arg_options[] = {
 	{NULL, 0}
 };
 /*
-
-{\tt get_options} : Reads the text of argument {\tt filt} looking for
+-----------
+get_options
+-----------
+Reads the text of argument {\tt filt} looking for
 any option keywords from argument {\tt opts}.  The flag values for each
 keyword found are logically ORed to form the result value.  Any
 characters that are not keywords indicate errors.
@@ -542,13 +547,12 @@ get_options(options_available *opts, char *filt)
 	return(ans);
 }
 /*
-=TEX
 
-\HOLindexEntry{check_cat_options}
-{\tt check_cat_options} : Validate the options set for
-the {\tt"cat"} action.
+-----------------
+check_cat_options
+-----------------
+Validate the options set for the "cat" action.
 
-=SIEVE_PROG
 */
 void
 check_cat_options(int flags)
@@ -579,35 +583,36 @@ check_cat_options(int flags)
 		grumble1("ignored option: 'verbalone'", &view_F, true);
 }
 /*
-=TEX
 
-\HOLindexEntry{show_options}
-{\tt show_options} : Print out the names of any options set.
+------------
+show_options
+------------
+Print out the names of any options set.
 
-=SIEVE_PROG
 */
 void
 show_options(FILE *fp, int flags)
 {
 #define SHOW_OPT(f, s) if(flags & f) (void)fputs(s, fp)
 	SHOW_OPT(OPT_CHAR, " char");
-	SHOW_OPT(OPT_DELINDEX, " delindex");
-	SHOW_OPT(OPT_FLAG_KW, " kwflag");
-	SHOW_OPT(OPT_KW, " kw");
-	SHOW_OPT(OPT_CONV_KW, " convkw");
 	SHOW_OPT(OPT_CONV_EXT, " convext");
-	SHOW_OPT(OPT_LATEX, " latex");
-	SHOW_OPT(OPT_VERBATIM, " verbatim");
-	SHOW_OPT(OPT_VERB_ALONE, " verbalone");
-	SHOW_OPT(OPT_ML_CHAR, " mlchar");
+	SHOW_OPT(OPT_CONV_KW, " convkw");
+	SHOW_OPT(OPT_DELINDEX, " delindex");
+	SHOW_OPT(OPT_KW, " kw");
+	SHOW_OPT(OPT_FLAG_KW, " kwflag");
 	SHOW_OPT(OPT_WARN_KW, " kwwarn");
+	SHOW_OPT(OPT_LATEX, " latex");
+	SHOW_OPT(OPT_ML_CHAR, " mlchar");
+	SHOW_OPT(OPT_UTF8_OUT, " utf8out");
+	SHOW_OPT(OPT_VERB_ALONE, " verbalone");
+	SHOW_OPT(OPT_VERBATIM, " verbatim");
 	SHOW_OPT(OPT_WHITE, " white");
 #undef SHOW_OPT
 }
 /*
-=TEX
-
-\subsection{Available Sieving Categories}
+----------------------------
+Available Sieving Categories
+----------------------------
 
 Each category described in the view file may specify several actions,
 the available set are described in this structure.  Note that the
@@ -615,7 +620,7 @@ entries in the array must be sorted on the {\tt name} field so that
 function {\tt find_action} works.  This ordering is checked in function
 {\tt check\-_program\-_initializations}.
 
-=SIEVE_PROG
+
 */
 struct actions_available{
 	char *name;
@@ -657,13 +662,13 @@ struct actions_available{
 
 #define NUM_ACTIONS ((sizeof actions_available) / (sizeof (struct actions_available)))
 /*
-=TEX
 
-\HOLindexEntry{find_action}
-{\tt find_action} : Given an action code name find the
-corresponding entry in {\tt actions_available}.
+-----------
+find_action
+-----------
+Given an action code name find the
+corresponding entry in actions_available.
 
-=SIEVE_PROG
 */
 int
 find_action(char *act_name)
@@ -679,10 +684,10 @@ find_action(char *act_name)
 	return(NOT_FOUND);
     }
 /*
-=TEX
+
 
 \HOLindexEntry{decode_action}
-=SIEVE_PROG
+
 */
 char *
 decode_action(int act_code)
@@ -695,12 +700,9 @@ decode_action(int act_code)
 	return("??");
     }
 /*
-=TEX
-
-
 
 \HOLindexEntry{dump_actions_available}
-=SIEVE_PROG
+
 */
 void
 dump_actions_available(void)
@@ -737,7 +739,7 @@ dump_actions_available(void)
 	}
 }
 /*
-=TEX
+
 
 \subsection{Decoded View File}
 
@@ -753,7 +755,7 @@ cat\-_filt\-_action}.
 \HOLindexEntry{cfa_flags::cat_filt_action}
 \HOLindexEntry{op_file::cat_filt_action}
 \HOLindexEntry{CFA_\ldots}
-=SIEVE_PROG
+
 */
 typedef struct{
 	short action_type;
@@ -796,7 +798,7 @@ typedef    struct{
 					action option flags. */
 	} cat_filt;
 /*
-=TEX
+
 
 An array is built, it has one element (which is of structure {\tt
 cat_filt}) per category described in the view file.
@@ -808,16 +810,16 @@ ignored.
 
 \HOLindexEntry{table}
 \HOLindexEntry{max_cat}
-=SIEVE_PROG
+
 */
 cat_filt	table[MAX_CAT];
 
 int		max_cat;
 /*
-=TEX
+
 
 \HOLindexEntry{initialize_table}
-=SIEVE_PROG
+
 */
 void
 initialize_table(void)
@@ -834,12 +836,9 @@ initialize_table(void)
 	max_cat = 1;
     }
 /*
-=TEX
-
-
-
-\HOLindexEntry{print_table_entry}
-=SIEVE_PROG
+-----------------
+print_table_entry
+-----------------
 */
 void
 print_table_entry(cat_filt *tab, FILE *fp)
@@ -895,14 +894,7 @@ print_table_entry(cat_filt *tab, FILE *fp)
 		}
 	}
 }
-/*
-=TEX
 
-
-
-\HOLindexEntry{look_up}
-=SIEVE_PROG
-*/
 int
 look_up(char *cat)
 {
@@ -914,14 +906,7 @@ look_up(char *cat)
 	};
 	return(NOT_FOUND);
 }
-/*
-=TEX
 
-
-
-\HOLindexEntry{print_table}
-=SIEVE_PROG
-*/
 void
 print_table(void)
 {
@@ -982,18 +967,18 @@ print_table(void)
 		}
 	}
 }
-/*
-=TEX
 
-\subsection{Source File Context}
+/*
+-------------------
+Source File Context
+-------------------
 
 A structure holding the current sieving context is maintained.  This
 holds the arguments from the directive line plus indexes into the table
 of known categories.  The arguments are numbered~1~to~9, additionally
 argument~0 refers to the directive name.
-
-=SIEVE_PROG
 */
+
 #define MAX_DIR_ARGS 9
 
 typedef struct{
@@ -1069,7 +1054,7 @@ dump_dir_info(dir_info *di)
 }
 */
 /*
-=TEX
+
 \subsection{Macro Expansion}
 
 Maximum length for macro expansion is twice the normal line length.
@@ -1081,11 +1066,10 @@ of the other programs used, such as \LaTeX{}, have a much smaller
 maximum input line length.
 
 \HOLindexEntry{MACRO_EXP_SIZE}
-=SIEVE_PROG
+
 */
 #define MACRO_EXP_SIZE ((MAX_LINE_LEN) * 2)
 /*
-=TEX
 
 \HOLindexEntry{copy_macro_arg}
 {\tt copy_macro_arg}: is used by {\tt expand_macro} to copy a macro.
@@ -1094,7 +1078,7 @@ character index {\tt orig_outp}, but no more than {\tt maxlen}
 characters may be written to {\tt out_line}.  Argument {\tt flags} gives
 details of how the macro text should be copied or converted.
 
-=SIEVE_PROG
+
 */
 int
 copy_macro_arg(
@@ -1131,7 +1115,7 @@ copy_macro_arg(
 	return(ans);
 }
 /*
-=TEX
+
 ------------
 expand_macro
 ------------
@@ -1139,7 +1123,6 @@ Expand the text of {\tt in_line} into the area {\tt
 out_line} which is {\tt lenout_line} characters long.  The macro
 parameters are found in {\tt di}.
 
-=SIEVE_PROG
 */
 void
 expand_macro(
@@ -1234,7 +1217,7 @@ expand_macro(
 	out_line[outp++] = '\0';
 }
 /*
-=TEX
+
 
 \subsection{Initialization and Initial Checks}
 
@@ -1249,7 +1232,7 @@ build to break at an early stage, so there is little to be gained by checking
 for errors here.
 
 \HOLindexEntry{initialize}
-=SIEVE_PROG
+
 */
 void
 initialize(void)
@@ -1288,12 +1271,12 @@ initialize(void)
 	}
 }
 /*
-=TEX
+
 
 Check the data structures built from the view file.
 
 \HOLindexEntry{check_program_initializations}
-=SIEVE_PROG
+
 */
 void
 check_program_initializations(void)
@@ -1337,14 +1320,13 @@ check_program_initializations(void)
 		EXIT(21);
 }
 /*
-=TEX
-
-\HOLindexEntry{conclude_steerfile}
-{\tt conclude_steerfile} : Complete the initializations of the
+------------------
+conclude_steerfile
+------------------
+Complete the initializations of the
 various tables which are initialized from the view file and
 make some simple validations of those tables.
 
-=SIEVE_PROG
 */
 void
 conclude_steerfile(void)
@@ -1374,7 +1356,7 @@ conclude_steerfile(void)
 	if(stop_prog) EXIT(23);							/* EXIT */
 }
 /*
-=TEX
+
 
 \subsection{Entering Data Into Category Table}
 
@@ -1388,7 +1370,7 @@ optional filter is in {\tt filt}, if this category header line is for
 the wanted view then {\tt using_view} is non zero.
 
 \HOLindexEntry{overwrite}
-=SIEVE_PROG
+
 */
 void
 overwrite(int tab_ent, int using_view, char *filt)
@@ -1429,7 +1411,7 @@ overwrite(int tab_ent, int using_view, char *filt)
 	}
 }
 /*
-=TEX
+
 
 \HOLindexEntry{insert}
 {\tt insert} : Add a new entry into the category table.  Return its
@@ -1446,7 +1428,7 @@ finding of directive lines.  Perhaps we should use another character
 flag, see section~\ref{CharacterFlags}, rather than treat the percent
 character specially here.
 
-=SIEVE_PROG
+
 */
 int
 insert(char *cat, int using_view, char *filt)
@@ -1485,14 +1467,14 @@ insert(char *cat, int using_view, char *filt)
 	return(max_cat-1);
 }
 /*
-=TEX
+
 
 \HOLindexEntry{arguments_decode}
 {\tt arguments_decode} : Decode an arguments action storing the results
 in the category table at {\tt tab_ent}.  The arguments are in
 {\tt filt} which has either one or two decimal numbers.
 
-=SIEVE_PROG
+
 */
 void
 arguments_decode(int tab_ent, char *filt)
@@ -1551,14 +1533,14 @@ arguments_decode(int tab_ent, char *filt)
 	}
 }
 /*
-=TEX
+
 
 \HOLindexEntry{verify_macro_calls}
 {\tt verify_macro_calls} : Check that the text contains only valid
 macro calls.  Issue warnings for bad macro calls.  Return 1 if there are
 any macro calls, 0 otherwise.
 
-=SIEVE_PROG
+
 */
 int
 verify_macro_calls(int max_args, char *filt)
@@ -1613,7 +1595,7 @@ verify_macro_calls(int max_args, char *filt)
 	return(has_macros);
 }
 /*
-=TEX
+
 
 \HOLindexEntry{decode_action_line}
 {\tt decode_action_line} : Decode and add an additional action to the indicated
@@ -1624,7 +1606,7 @@ recursive call is used to process the rest of the line which contains
 the real action.  Argument depth is used to prevent multiple output
 redirections, it is incremented on each recursive call.
 
-=SIEVE_PROG
+
 */
 int
 decode_action_line(
@@ -1769,48 +1751,6 @@ decode_action_line(
 	return(1);
 }
 /*
-=TEX
-
-\subsection{Keyword File Reading Functions}
-
-\HOLindexEntry{get_char_code}
-{\tt get_char_code} : Extract a character code from {\tt line}, if a
-code is obtained then return 1 and set {\tt value} to the code found.
-If no code found then return 0 and set "value" to 0.
-
-Character codes are one of:  hex with a leading "0x" or "0X"; octal
-with a leading "0"; or decimal numbers.
-Character codes are now expected to be UNICODE code points.
-They must be in the range~$-1\sb{10}$ to~$xFFFFFF\sb{16}$ (this needs to be refined a bit).
-
-NOTE: this is not in use.
-
-=SIEVE_PROG
-*/
-int
-get_char_code(char *line, int *value)
-{
-	int ch = -1;		/* -1 ==> not a valid code */
-
-	int scan_ans;
-	int len;
-
-	scan_ans = sscanf(line, "%i%n", &ch, &len);
-
-	if(scan_ans != 1 || len != strlen(line))
-		ch = -1;
-
-	if(ch >= -1 && ch <= 0xFFFFFF) {
-		*value = ch;
-		return(1);
-	} else {
-		*value = 0;
-		return(0);
-	}
-}
-
-/*
-=TEX
 
 \subsection{Sieving Functions}
 
@@ -1821,7 +1761,6 @@ written to several places whilst sieving.
 {\tt open_output} : Open any output file wanted for the action given by
 {\tt cf}, returning the file details in the argument {\tt di}.
 
-=SIEVE_PROG
 */
 
 void
@@ -1873,14 +1812,14 @@ open_output(dir_info *di, cat_filt_action *cf)
 	}
 }
 /*
-=TEX
+
 
 \HOLindexEntry{reset_output}
 {\tt reset_output} :  Called at end of input and at changes of
 category, this function makes sure that any active filter and any
 output other than standard output are shut down properly.
 
-=SIEVE_PROG
+
 */
 void
 reset_output(dir_info *di)
@@ -1912,7 +1851,7 @@ reset_output(dir_info *di)
 	di->cur_fp_class = FP_STDOUT;
 }
 /*
-=TEX
+
 
 \HOLindexEntry{do_non_copy_actions}
 {\tt do_non_copy_actions} :  Do the next actions of the current
@@ -1922,7 +1861,7 @@ last action.  The current category and next action number are found
 from argument {\tt di}.  Argument {\tt fp} gives the output stream
 for those cases where the action does not state its own output stream.
 
-=SIEVE_PROG
+
 */
 int
 do_non_copy_actions(dir_info *di)
@@ -2008,13 +1947,13 @@ do_non_copy_actions(dir_info *di)
 	return(di->cur_act_index);
 }
 /*
-=TEX
+
 
 \HOLindexEntry{complete_actions}
 {\tt complete_actions} :  Do all the remaining actions for the
 category.  These must be non-copy actions.
 
-=SIEVE_PROG
+
 */
 void
 complete_actions(dir_info *di)
@@ -2031,7 +1970,7 @@ complete_actions(dir_info *di)
 	}
 }
 /*
-=TEX
+
 
 \subsection{Auxiliaries For Source File Line Processing}
 
@@ -2050,7 +1989,7 @@ characters where the open index character is expanded to something like
 `\verb|\index\bgroup|' and the close index character
 to `\verb|\egroup|'.
 
-=SIEVE_PROG
+
 */
 int
 copy_PrNN(char *str, int code)
@@ -2071,7 +2010,7 @@ copy_PrNN(char *str, int code)
 	return(PrNN_SIZE);
 }
 /*
-=TEX
+
 
 \HOLindexEntry{copy_string}
 {\tt copy_string} : Copies the {\tt source} string into the {\tt dest}
@@ -2080,7 +2019,7 @@ after the copied characters if the length is exceeded.  Return the
 number of characters copied.  This differs from the C library routines
 {\tt strcpy} and {\tt strncpy} which return the address of the output
 string.
-=SIEVE_PROG
+
 */
 int
 copy_string(char *source, char *dest, int max)
@@ -2096,7 +2035,7 @@ copy_string(char *source, char *dest, int max)
 	return(i);
 }
 /*
-=TEX
+
 
 {\tt copy_keyword} :  Copies the keyword {\tt kw} read from the input
 string into the {\tt dest} string for up to {\tt max} characters.
@@ -2104,7 +2043,6 @@ Return the number of characters written to {\tt dest}.  The keyword is
 {\tt kwlen} characters long, it starts and (probably) ends with
 `{\tt\%}' characters which are not copied if {\tt suppress} is non zero.
 
-=SIEVE_PROG
 */
 int
 copy_keyword(
@@ -2204,8 +2142,8 @@ overflowing the line length macro {\tt MAIN_LEEWAY} allows a little
 leeway for adding a few single characters.  The value allows at least
 the number of characters that the conversions below may create.
 
-{\tt MAX_TEX_ARG_NESTING} defines the length of the stack containing arguments
-for {\TeX}.
+MAX_TEX_ARG_NESTING defines the length of the stack containing arguments
+for TeX.
 */
 #define MAIN_LEEWAY (MAX_KW_LEN+5)
 #define MAX_TEX_ARG_NESTING (16)
@@ -2298,7 +2236,7 @@ main_convert(
 			out_line[outp++] = '}';
 			tex_arg_stack_head -= 1;
 		}
-
+		
 		switch(ch) {
 		case '%': if(opt_do_kw) {
 				int kwlen;
@@ -2563,16 +2501,15 @@ main_convert(
 	}
 }
 /*
-=TEX
+
 ================
 Sieving Routines
 ================
 ------------
 process_line
 ------------
-Handles each non-directive line, it selects the
-appropriate type of processing.  Function {\tt sieve} is in overall control of
-the sieving phase of the program.
+Handles each non-directive line, it selects the appropriate type of processing.
+Function main_sieve is in overall control of the sieving phase of the program.
 */
 void
 process_line(char *line, dir_info *di)
@@ -2610,7 +2547,6 @@ process_line(char *line, dir_info *di)
 			}
 			op_text = convert_area;
 		}
-
 		FPRINTF(di->cur_fp, "%s\n", op_text);
 		break;								/* BREAK */
 
@@ -2634,17 +2570,19 @@ process_line(char *line, dir_info *di)
 		EXIT(11);							/* EXIT */
 	}
 }
+
 /*
-=TEX
 ----------------------
 set_up_for_copy_action
 ----------------------
-After decoding a directive line set up
-the copying action.  The actual copying is done via {\tt process_line}
-which is called for the non-directive lines.  A main activity here is
-to set up the pipe for a filter or the output for write or appending.
+After decoding a directive line set up the copying action.
+The actual copying is done via process_line which is called
+for the non-directive lines.
+A main activity here is to set up the pipe for a filter or the output
+for write or appending.
 These are set into the given {\tt di}.
 */
+
 void
 set_up_for_copy_action(dir_info *di)
 {
@@ -2711,8 +2649,8 @@ set_up_for_copy_action(dir_info *di)
 				break;						/* BREAK */
 	}
 }
+
 /*
-=TEX
 -------------------
 set_up_new_category
 -------------------
@@ -2720,6 +2658,7 @@ Update the directive information in {\tt
 di} ready to process a new category whose name, arguments, etc., are
 given in {\tt di}.
 */
+
 void
 set_up_new_category(dir_info *di)
 {
@@ -2795,8 +2734,8 @@ set_up_new_category(dir_info *di)
 ---------------------
 decode_directive_line
 ---------------------
-{\tt decode_directive_line} :  Return 0 if the line is not a directive
-line.  If it is a directive line then split it into its component
+Return 0 if the line is not a directive line.
+If it is a directive line then split it into its component
 pieces, which comprise the category and some arguments.  The last
 argument is the {\tt MAX_DIR_ARGS-1} word and all remaining characters on
 the line.  Update {\tt di} with the information found.
@@ -3040,7 +2979,6 @@ is_same_directive(dir_info *old, dir_info *new)
 	return(1);
 }
 /*
-=TEX
 ----------
 main_sieve
 ----------
@@ -3064,12 +3002,13 @@ main_sieve(void)
 	dir_info *next_di = &di_area_2;
 
 	main_F.fp = stdin;
+	main_F.utf8 = utf8_stdin;
 
 	init_directive_line(c_di);
 
 	if(debug) message1("Processing standard input");
 	while( (!feof(main_F.fp)) && (!ferror(main_F.fp)) ) {
-		(void)read_line(main_F.cur_line, MAX_LINE_LEN, &main_F);
+		(void)read_line_as_ext(&main_F);
 		main_F.line_no ++;
 
 		if(debug & D_READ_SOURCE_LINE) {
@@ -3264,12 +3203,10 @@ read_view_file(char *name)
 	};
 }
 /*
-=====================================
-Printing the Sizes of Data Areas Used
-=====================================
 -----------
 list_limits
 -----------
+Printing the Sizes of Data Areas Used
 */
 void
 list_limits(void)
@@ -3305,9 +3242,9 @@ list_limits(void)
 #undef LLL
 }
 /*
-----
+====
 main
-----
+====
 */
 int
 main(int argc, char **argv)
@@ -3324,7 +3261,7 @@ main(int argc, char **argv)
 
 	check_program_initializations();
 
-	while((option = getopt(argc, argv, "d:f:Kk:lv")) != -1) {
+	while((option = getopt(argc, argv, "d:f:Kk:luv")) != -1) {
 	    switch(option) {
 		case 'd':
 		    debug |= atoi(optarg);
@@ -3346,6 +3283,9 @@ main(int argc, char **argv)
 		    break;							/* BREAK */
 		case 'l':
 		    limits.opt_list = 1;
+		    break;							/* BREAK */
+		case 'u':
+		    utf8_stdin = True;
 		    break;							/* BREAK */
 		case 'v':
 		    FPRINTF(stderr, "%s: version %s\n", program_name,

@@ -100,6 +100,9 @@ void initialise_keyword_information(void);
 char *find_steering_file(char *name, char *file_type);
 
 #define MAX_LINE_LEN 1024
+
+bool utf8_stdin;
+
 struct file_data{
   char *name;
   char *file_name;
@@ -110,8 +113,10 @@ struct file_data{
   bool utf8;
   unicode code_line[MAX_LINE_LEN+1];
 };
+
 extern struct file_data keyword_F;
-int read_line(char *line, int max, struct file_data *file_F);
+
+int read_line_as_ext(struct file_data *file_F);
 void read_steering_line(char *line, struct file_data *file_F);
 void read_keyword_file(char *name);
 void conclude_keywordfile(void);
