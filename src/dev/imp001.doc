@@ -182,7 +182,15 @@ Ported to Lemma 1 document template.
 It now allows SLRP to be compiled with MLton.
 
 \item[2016/09/17]
-Support for Poly/ML compiled with fixed magnitude {\tt int} type.
+Updates to support latest updates to Poly/ML and Mac OS Xcode
+
+\item[2017/03/05]
+Poly/ML can now be compiled with a fixed magnitude type for the default integer type,
+so we now use structure {\tt IntInf} rather than {\tt Int} for the
+arbitrary magnitude arithmetic.  Pretty-printing arbitrary magnitude integers in SML/NJ
+now works so SML/NJ and Poly/ML can use the same code.
+
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -2407,34 +2415,13 @@ open SearchTree;
 =SML
 structure €Integer› : Integer = struct
 =TEX
-For SML/NJ, we give the code using the basis library's $IntInf$ structure.
-Reimplementation using a custom representation of natural numbers
-as decimal literal strings is recommended, since that will avoid the
-conversion overheads in the intended use to support object language
-arithmetic (where natural numbers are represented as constants whose
-names are decimal numeric strings).
-In any case, we hide the representation inside a datatype so that
-we can define a pretty-printer for it.
-=NJML
-	datatype INTEGER = Integer of IntInf.int;
-=TEX
-For Poly/ML, life is much simpler --- the built-in integers will do
-and the compiler's pretty-printer will do us fine.
-=POLYML
-	type INTEGER = int;
+We use the basis library's $IntInf$ structure.
+=SML
+	type INTEGER = IntInf.int;
 =TEX
 For $idiv$ and $imod$ we have to map the basis library exception
 onto the {\Product} one.
-=NJML
-	fun (Integer x : INTEGER) €idiv› (Integer y : INTEGER) : INTEGER = (
-		Integer (IntInf.div(x, y))
-		handle Div => fail "idiv" 1201 []
-	);
-	fun (Integer x : INTEGER) €imod› (Integer y : INTEGER) : INTEGER = (
-		Integer (IntInf.mod(x, y))
-		handle Div => fail "imod" 1201 []
-	);
-=POLYML
+=SML
 	fun (x : INTEGER) €idiv› (y : INTEGER) : INTEGER = (
 		x div y
 		handle Div => fail "idiv" 1201 []
@@ -2444,59 +2431,25 @@ onto the {\Product} one.
 		handle Div => fail "imod" 1201 []
 	);
 =TEX
-For SML/NJ, the remaining arithmetic operators are not much more than renamings of the
-basis library ones.
-=NJML
-	fun mk_dyop (f : IntInf.int * IntInf.int -> IntInf.int) :
-		INTEGER * INTEGER -> INTEGER = (
-			fn(Integer x, Integer y) => Integer (f(x, y))
-	);
-	val op €@*› : INTEGER * INTEGER -> INTEGER = mk_dyop IntInf.*;
-	val op €@+› : INTEGER * INTEGER -> INTEGER = mk_dyop IntInf.+;
-	val op €@-› : INTEGER * INTEGER -> INTEGER = mk_dyop IntInf.-;
-	fun mk_monop (f : IntInf.int -> IntInf.int) : INTEGER -> INTEGER = (
-			fn(Integer x) => Integer (f x)
-	);
-	val op €@~› : INTEGER -> INTEGER = mk_monop IntInf.~;
-	val op €iabs› : INTEGER -> INTEGER = mk_monop IntInf.abs;
-	fun mk_dypred (f : IntInf.int * IntInf.int -> bool) :
-		INTEGER * INTEGER -> bool = (
-			fn(Integer x, Integer y) => f(x, y)
-	);
-	val op €@<› : INTEGER * INTEGER -> bool = mk_dypred IntInf.<;
-	val op €@>› : INTEGER * INTEGER -> bool = mk_dypred IntInf.>;
-	val op €@<=› : INTEGER * INTEGER -> bool = mk_dypred IntInf.<=;
-	val op €@>=› : INTEGER * INTEGER -> bool = mk_dypred IntInf.>=;
-=TEX
-For Poly/ML, the remaining operators really are just renamings of the
+The remaining operators really are just renamings of the
 existing ones:
-=POLYML
-	val op €@*› : INTEGER * INTEGER -> INTEGER = Int.*;
-	val op €@+› : INTEGER * INTEGER -> INTEGER = Int.+;
-	val op €@-› : INTEGER * INTEGER -> INTEGER = Int.-;
-	val op €@~› : INTEGER -> INTEGER = Int.~;
-	val op €iabs› : INTEGER -> INTEGER = Int.abs;
-	val op €@<› : INTEGER * INTEGER -> bool = Int.<;
-	val op €@>› : INTEGER * INTEGER -> bool = Int.>;
-	val op €@<=› : INTEGER * INTEGER -> bool = Int.<=;
-	val op €@>=› : INTEGER * INTEGER -> bool = Int.>=;
+=SML
+	val op €@*› : INTEGER * INTEGER -> INTEGER = IntInf.*;
+	val op €@+› : INTEGER * INTEGER -> INTEGER = IntInf.+;
+	val op €@-› : INTEGER * INTEGER -> INTEGER = IntInf.-;
+	val op €@~› : INTEGER -> INTEGER = IntInf.~;
+	val op €iabs› : INTEGER -> INTEGER = IntInf.abs;
+	val op €@<› : INTEGER * INTEGER -> bool = IntInf.<;
+	val op €@>› : INTEGER * INTEGER -> bool = IntInf.>;
+	val op €@<=› : INTEGER * INTEGER -> bool = IntInf.<=;
+	val op €@>=› : INTEGER * INTEGER -> bool = IntInf.>=;
 =TEX
 The interface to convert from a string requires a bit of glue
 for the result value and error-handling.
 =SML
 	fun €integer_of_string› (s : string) : INTEGER = (
-		case
-=NJML
-		IntInf.fromString
-=POLYML
-		Int.fromString
-=SML
-			s of
-			SOME x =>
-=NJML
-				Integer
-=SML
-					x
+		case IntInf.fromString s of
+			SOME x => x
 		|	NONE =>
 				if	s = ""
 				then	fail "integer_of_string" 1202 []
@@ -2508,43 +2461,23 @@ The opposite conversion requires adjustment of the signs to our preferred
 form.
 =SML
 	val zero = integer_of_string "0";
-	fun €string_of_integer› (x as
-=NJML
-		Integer
-=SML
-			i : INTEGER) : string = (
+	fun €string_of_integer› (x : INTEGER) : string = (
 		if	x @< zero
 		then	"-" ^ string_of_integer (@~ x)
-		else
-=NJML
-			IntInf.toString i
-=POLYML
-			Int.toString i
+		else	IntInf.toString x
 =SML
 	);
 =TEX
 Conversion to ints requires glue for error-handling.
 =SML
-	fun €int_of_integer› (
-=NJML
-			Integer
-=SML
-				x : INTEGER) : int = (
-=NJML
+	fun €int_of_integer› (x : INTEGER) : int = (
 		IntInf.toInt x
-=POLYML
-		Int.toInt x
-=SML
 		handle Overflow => fail "int_of_integer" 1204 []
 	);
 =TEX
 And again the opposite conversion is just a renaming:
 =SML
-	val €integer_of_int› : int -> INTEGER =
-=NJML
-		 Integer o IntInf.fromInt;
-=POLYML
-		Int.fromInt;
+	val €integer_of_int› : int -> INTEGER = IntInf.fromInt;
 =TEX
 The error path in the following is a bit odd for an empty string: we
 call $fromString$ and let it fail.
@@ -2552,13 +2485,8 @@ call $fromString$ and let it fail.
 	fun €natural_of_string› (s : string) : INTEGER = (
 		if	s = "" orelse is_all_decimal s
 		then
-=NJML
 			case IntInf.fromString s of
-				SOME x => Integer x
-=POLYML
-			case Int.fromString s of
 				SOME x => x
-=SML
 			|	NONE => fail "natural_of_string" 1013 []
 		else	fail "natural_of_string" 1012 [fn _ => s]
 	);
@@ -2572,6 +2500,17 @@ fun €integer_order› (i1 : INTEGER) (i2 : INTEGER) : int = (
 	else if	i1 @< i2
 	then	~1
 	else	1
+);
+=TEX
+=SML
+fun €integer_interval› (a : INTEGER) (b : INTEGER) : INTEGER list = (
+	let	fun aux acc i = (
+			if	i @< a
+			then	acc
+			else	aux (i :: acc) (i @- one)
+		);
+	in	aux [] b
+	end
 );
 =TEX
 =SML
@@ -2611,23 +2550,6 @@ fun €string_of_float› ((x, p, e): INTEGER * INTEGER * INTEGER) : string = (
 =SML
 end (* of structure Integer *);
 =TEX
-Poly/ML doesn't need us to give a pretty-printer for integers, it already has one and so,
-since the INSTALLPP category will generate some code, we comment it out for Poly/ML:
-=POLYML
-(*
-=SML
-val _ =
-let	fun integer_pp (addstring, beginb, _, endb) (x : Integer.INTEGER) = (
-		beginb(0, false);
-			addstring("@@\"" ^ Integer.string_of_integer x ^ "\"");
-		endb()
-	);
-in
-=INSTALLPP
-		(PPCompiler.make_pp ["Integer", "INTEGER"] integer_pp)
-end;
-=POLYML
-*)
 =SML
 open Integer;
 =MLTON
