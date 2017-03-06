@@ -537,6 +537,8 @@ struct file_data{
   unicode code_line[MAX_LINE_LEN+1];
 };
 
+struct file_data dummy_F = 	{ "dummy file", 0, 0, 0 };
+
 /*
 ========================
 Sizes of Data Areas Used
@@ -1007,32 +1009,26 @@ get_char_unicode(char *line, unicode *value)
 
 /*
 -------------------
-get_percent_unicode
+percent_hex_to_unicode
 -------------------
 This procedure processes the hexadecimal literals permitted in percemts
 representing unicode code points.
 Only hex is permitted, and it must be prefixed by "#x" (not "0x").
 
+A *unicode parameter is set to the length including percents if successful,
+the return value is the unicode value.
 */
-int
-get_percent_unicode(char *line, unicode *value)
+
+unicode
+percent_hex_to_unicode(char *line, int *len)
 {
 	int ch = -1;		/* -1 ==> not a valid code */
-
 	int scan_ans;
-	int len;
-
-	scan_ans = sscanf(line, "%%#x%X%%%n", &ch, &len);
-
+	scan_ans = sscanf(line, "%%#x%X%%%n", &ch, len);
 	if(scan_ans != 1) ch = -1;
-
-	if(ch >= 1 && ch <= 0x10FFFF) {
-		*value = ch;
-		return(len);
-	} else {
-		*value = 0;
-		return(0);
-	}
+	if(ch >= 1 && ch <= 0x10FFFF) return(ch);
+	*len = 0;
+	return(0);
 }
 
 /*
@@ -1530,7 +1526,10 @@ conclude_keywordfile(void)
 get_hol_kw
 ----------
 This function may be used to look up a named keyword returning the position
-of the relevant entry in kwi.keyword.
+of the relevant entry in kwi.keyword, or -1 if not found.
+
+It grumbles if the keyword is malformed or unknown.
+
 */
 
 int
@@ -1601,7 +1600,7 @@ UNICODE and utf8 handling
 Unicode <-> ext mapping
 -----------------------
 
-Convert a unicode code point to a hexadecimal in percents */
+Convert a unicode code point to a 6-digit hexadecimal in percents */
 
 const char *unicode_to_hex(unicode code_point)
 {
@@ -1745,8 +1744,9 @@ const char *unicode_to_kwa(unicode code_point)
 ----------------
 code_line_to_ext
 ----------------
-This procedure takes a line input which has been translated into unicode
+This procedure takes a line of input which has been translated into unicode
 code points into the ProofPower extended character set.
+The source and destination are buffers in a file_data parameter.
 
 */
 void code_line_to_ext(struct file_data *file_F){
@@ -1892,6 +1892,7 @@ int read_line_as_ext(struct file_data *file_F){
   else {r = simple_read_line(file_F->cur_line, MAX_LINE_LEN, file_F);};
   return r;
 };
+
 /*
 ----------------------
 output_unicode_as_utf8
@@ -1944,24 +1945,61 @@ void output_unicode_sequence(unicode *line, FILE *file){
 }
 
 /*
-----------------------
-convert_ext_to_unicode
-----------------------
-Takes a string of characters which is coded in the extended ascii,
-admitting percent enclosed keyword names or hexadecimal unicode codes,
-and sets a unicode parameter to the corresponding unicode code point,
-returning the number of characters in the source which expressed the
-code value. 
+-------------------
+named_kw_to_unicode
+-------------------
+Takes a string of characters beginning with a percent enclosed keyword
+name and returns the unicode code point associated with that keyword
+in the current keyword file(s), also setting a parameter to the length
+of the keyword (inluding percents).
+*/
 
-int convert_ext_to_unicode(char *line, unicode *uni){
-  if (*line = '%') {
-  }
-  else {
-  if }
+unicode named_kw_to_unicode(char *line, int *len){
+  unicode val;
+  int kw_index;
+  kw_index = get_hol_kw(line, len, False, &dummy_F);
+  if (len == 0) return NOT_FOUND; 
+  val = kwi.keyword[kw_index].uni;
+  return val;
 }
 
+/*
+-------------
+kw_to_unicode
+-------------
+Takes a string of characters which is coded in the extended ascii,
+admitting percent enclosed keyword names or hexadecimal unicode codes,
+and sets a unicode parameter to the unicode code point corresponding
+to a named percent keyword if that keyword appears enclosed in percents
+at the beginning of the string, setting a parameter to the length of the
+percent enclosed name.
+*/
+
+unicode kw_to_unicode(char *line, int *len){
+  unicode val;
+  val = percent_hex_to_unicode(line, len);
+  if (len>0) return val;
+  return named_kw_to_unicode(line, len);
+}
+
+/*
 --------------------------
-convert_ext_seq_to_unicode
+ext_or_kw_to_unicode
+--------------------------
+Takes a null terminated string of characters which are either asscii,
+or ProofPower extended characters, or percent enclosed keyword names
+(declared in the current keyword files) or percent enclosed ascii
+hexadecimal unicode code points and converts the first to a unicode code point. 
+*/
+  
+unicode ext_or_kw_to_unicode(char *line, int *len){
+  if (*line != '%'){*len = 1; return *line;};
+  return kw_to_unicode(line, len);
+}
+
+/*
+--------------------------
+ext_seq_to_unicode
 --------------------------
 Takes a null terminated string of characters which are either asscii,
 or ProofPower extended characters, or perent enclosed keyword names
@@ -1969,6 +2007,16 @@ or ProofPower extended characters, or perent enclosed keyword names
 hexadecimal unicode code points and converst them to a null terminated
 array of unicode code points. 
 */
+
+void ext_seq_to_unicode(char* line, unicode *codes){
+  int ip, op, len = 0;
+  while (*(line+ip) != 0){
+    *(codes+op) = ext_or_kw_to_unicode(line+ip, &len);
+    op += len;
+    ip++;
+  };
+  *(codes+op) = 0;
+}
 
 /*
 ===============================
@@ -2039,7 +2087,7 @@ enum {	S_INITIAL,
 do_hex_to_unicode
 ----------------
 Translate from ProofPower ascii/ext format to utf8 ecoded unicode.
-*/
+
 
 void do_chars(int len, char *cs)
 {
@@ -2081,9 +2129,11 @@ unicode hex_to_unicode (char *line, int *len)
 		}
 		if(state == S_HAVE_KEYWORD) {
 			sscanf(&buf[2], "%6X", &u);
-			if(/*!do_keyword(u)*/False) { do_chars(l, buf); }
+			if(output_unicode_as_utf8(u)) { do_chars(l, buf); }
 			l = 0;
 			state = S_INITIAL;
 		}
 	}
 }
+
+*/
