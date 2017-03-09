@@ -20,7 +20,7 @@ clean:
 
 rebuild: clean all
 
-pptex.ldd:
+pptex.ldd: env
 	cd pptex; make -f pptex.mkf clean; make -f pptex.mkf inst
 	touch pptex.ldd
 
