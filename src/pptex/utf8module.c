@@ -519,6 +519,7 @@ int debug = 0;
 #define D_EXPAND 2048
 #define D_READ_STEER_LINE 4096
 #define D_8192 8192
+#define D_UTF8 16384
 
 #define FPRINTF (void)fprintf
 #define PRINTF (void)printf
@@ -537,7 +538,7 @@ struct file_data{
   unicode code_line[MAX_LINE_LEN+1];
 };
 
-struct file_data dummy_F = 	{ "dummy file", 0, 0, 0 };
+struct file_data dummy_F = {"dummy file", "", 0, 0};
 
 /*
 ========================
@@ -878,7 +879,7 @@ show_kw_kind(int kind)
 void
 show_one_keyword(struct keyword_information *ki)
 {
-	PRINTF("(%p)",		ki);
+  /*	PRINTF("(%p)",		ki);*/
 	PRINTF(" ech=%4d",		ki->ech);
 	PRINTF(" uni=%8x",		ki->uni);
 	PRINTF("  ty=");
@@ -1861,6 +1862,7 @@ If the line
 int read_line_as_unicode(struct file_data *file_F){
   int r;
   r = simple_read_line(file_F->cur_line, MAX_LINE_LEN, file_F);
+  if (debug & D_UTF8) PRINTF("read_line_as_unicode: %i", file_F->line_no);
   if (r && file_F->utf8){
     utf8_line_to_codes(file_F->cur_line, file_F->code_line);    
   };
@@ -1957,9 +1959,12 @@ of the keyword (inluding percents).
 unicode named_kw_to_unicode(char *line, int *len){
   unicode val;
   int kw_index;
+  if (debug & D_UTF8) message("named_kw_to_unicode:%s", line);
   kw_index = get_hol_kw(line, len, False, &dummy_F);
+  PRINTF(":%i:%i:\n", kw_index, *len);
   if (len == 0) return NOT_FOUND; 
   val = kwi.keyword[kw_index].uni;
+  PRINTF(":%i:\n", val);
   return val;
 }
 
@@ -1977,10 +1982,22 @@ percent enclosed name.
 
 unicode kw_to_unicode(char *line, int *len){
   unicode val;
+  if (debug & D_UTF8) message("kw_to_unicode:%s", line);
   val = percent_hex_to_unicode(line, len);
-  if (len>0) return val;
+  /*  PRINTF(":%i:%i\n", *len, val); */
+  if (*len>0) return val;
   return named_kw_to_unicode(line, len);
 }
+
+/*
+--------------
+ext_to_unicode
+--------------
+*/
+
+unicode ext_to_unicode(char ch){
+  return kwi.char_code[ch]->uni;
+};
 
 /*
 --------------------------
@@ -1993,7 +2010,11 @@ hexadecimal unicode code points and converts the first to a unicode code point.
 */
   
 unicode ext_or_kw_to_unicode(char *line, int *len){
-  if (*line != '%'){*len = 1; return *line;};
+  if (*line != '%'){
+    *len=1;
+    if (*line < 0)return *line;
+    else return (ext_to_unicode(*line));
+  };
   return kw_to_unicode(line, len);
 }
 
@@ -2008,15 +2029,32 @@ hexadecimal unicode code points and converst them to a null terminated
 array of unicode code points. 
 */
 
-void ext_seq_to_unicode(char* line, unicode *codes){
-  int ip, op, len = 0;
+void ext_seq_to_unicode(char *line, unicode codes[]){
+  int ip, op, len, res = 0;
   while (*(line+ip) != 0){
-    *(codes+op) = ext_or_kw_to_unicode(line+ip, &len);
-    op += len;
-    ip++;
+    if (debug & D_UTF8) PRINTF("ext_seq_to_unicode:ip=%i\n", ip);
+    res = ext_or_kw_to_unicode(line+ip, &len);
+    if (res > 0){
+      codes[op] = res; 
+      ip += len;
+      op++;}
+    else ip++;
   };
-  *(codes+op) = 0;
+  codes[op] = 0;
 }
+
+/*
+---------------------
+output_ext_as_unicode
+---------------------
+*/
+
+void output_ext_as_unicode(char *line, FILE *file_F){
+  static unicode codes[MAX_LINE_LEN+1];
+  if (debug & D_UTF8)  message1("output_ext_as_unicode:\n");
+  ext_seq_to_unicode(line, codes);
+  output_unicode_sequence(codes, file_F);
+};
 
 /*
 ===============================

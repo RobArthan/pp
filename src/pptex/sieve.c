@@ -198,6 +198,8 @@ struct debug_data{
 #define D_READ_STEER_LINE 4096
 	{D_READ_STEER_LINE,		"view and keyword file lines read"},
 #define D_8192 8192
+#define D_UTF8 16384
+	{D_UTF8,		        "unicode/utf8 processing"},
 };
 /*
 
@@ -214,6 +216,7 @@ The next free error code is
 41
 all codes below this are used.
 */
+
 void
 usage(void)
 {
@@ -222,12 +225,7 @@ usage(void)
 	program_name);
     FPRINTF(stderr, "%s version: %s\n", program_name, coprlemma1);
 }
-/*
 
-
-\HOLindexEntry{handle_sigpipe}
-
-*/
 /*ARGSUSED*/
 void
 handle_sigpipe(int sig)
@@ -257,9 +255,9 @@ They are also used in the sieve program for the view file and the main (standard
 */
 
 struct file_data view_F = 		{ "view file", 0, 0, 0 };
-struct file_data main_F = 		{ "standard input", 0, 0, 0 };
-/*
+struct file_data main_F = 		{ "standard input", 0, 0, 0};
 
+/*
 
 \subsection{Character Flags} \label{CharacterFlags}
 
@@ -1357,19 +1355,20 @@ conclude_steerfile(void)
 }
 /*
 
-
-\subsection{Entering Data Into Category Table}
-
-{\tt overwrite} : Write values into a particular category table entry.
+=================================
+Entering Data Into Category Table
+=================================
+---------
+overwrite
+---------
+Write values into a particular category table entry.
 This corresponds to either a new entry being inserted or to overwriting
 a previously set up entry.  It is the responsibility of the caller to
 ensure that the previously entry is not wanted.
 
-The category table entry to overwrite is in {\tt tab_ent}, the
-optional filter is in {\tt filt}, if this category header line is for
-the wanted view then {\tt using_view} is non zero.
-
-\HOLindexEntry{overwrite}
+The category table entry to overwrite is in tab_ent, the
+optional filter is in filt, if this category header line is for
+the wanted view then using_view is non zero.
 
 */
 void
@@ -1412,9 +1411,10 @@ overwrite(int tab_ent, int using_view, char *filt)
 }
 /*
 
-
-\HOLindexEntry{insert}
-{\tt insert} : Add a new entry into the category table.  Return its
+------
+insert
+------
+Add a new entry into the category table.  Return its
 index.  The category name is in {\tt cat}, the optional filter is in
 {\tt filt}, if this category header line is for the wanted view then
 {\tt using_view} is non zero.
@@ -1467,13 +1467,12 @@ insert(char *cat, int using_view, char *filt)
 	return(max_cat-1);
 }
 /*
-
-
-\HOLindexEntry{arguments_decode}
-{\tt arguments_decode} : Decode an arguments action storing the results
+----------------
+arguments_decode
+----------------
+Decode an arguments action storing the results
 in the category table at {\tt tab_ent}.  The arguments are in
 {\tt filt} which has either one or two decimal numbers.
-
 
 */
 void
@@ -1813,12 +1812,12 @@ open_output(dir_info *di, cat_filt_action *cf)
 }
 /*
 
-
-\HOLindexEntry{reset_output}
-{\tt reset_output} :  Called at end of input and at changes of
+------------
+reset_output
+------------
+Called at end of input and at changes of
 category, this function makes sure that any active filter and any
 output other than standard output are shut down properly.
-
 
 */
 void
@@ -1948,11 +1947,11 @@ do_non_copy_actions(dir_info *di)
 }
 /*
 
-
-\HOLindexEntry{complete_actions}
-{\tt complete_actions} :  Do all the remaining actions for the
+----------------
+complete_actions
+----------------
+Do all the remaining actions for the
 category.  These must be non-copy actions.
-
 
 */
 void
@@ -1970,10 +1969,9 @@ complete_actions(dir_info *di)
 	}
 }
 /*
-
-
-\subsection{Auxiliaries For Source File Line Processing}
-
+===========================================
+Auxiliaries For Source File Line Processing
+===========================================
 
 {\tt copy_PrNN} : Writes the characters `\verb|\Pr|$\cal NN$\verb|{}|'
 starting at {\tt str} where the `$\cal NN$' is the hexadecimal value of
@@ -2136,7 +2134,7 @@ Various conversions are supported, they are described with the
 definitions of the options flags in section~\ref{ActionOptions}.
 
 MAIN_LEEWAY
------------
+...........
 To avoid complicating the code below by excessive testing of
 overflowing the line length macro {\tt MAIN_LEEWAY} allows a little
 leeway for adding a few single characters.  The value allows at least
@@ -2170,6 +2168,7 @@ main_convert(
 	int opt_kw_warn = flags & OPT_WARN_KW;
 	int opt_flag_kw = opt_do_kw && opt_do_latex && (flags & OPT_FLAG_KW);
 	int opt_do_white = flags & OPT_WHITE;
+	int opt_utf8_out = flags & OPT_UTF8_OUT;
 	int tex_arg_stack[MAX_TEX_ARG_NESTING];
 	int tex_arg_stack_head = -1;
 
@@ -2537,18 +2536,23 @@ process_line(char *line, dir_info *di)
 		break;								/* BREAK */
 
 	case CAT_ACT :
-		/* if(a_flags) */ {
-			main_convert(op_text, a_flags, convert_area,
-				MACRO_EXP_SIZE, &main_F);
-			if(limits.opt_list) {
-				int ca_len = strlen(convert_area);
-				if(ca_len > limits.process_line_len)
-					limits.process_line_len = ca_len;
-			}
-			op_text = convert_area;
-		}
-		FPRINTF(di->cur_fp, "%s\n", op_text);
-		break;								/* BREAK */
+	  /* if(a_flags) */ {
+	  main_convert(op_text, a_flags, convert_area,
+		       MACRO_EXP_SIZE, &main_F);
+	  if(limits.opt_list) {
+	    int ca_len = strlen(convert_area);
+	    if(ca_len > limits.process_line_len)
+	      limits.process_line_len = ca_len;
+	  }
+	  op_text = convert_area;
+	}
+	  if (a_flags & OPT_UTF8_OUT) {
+	    if (debug & D_UTF8){message1("UTF8:process_line 1");};
+	    output_ext_as_unicode(op_text, di->cur_fp);
+	    if (debug & D_UTF8){message1("UTF8:process_line 2");};
+	  }
+	  else FPRINTF(di->cur_fp, "%s\n", op_text);
+	  break;								/* BREAK */
 
 	case ML_STRING_ACT :
 		mlstring(op_text, di->cur_fp);
@@ -2701,6 +2705,7 @@ set_up_new_category(dir_info *di)
 			di->cur_act_index = do_non_copy_actions(di);
 
 			if(di->tab->num_actions == 0) { /* just copy */
+		  if (debug & D_UTF8){message1("UTF8:set_up_new_category: just copy");};
 				di->current_action = CAT_ACT;
 			} else if(di->tab->num_actions < 0
 					|| di->tab->num_actions > MAX_ACTION) {
@@ -2718,11 +2723,13 @@ set_up_new_category(dir_info *di)
 				EXIT(15);					/* EXIT */
 			} else {
 				/* Must flush the results of any previous actions
-					before invoking the fliter. */
+					before invoking the filter. */
+		  if (debug & D_UTF8){message1("UTF8:set_up_new_category: about to fflush");};
 				if(fflush(di->cur_fp) != 0) {
 					unix_error("i/o error reported on flush operation", "");
 					EXIT(16);				/* EXIT */
 				};
+		  if (debug & D_UTF8){message1("UTF8:set_up_new_category: fflush-ed OK");};
 
 				set_up_for_copy_action(di);
 			}
@@ -3002,11 +3009,10 @@ main_sieve(void)
 	dir_info *next_di = &di_area_2;
 
 	main_F.fp = stdin;
-	main_F.utf8 = utf8_stdin;
 
 	init_directive_line(c_di);
 
-	if(debug) message1("Processing standard input");
+	if(debug) message("Processing standard input: %s\n", main_F.utf8 ? "utf8 input" : "ext Input");
 	while( (!feof(main_F.fp)) && (!ferror(main_F.fp)) ) {
 		(void)read_line_as_ext(&main_F);
 		main_F.line_no ++;
@@ -3047,14 +3053,13 @@ main_sieve(void)
 					c_di = next_di;
 					next_di = temp;
 				}
-
 				set_up_new_category(c_di);
 
 				/* Bottom of change of category */
 			}
 			/* Bottom of found a directive line */
 		} else {
-			process_line(main_F.cur_line, c_di);
+		  process_line(main_F.cur_line, c_di);
 		}
 		/* Bottom of while loop */
 	}
@@ -3261,6 +3266,7 @@ main(int argc, char **argv)
 
 	check_program_initializations();
 
+	main_F.utf8 = False;
 	while((option = getopt(argc, argv, "d:f:Kk:luv")) != -1) {
 	    switch(option) {
 		case 'd':
@@ -3285,7 +3291,7 @@ main(int argc, char **argv)
 		    limits.opt_list = 1;
 		    break;							/* BREAK */
 		case 'u':
-		    utf8_stdin = True;
+		    main_F.utf8 = True;
 		    break;							/* BREAK */
 		case 'v':
 		    FPRINTF(stderr, "%s: version %s\n", program_name,

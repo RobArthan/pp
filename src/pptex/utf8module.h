@@ -154,6 +154,9 @@ int get_hol_kw(char *str,
 	int * len,
 	int warn,
 	struct file_data *file_F);
+
+void output_ext_as_unicode(char *line, FILE *file_F);
+
 extern unsigned char character_flags[256];
 
 #endif
