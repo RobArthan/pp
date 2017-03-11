@@ -116,10 +116,10 @@ struct file_data{
 
 extern struct file_data keyword_F;
 
+int simple_read_line(char *line, int max_len, struct file_data *file_F);
 int read_line_as_ext(struct file_data *file_F);
 void read_steering_line(char *line, struct file_data *file_F);
-void read_keyword_file(char *name);
-void conclude_keywordfile(void);
+void read_keyword_files(char *keyword_files[]);
 
 struct limits{
 	int opt_list;
@@ -155,8 +155,12 @@ int get_hol_kw(char *str,
 	int warn,
 	struct file_data *file_F);
 
-void output_ext_as_unicode(char *line, FILE *file_F);
+void output_ext_as_utf8(char *line, FILE *file_F);
 
 extern unsigned char character_flags[256];
+
+void transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F);
+void transcribe_file_to_ext(struct file_data *input_F, FILE *output_F);
+void transcribe_file_to_ascii(struct file_data *input_F, FILE *output_F);
 
 #endif

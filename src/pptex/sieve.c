@@ -254,8 +254,8 @@ The input file controls are now located in the utf8module, so that it can use th
 They are also used in the sieve program for the view file and the main (standard) input stream.
 */
 
-struct file_data view_F = 		{ "view file", 0, 0, 0 };
-struct file_data main_F = 		{ "standard input", 0, 0, 0};
+struct file_data view_F = 		{ "view file", 0, 0, 0, 0, 0, 0, 0};
+struct file_data main_F = 		{ "standard input", 0, 0, 0, 0, 0, 0, 0};
 
 /*
 
@@ -2548,7 +2548,7 @@ process_line(char *line, dir_info *di)
 	}
 	  if (a_flags & OPT_UTF8_OUT) {
 	    if (debug & D_UTF8){message1("UTF8:process_line 1");};
-	    output_ext_as_unicode(op_text, di->cur_fp);
+	    output_ext_as_utf8(op_text, di->cur_fp);
 	    if (debug & D_UTF8){message1("UTF8:process_line 2");};
 	  }
 	  else FPRINTF(di->cur_fp, "%s\n", op_text);
@@ -2726,6 +2726,7 @@ set_up_new_category(dir_info *di)
 					before invoking the filter. */
 		  if (debug & D_UTF8){message1("UTF8:set_up_new_category: about to fflush");};
 				if(fflush(di->cur_fp) != 0) {
+		  if (debug & D_UTF8){message1("UTF8:set_up_new_category: fflush failed");};
 					unix_error("i/o error reported on flush operation", "");
 					EXIT(16);				/* EXIT */
 				};
@@ -3009,12 +3010,15 @@ main_sieve(void)
 	dir_info *next_di = &di_area_2;
 
 	main_F.fp = stdin;
+	if(debug & D_UTF8) message("main_sieve: main_F.name = %s", main_F.name);
 
 	init_directive_line(c_di);
 
-	if(debug) message("Processing standard input: %s\n", main_F.utf8 ? "utf8 input" : "ext Input");
+	if(debug) PRINTF("main_sieve: processing %s from %s\n",
+			 main_F.utf8 ? "utf8 input" : "ext input", main_F.name);
 	while( (!feof(main_F.fp)) && (!ferror(main_F.fp)) ) {
-		(void)read_line_as_ext(&main_F);
+	  	(void)read_line_as_ext(&main_F);
+	/*      (void)simple_read_line(main_F.cur_line, MAX_LINE_LEN, &main_F); */
 		main_F.line_no ++;
 
 		if(debug & D_READ_SOURCE_LINE) {
@@ -3331,11 +3335,8 @@ main(int argc, char **argv)
 
 	if(debug) message("Processing for view %s", view_option);
 
-	for(option=0; option<limits.num_keyword_files; option++) {
-		if(keyword_files[option] != NULL)
-			read_keyword_file(keyword_files[option]);
-	}
-	conclude_keywordfile();
+	read_keyword_files(keyword_files);
+
 	read_view_file(steering_file);
 	conclude_steerfile();
 
