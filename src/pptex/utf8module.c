@@ -538,7 +538,7 @@ struct file_data{
   unicode code_line[MAX_LINE_LEN+1];
 };
 
-struct file_data dummy_F = {"dummy file", "", 0, 0};
+struct file_data dummy_F = {"dummy file", NULL, 0, 0, NULL, 0, 0, 0};
 
 /*
 ========================
@@ -691,6 +691,7 @@ message1(char *msg)
 {
 	(void)fputs(msg, stdout);
 	(void)fputs("\n", stdout);
+	if(debug) fflush(stdout);
 }
 
 void
@@ -698,6 +699,7 @@ message(char *fmt, char *msg)
 {
 	(void)printf(fmt, msg);
 	(void)fputs("\n", stdout);
+	if(debug) fflush(stdout);
 }
 void *
 malloc_and_check(unsigned size, int err)
@@ -916,8 +918,10 @@ show_keywords(void)
 	(void)printf("\t%d  max keyword length\n", kwi.max_kw_len);
 
 	for(i=0; i<kwi.num_keywords; i++) {
-		show_one_indexed_keyword(i);
-	}
+	  show_one_indexed_keyword(i);
+	  if (debug) {printf("done %i\n", i); fflush(stdout);};
+	};
+	if (debug) {printf("finished after %i\n", i); fflush(stdout);};
 }
 
 /*
@@ -1157,7 +1161,8 @@ simple_read_line(char *line, int max_len, struct file_data *file_F)
 	int i = 0;
 
 	while(i < max_len && (whatgot = getc(file_F->fp)) != '\n' && whatgot != EOF) {
-		line[i++] = whatgot;
+      	  /* if (debug & D_UTF8) PRINTF("simple_read_line 1, whatgot=%i\n", whatgot); */
+	  line[i++] = whatgot;
 	}
 
 	if(i >= max_len) {
@@ -1167,6 +1172,7 @@ simple_read_line(char *line, int max_len, struct file_data *file_F)
 		EXIT(4);
 	}
 	line[i] = '\0';
+	if (debug & D_UTF8) message("simple_read_line 2, line=%s", line);
 	return(i);
 }
 
@@ -1401,6 +1407,7 @@ conclude_keywordfile(void)
 	int i;
 	int dump_keywords = 0;
 	int stop_prog = 0;
+	if(debug) fflush(NULL);
 	qsort((char*)kwi.keyword,
 			kwi.num_keywords,
 			sizeof(struct keyword_information),
@@ -1525,7 +1532,12 @@ conclude_keywordfile(void)
 
 	if(dump_keywords || (debug & D_SHOW_KEYWORD_TABLE))
 		show_keywords();
-
+	
+	if(debug) {
+	  PRINTF("show_keywords done, stop prog= %i\n", stop_prog);
+	  fflush(NULL);
+	};
+	
 	if(stop_prog) EXIT(22);	
 }
 /*
@@ -1542,8 +1554,8 @@ read_keyword_files(char *keyword_files[]){
     if(keyword_files[option] != NULL)
       read_keyword_file(keyword_files[option]);
   };
-  if(debug & D_UTF8) message1("Keyword files read");
   conclude_keywordfile();
+  if(debug & D_UTF8){message1("Keyword files read"); fflush(NULL);};
   return;
 };
 
@@ -1628,10 +1640,10 @@ Unicode <-> ext mapping
 
 Convert a unicode code point to a 6-digit hexadecimal in percents */
 
-const char *unicode_to_hex(unicode code_point)
+char *unicode_to_hex(unicode code_point)
 {
 	static char buf[10];
-	sprintf(buf, "%%x%06X%%", code_point);
+	sprintf(buf, "%%#x%06X%%", code_point);
 	return buf;
 }
 
@@ -1672,10 +1684,11 @@ const char unicode_to_ext(unicode cp)
 /* Translate a unicode code point to pp ext char or else to hex in percents */
 
 const char *unicode_to_ppk(unicode cp)
-{	
-	char search_result;
-	search_result = unicode_to_ext(cp);
-	return (search_result=(char)0) ? NULL : unicode_to_hex(cp);
+{
+  static char s[2];
+  s[0] = unicode_to_ext(cp);
+  s[1]=0;
+  return (s[0]) ? s : unicode_to_hex(cp);
 }
 
 /*
@@ -1731,7 +1744,7 @@ struct keyword_information *unicode_to_kwi(unicode cp)
   struct keyword_information *search_result;
   key.uni = cp;
   search_result = bsearch(&key, kwi.unicode_code,
-			  kwi.num_unicodes, sizeof(search_result), compare_keyword_unicode);
+			  kwi.num_unicodes, sizeof(*search_result), compare_keyword_unicode);
   return search_result;
 }
 
@@ -1743,9 +1756,10 @@ Convert a unicode code point to a keyword in percents
 (named if possible. otherwise hex).
 */
 
-const char *unicode_to_kw(unicode code_point)
+char *unicode_to_kw(unicode code_point)
 {
-  struct keyword_information *kwi = unicode_to_kwi(code_point);  
+  struct keyword_information *kwi = unicode_to_kwi(code_point);
+  if(debug & D_UTF8) PRINTF("unicode_to_kw: code_point = %x, kwi = %x\n", code_point, kwi);
   return (kwi == NULL) ? unicode_to_hex(code_point) : kwi->name;
 }
 
@@ -1754,9 +1768,10 @@ const char *unicode_to_kw(unicode code_point)
 unicode_to_kwa
 --------------
 Convert unicode code point to ascii string which is either a single character
-(if lt 128) a percent named keyword or a percent hex code */ 
+(if < 128) a percent named keyword or a percent hex code.
+*/ 
 
-const char *unicode_to_kwa(unicode code_point)
+char *unicode_to_kwa(unicode code_point)
 {
   static char ascii[2];
   if (code_point <= 0x7F) {
@@ -1774,17 +1789,17 @@ code_line_to_ext
 This procedure takes a line of input which has been translated into unicode
 code points into the ProofPower extended character set.
 The source and destination are buffers in a file_data parameter.
-
 */
+
 void code_line_to_ext(struct file_data *file_F){
   int op=0;
   unicode *codes;
-  char *line;
+  char *line, *r;
   codes = file_F->code_line;
   line = file_F->cur_line;
   while (*codes !=0 && op < MAX_LINE_LEN){
-    const char *r;
     r = unicode_to_kwa(*codes);
+    if(debug & D_UTF8) PRINTF("code_line_to_ext : *codes=%x, r=%s\n", *codes, r);
     while (*r !=0 && op < MAX_LINE_LEN) {
       *line = *r;
       line++;
@@ -1812,7 +1827,7 @@ void code_line_to_ascii(struct file_data *file_F){
   line = file_F->cur_line;
   while (*codes !=0 && op < MAX_LINE_LEN){
     const char *r;
-    r = unicode_to_kw(*codes);
+    r = unicode_to_kwa(*codes);
     while (*r !=0 && op < MAX_LINE_LEN) {
       *line = *r;
       line++;
@@ -1858,24 +1873,31 @@ The value returned is the unicode code point or else zero.
 unicode extract_code_point(char *buff, int *pos)
 {
   int r, l;
-  int whatgot = buff[*pos];
+  int whatgot = buff[(*pos)++];
   
+  /*  if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 1, whatgot=%i\n", whatgot); */
   r = whatgot & 0xff;
-  if(r <= 0x7f) { pos += 1; return r; }
+  /*  if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 2, r=%i\n", r); */
+  if(r <= 0x7f) { return r; }
   l = 0;
   while(r & 0x80) {
     r = (r & 0x7f) << 1;
     l += 1;
   }
-  if(l > 4) { return invalid_unicode(); }
+  if(l > 4) { message1("extract_code_point 3 l>4"); return invalid_unicode(); }
   r = r >> l;
+    if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 4, r=%i, l=%i\n", r, l);
   while(--l) {
-    whatgot = line[pos+4-l];
+    whatgot = buff[(*pos)++];
+    if(debug & D_UTF8){
+      FPRINTF(stdout, "extract_code_point 4, r=%x, l=%i, whatgot=%x\n", r, l, whatgot);fflush(NULL);};
     if((whatgot & 0xc0) != 0x80) {
+      if(debug & D_UTF8)FPRINTF(stdout,"extract_code_point code 5 problem, whatgot=%i, l=%i\n", whatgot, l);
       return invalid_unicode();
     }
     r = (r << 6) | (whatgot & 0x3f);
   }
+  if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 6, r=%x\n", r);
   return r;
 }
 
@@ -1895,13 +1917,14 @@ The return value is the number of code points resulting.
 int utf8_line_to_codes(char line[], unicode codes[]){
   int ip = 0;
   int op = 0;
-  int code = 0;
+  unicode code = 0;
   codes[op]=1;
-  while(ip < MAX_LINE_LEN && line[ip] != 0 && codes[op] != 0){
+  while(ip < MAX_LINE_LEN && line[ip] != 0){
     code = extract_code_point(line, &ip);
-    if (code != 0) {codes[op++] = code;}
+    if (code > 0) codes[op++] = code;
     else {return invalid_unicode();}
   };
+  codes[op++]=0;
   return op;
 };
 
@@ -1917,7 +1940,7 @@ from utf8 to unicode code points.
 int read_utf8_as_unicode(struct file_data *file_F){
   int r;
   r = simple_read_line(file_F->cur_line, MAX_LINE_LEN, file_F);
-  if (debug & D_UTF8) PRINTF("read_line_as_unicode: %i", file_F->line_no);
+  if (debug & D_UTF8) PRINTF("read_utf8_as_unicode: %i\n", file_F->line_no);
   if (r){
     utf8_line_to_codes(file_F->cur_line, file_F->code_line);    
   };
@@ -1945,6 +1968,10 @@ from keywords to ext chars is undertaken.
 
 int read_line_as_ext(struct file_data *file_F){
   int r = True;
+  if (debug & D_UTF8) {
+    PRINTF("read_line_as_ext, file_F->utf8=%i, file_F->name=%s\n", file_F->utf8, file_F->name);
+    fflush(NULL);
+  };
   if (file_F->utf8){
     if ((r = read_utf8_as_unicode(file_F))){code_line_to_ext(file_F);}
     else {return r;};    
@@ -2022,7 +2049,7 @@ unicode named_kw_to_unicode(char *line, int *len){
   if (debug & D_UTF8) message("named_kw_to_unicode:line=%s", line);
   kw_index = get_hol_kw(line, len, False, &dummy_F);
   if (debug & D_UTF8) PRINTF("named_kw_to_unicode:kw_index=%i:*len=%i:\n", kw_index, *len);
-  if (len == 0) return NOT_FOUND; 
+  if (kw_index == NOT_FOUND){*len=0; return NOT_FOUND;}; 
   val = kwi.keyword[kw_index].uni;
   if (debug & D_UTF8) PRINTF("named_kw_to_unicode:val=%i:\n", val);
   return val;
@@ -2057,8 +2084,13 @@ ext_to_unicode
 --------------
 */
 
-unicode ext_to_unicode(char ch){
-  return kwi.char_code[ch]->uni;
+unicode ext_to_unicode(unsigned char ch){
+  struct keyword_information *ki = kwi.char_code[ch];
+  if (ki == NULL) {
+    message1("unknown ext code in input file");
+    return NOT_FOUND;
+  }
+  else return ki->uni;
 };
 
 /*
@@ -2076,6 +2108,10 @@ unicode ext_or_kw_to_unicode(char *line, int *len){
   if (line[0] != '%'){
     if (line[0] == 0) return NOT_FOUND; 
     *len = 1;
+    if(debug & D_UTF8) {
+      PRINTF("ext_or_kw_to_unicode, *line=%i\n", line[0]);
+      fflush(NULL);
+    };
     if (line[0] & 0x80) return (ext_to_unicode(*line));
     else return line[0];
   };
@@ -2083,8 +2119,8 @@ unicode ext_or_kw_to_unicode(char *line, int *len){
   if (val == NOT_FOUND) {
     *len = 1;
     return line[0];
-  };
-  return val;
+  }
+  else return val;
 }
 
 /*
@@ -2102,9 +2138,11 @@ void ext_seq_to_unicode(char *line, unicode codes[]){
   int ip = 0, op = 0, len = 0;
   unicode res;
   while (line[ip] != 0){
-    if (debug & D_UTF8) PRINTF("ext_seq_to_unicode:ip=%i, op=%i\n", ip, op);
+    if (debug & D_UTF8) {
+      PRINTF("ext_seq_to_unicode 1:ip=%i, op=%i\n", ip, op); fflush(NULL);
+    };
     res = ext_or_kw_to_unicode(line+ip, &len);
-    if (debug & D_UTF8) PRINTF("ext_seq_to_unicode:res=%i, len=%i\n", res, len);
+    if (debug & D_UTF8) PRINTF("ext_seq_to_unicode 2:*line=%x res=%x, len=%i\n", *line, res, len);
     if (res > 0){
       codes[op] = res; 
       ip += len;
@@ -2154,7 +2192,7 @@ output_ext_as_utf8
 
 void output_ext_as_utf8(char *line, FILE *file_F){
   static unicode codes[MAX_LINE_LEN+1];
-  if (debug & D_UTF8)  message1("output_ext_as_utf8");
+  if (debug & D_UTF8)  message("output_ext_as_utf8, line=%s", line);
   ext_seq_to_unicode(line, codes);
   output_unicode_sequence(codes, file_F);
 };
@@ -2173,8 +2211,12 @@ stream as FILE*.
 
 void
 transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F){
+  if(debug & D_UTF8) message1("transcribe_file_to_utf8 1");
   while (!feof(input_F->fp)) {
+  if(debug & D_UTF8) message1("transcribe_file_to_utf8 2");
     read_line_as_ext(input_F);
+    if(debug & D_UTF8)
+      message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
     output_ext_as_utf8(input_F->cur_line, output_F);
   };
   return;
@@ -2194,9 +2236,11 @@ stream as FILE*.
 
 void
 transcribe_file_to_ext(struct file_data *input_F, FILE *output_F){
+  if (debug) fflush(NULL);
   while (!feof(input_F->fp)) {
     read_line_as_ext(input_F);
     FPRINTF(output_F, "%s\n", input_F->cur_line);
+    if (debug) fflush(NULL);
   };
   return;
 }

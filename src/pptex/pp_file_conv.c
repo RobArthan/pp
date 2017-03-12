@@ -207,8 +207,8 @@ The input file controls are now located in the utf8module, so that it can use th
 They are also used in the sieve program for the view file and the main (standard) input stream.
 */
 
-struct file_data view_F = 		{ "view file", 0, 0, 0 };
-struct file_data main_F = 		{ "standard input", 0, 0, 0};
+struct file_data view_F = 		{ "view file", 0, 0, 0, 0, 0, 0};
+struct file_data main_F = 		{ "standard input", 0, 0, 0, 0, 0, 0};
 
 /*
 
@@ -708,6 +708,8 @@ main(int argc, char **argv)
 	limits.num_keyword_files = 0;
 	keyword_files[limits.num_keyword_files++] = KEYWORD_FILE;
 	program_name = argv[0];
+	
+	main_F.fp = stdin;
 	
 	initialize();
 
