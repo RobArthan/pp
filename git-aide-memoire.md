@@ -40,7 +40,7 @@ This is a list of example git command lines each with a potted explanation.
 * Create an annotated tag for a specified commit (prompts for message):  
     `git tag -a v3.1w6 3c5daefb03286d2999daef75c745e73bd82b4718`
 
-* List all tags with 1st line of the description:
+* List all tags with 1st line of the description:  
     `git tag -l -n 1 '*'`
 
 * Get info on tag:  
@@ -62,7 +62,7 @@ This is a list of example git command lines each with a potted explanation.
     `git push origin :fix-3.1w6`
 
 * To merge changes into current branch 
-(In case of conflicts, resolve them by changing the conflicted files to be as you want them to be, add them and then commit.):  
+(In case of conflicts, resolve them by changing the conflicted files to be as you want them to be, add them and then commit):  
     `git merge fix-3.1w6`
 
 ----
