@@ -74,7 +74,7 @@ to clean the package directory first. E.g.,
 (You could also use `git clean -xf` to do the clean, but it is more aggressive
 in what it removes. In particular, the `clean` targets will not delete files
 with `.txt` or `.sh` extensions or unknown files with no extension, so you can
-safely use such file names for temporarty working data or scripts.)
+safely use such file names for temporary working data or scripts.)
 
 Run the test suite for the package by making the target test, e.g., in hol:
 
