@@ -622,6 +622,7 @@ grumble(char *fmt,
 
 	file_F->grumbles ++;
 }
+
 void
 error_top(void)
 {
@@ -954,7 +955,10 @@ compare_keyword_unicode(
 {
   const struct keyword_information *kw1 = *vp1;
   const struct keyword_information *kw2 = *vp2;
-  if (debug & D_UTF8) PRINTF("compare_keyword_unicode, u1=%6x, u2=%6x\n", kw1->uni, kw2->uni);
+  /*  if (debug & D_UTF8) {
+    PRINTF("compare_keyword_unicode, u1=%6x, u2=%6x\n", kw1, kw2);
+    fflush(NULL);
+    }; */
   if (kw1->uni == kw2->uni) return 0;
   else if (kw1->uni < kw2->uni) return -1;
   else return 1;
@@ -1786,12 +1790,22 @@ Find the keyword information for a unicode code point (if any).
 
 struct keyword_information *unicode_to_kwi(unicode cp)
 {	
-  struct keyword_information key;
-  struct keyword_information *search_result;
+  struct keyword_information key, *keyr;
+  struct keyword_information **search_result;
+  int i;
   key.uni = cp;
-  search_result = bsearch(&key, kwi.unicode_code,
-			  kwi.num_unicodes, sizeof(*search_result), compare_keyword_unicode);
-  return search_result;
+  keyr = &key;
+  /*  if(debug & D_UTF8) {
+    PRINTF("unicode_to_kwi: code_point = 0x%6X\n", cp);
+    fflush(NULL);
+    for (i=0; i<kwi.num_unicodes; i++){
+      PRINTF("unicode_to_kwi unicode_code entry 0x%6X (size = %i)\n", kwi.unicode_code[i]->uni, sizeof(search_result));
+    };
+    fflush(NULL);} */
+  search_result = bsearch(&keyr, kwi.unicode_code,
+			  kwi.num_unicodes, sizeof(search_result), compare_keyword_unicode);
+  if (search_result == NULL) return NULL;
+  return *search_result;
 }
 
 /*
@@ -1805,8 +1819,52 @@ Convert a unicode code point to a keyword in percents
 char *unicode_to_kw(unicode code_point)
 {
   struct keyword_information *kwi = unicode_to_kwi(code_point);
-  if(debug & D_UTF8) PRINTF("unicode_to_kw: code_point = %x, kwi = %x\n", code_point, (unsigned int)kwi);
+  if(debug & D_UTF8) {
+    PRINTF("unicode_to_kw: code_point = 0x%6X, kwi = 0x%8X\n", code_point, (unsigned int)kwi);
+    fflush(NULL);}
+  ;
   return (kwi == NULL) ? unicode_to_hex(code_point) : kwi->name;
+}
+
+/*
+-------------
+unicode_to_ekwa
+-------------
+Convert a unicode code point to either:
+1. the same ascii character (<128)
+2. a ProofPower extended character (128-255)
+3. a keyword in percents
+4. a percent enclose hexadecimal literal unicode code point
+in that order of priority.
+
+*/
+
+char *unicode_to_ekwa(unicode code_point){
+  struct keyword_information *kwi;
+  static char ascext[2];
+  if (code_point <= 0x7F) {
+    ascext[0] = (unsigned char) code_point;
+    ascext[1] = 0;
+    return ascext;
+  };
+  kwi = unicode_to_kwi(code_point);
+  if(debug & D_UTF8) {
+    PRINTF("unicode_to_ekwa: code_point = 0x%6X, kwi = 0x%8X\n", code_point, (unsigned int)kwi);
+    fflush(NULL);
+  };
+  if (kwi == NULL) return unicode_to_hex(code_point);
+  else if (kwi->uni != code_point) {
+    error_top();
+    FPRINTF(stderr,
+	    "internal error unicode_to_ekwa code mismatch, code_point=%06x, kwi->uni=%06x",
+	    code_point, kwi->uni);
+  }
+  else if (kwi->ech>0) {
+    ascext[0] = (unsigned char) kwi->ech;
+    ascext[1] = 0;
+    return ascext;
+  }
+  else return kwi->name;
 }
 
 /* 
@@ -1817,8 +1875,7 @@ Convert unicode code point to ascii string which is either a single character
 (if < 128) a percent named keyword or a percent hex code.
 */ 
 
-char *unicode_to_kwa(unicode code_point)
-{
+char *unicode_to_kwa(unicode code_point){
   static char ascii[2];
   if (code_point <= 0x7F) {
     ascii[0] = (unsigned char) code_point;
@@ -1827,7 +1884,7 @@ char *unicode_to_kwa(unicode code_point)
   }
   else return unicode_to_kw (code_point);
 }
-
+ 
 /*
 ----------------
 code_line_to_ext
@@ -1844,8 +1901,9 @@ void code_line_to_ext(struct file_data *file_F){
   codes = file_F->code_line;
   line = file_F->cur_line;
   while (*codes !=0 && op < MAX_LINE_LEN){
-    r = unicode_to_kwa(*codes);
-    if(debug & D_UTF8) PRINTF("code_line_to_ext : *codes=%x, r=%s\n", *codes, r);
+    /*  if(debug & D_UTF8) {PRINTF("code_line_to_ext 1: *codes=%x\n", *codes); fflush(NULL);}; */
+    r = unicode_to_ekwa(*codes);
+    if(debug & D_UTF8) {PRINTF("code_line_to_ext 2: *codes=%x, r=%s\n", *codes, r); fflush(NULL);};
     while (*r !=0 && op < MAX_LINE_LEN) {
       *line = *r;
       line++;
@@ -1916,36 +1974,38 @@ there is valid utf8 encoded unicode character at that point.
 The value returned is the unicode code point or else zero.
 */
 
-unicode extract_code_point(char *buff, int *pos)
-{
-  int r, l;
-  int whatgot = buff[(*pos)++];
-  
-  /*  if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 1, whatgot=%i\n", whatgot); */
-  r = whatgot & 0xff;
-  /*  if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 2, r=%i\n", r); */
-  if(r <= 0x7f) { return r; }
-  l = 0;
-  while(r & 0x80) {
-    r = (r & 0x7f) << 1;
-    l += 1;
-  }
-  if(l > 4) { message1("extract_code_point 3 l>4"); return invalid_unicode(); }
-  r = r >> l;
-    if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 4, r=%i, l=%i\n", r, l);
-  while(--l) {
-    whatgot = buff[(*pos)++];
-    if(debug & D_UTF8){
-      FPRINTF(stdout, "extract_code_point 4, r=%x, l=%i, whatgot=%x\n", r, l, whatgot);fflush(NULL);};
-    if((whatgot & 0xc0) != 0x80) {
-      if(debug & D_UTF8)FPRINTF(stdout,"extract_code_point code 5 problem, whatgot=%i, l=%i\n", whatgot, l);
-      return invalid_unicode();
-    }
-    r = (r << 6) | (whatgot & 0x3f);
-  }
-  if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 6, r=%x\n", r);
-  return r;
-}
+ unicode extract_code_point(char *buff, int *pos){
+   int r, l;
+   int whatgot = buff[(*pos)++];
+   
+   /*  if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 1, whatgot=%i\n", whatgot); */
+
+   r = whatgot & 0xff;
+
+   /*  if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 2, r=%i\n", r); */
+
+   if(r <= 0x7f) { return r; };
+   l = 0;
+   while(r & 0x80) {
+     r = (r & 0x7f) << 1;
+     l += 1;
+   };
+   if(l > 4) { message1("extract_code_point 3 l>4"); return invalid_unicode(); };
+   r = r >> l;
+   if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 4, r=%i, l=%i\n", r, l);
+   while(--l) {
+     whatgot = buff[(*pos)++];
+     if(debug & D_UTF8){
+       FPRINTF(stdout, "extract_code_point 4, r=%x, l=%i, whatgot=%x\n", r, l, whatgot);fflush(NULL);};
+     if((whatgot & 0xc0) != 0x80) {
+       if(debug & D_UTF8)FPRINTF(stdout,"extract_code_point code 5 problem, whatgot=%i, l=%i\n", whatgot, l);
+       return invalid_unicode();
+     };
+     r = (r << 6) | (whatgot & 0x3f);
+   };
+   if(debug & D_UTF8){FPRINTF(stdout, "extract_code_point 6, r=%x\n", r); fflush(NULL);};
+   return r;
+ }
 
 /*
 ------------------
