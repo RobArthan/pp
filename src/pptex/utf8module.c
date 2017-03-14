@@ -781,7 +781,7 @@ add_new_keyword(
 	struct keyword_information *ki;
 	int len = strlen(name);
 	int orig_kind = kind;
-
+	
 	if(kwi.num_keywords >= MAX_KEYWORDS) {
 		error1("too many keywords");
 		EXIT(29);
@@ -803,12 +803,7 @@ add_new_keyword(
 	    grumble1("sameas keyword too long", &keyword_F, true);
 	  }
 	  if(len2 > kwi.max_kw_len) kwi.max_kw_len = len2;
-	}
-	else {
-	  kwi.unicode_code[kwi.num_unicodes++] = ki;
-	}
-
-	kwi.num_keywords++;
+	};
 
 	ki->name = name;
 	ki->ech = ech;
@@ -818,7 +813,8 @@ add_new_keyword(
 	ki->macro = macro;
 	ki->tex_arg = tex_arg;
 	ki->tex_arg_sense = tex_arg_sense;
-
+	
+	kwi.num_keywords++;
 	
 	if (debug & D_SHOW_KEYWORD_TABLE) {
 	   PRINTF("add_keyword: %s ext: %d uni %x\n", name, ki->ech, uni);
@@ -953,12 +949,15 @@ this function, given two references to keyword_information
 
 int
 compare_keyword_unicode(
-	const void *vp1,
-	const void *vp2)
+	const void **vp1,
+	const void **vp2)
 {
-	const struct keyword_information *kw1 = vp1;
-	const struct keyword_information *kw2 = vp2;
-	return(kw2->uni - kw1->uni);
+  const struct keyword_information *kw1 = *vp1;
+  const struct keyword_information *kw2 = *vp2;
+  if (debug & D_UTF8) PRINTF("compare_keyword_unicode, u1=%6x, u2=%6x\n", kw1->uni, kw2->uni);
+  if (kw1->uni == kw2->uni) return 0;
+  else if (kw1->uni < kw2->uni) return -1;
+  else return 1;
 }
 
 void initialise_keyword_information(void) {
@@ -972,7 +971,7 @@ void initialise_keyword_information(void) {
 	for(i=0; i<256; i++)
 		kwi.char_code[i] = NULL;
 
-	add_new_keyword("%%", -1, -1, KW_SIMPLE, "\\%", NULL, 0);
+	add_new_keyword("%%", NOT_FOUND, '%', KW_SIMPLE, "\\%", NULL, 0);
 };
 
 /*
@@ -1173,6 +1172,7 @@ simple_read_line(char *line, int max_len, struct file_data *file_F)
 	}
 	line[i] = '\0';
 	if (debug & D_UTF8) message("simple_read_line 2, line=%s", line);
+	file_F->line_no++;
 	return(i);
 }
 
@@ -1341,7 +1341,7 @@ read_keyword_file(char *name)
 				}
 			}
 
-			add_new_keyword(strdup(def_kw), -1, -1, KW_SAMEAS_UNKNOWN,
+			add_new_keyword(strdup(def_kw), NOT_FOUND, NOT_FOUND, KW_SAMEAS_UNKNOWN,
 				strdup(code_kw_str), NULL, 0);
 		} else {
 
@@ -1407,18 +1407,22 @@ conclude_keywordfile(void)
 	int i;
 	int dump_keywords = 0;
 	int stop_prog = 0;
+
 	if(debug) fflush(NULL);
+
 	qsort((char*)kwi.keyword,
 			kwi.num_keywords,
 			sizeof(struct keyword_information),
 			compare_keyword_information);
-	qsort((char*)kwi.unicode_code,
-			kwi.num_keywords,
-			sizeof(struct keyword_information),
-			compare_keyword_unicode);
+	
+	if (debug & D_UTF8){
+	  for(i=0; i<kwi.num_keywords; i++) {
+	    PRINTF ("keyword entry %i is:%s\n", i, kwi.keyword[i].name);
+	  };
+	};
+	
 	for(i=1; i<kwi.num_keywords; i++) {
 		struct keyword_information *cur_ki = &kwi.keyword[i];
-
 		switch(cur_ki->orig_kind) {
 		case KW_SAMEAS :
 		case KW_SAMEAS_UNKNOWN : {
@@ -1456,19 +1460,20 @@ conclude_keywordfile(void)
 		case KW_START_DIR :
 		case KW_VERB_ALONE :
 		case KW_WHITE :
-			if(cur_ki->ech != -1) {
-				if(kwi.char_code[cur_ki->ech] == NULL)
-					kwi.char_code[cur_ki->ech] = cur_ki;
-				else {
-					grumble("conflicting char codes for keyword '%s'",
-						cur_ki->name, &keyword_F, false);
-					FPRINTF(stderr,
-						"\tchar code %d already has keyword '%s'\n",
-						cur_ki->ech,
-						kwi.char_code[cur_ki->ech]->name);
-					dump_keywords = 1;
-				}
-			}
+		  if(cur_ki->ech != -1) {
+		    if(kwi.char_code[cur_ki->ech] == NULL)
+		      kwi.char_code[cur_ki->ech] = cur_ki;
+		    else {
+		      grumble1("Multiple keywords for ext code ",
+			      &keyword_F, false);
+		      FPRINTF(stderr,
+			      "\tchar code %d already has keyword '%s', now given keyword '%s'\n",
+			      cur_ki->ech,
+			      cur_ki->name,
+			      kwi.char_code[cur_ki->ech]->name);
+		      dump_keywords = 1;
+		    }
+		  }
 		  /*
        		    int kwipos = unicodekwi(cur_ki->uni);
 		    if(kwipos != NOT_FOUND){
@@ -1529,6 +1534,47 @@ conclude_keywordfile(void)
 			break;
 		}
 	}
+
+	for (i=0; i<kwi.num_keywords; i++)
+	  if (kwi.keyword[i].uni != NOT_FOUND) {
+	    kwi.unicode_code[kwi.num_unicodes] = &kwi.keyword[i];
+	    if (debug & D_UTF8)
+	      PRINTF("Add unicode_code %6x in position %3i\n", kwi.keyword[i].uni, kwi.num_unicodes);
+	    kwi.num_unicodes++;
+	  };
+
+	if(debug & D_UTF8) {
+	  PRINTF("\nChecking unicode_code mapping (before sort): num_unicodes = %i\n\n", kwi.num_unicodes);
+	  fflush(NULL);
+	};
+
+	if (debug & D_UTF8){
+	  for(i=0; i<kwi.num_unicodes; i++) {
+	    if (!(kwi.unicode_code[i] == NULL)){
+	      PRINTF ("unicode_code entry %3i is 0x%6x\n", i, kwi.unicode_code[i]->uni);
+	    }
+	    else PRINTF ("unicode_code entry %i is NULL\n", i);
+	  };
+	};
+
+	qsort((char*)kwi.unicode_code,
+	      kwi.num_unicodes,
+	      sizeof(&kwi),
+	      compare_keyword_unicode);
+
+	if(debug & D_UTF8) {
+	  PRINTF("\nChecking unicode_code mapping (after sort): num_unicodes = %i\n\n", kwi.num_unicodes);
+	  fflush(NULL);
+	};
+	
+	if (debug & D_UTF8){
+	  for(i=0; i<kwi.num_unicodes; i++) {
+	    if (!(kwi.unicode_code[i] == NULL)){
+	      PRINTF ("unicode_code entry %3i is 0x%6x\n", i, kwi.unicode_code[i]->uni);
+	    }
+	    else PRINTF ("unicode_code entry %i is NULL\n", i);
+	  };
+	};
 
 	if(dump_keywords || (debug & D_SHOW_KEYWORD_TABLE))
 		show_keywords();
@@ -1759,7 +1805,7 @@ Convert a unicode code point to a keyword in percents
 char *unicode_to_kw(unicode code_point)
 {
   struct keyword_information *kwi = unicode_to_kwi(code_point);
-  if(debug & D_UTF8) PRINTF("unicode_to_kw: code_point = %x, kwi = %x\n", code_point, kwi);
+  if(debug & D_UTF8) PRINTF("unicode_to_kw: code_point = %x, kwi = %x\n", code_point, (unsigned int)kwi);
   return (kwi == NULL) ? unicode_to_hex(code_point) : kwi->name;
 }
 
