@@ -213,7 +213,7 @@ but with a code of zero.
 
 EXIT codes are allocated sequentially starting at 0.
 The next free error code is
-41
+42
 all codes below this are used.
 */
 

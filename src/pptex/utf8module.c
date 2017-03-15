@@ -950,11 +950,11 @@ this function, given two references to keyword_information
 
 int
 compare_keyword_unicode(
-	const void **vp1,
-	const void **vp2)
+	const void *vp1,
+	const void *vp2)
 {
-  const struct keyword_information *kw1 = *vp1;
-  const struct keyword_information *kw2 = *vp2;
+  const struct keyword_information *kw1 = vp1;
+  const struct keyword_information *kw2 = vp2;
   /*  if (debug & D_UTF8) {
     PRINTF("compare_keyword_unicode, u1=%6x, u2=%6x\n", kw1, kw2);
     fflush(NULL);
@@ -1827,9 +1827,9 @@ char *unicode_to_kw(unicode code_point)
 }
 
 /*
--------------
+---------------
 unicode_to_ekwa
--------------
+---------------
 Convert a unicode code point to either:
 1. the same ascii character (<128)
 2. a ProofPower extended character (128-255)
@@ -1858,7 +1858,8 @@ char *unicode_to_ekwa(unicode code_point){
     FPRINTF(stderr,
 	    "internal error unicode_to_ekwa code mismatch, code_point=%06x, kwi->uni=%06x",
 	    code_point, kwi->uni);
-  }
+    EXIT(41);
+    return "";}
   else if (kwi->ech>0) {
     ascext[0] = (unsigned char) kwi->ech;
     ascext[1] = 0;
@@ -2370,123 +2371,3 @@ transcribe_file_to_ascii(struct file_data *input_F, FILE *output_F){
   };
   return;
 }
-
-/*
-===============================
-from pputf8 - temporary
-===============================
-
-These functions read and write to stdin and stdout directly,
-and are here just until their functionality is incorporated
-into facilities which work from and to buffers.
-
------------------
-do_unicode_to_ppe
------------------
-
-this procedure transcribes a utf8 input stream to a ProofPower
-ext output stream.  If an input is ascii it goes straight through.
-If it corresponds to an extended character then that extended
-character goes out, otherwise an hex code in percents is output.
-
-unicode get_code_point (){
-  return 0;
-};
-
-void do_unicode_to_ppe(void)
-{
-	unicode cp;
-	const char *pp_string;
-	cp = get_code_point();
-	while(cp) {
-		pp_string = unicode_to_ppk(cp);
-		printf("%s", pp_string);
-		cp = get_code_point();
-	}
-}
-
-*/
-/* this procedure transcribes a utf8 input stream to a ProofPower
-   ascii output stream.  If an input is ascii it goes straight through.
-   If it corresponds to a named keyword then that percent keyword goes out,
-   otherwise a hex code in percents is output.
-
-void do_unicode_to_ppa(void)
-{
-	unicode cp;
-	const char *pp_string;
-	cp = get_code_point();
-	while(cp) {
-		pp_string = unicode_to_kwa(cp);
-		printf("%s", pp_string);
-		cp = get_code_point();
-	}
-}
-
-enum {	S_INITIAL,
-	S_HAVE_PERCENT,
-	S_HAVE_X,
-	S_HAVE_HEXIT_1,
-	S_HAVE_HEXIT_2,
-	S_HAVE_HEXIT_3,
-	S_HAVE_HEXIT_4,
-	S_HAVE_HEXIT_5,
-	S_HAVE_HEXIT_6,
-	S_HAVE_KEYWORD};
-
-*/
-/*
-----------------
-do_hex_to_unicode
-----------------
-Translate from ProofPower ascii/ext format to utf8 ecoded unicode.
-
-
-void do_chars(int len, char *cs)
-{
-	while(len--) {
-		printf("%s", pp_to_unicode[(int)*cs++ & 0xff]);
-	}
-}
-
-#define STEP(TST, ST)				\
-	if((TST)(whatgot)) {\
-		state = (ST);\
-	} else {\
-		do_chars(l, buf);\
-		l = 0;\
-		state = S_INITIAL;\
-	};\
-	break;
-
-unicode hex_to_unicode (char *line, int *len)
-{
-	int whatgot, state, l;
-	char buf[9];
-	unsigned u;
-	l = 0;
-	state = S_INITIAL;
-	while ((whatgot = getchar()) != EOF) {
-		buf[l++] = whatgot;
-		switch(state) {
-			case S_INITIAL:      STEP(is_percent,  S_HAVE_PERCENT);
-			case S_HAVE_PERCENT: STEP(is_x,              S_HAVE_X);
-			case S_HAVE_X:       STEP(is_uc_hexit, S_HAVE_HEXIT_1);
-			case S_HAVE_HEXIT_1: STEP(is_uc_hexit, S_HAVE_HEXIT_2);
-			case S_HAVE_HEXIT_2: STEP(is_uc_hexit, S_HAVE_HEXIT_3);
-			case S_HAVE_HEXIT_3: STEP(is_uc_hexit, S_HAVE_HEXIT_4);
-			case S_HAVE_HEXIT_4: STEP(is_uc_hexit, S_HAVE_HEXIT_5);
-			case S_HAVE_HEXIT_5: STEP(is_uc_hexit, S_HAVE_HEXIT_6);
-			case S_HAVE_HEXIT_6: STEP(is_percent,  S_HAVE_KEYWORD);
-
-		}
-		if(state == S_HAVE_KEYWORD) {
-			sscanf(&buf[2], "%6X", &u);
-			if(output_unicode_as_utf8(u)) { do_chars(l, buf); }
-			l = 0;
-			state = S_INITIAL;
-		}
-	}
-}
-
-*/
