@@ -1659,12 +1659,16 @@ read_keyword_files
 void
 read_keyword_files(char *keyword_files[]){
   int option;
+  
+  initialise_keyword_information();
+
   for(option=0; option<limits.num_keyword_files; option++) {
     if(keyword_files[option] != NULL)
       read_keyword_file(keyword_files[option]);
   };
+
   conclude_keywordfile();
-  if(debug & D_UTF8){message1("Keyword files read"); fflush(NULL);};
+
   return;
 };
 

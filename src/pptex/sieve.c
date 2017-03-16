@@ -1242,8 +1242,6 @@ initialize(void)
 #endif
 	for(i=1; i<256; i++) character_flags[i] = 0;
 
-	initialise_keyword_information();
-
 	SET_DIRECTIVE_CHAR('%');
 	SET_DIRECTIVE_CHAR('=');
 
