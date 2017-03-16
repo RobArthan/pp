@@ -61,14 +61,7 @@ system~\cite{DS/FMU/IED/USR001}.
 #include <locale.h>
 #endif
 
-/*
-#define MAX_CAT (80+1)
-#define MAX_ACTION 20
-*/
-
 #define NOT_FOUND (-1)
-
-#define STEER_FILE "sieveview"
 #define KEYWORD_FILE "sievekeyword"
 
 #define PPHOME "PPHOME"
@@ -78,9 +71,7 @@ system~\cite{DS/FMU/IED/USR001}.
 
 /*
 
-
 \subsection{Identification}
-
 
 */
 
@@ -101,7 +92,7 @@ extern char *optarg;
 extern int optind, opterr;
 void * malloc(size_t size);
 char * getenv(const char *name);
-void	exit(int status);
+void exit(int status);
 
 /*
 
@@ -118,42 +109,22 @@ Several diagnostic outputs are provided, they are controlled by the
 {\tt-d} command option which sets the {\tt debug} flag.
 These outputs are written to the standard output.
 
-
 */
+
 struct debug_data{
 	int flag;
 	char *purpose;
 } debug_data [] = {
-#define D_SHOW_SIEVE_TABLE 1
-	{D_SHOW_SIEVE_TABLE,		"sieving table"},
 #define D_SHOW_KEYWORD_TABLE 2
 	{D_SHOW_KEYWORD_TABLE,		"keyword table"},
-#define D_INIT_TABLES 4
-	{D_INIT_TABLES,			"actions available"},
-#define D_READ_SOURCE_LINE 8
-	{D_READ_SOURCE_LINE,		"source lines read"},
-#define D_DECODE_DIR_LINE 16
-	{D_DECODE_DIR_LINE,		"decoded directive lines"},
-#define D_ACTIONS 32
-	{D_ACTIONS,			"filter actions"},
-#define D_SHOW_FULL_SIEVE_TABLE 64
-	{D_SHOW_FULL_SIEVE_TABLE,	"whole sieving table"},
 #define D_GET_KW 128
 	{D_GET_KW,			"percent keywords read"},
-#define D_OPEN_OUTPUT 256
-	{D_OPEN_OUTPUT,			"open output for write or append"},
-#define D_MAIN_CONVERT_CH 512
-	{D_MAIN_CONVERT_CH,		"char by char in main convert"},
-#define D_PROCESS_LINE 1024
-	{D_PROCESS_LINE,		"source line processing"},
-#define D_EXPAND 2048
-	{D_EXPAND,			"macro expansions"},
 #define D_READ_STEER_LINE 4096
 	{D_READ_STEER_LINE,		"view and keyword file lines read"},
-#define D_8192 8192
 #define D_UTF8 16384
 	{D_UTF8,		        "unicode/utf8 processing"},
 };
+
 /*
 
 \subsection{Error and Warning Messages}
@@ -166,7 +137,7 @@ but with a code of zero.
 
 EXIT codes are allocated sequentially starting at 0.
 The next free error code is
-41
+42
 all codes below this are used.
 */
 
@@ -198,10 +169,9 @@ init_signals(void)
 	(void)signal(SIGPIPE, handle_sigpipe);
 }
 /*
-
-
-
-\subsection{Input Files}
+-----------
+Input Files
+-----------
 
 The input file controls are now located in the utf8module, so that it can use them in processing the keyword file.
 They are also used in the sieve program for the view file and the main (standard) input stream.
@@ -293,93 +263,54 @@ Convert extended characters, but not percent keywords, to their
 */
 #define OPT_CHAR 4
 /*
-
-
-\item Modifies options {\tt OPT_KW} and {\tt OPT_VERBATIM} so that
+Modifies options {\tt OPT_KW} and {\tt OPT_VERBATIM} so that
 	extended characters and percent keywords for indexing are
 	deleted.
-
-
 */
 #define OPT_DELINDEX 8
 /*
-
-
-\item Extended characters, but not percent keywords, are converted to
+Extended characters, but not percent keywords, are converted to
 	their Standard ML string form.  This option is not compatible
 	with {\tt OPT_KW} or {\tt OPT_VERBATIM}.
-
-
 */
 #define OPT_ML_CHAR 16
 /*
-
-
-\item Issue a warning message when unknown keywords are
+Issue a warning message when unknown keywords are
 	found.  Only meaningful when {\tt OPT_KW} is set.
-
-
 */
 #define OPT_WARN_KW 32
 /*
-
-
-\item Convert unknown keywords to a call on the \LaTeX{} macro
+Convert unknown keywords to a call on the \LaTeX{} macro
 	\verb|\UnknownKeyword|.  Only meaningful when {\tt OPT_KW} and
 	{\tt OPT_VERBATIM} are set.
-
-
 */
 #define OPT_FLAG_KW 64
 /*
-
-
-\item Lines containing at least one character of type {\tt verbalone}
+Lines containing at least one character of type {\tt verbalone}
 	plus any number of {\tt white} characters have a reduced
 	verbatim-like processing where the line ends are not marked.
-
-
 */
 #define OPT_VERB_ALONE 128
 /*
-
-
-\item Where possible keywords are converted to their corresponding
+Where possible keywords are converted to their corresponding
 	extended character.
-
-
 */
 #define OPT_CONV_KW 256
 /*
-
-
-\item Convert extended characters of class {\tt white} to a
+Convert extended characters of class {\tt white} to a
 	space character.  When {\tt OPT_KW} is set also convert the
 	keywords.
-
-
 */
 #define OPT_WHITE 512
 /*
-
-
-\item Convert extended characters to keywords.
-
-
+Convert extended characters to keywords.
 */
 #define OPT_CONV_EXT 2048
 /*
-
-
-\item Convert extended characters to keywords.
-
-
+Convert extended characters to keywords.
 */
 #define OPT_UTF8_OUT 4096
 /*
-
-
-\end{itemize}
 
 Now do some checking that these flags are well-defined.
 Other checks are made in the startup function, {\tt initialize}.
@@ -419,150 +350,9 @@ Other checks are made in the startup function, {\tt initialize}.
 	Faulty setting of flags;
 #endif
 /*
------------------
-options_available
------------------
-The options are gathered together with their keywords for function
-get_options below.
-
-*/
-options_available cat_options[] = {
-	{"char", OPT_CHAR},
-	{"convkw", OPT_CONV_KW | OPT_KW},
-	{"convext", OPT_CONV_EXT},
-	{"delindex", OPT_DELINDEX},
-	{"kw", OPT_KW},
-	{"kwflag", OPT_FLAG_KW},
-	{"kwwarn", OPT_WARN_KW},
-	{"latex", OPT_LATEX | OPT_CHAR},
-	{"mlchar", OPT_ML_CHAR},
-	{"verbalone", OPT_VERB_ALONE},
-	{"utf8out", OPT_UTF8_OUT},
-	{"verbatim", OPT_VERBATIM | OPT_LATEX | OPT_CHAR},
-	{"white", OPT_WHITE},
-	{NULL, 0}
-};
-/*
------------
-arg_options
------------
-
-*/
-options_available arg_options[] = {
-	{"delindex", OPT_DELINDEX},
-	{"latex", OPT_LATEX | OPT_CHAR},
-	{NULL, 0}
-};
-/*
------------
-get_options
------------
-Reads the text of argument {\tt filt} looking for
-any option keywords from argument {\tt opts}.  The flag values for each
-keyword found are logically ORed to form the result value.  Any
-characters that are not keywords indicate errors.
-
-*/
-int
-get_options(options_available *opts, char *filt)
-{
-	int ikw;
-	int ans = 0;
-
-	char wrkstr[MAX_LINE_LEN+1];
-	char *start_kw, *end_kw;
-
-	start_kw = skip_space(filt);
-
-	while(start_kw[0] != '\0') {
-		end_kw = find_space(start_kw);
-		string_n_copy(wrkstr, start_kw, end_kw - start_kw);
-		*(wrkstr + (end_kw - start_kw)) = '\0';
-
-		ikw = 0;
-
-		while(opts[ikw].name != NULL && strcmp(opts[ikw].name, wrkstr) != 0) {
-			ikw++;
-		}
-
-		if(opts[ikw].name != NULL) {
-			ans |= opts[ikw].flag;
-		} else {
-			grumble("unexpected keyword '%s'", wrkstr, &view_F, true);
-			return(0);						/* RETURN */
-		}
-
-		start_kw = skip_space(end_kw);
-	}
-
-	return(ans);
-}
-/*
-
------------------
-check_cat_options
------------------
-Validate the options set for the "cat" action.
-
-*/
-void
-check_cat_options(int flags)
-{
-	if(flags & OPT_VERBATIM && flags & OPT_ML_CHAR)
-		grumble1("conflicting options: 'verbatim' and 'mlchar'", &view_F, true);
-
-	if(flags & OPT_LATEX && flags & OPT_ML_CHAR)
-		grumble1("conflicting options: 'latex' and 'mlchar'", &view_F, true);
-
-	if(flags & OPT_CONV_EXT && flags & OPT_ML_CHAR)
-		grumble1("conflicting options: 'convext' and 'mlchar'", &view_F, true);
-
-	if(flags & OPT_VERBATIM && flags & OPT_CONV_EXT)
-		grumble1("conflicting options: 'verbatim' and 'convext'", &view_F, true);
-
-	if(flags & OPT_LATEX && flags & OPT_CONV_EXT)
-		grumble1("conflicting options: 'latex' and 'convext'", &view_F, true);
-
-	if(flags & OPT_VERBATIM && flags & OPT_CONV_KW)
-		grumble1("conflicting options: 'verbatim' and 'convkw'", &view_F, true);
-
-	/* Need both OPT_VERBATIM and OPT_KW for OPT_FLAG_KW */
-	if(flags & OPT_FLAG_KW && !(flags & OPT_VERBATIM && flags & OPT_KW))
-		grumble1("ignored option: 'kwflag'", &view_F, true);
-
-	if(flags & OPT_VERB_ALONE && !(flags & OPT_VERBATIM))
-		grumble1("ignored option: 'verbalone'", &view_F, true);
-}
-/*
-
-------------
-show_options
-------------
-Print out the names of any options set.
-
-*/
-void
-show_options(FILE *fp, int flags)
-{
-#define SHOW_OPT(f, s) if(flags & f) (void)fputs(s, fp)
-	SHOW_OPT(OPT_CHAR, " char");
-	SHOW_OPT(OPT_CONV_EXT, " convext");
-	SHOW_OPT(OPT_CONV_KW, " convkw");
-	SHOW_OPT(OPT_DELINDEX, " delindex");
-	SHOW_OPT(OPT_KW, " kw");
-	SHOW_OPT(OPT_FLAG_KW, " kwflag");
-	SHOW_OPT(OPT_WARN_KW, " kwwarn");
-	SHOW_OPT(OPT_LATEX, " latex");
-	SHOW_OPT(OPT_ML_CHAR, " mlchar");
-	SHOW_OPT(OPT_UTF8_OUT, " utf8out");
-	SHOW_OPT(OPT_VERB_ALONE, " verbalone");
-	SHOW_OPT(OPT_VERBATIM, " verbatim");
-	SHOW_OPT(OPT_WHITE, " white");
-#undef SHOW_OPT
-}
-
-/*
-\subsection{Initialization and Initial Checks}
+=================================
+Initialization and Initial Checks
+=================================
 
 A number of arrays need to be initialized.
 
@@ -573,8 +363,6 @@ success of this to support earlier versions of cygwin with the call should
 failing harmlessly. The problem with illegal patterns causes the {\Product}
 build to break at an early stage, so there is little to be gained by checking
 for errors here.
-
-\HOLindexEntry{initialize}
 
 */
 void
@@ -596,78 +384,9 @@ initialize(void)
 		int used_flags = 0;
 		int not_or_flags = ~OR_FLAGS;
 
-		i = 0;
-		while(cat_options[i].name != NULL) { used_flags |= cat_options[i].flag; i++; }
-		i = 0;
-		while(arg_options[i].name != NULL) { used_flags |= arg_options[i].flag; i++; }
-
-		if((used_flags & not_or_flags) != 0) {
-			internal_error("Flag values faulty", "");
-			EXIT(36);					
-		}
 	}
 }
 
-/*
-===========================================
-Auxiliaries For Source File Line Processing
-===========================================
-
-\HOLindexEntry{copy_string}
-{\tt copy_string} : Copies the {\tt source} string into the {\tt dest}
-string for up to {\tt max} characters.  Does not add a null character
-after the copied characters if the length is exceeded.  Return the
-number of characters copied.  This differs from the C library routines
-{\tt strcpy} and {\tt strncpy} which return the address of the output
-string.
-
-*/
-int
-copy_string(char *source, char *dest, int max)
-{
-	int i = 0;
-
-	if(source != NULL) {
-		while((*(dest++) = *(source++)) != '\0' && i < max) {
-			i++;
-		}
-	}
-
-	return(i);
-}
-/*
-
-
-{\tt copy_keyword} :  Copies the keyword {\tt kw} read from the input
-string into the {\tt dest} string for up to {\tt max} characters.
-Return the number of characters written to {\tt dest}.  The keyword is
-{\tt kwlen} characters long, it starts and (probably) ends with
-`{\tt\%}' characters which are not copied if {\tt suppress} is non zero.
-
-*/
-int
-copy_keyword(
-	char *kw,
-	int kwlen,
-	char *dest,
-	int max,
-	int suppress)
-{
-	int inp = 0;
-	int outp = 0;
-
-	while(*kw != '\0' && inp < kwlen && outp < max) {
-		if(suppress && *kw == '%') {
-			kw++;
-		} else {
-			*(dest++) = *(kw++);
-			outp++;
-		}
-		inp++;
-	}
-
-	return(outp);
-}
 
 /*
 -----------
@@ -701,7 +420,6 @@ int
 main(int argc, char **argv)
 {
   int option, ascii_out = False;
-	char *steering_file = STEER_FILE;
 	char *keyword_files[MAX_KEYWORD_FILES];
 
 	
@@ -798,5 +516,3 @@ main(int argc, char **argv)
 	EXIT(0);								/* EXIT */
 
     }
-
-

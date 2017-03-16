@@ -2,12 +2,7 @@
 #define UTF8MODULE
 
 typedef int unicode;
-typedef struct {
-	unicode code_point;
-	char pp_char;} unicode_to_pp_entry;
 #define UNICODE_TO_PP_LEN 128
-unicode_to_pp_entry unicode_to_pp [UNICODE_TO_PP_LEN];
-
 typedef char bool;
 enum {False = 0, True = 1};
 
@@ -21,6 +16,13 @@ char * find_space(char *str);
 void string_n_copy(char *dest, char *source, int n);
 char * split_at_space(char *str);
 int str_match(char *prefix, char *str);
+int copy_string(char *source, char *dest, int max);
+int copy_keyword(
+	char *kw,
+	int kwlen,
+	char *dest,
+	int max,
+	int suppress);
 
 /* find file */
 char * tilde_expand(char *name);
@@ -40,8 +42,15 @@ void print_unix_error1(int eno);
 void unix_error1(char *msg);
 void unix_error(char *fmt, char *msg);
 void *malloc_and_check(unsigned size, int err);
+
+/* debug information */
+
+#define D_SHOW_KEYWORD_TABLE 2
+#define D_GET_KW 128
+#define D_READ_STEER_LINE 4096
+#define D_UTF8 16384
+
 int unicode_to_pp_entry_cmp(const void *buf1, const void *buf2);
-const char *unicode_to_kw(unicode code_point);
 const char *unicode2ppk(unicode cp);
 unicode invalid_unicode(void);
 unicode get_code_point(void);
@@ -73,6 +82,7 @@ struct keyword_information{
 #define KW_RE_MATCH 0		/* The argument must match the R.E. */
 #define KW_RE_DELIMITER 1	/* The argument is delimited by something that matches the R.E. */
 };
+
 struct kw_information {
   int num_keywords;
   int num_unicodes;
@@ -83,13 +93,7 @@ struct kw_information {
 };
 
 struct kw_information kwi;
-void add_new_keyword(
-	char *name,
-	unicode uni,
-	int kind,
-	char *macro,
-	regex_t * tex_arg,
-	char tex_arg_sense);
+
 int find_keyword(char *kw);
 void show_kw_kind(int kind);
 void show_one_keyword(struct keyword_information *ki);

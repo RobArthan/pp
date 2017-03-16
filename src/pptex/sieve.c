@@ -2007,64 +2007,7 @@ copy_PrNN(char *str, int code)
 
 	return(PrNN_SIZE);
 }
-/*
 
-
-\HOLindexEntry{copy_string}
-{\tt copy_string} : Copies the {\tt source} string into the {\tt dest}
-string for up to {\tt max} characters.  Does not add a null character
-after the copied characters if the length is exceeded.  Return the
-number of characters copied.  This differs from the C library routines
-{\tt strcpy} and {\tt strncpy} which return the address of the output
-string.
-
-*/
-int
-copy_string(char *source, char *dest, int max)
-{
-	int i = 0;
-
-	if(source != NULL) {
-		while((*(dest++) = *(source++)) != '\0' && i < max) {
-			i++;
-		}
-	}
-
-	return(i);
-}
-/*
-
-
-{\tt copy_keyword} :  Copies the keyword {\tt kw} read from the input
-string into the {\tt dest} string for up to {\tt max} characters.
-Return the number of characters written to {\tt dest}.  The keyword is
-{\tt kwlen} characters long, it starts and (probably) ends with
-`{\tt\%}' characters which are not copied if {\tt suppress} is non zero.
-
-*/
-int
-copy_keyword(
-	char *kw,
-	int kwlen,
-	char *dest,
-	int max,
-	int suppress)
-{
-	int inp = 0;
-	int outp = 0;
-
-	while(*kw != '\0' && inp < kwlen && outp < max) {
-		if(suppress && *kw == '%') {
-			kw++;
-		} else {
-			*(dest++) = *(kw++);
-			outp++;
-		}
-		inp++;
-	}
-
-	return(outp);
-}
 /*
 ===========================
 Source File Line Processing
@@ -2086,6 +2029,7 @@ of this routine) convert even numbered ``~\verb|`|~'' characters (as
 counted when read) into ``~\verb|'|~''characters.  Other characters are
 left unchanged.
 */
+
 void
 mlstring(char *line, FILE    *fp)
 {

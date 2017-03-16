@@ -15,14 +15,17 @@
 #include <fcntl.h>
 #include "unicodepptab.h"
 #include "ppunicodetab.h"
+#include "utf8module.h"
 
 #define PPHOME "PPHOME"
 #define PPETCPATH "PPETCPATH"
 #define PPENVDEBUG "PPENVDEBUG"
 #define SLASH_ETC "/etc"
 
+/*
 typedef char bool;
 enum {False = 0, True = 1};
+*/
 
 #define bool short
 #define true 1
@@ -505,21 +508,18 @@ int line;
 char * program_name = "";
 int debug = 0;
 
+/*
 #define D_SHOW_SIEVE_TABLE 1
-#define D_SHOW_KEYWORD_TABLE 2
 #define D_INIT_TABLES 4
 #define D_READ_SOURCE_LINE 8
 #define D_DECODE_DIR_LINE 16
 #define D_ACTIONS 32
 #define D_SHOW_FULL_SIEVE_TABLE 64
-#define D_GET_KW 128
 #define D_OPEN_OUTPUT 256
 #define D_MAIN_CONVERT_CH 512
 #define D_PROCESS_LINE 1024
 #define D_EXPAND 2048
-#define D_READ_STEER_LINE 4096
-#define D_8192 8192
-#define D_UTF8 16384
+*/
 
 #define FPRINTF (void)fprintf
 #define PRINTF (void)printf
@@ -527,6 +527,7 @@ int debug = 0;
 #define MAX_LINE_LEN 1024
 #define NOT_FOUND (-1)
 
+/*
 struct file_data{
   char *name;
   char *file_name;
@@ -537,6 +538,7 @@ struct file_data{
   bool utf8;
   unicode code_line[MAX_LINE_LEN+1];
 };
+*/
 
 struct file_data dummy_F = {"dummy file", NULL, 0, 0, NULL, 0, 0, 0};
 
@@ -554,6 +556,7 @@ Many of the limiting values are declared near the data structures
 they refer to.  A few are declared here.
 */
 
+/*
 struct limits{
 	int opt_list;
 	int file_name_area;
@@ -567,6 +570,7 @@ struct limits{
 } limits = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0
 };
+*/
 
 #define MAX_KEYWORD_FILES 20
 
@@ -717,6 +721,35 @@ malloc_and_check(unsigned size, int err)
 	return(area);
 }
 
+/*
+===========================================
+Auxiliaries For Source File Line Processing
+===========================================
+-----------
+copy_string
+-----------
+Copies the {\tt source} string into the {\tt dest}
+string for up to {\tt max} characters.  Does not add a null character
+after the copied characters if the length is exceeded.  Return the
+number of characters copied.  This differs from the C library routines
+{\tt strcpy} and {\tt strncpy} which return the address of the output
+string.
+*/
+
+int
+copy_string(char *source, char *dest, int max)
+{
+	int i = 0;
+
+	if(source != NULL) {
+		while((*(dest++) = *(source++)) != '\0' && i < max) {
+			i++;
+		}
+	}
+
+	return(i);
+}
+
 
 /*
 =======================
@@ -728,6 +761,7 @@ bool utf8_stdin = False; /* this is set True by -u flag in sieve */
 
 struct file_data keyword_F = 	{ "keyword file", 0, 0, 0 };
 
+/*
 struct keyword_information{
 	unicode uni;		
 	short ech;		
@@ -749,17 +783,45 @@ struct keyword_information{
 #define KW_RE_MATCH 0	
 #define KW_RE_DELIMITER 1
 };
+*/
+
 #define MAX_KEYWORDS 4000
 #define MAX_KW_LEN 50
 
-struct kw_information {
-  int num_keywords;
-  int num_unicodes;
-  int max_kw_len;
-  struct keyword_information *char_code[256];
-  struct keyword_information *unicode_code[MAX_KEYWORDS];
-  struct keyword_information keyword[MAX_KEYWORDS];
-} kwi = {0, 0, 0};
+/*
+------------
+copy_keyword
+------------
+Copies the keyword {\tt kw} read from the input
+string into the {\tt dest} string for up to {\tt max} characters.
+Return the number of characters written to {\tt dest}.  The keyword is
+{\tt kwlen} characters long, it starts and (probably) ends with
+`{\tt\%}' characters which are not copied if {\tt suppress} is non zero.
+*/
+
+int
+copy_keyword(
+	char *kw,
+	int kwlen,
+	char *dest,
+	int max,
+	int suppress)
+{
+	int inp = 0;
+	int outp = 0;
+
+	while(*kw != '\0' && inp < kwlen && outp < max) {
+		if(suppress && *kw == '%') {
+			kw++;
+		} else {
+			*(dest++) = *(kw++);
+			outp++;
+		}
+		inp++;
+	}
+
+	return(outp);
+}
 
 /*
 ---------------
@@ -950,11 +1012,11 @@ this function, given two references to keyword_information
 
 int
 compare_keyword_unicode(
-	const void *vp1,
-	const void *vp2)
+	const void **vp1,
+	const void **vp2)
 {
-  const struct keyword_information *kw1 = vp1;
-  const struct keyword_information *kw2 = vp2;
+  const struct keyword_information *kw1 = *vp1;
+  const struct keyword_information *kw2 = *vp2;
   /*  if (debug & D_UTF8) {
     PRINTF("compare_keyword_unicode, u1=%6x, u2=%6x\n", kw1, kw2);
     fflush(NULL);
@@ -1832,9 +1894,9 @@ unicode_to_ekwa
 ---------------
 Convert a unicode code point to either:
 1. the same ascii character (<128)
-2. a ProofPower extended character (128-255)
-3. a keyword in percents
-4. a percent enclose hexadecimal literal unicode code point
+2. a percent enclose hexadecimal literal unicode code point
+3. a ProofPower extended character (128-255)
+4. a keyword in percents
 in that order of priority.
 
 */
