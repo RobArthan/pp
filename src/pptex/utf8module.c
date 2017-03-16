@@ -1012,17 +1012,13 @@ this function, given two references to keyword_information
 
 int
 compare_keyword_unicode(
-	const void **vp1,
-	const void **vp2)
+	const void *vp1,
+	const void *vp2)
 {
-  const struct keyword_information *kw1 = *vp1;
-  const struct keyword_information *kw2 = *vp2;
-  /*  if (debug & D_UTF8) {
-    PRINTF("compare_keyword_unicode, u1=%6x, u2=%6x\n", kw1, kw2);
-    fflush(NULL);
-    }; */
-  if (kw1->uni == kw2->uni) return 0;
-  else if (kw1->uni < kw2->uni) return -1;
+  struct keyword_information **kw1 = (struct keyword_information**)vp1;
+  struct keyword_information **kw2 = (struct keyword_information**)vp2;
+  if ((*kw1)->uni == (*kw2)->uni) return 0;
+  else if ((*kw1)->uni < (*kw2)->uni) return -1;
   else return 1;
 }
 
@@ -1507,6 +1503,7 @@ conclude_keywordfile(void)
 					cur_ki->orig_kind = KW_SAMEAS;
 					cur_ki->act_kind = copy_from->orig_kind;
 					cur_ki->ech = copy_from->ech;
+					cur_ki->uni = copy_from->uni;
 					cur_ki->macro = copy_from->macro;
 
 					if(cur_ki->act_kind == KW_SAMEAS ||
@@ -1890,18 +1887,18 @@ char *unicode_to_kw(unicode code_point)
 
 /*
 ---------------
-unicode_to_ekwa
+unicode_to_aekw
 ---------------
+(to Ascii, Extended character, or KeyWord)
 Convert a unicode code point to either:
 1. the same ascii character (<128)
-2. a percent enclose hexadecimal literal unicode code point
-3. a ProofPower extended character (128-255)
+2. a ProofPower extended character (128-255)
+3. a percent enclose hexadecimal literal unicode code point
 4. a keyword in percents
 in that order of priority.
-
 */
 
-char *unicode_to_ekwa(unicode code_point){
+char *unicode_to_aekw(unicode code_point){
   struct keyword_information *kwi;
   static char ascext[2];
   if (code_point <= 0x7F) {
@@ -1911,14 +1908,14 @@ char *unicode_to_ekwa(unicode code_point){
   };
   kwi = unicode_to_kwi(code_point);
   if(debug & D_UTF8) {
-    PRINTF("unicode_to_ekwa: code_point = 0x%6X, kwi = 0x%8X\n", code_point, (unsigned int)kwi);
+    PRINTF("unicode_to_aekw: code_point = 0x%6X, kwi = 0x%8X\n", code_point, (unsigned int)kwi);
     fflush(NULL);
   };
   if (kwi == NULL) return unicode_to_hex(code_point);
   else if (kwi->uni != code_point) {
     error_top();
     FPRINTF(stderr,
-	    "internal error unicode_to_ekwa code mismatch, code_point=%06x, kwi->uni=%06x",
+	    "internal error unicode_to_aekw code mismatch, code_point=%06x, kwi->uni=%06x",
 	    code_point, kwi->uni);
     EXIT(41);
     return "";}
@@ -1965,7 +1962,7 @@ void code_line_to_ext(struct file_data *file_F){
   line = file_F->cur_line;
   while (*codes !=0 && op < MAX_LINE_LEN){
     /*  if(debug & D_UTF8) {PRINTF("code_line_to_ext 1: *codes=%x\n", *codes); fflush(NULL);}; */
-    r = unicode_to_ekwa(*codes);
+    r = unicode_to_aekw(*codes);
     if(debug & D_UTF8) {PRINTF("code_line_to_ext 2: *codes=%x, r=%s\n", *codes, r); fflush(NULL);};
     while (*r !=0 && op < MAX_LINE_LEN) {
       *line = *r;

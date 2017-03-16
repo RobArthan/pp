@@ -219,7 +219,9 @@ keywords are read the appropriate flags are set.
 
 The remaining flags are available for future expansion.
 
-\subsection{Action Options} \label{ActionOptions}
+==============
+Action Options
+==============
 
 Associated with some of the actions there are a number
 of options available.
@@ -372,7 +374,7 @@ initialize(void)
 #ifdef __CYGWIN__
 	setlocale(LC_ALL, "C.ISO88591");
 #endif
-	for(i=1; i<256; i++) character_flags[i] = 0;
+	/*	for(i=1; i<256; i++) character_flags[i] = 0; */
 
 	initialise_keyword_information();
 
