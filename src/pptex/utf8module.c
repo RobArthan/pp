@@ -1033,7 +1033,7 @@ void initialise_keyword_information(void) {
 	for(i=0; i<256; i++)
 		kwi.char_code[i] = NULL;
 
-	add_new_keyword("%%", NOT_FOUND, '%', KW_SIMPLE, "\\%", NULL, 0);
+	add_new_keyword("%%", NOT_FOUND, NOT_FOUND, KW_SIMPLE, "\\%", NULL, 0);
 };
 
 /*
