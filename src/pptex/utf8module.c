@@ -526,6 +526,7 @@ int debug = 0;
 #define PUTC (void)putc
 #define MAX_LINE_LEN 1024
 #define NOT_FOUND (-1)
+#define U_NOT_FOUND 0xFFFFFF
 
 /*
 struct file_data{
@@ -880,7 +881,7 @@ add_new_keyword(
 	kwi.num_keywords++;
 	
 	if (debug & D_SHOW_KEYWORD_TABLE) {
-	   PRINTF("add_keyword: %s ext: %d uni %x\n", name, ki->ech, uni);
+	   PRINTF("add_new_keyword: %s ext: %d uni %x\n", name, ki->ech, uni);
 	};
 	
 	if(kwi.num_keywords>1 && strcmp(kwi.keyword[kwi.num_keywords-1].name,
@@ -1033,7 +1034,7 @@ void initialise_keyword_information(void) {
 	for(i=0; i<256; i++)
 		kwi.char_code[i] = NULL;
 
-	add_new_keyword("%%", NOT_FOUND, NOT_FOUND, KW_SIMPLE, "\\%", NULL, 0);
+	add_new_keyword("%%", NOT_FOUND, U_NOT_FOUND, KW_SIMPLE, "\\%", NULL, 0);
 };
 
 /*
@@ -1049,6 +1050,8 @@ Unicode code points are represented as an ascii literal which is one of:
 2. octal with a leading "0"
 3. decimal numbers.
 They must be in the range -1 to 10ffff\sb{16}.
+
+The -1 is not a unicode code but is used in keyword files to designate "no unicode code".
 */
 
 int
@@ -1321,9 +1324,9 @@ read_keyword_file(char *name)
 	while( (!feof(keyword_F.fp)) && (!ferror(keyword_F.fp)) ) {
 		char * def_kw;
 		char * kind_str;
-		int kind;
+		int kind, icode;
 		char * code_kw_str;
-		int code;
+		unicode code;
 		int ech;
 		char * macro;
 		regex_t * tex_arg;
@@ -1403,15 +1406,17 @@ read_keyword_file(char *name)
 				}
 			}
 
-			add_new_keyword(strdup(def_kw), NOT_FOUND, NOT_FOUND, KW_SAMEAS_UNKNOWN,
+			add_new_keyword(strdup(def_kw), NOT_FOUND, U_NOT_FOUND, KW_SAMEAS_UNKNOWN,
 				strdup(code_kw_str), NULL, 0);
 		} else {
 
-			if(!get_char_unicode(code_kw_str, &code)) {
+			if(!get_char_unicode(code_kw_str, &icode)) {
 				grumble1("unreadable or out of range char code",
 					&keyword_F, true);
 				continue;					/* CONTINUE */
 			}
+
+			code = (icode < 0) ? U_NOT_FOUND : icode;
 
 			ech = uni_to_pp(code);
 			
@@ -2216,12 +2221,14 @@ of the keyword (inluding percents).
 unicode named_kw_to_unicode(char *line, int *len){
   unicode val;
   int kw_index;
-  if (debug & D_UTF8) message("named_kw_to_unicode:line=%s", line);
+  if (debug & D_UTF8) message("named_kw_to_unicode 1:line=%s", line);
   kw_index = get_hol_kw(line, len, False, &dummy_F);
-  if (debug & D_UTF8) PRINTF("named_kw_to_unicode:kw_index=%i:*len=%i:\n", kw_index, *len);
+  if (debug & D_UTF8) PRINTF("named_kw_to_unicode 2:kw_index=%i:*len=%i:\n", kw_index, *len);
   if (kw_index == NOT_FOUND){*len=0; return NOT_FOUND;}; 
   val = kwi.keyword[kw_index].uni;
-  if (debug & D_UTF8) PRINTF("named_kw_to_unicode:val=%i:\n", val);
+  if (debug & D_UTF8) PRINTF("named_kw_to_unicode 3:val=%i:\n", val);
+  /*  if (val = U_NOT_FOUND){*len=0; return U_NOT_FOUND;}; 
+      if (debug & D_UTF8) PRINTF("named_kw_to_unicode 4:val=%i:\n", val); */
   return val;
 }
 
@@ -2245,7 +2252,7 @@ unicode kw_to_unicode(char *line, int *len){
   if (*len>0) return val;
   val = named_kw_to_unicode(line, len);
   if (*len>0) return val;
-  return NOT_FOUND;
+  return U_NOT_FOUND;
 }
 
 /*
@@ -2267,30 +2274,37 @@ unicode ext_to_unicode(unsigned char ch){
 --------------------------
 ext_or_kw_to_unicode
 --------------------------
-Takes a null terminated string of characters which are either asscii,
+Takes a null terminated string of characters which are either ascii,
 or ProofPower extended characters, or percent enclosed keyword names
 (declared in the current keyword files) or percent enclosed ascii
-hexadecimal unicode code points and converts the first to a unicode code point. 
+hexadecimal unicode code points and converts the first to a unicode code point.
+
+If this function delivers U_NOT_FOUND then this means that a keyword which
+has no associated unicode code point was found.
+The *len parameter will in that case be set to the length of the keyword
+even though no unicode code point is returned.
 */
   
 unicode ext_or_kw_to_unicode(char *line, int *len){
   unicode val;
+  *len = 0;
   if (line[0] != '%'){
-    if (line[0] == 0) return NOT_FOUND; 
+    if (line[0] == 0) return U_NOT_FOUND; 
     *len = 1;
     if(debug & D_UTF8) {
-      PRINTF("ext_or_kw_to_unicode, *line=%i\n", line[0]);
+      PRINTF("ext_or_kw_to_unicode 1: line[0]=%i\n", line[0]);
       fflush(NULL);
     };
     if (line[0] & 0x80) return (ext_to_unicode(*line));
     else return line[0];
   };
   val = kw_to_unicode(line, len);
-  if (val == NOT_FOUND) {
-    *len = 1;
-    return line[0];
-  }
-  else return val;
+  if(debug & D_UTF8) {
+    PRINTF("ext_or_kw_to_unicode 2: val=%x\n", val);
+    fflush(NULL);
+  };
+  if (*len == 0) *len = 1; /* a percent not followed by a keyword */
+  return val;
 }
 
 /*
@@ -2312,12 +2326,17 @@ void ext_seq_to_unicode(char *line, unicode codes[]){
       PRINTF("ext_seq_to_unicode 1:ip=%i, op=%i\n", ip, op); fflush(NULL);
     };
     res = ext_or_kw_to_unicode(line+ip, &len);
-    if (debug & D_UTF8) PRINTF("ext_seq_to_unicode 2:*line=%x res=%x, len=%i\n", *line, res, len);
-    if (res > 0){
+    if (debug & D_UTF8) PRINTF("ext_seq_to_unicode 2: res=%x, len=%i\n", res, len);
+    if (res == U_NOT_FOUND)
+      while(len-- >0) {
+        if (debug & D_UTF8) PRINTF("ext_seq_to_unicode 3: len=%i, op=%i, ip=%i, line[ip]=%i\n",
+				   len, op, ip, line[ip]);
+	codes[op++] = line[ip++];
+      }
+    else {
       codes[op] = res; 
       ip += len;
       op++;}
-    else ip++;
   };
   codes[op] = 0;
 }
