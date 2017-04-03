@@ -308,20 +308,16 @@ typedef struct{
 	int flag;
 } options_available;
 /*
-
-
 The {\tt flags} may take one of the following values.
 
-\begin{itemize}
-
-\item Lines are to be processed for the verbatim-like formal text
+Lines are to be processed for the verbatim-like formal text
 	environments.  This flag implies {\tt OPT_LATEX} and {\tt OPT_CHAR}.
 */
 #define OPT_VERBATIM 1
 /*
 
 
-\item Text is to be processed for the verbatim-like formal text
+Text is to be processed for the verbatim-like formal text
 	environments, only with this flag set are the LaTeX conversions
 	applied.  This option is automatically set with {\tt
 	OPT_VERBATIM}.
@@ -340,91 +336,54 @@ Convert extended characters, but not percent keywords, to their
 */
 #define OPT_CHAR 4
 /*
-
-
-\item Modifies options {\tt OPT_KW} and {\tt OPT_VERBATIM} so that
+Modifies options {\tt OPT_KW} and {\tt OPT_VERBATIM} so that
 	extended characters and percent keywords for indexing are
 	deleted.
-
-
 */
 #define OPT_DELINDEX 8
 /*
-
-
-\item Extended characters, but not percent keywords, are converted to
+Extended characters, but not percent keywords, are converted to
 	their Standard ML string form.  This option is not compatible
 	with {\tt OPT_KW} or {\tt OPT_VERBATIM}.
-
-
 */
 #define OPT_ML_CHAR 16
 /*
-
-
-\item Issue a warning message when unknown keywords are
+Issue a warning message when unknown keywords are
 	found.  Only meaningful when {\tt OPT_KW} is set.
-
-
 */
 #define OPT_WARN_KW 32
 /*
-
-
-\item Convert unknown keywords to a call on the \LaTeX{} macro
+Convert unknown keywords to a call on the \LaTeX{} macro
 	\verb|\UnknownKeyword|.  Only meaningful when {\tt OPT_KW} and
 	{\tt OPT_VERBATIM} are set.
-
-
 */
 #define OPT_FLAG_KW 64
 /*
-
-
-\item Lines containing at least one character of type {\tt verbalone}
+Lines containing at least one character of type {\tt verbalone}
 	plus any number of {\tt white} characters have a reduced
 	verbatim-like processing where the line ends are not marked.
-
-
 */
 #define OPT_VERB_ALONE 128
 /*
-
-
-\item Where possible keywords are converted to their corresponding
+Where possible keywords are converted to their corresponding
 	extended character.
-
-
 */
 #define OPT_CONV_KW 256
 /*
-
-
-\item Convert extended characters of class {\tt white} to a
+Convert extended characters of class {\tt white} to a
 	space character.  When {\tt OPT_KW} is set also convert the
 	keywords.
-
-
 */
 #define OPT_WHITE 512
 /*
-
-
-\item Convert extended characters to keywords.
-
-
+Convert extended characters to keywords.
 */
 #define OPT_CONV_EXT 2048
 /*
-
-
-\item Convert extended characters to keywords.
-
-
+Convert extended characters to keywords.
 */
 #define OPT_UTF8_OUT 4096
 /*
-
 
 \end{itemize}
 

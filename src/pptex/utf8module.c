@@ -528,19 +528,6 @@ int debug = 0;
 #define NOT_FOUND (-1)
 #define U_NOT_FOUND 0xFFFFFF
 
-/*
-struct file_data{
-  char *name;
-  char *file_name;
-  int line_no;
-  int grumbles;
-  FILE *fp;
-  char cur_line[MAX_LINE_LEN+1];
-  bool utf8;
-  unicode code_line[MAX_LINE_LEN+1];
-};
-*/
-
 struct file_data dummy_F = {"dummy file", NULL, 0, 0, NULL, 0, 0, 0};
 
 /*

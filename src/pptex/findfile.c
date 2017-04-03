@@ -1,5 +1,5 @@
 /* Originally from: imp096.doc but now maintained as findfile.c,
-with the main functionality share with sieve and xpp through
+with the main functionality shared with sieve pp_file_conv and xpp through
 utf8module.c
 
 Program findfile basically just calls the {\tt find_file} function (in utf8module).
@@ -16,8 +16,7 @@ A common idiom of use from within a shell script will be
 #define FPRINTF (void)fprintf
 #define PRINTF (void)printf
 #define PUTC (void)putc
-/*
-*/
+
 #include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +28,6 @@ A common idiom of use from within a shell script will be
 #include <unistd.h>
 #include <regex.h>
 #include "utf8module.h"
-#ifndef SIEVE_PROG
 
 /*
 ====
@@ -127,4 +125,3 @@ main(int argc, char **argv)
 
 }
 
-#endif
