@@ -864,8 +864,7 @@ add_new_keyword(
 	ki->macro = macro;
 	ki->tex_arg = tex_arg;
 	ki->tex_arg_sense = tex_arg_sense;
-	
-	kwi.num_keywords++;
+	ki->seq = kwi.num_keywords++;
 	
 	if (debug & D_SHOW_KEYWORD_TABLE) {
 	   PRINTF("add_new_keyword: %s ext: %d uni %x\n", name, ki->ech, uni);
@@ -876,6 +875,49 @@ add_new_keyword(
 		grumble1("keywords unsorted", &keyword_F, true);
 	}
 }
+
+
+/*
+---------------------------
+compare_keyword_information
+---------------------------
+this function, given two references to keyword_information
+   compares the keyword names
+*/
+
+int
+compare_keyword_information(
+	const void *vp1,
+	const void *vp2)
+{
+	const struct keyword_information *kw1 = vp1;
+	const struct keyword_information *kw2 = vp2;
+	if (kw1->name == NULL || kw2->name == NULL) return -1;
+	int res = strcmp(kw1->name, kw2->name);
+	if (res == 0) return (kw1->seq - kw2->seq);
+	return res;
+}
+
+/*
+---------------------------
+compare_keyword_information
+---------------------------
+this function, given two references to keyword_information
+   compares the keyword names
+
+int
+compare_keyword_information2(
+	const void *vp1,
+	const void *vp2)
+{
+	const struct keyword_information *kw1 = vp1;
+	const struct keyword_information *kw2 = vp2;
+	FPRINTF(stdout, "compare_keyword_information2\n");
+	int res = strcmp(kw1.name, kw2.name);
+	FPRINTF(stdout, "compare_keyword_information2: %i\n", res);
+	return res;
+}
+*/
 
 /*
 ------------
@@ -900,9 +942,29 @@ find_keyword(char *kw)
 		if(posn < 0)	top_end = middle - 1;
 		else		lower_end = middle + 1;
 	}
-
 	return(NOT_FOUND);
 }
+
+/*
+int
+find_keyword(char *kw)
+{
+  int res = 0;
+  struct keyword_information *ki;
+  FPRINTF(stdout, "find_keyword\n");
+  fflush(NULL);
+  ki = bsearch(
+	       kw, kwi.keyword,
+	       kwi.num_keywords,
+	       sizeof(struct keyword_information),
+	       compare_keyword_information);
+  if (ki == NULL) return NOT_FOUND;
+  res = ki - kwi.keyword;
+  FPRINTF(stdout, "find_keyword: ki=%x, res = %x\n", ki, res);
+  fflush(NULL);
+  return res;
+}
+*/
 
 void
 show_kw_kind(int kind)
@@ -929,6 +991,7 @@ void
 show_one_keyword(struct keyword_information *ki)
 {
   	PRINTF("(%p)",		ki);
+	PRINTF(" seq=%4d",		ki->seq);
 	PRINTF(" ech=%4d",		ki->ech);
 	PRINTF(" uni=%8x",		ki->uni);
 	PRINTF("  ty=");
@@ -938,7 +1001,7 @@ show_one_keyword(struct keyword_information *ki)
 		show_kw_kind(ki->orig_kind);
 		PUTC(')', stdout);
 	}
-	PRINTF("  name=(%ld)",		(long)strlen(ki->name));
+	PRINTF("  name=(%2ld)",		(long)strlen(ki->name));
 	PRINTF("'%s'",			ki->name);
 	PRINTF("  macro='%s'\n",	ki->macro ? ki->macro : "(None)");
 }
@@ -969,25 +1032,6 @@ show_keywords(void)
 	  if (debug) {printf("done %i\n", i); fflush(stdout);};
 	};
 	if (debug) {printf("finished after %i\n", i); fflush(stdout);};
-}
-
-/*
----------------------------
-compare_keyword_information
----------------------------
-this function, given two references to keyword_information
-   compares the keyword names
-*/
-
-int
-compare_keyword_information(
-	const void *vp1,
-	const void *vp2)
-{
-	const struct keyword_information *kw1 = vp1;
-	const struct keyword_information *kw2 = vp2;
-	return(kw1->name == NULL || kw2->name == NULL
-		? -1 : strcmp(kw1->name, kw2->name));
 }
 
 /*
@@ -1311,7 +1355,7 @@ read_keyword_file(char *name)
 	while( (!feof(keyword_F.fp)) && (!ferror(keyword_F.fp)) ) {
 		char * def_kw;
 		char * kind_str;
-		int kind, icode;
+		int kind, icode, kwindex;
 		char * code_kw_str;
 		unicode code;
 		int ech;
@@ -1406,12 +1450,29 @@ read_keyword_file(char *name)
 			code = (icode < 0) ? U_NOT_FOUND : icode;
 
 			ech = uni_to_pp(code);
-			
-			if(find_keyword(def_kw) != NOT_FOUND) {
-				grumble1("duplicate keyword", &keyword_F, true);
-				continue;					/* CONTINUE */
-			}
 
+			/*
+			kwindex = find_keyword(def_kw);
+			
+			if(kwindex != NOT_FOUND) {
+			  if (kind == KW_SIMPLE) {
+			    struct keyword_information *ki = &kwi.keyword[kwindex];
+			    if (ki->orig_kind == KW_SIMPLE){
+			      if (ki->uni == U_NOT_FOUND){
+				ki->uni = code;
+				ki->ech = ech;
+			      } else {
+				if (ki->uni != code)
+				  grumble1("clashing keyword definitions", &keyword_F, true);
+			      };
+			    } else {
+			    grumble1("duplicate keyword", &keyword_F, true);
+			    }
+			  } else grumble1("duplicate keyword", &keyword_F, true);
+			  continue;
+			}
+			*/
+			
 			if((kind == KW_DIRECTIVE || kind == KW_START_DIR)
 					&& ech == -1) {
 				grumble1("ascii/ext code for directive is '-1'", &keyword_F, true);
@@ -1464,17 +1525,23 @@ conclude_keywordfile(void)
 
 	if(debug) fflush(NULL);
 
+	/* first sort kwi.keyword into alphabetic order of keyword name */
+	
 	qsort((char*)kwi.keyword,
 			kwi.num_keywords,
 			sizeof(struct keyword_information),
 			compare_keyword_information);
+
+	/* Then scan keyword table combining multiple entries for a keyword into a single entry.
+	   ---
+	*/
 	
 	if (debug & D_UTF8){
 	  for(i=0; i<kwi.num_keywords; i++) {
 	    PRINTF ("keyword entry %i is:%s\n", i, kwi.keyword[i].name);
 	  };
 	};
-	
+
 	for(i=1; i<kwi.num_keywords; i++) {
 		struct keyword_information *cur_ki = &kwi.keyword[i];
 		switch(cur_ki->orig_kind) {
@@ -1522,10 +1589,10 @@ conclude_keywordfile(void)
 		      grumble1("Multiple keywords for ext code ",
 			      &keyword_F, false);
 		      FPRINTF(stderr,
-			      "\tchar code %d already has keyword '%s', now given keyword '%s'\n",
+			      "\tchar ext code %d already has keyword '%s', now given keyword '%s'\n",
 			      cur_ki->ech,
-			      cur_ki->name,
-			      kwi.char_code[cur_ki->ech]->name);
+			      kwi.char_code[cur_ki->ech]->name,
+			      cur_ki->name);
 		      dump_keywords = 1;
 		    }
 		  }

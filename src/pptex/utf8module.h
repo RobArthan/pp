@@ -119,6 +119,7 @@ struct keyword_information{
   char tex_arg_sense;	/* How to interpret the R.E. */
 #define KW_RE_MATCH 0		/* The argument must match the R.E. */
 #define KW_RE_DELIMITER 1	/* The argument is delimited by something that matches the R.E. */
+  short seq;   /* sequence number */
 };
 
 struct kw_information {
