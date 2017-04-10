@@ -106,6 +106,7 @@ string_n_copy(char *dest, char *source, int n)
 	}
 	*dest = '\0';
 }
+
 /*
 --------------
 split_at_space
@@ -117,8 +118,8 @@ skip further white space characters returning a pointer to the first
 non-space character.  If the argument does not have any spaces then
 nothing is overwritten and the value returned is a pointer to the null
 character at the end of the string.
-
 */
+
 char *
 split_at_space(char *str)
 {
@@ -130,6 +131,7 @@ split_at_space(char *str)
 	}
 	return(p);
 }
+
 /*
 ---------
 str_match
@@ -245,6 +247,7 @@ file_exists(char *name, int is_reg)
 	struct stat st;
 	return((name != NULL) && !stat(name, &st) && (!is_reg ||S_ISREG(st.st_mode)));
 }
+
 /*
 -----------
 is_sym_link
@@ -571,7 +574,6 @@ EXIT(int n)
 
   (void)exit(n);
 }
-
 
 /*
 ========================
@@ -991,9 +993,9 @@ void
 show_one_keyword(struct keyword_information *ki)
 {
   	PRINTF("(%p)",		ki);
-	PRINTF(" seq=%4d",		ki->seq);
-	PRINTF(" ech=%4d",		ki->ech);
-	PRINTF(" uni=%8x",		ki->uni);
+	PRINTF(" seq=%3x",		ki->seq);
+	PRINTF(" ech=%3i",		ki->ech);
+	PRINTF(" uni=%6x",		ki->uni);
 	PRINTF("  ty=");
 	show_kw_kind(ki->act_kind);
 	if(ki->act_kind != ki->orig_kind) {
@@ -1001,7 +1003,7 @@ show_one_keyword(struct keyword_information *ki)
 		show_kw_kind(ki->orig_kind);
 		PUTC(')', stdout);
 	}
-	PRINTF("  name=(%2ld)",		(long)strlen(ki->name));
+	PRINTF("  name=(%2ld)",       	(long)strlen(ki->name));
 	PRINTF("'%s'",			ki->name);
 	PRINTF("  macro='%s'\n",	ki->macro ? ki->macro : "(None)");
 }
@@ -1029,7 +1031,6 @@ show_keywords(void)
 
 	for(i=0; i<kwi.num_keywords; i++) {
 	  show_one_indexed_keyword(i);
-	  if (debug) {printf("done %i\n", i); fflush(stdout);};
 	};
 	if (debug) {printf("finished after %i\n", i); fflush(stdout);};
 }
@@ -1451,6 +1452,10 @@ read_keyword_file(char *name)
 
 			ech = uni_to_pp(code);
 
+			/* This code used to look up in the table to find out whether
+			   keywoed was already defined, but until table is sorted the lookup
+			   will not work, so this check has been deferred.
+			*/
 			/*
 			kwindex = find_keyword(def_kw);
 			
@@ -1505,8 +1510,22 @@ conclude_keywordfile
 This procedure completes the keyword_information after all the keyword files
 have been read.
 
-It sorts the indexes which allow for lookup by keyword name and unicode code
-point using binary search.
+First it sorts the table in alphabetic order of keyword, preserving the original
+ordering where there are multiple entries for a sinle keyword.
+Then it scans the table to eliminate multiple entries.
+In a limited number of cases a second entry is permitted to override parts of the first,
+and is then discarded.
+in other cases the second entry is discarded without effect (apart from a warning or error message)
+A second entry for a keyword will be discarded unless both it and the original have kind KW_SIMPLE.
+It the second supplies a new unicode code point then this will override the first unless the first
+is a code point associated with a ProofPower extended character (since that correspondence is
+hard wired elsewhere and cannot be overridden by the keyword file).
+If the second supplies a macro then it, and any parameter info, will replace the original.
+After this scan no keyword will have multiple entries.
+
+Now that the table is alphabetic and duplicate free the other indexes used to find information
+in it are sorted.
+
 It then looks through the table doing various checks or completions.
 This includes:
 1. Resolves 'sameas' keywords if possible, by copying the keyword information for
@@ -1519,194 +1538,234 @@ This includes:
 void
 conclude_keywordfile(void)
 {
-	int i;
-	int dump_keywords = 0;
-	int stop_prog = 0;
-
-	if(debug) fflush(NULL);
-
-	/* first sort kwi.keyword into alphabetic order of keyword name */
-	
-	qsort((char*)kwi.keyword,
-			kwi.num_keywords,
-			sizeof(struct keyword_information),
-			compare_keyword_information);
-
-	/* Then scan keyword table combining multiple entries for a keyword into a single entry.
-	   ---
-	*/
-	
-	if (debug & D_UTF8){
-	  for(i=0; i<kwi.num_keywords; i++) {
-	    PRINTF ("keyword entry %i is:%s\n", i, kwi.keyword[i].name);
-	  };
-	};
-
-	for(i=1; i<kwi.num_keywords; i++) {
-		struct keyword_information *cur_ki = &kwi.keyword[i];
-		switch(cur_ki->orig_kind) {
-		case KW_SAMEAS :
-		case KW_SAMEAS_UNKNOWN : {
-				int copy_from_index = find_keyword(cur_ki->macro);
-
-				if(copy_from_index == NOT_FOUND) {
-					grumble("undeclared keyword '%s' referred to by sameas",
-						cur_ki->macro, &keyword_F, false);
-					dump_keywords = 1;
-				} else {
-					struct keyword_information *copy_from
-						= &kwi.keyword[copy_from_index];
-
-					free(cur_ki->macro);
-
-					cur_ki->orig_kind = KW_SAMEAS;
-					cur_ki->act_kind = copy_from->orig_kind;
-					cur_ki->ech = copy_from->ech;
-					cur_ki->uni = copy_from->uni;
-					cur_ki->macro = copy_from->macro;
-
-					if(cur_ki->act_kind == KW_SAMEAS ||
-							cur_ki->act_kind ==
-								KW_SAMEAS_UNKNOWN) {
-						grumble("unresolved 'sameas' for keyword '%s' (keyword referred to is also 'sameas')",
-							cur_ki->name, &keyword_F, false);
-						dump_keywords = 1;
-					}
-				}
-			}
-			break;
-
-		case KW_SIMPLE :
-		case KW_INDEX :
-		case KW_DIRECTIVE :
-		case KW_START_DIR :
-		case KW_VERB_ALONE :
-		case KW_WHITE :
-		  if(cur_ki->ech != -1) {
-		    if(kwi.char_code[cur_ki->ech] == NULL)
-		      kwi.char_code[cur_ki->ech] = cur_ki;
-		    else {
-		      grumble1("Multiple keywords for ext code ",
-			      &keyword_F, false);
-		      FPRINTF(stderr,
-			      "\tchar ext code %d already has keyword '%s', now given keyword '%s'\n",
-			      cur_ki->ech,
-			      kwi.char_code[cur_ki->ech]->name,
-			      cur_ki->name);
-		      dump_keywords = 1;
-		    }
-		  }
-		  /*
-       		    int kwipos = unicodekwi(cur_ki->uni);
-		    if(kwipos != NOT_FOUND){
-			    if(kwi.unicode_code[kwipos] == NULL)
-					kwi.char_code[cur_ki->ech] = cur_ki;
-				else {
-					grumble("conflicting unicode codes for keyword '%s'",
-						cur_ki->name, &keyword_F, false);
-					FPRINTF(stderr,
-						"\tchar code %d already has keyword '%s'\n",
-						cur_ki->ech,
-						kwi.char_code[cur_ki->ech]->name);
-					dump_keywords = 1;
-				}
-			}
-		  */
-			break;
-
-		case KW_NOT_SET :
-			break;
-		default:
-			internal_error("unknown entry in keyword database", "");
-			dump_keywords = 1;
-			stop_prog = 1;
-		}
-
-		if(cur_ki->ech == -1 && cur_ki->uni == -1 && cur_ki->macro == NULL) {
-			grumble1("macro required when char code is -1", &keyword_F, false);
-			dump_keywords = 1;
-		}
+  int i, j;
+  int dump_keywords = 0;
+  int stop_prog = 0;
+  struct keyword_information *prev_ki = NULL;
+  
+  if(debug) fflush(NULL);
+  
+  /* first sort kwi.keyword into alphabetic order of keyword name (and sequence no.) */
+  
+  qsort((char*)kwi.keyword,
+	kwi.num_keywords,
+	sizeof(struct keyword_information),
+	compare_keyword_information);
+  
+  /* Then scan keyword table combining multiple entries for a keyword into a single entry,
+     where possible.
+     There are two pairs being tracked here.
+     i and j are positrions of source and destination as the keyword file
+     is transcribed into itself compressing multiple entries for single keyword into ine entry.
+  */
+  
+  j=0;
+  prev_ki = NULL;
+  for(i=1; i<kwi.num_keywords; i++) {
+    struct keyword_information *cur_ki = &kwi.keyword[i];
+    /*    if (debug & D_UTF8) FPRINTF(stderr, "kwi scan 1 i=%i, j=%i\n", i, j); */
+    if (prev_ki != NULL && (strcmp(prev_ki->name, cur_ki->name) == 0)) {
+      /*      if (debug & D_UTF8) FPRINTF(stderr, "kwi scan 2 %i\n", i); */
+      if (prev_ki->orig_kind != KW_SIMPLE || cur_ki->orig_kind != KW_SIMPLE)
+	grumble("Multiple keyword file entries for keyword %s, not all SIMPLE\n",
+		prev_ki->name, &keyword_F, false);
+      else {
+	if (prev_ki->ech != NOT_FOUND && cur_ki->uni != U_NOT_FOUND
+	    && cur_ki->uni != prev_ki->uni)
+	  grumble("Second keyword file entry for keyword %s, not permitted to change unicode for ext char\n",
+		  prev_ki->name, &keyword_F, false);
+	else {
+	  if (cur_ki->uni != U_NOT_FOUND) {
+	    prev_ki->uni = cur_ki->uni;
+	    prev_ki->ech = cur_ki->ech;
+	  }
 	}
-
-	for(i=1; i<kwi.num_keywords; i++) {
-		struct keyword_information *cur_ki = &kwi.keyword[i];
-
-		switch(cur_ki->act_kind) {
-		case KW_START_DIR:
-		case KW_DIRECTIVE:
-			if(cur_ki->ech != -1)
-				SET_DIRECTIVE_CHAR(cur_ki->ech);
-			else
-				grumble("no extended char with directive keyword '%s'",
-						cur_ki->name, &keyword_F, false);
-
-			if(cur_ki->name[1] != '\0' && cur_ki->name[1] != '%')
-				SET_SND_CHAR_DIR_KW(cur_ki->name[1]);
-			break;
-
-		case KW_VERB_ALONE:
-			if(cur_ki->ech != -1)
-				SET_VERB_ALONE_CH(cur_ki->ech);
-			else
-				grumble("no extended char with directive keyword '%s'",
-						cur_ki->name, &keyword_F, false);
-			break;
-
-		default:
-			break;
-		}
+	if (cur_ki->macro != NULL){
+	  prev_ki->macro = cur_ki->macro;
+	  prev_ki->tex_arg = cur_ki->tex_arg;
+	  prev_ki->tex_arg_sense = cur_ki->tex_arg_sense;
 	}
-
-	for (i=0; i<kwi.num_keywords; i++)
-	  if (kwi.keyword[i].uni != NOT_FOUND) {
-	    kwi.unicode_code[kwi.num_unicodes] = &kwi.keyword[i];
-	    if (debug & D_UTF8)
-	      PRINTF("Add unicode_code %6x in position %3i\n", kwi.keyword[i].uni, kwi.num_unicodes);
-	    kwi.num_unicodes++;
-	  };
-
-	if(debug & D_UTF8) {
-	  PRINTF("\nChecking unicode_code mapping (before sort): num_unicodes = %i\n\n", kwi.num_unicodes);
-	  fflush(NULL);
-	};
-
-	if (debug & D_UTF8){
-	  for(i=0; i<kwi.num_unicodes; i++) {
-	    if (!(kwi.unicode_code[i] == NULL)){
-	      PRINTF ("unicode_code entry %3i is 0x%6x\n", i, kwi.unicode_code[i]->uni);
-	    }
-	    else PRINTF ("unicode_code entry %i is NULL\n", i);
-	  };
-	};
-
-	qsort((char*)kwi.unicode_code,
-	      kwi.num_unicodes,
-	      sizeof(&kwi),
-	      compare_keyword_unicode);
-
-	if(debug & D_UTF8) {
-	  PRINTF("\nChecking unicode_code mapping (after sort): num_unicodes = %i\n\n", kwi.num_unicodes);
-	  fflush(NULL);
-	};
+	continue;
+      }
+    }
+    /*   if (debug & D_UTF8) FPRINTF(stderr, "kwi scan 3 i=%i, j=%i\n", i, j); */
+   if (++j < i) kwi.keyword[j] = kwi.keyword[i];
+   prev_ki = &kwi.keyword[j];
+  }
+  kwi.num_keywords = j+1;
+  
+  if (debug & D_UTF8){
+    for(i=0; i<kwi.num_keywords; i++) {
+      PRINTF ("keyword entry %i name =%s\n", i, kwi.keyword[i].name);
+    };
+  };
+  
+  for(i=1; i<kwi.num_keywords; i++) {
+    struct keyword_information *cur_ki = &kwi.keyword[i];
+    
+    switch(cur_ki->orig_kind) {
+    case KW_SAMEAS :
+    case KW_SAMEAS_UNKNOWN : {
+      int copy_from_index = find_keyword(cur_ki->macro);
+      
+      if(copy_from_index == NOT_FOUND) {
+	grumble("undeclared keyword '%s' referred to by sameas",
+		cur_ki->macro, &keyword_F, false);
+	dump_keywords = 1;
+      } else {
+	struct keyword_information *copy_from
+	  = &kwi.keyword[copy_from_index];
 	
-	if (debug & D_UTF8){
-	  for(i=0; i<kwi.num_unicodes; i++) {
-	    if (!(kwi.unicode_code[i] == NULL)){
-	      PRINTF ("unicode_code entry %3i is 0x%6x\n", i, kwi.unicode_code[i]->uni);
-	    }
-	    else PRINTF ("unicode_code entry %i is NULL\n", i);
-	  };
-	};
-
-	if(dump_keywords || (debug & D_SHOW_KEYWORD_TABLE))
-		show_keywords();
+	free(cur_ki->macro);
 	
-	if(debug) {
-	  PRINTF("show_keywords done, stop prog= %i\n", stop_prog);
-	  fflush(NULL);
-	};
+	cur_ki->orig_kind = KW_SAMEAS;
+	cur_ki->act_kind = copy_from->orig_kind;
+	cur_ki->ech = copy_from->ech;
+	cur_ki->uni = copy_from->uni;
+	cur_ki->macro = copy_from->macro;
 	
-	if(stop_prog) EXIT(22);	
+	if(cur_ki->act_kind == KW_SAMEAS ||
+	   cur_ki->act_kind ==
+	   KW_SAMEAS_UNKNOWN) {
+	  grumble("unresolved 'sameas' for keyword '%s' (keyword referred to is also 'sameas')",
+		  cur_ki->name, &keyword_F, false);
+	  dump_keywords = 1;
+	}
+      }
+    }
+      break;
+      
+    case KW_SIMPLE :
+    case KW_INDEX :
+    case KW_DIRECTIVE :
+    case KW_START_DIR :
+    case KW_VERB_ALONE :
+    case KW_WHITE :
+      if(cur_ki->ech != -1) {
+	if(kwi.char_code[cur_ki->ech] == NULL)
+	  kwi.char_code[cur_ki->ech] = cur_ki;
+	else {
+	  grumble1("Multiple keywords for ext code ",
+		   &keyword_F, false);
+	  FPRINTF(stderr,
+		  "\tchar ext code %d already has keyword '%s', now given keyword '%s'\n",
+		  cur_ki->ech,
+		  kwi.char_code[cur_ki->ech]->name,
+		  cur_ki->name);
+	  dump_keywords = 1;
+	}
+      }
+      /*
+      int kwipos = unicodekwi(cur_ki->uni);
+      if(kwipos != NOT_FOUND){
+	if(kwi.unicode_code[kwipos] == NULL)
+	  kwi.char_code[cur_ki->ech] = cur_ki;
+	else {
+	  grumble("conflicting unicode codes for keyword '%s'",
+		  cur_ki->name, &keyword_F, false);
+	  FPRINTF(stderr,
+		  "\tchar code %d already has keyword '%s'\n",
+		  cur_ki->ech,
+		  kwi.char_code[cur_ki->ech]->name);
+	  dump_keywords = 1;
+	}
+      }
+      */
+      break;
+      
+    case KW_NOT_SET :
+      break;
+    default:
+      internal_error("unknown entry in keyword database", "");
+      dump_keywords = 1;
+      stop_prog = 1;
+    }
+    
+    if(cur_ki->ech == -1 && cur_ki->uni == -1 && cur_ki->macro == NULL) {
+      grumble1("macro required when char code is -1", &keyword_F, false);
+      dump_keywords = 1;
+    }
+  }
+  
+  for(i=1; i<kwi.num_keywords; i++) {
+    struct keyword_information *cur_ki = &kwi.keyword[i];
+    
+    switch(cur_ki->act_kind) {
+    case KW_START_DIR:
+    case KW_DIRECTIVE:
+      if(cur_ki->ech != -1)
+	SET_DIRECTIVE_CHAR(cur_ki->ech);
+      else
+	grumble("no extended char with directive keyword '%s'",
+		cur_ki->name, &keyword_F, false);
+      
+      if(cur_ki->name[1] != '\0' && cur_ki->name[1] != '%')
+	SET_SND_CHAR_DIR_KW(cur_ki->name[1]);
+      break;
+      
+    case KW_VERB_ALONE:
+      if(cur_ki->ech != -1)
+	SET_VERB_ALONE_CH(cur_ki->ech);
+      else
+	grumble("no extended char with directive keyword '%s'",
+		cur_ki->name, &keyword_F, false);
+      break;
+      
+    default:
+      break;
+    }
+  }
+  
+  for (i=0; i<kwi.num_keywords; i++)
+    if (kwi.keyword[i].uni != U_NOT_FOUND) {
+      kwi.unicode_code[kwi.num_unicodes] = &kwi.keyword[i];
+      if (debug & D_UTF8)
+	PRINTF("Add unicode_code 0%6x in position %3i\n", kwi.keyword[i].uni, kwi.num_unicodes);
+      kwi.num_unicodes++;
+    };
+  
+  if(debug & D_UTF8) {
+    PRINTF("\nChecking unicode_code mapping (before sort): num_unicodes = %i\n\n", kwi.num_unicodes);
+    fflush(NULL);
+  };
+  
+  if (debug & D_UTF8){
+    for(i=0; i<kwi.num_unicodes; i++) {
+      if (!(kwi.unicode_code[i] == NULL)){
+	PRINTF ("unicode_code entry %3i is 0x%6x\n", i, kwi.unicode_code[i]->uni);
+      }
+      else PRINTF ("unicode_code entry %i is NULL\n", i);
+    };
+  };
+  
+  qsort((char*)kwi.unicode_code,
+	kwi.num_unicodes,
+	sizeof(&kwi),
+	compare_keyword_unicode);
+  
+  if(debug & D_UTF8) {
+    PRINTF("\nChecking unicode_code mapping (after sort): num_unicodes = %i\n\n", kwi.num_unicodes);
+    fflush(NULL);
+  };
+  
+  if (debug & D_UTF8){
+    for(i=0; i<kwi.num_unicodes; i++) {
+      if (!(kwi.unicode_code[i] == NULL)){
+	PRINTF ("unicode_code entry %3i is 0x%6x\n", i, kwi.unicode_code[i]->uni);
+      }
+      else PRINTF ("unicode_code entry %i is NULL\n", i);
+    };
+  };
+  
+  if(dump_keywords || (debug & D_SHOW_KEYWORD_TABLE))
+    show_keywords();
+  
+  if(debug) {
+    PRINTF("show_keywords done, stop prog= %i\n", stop_prog);
+    fflush(NULL);
+  };
+  
+  if(stop_prog) EXIT(22);	
 }
 /*
 
@@ -2394,6 +2453,7 @@ void ext_seq_to_unicode(char *line, unicode codes[]){
   };
   codes[op] = 0;
 }
+
 /*
 ------------------
 read_line_as_ascii

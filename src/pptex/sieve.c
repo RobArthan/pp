@@ -2181,6 +2181,16 @@ main_convert(
 					} else if(opt_conv_kw && curkw->ech != -1) {
 						/* Replace with the extended character */
 						out_line[outp++] = curkw->ech;
+					} else if(opt_do_latex && curkw->ech == -1) {
+						/* Replace with latex macro of same name */
+						out_line[outp++] = '{';
+						{
+						  int tp = outp;
+						  outp += copy_keyword(&in_line[inp], kwlen,
+								       &out_line[outp], lenout_line-outp, 0);
+						  out_line[tp] = '\\';
+						}
+						out_line[outp-1] = '}';
 					} else {
 						/* Just copy the keyword */
 						outp += copy_keyword(&in_line[inp], kwlen,
