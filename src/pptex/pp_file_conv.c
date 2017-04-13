@@ -195,7 +195,7 @@ for errors here.
 */
 
 void
-initialize(int argc, char **argv, int option, int ascii_out,
+initialize(int argc, char **argv, int option, int *ascii_out,
 	   char *keyword_files[MAX_KEYWORD_FILES])
 {
 #ifdef __CYGWIN__
@@ -207,7 +207,7 @@ initialize(int argc, char **argv, int option, int ascii_out,
 	while((option = getopt(argc, argv, "ad:f:Kk:luv")) != -1) {
 	    switch(option) {
 	    case 'a':
-		  ascii_out = True;
+		  *ascii_out = True;
 		  break;							/* BREAK */
 	    case 'd':
 	      debug |= atoi(optarg);
@@ -298,7 +298,7 @@ main(int argc, char **argv)
   
   main_F.fp = stdin;
   
-  initialize(argc, argv, option, ascii_out, keyword_files);
+  initialize(argc, argv, option, &ascii_out, keyword_files);
   
   read_keyword_files(keyword_files);
   

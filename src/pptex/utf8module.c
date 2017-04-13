@@ -1588,7 +1588,6 @@ conclude_keywordfile(void)
 	continue;
       }
     }
-    /*   if (debug & D_UTF8) FPRINTF(stderr, "kwi scan 3 i=%i, j=%i\n", i, j); */
    if (++j < i) kwi.keyword[j] = kwi.keyword[i];
    prev_ki = &kwi.keyword[j];
   }
@@ -1596,9 +1595,11 @@ conclude_keywordfile(void)
   
   if (debug & D_UTF8){
     for(i=0; i<kwi.num_keywords; i++) {
-      PRINTF ("keyword entry %i name =%s\n", i, kwi.keyword[i].name);
+      PRINTF ("keyword entry % 4i name =%s\n", i, kwi.keyword[i].name);
     };
   };
+
+  /* Scan table to connect SAMEAS entries and do some checks */
   
   for(i=1; i<kwi.num_keywords; i++) {
     struct keyword_information *cur_ki = &kwi.keyword[i];
@@ -1645,14 +1646,13 @@ conclude_keywordfile(void)
 	if(kwi.char_code[cur_ki->ech] == NULL)
 	  kwi.char_code[cur_ki->ech] = cur_ki;
 	else {
-	  grumble1("Multiple keywords for ext code ",
-		   &keyword_F, false);
-	  FPRINTF(stderr,
-		  "\tchar ext code %d already has keyword '%s', now given keyword '%s'\n",
+	  /*	  FPRINTF(stderr,
+		  "Ext code %03d already has keyword % 23s, now given keyword %s\n",
 		  cur_ki->ech,
 		  kwi.char_code[cur_ki->ech]->name,
 		  cur_ki->name);
-	  dump_keywords = 1;
+		  dump_keywords = 1;
+	  */
 	}
       }
       /*
@@ -1715,6 +1715,8 @@ conclude_keywordfile(void)
       break;
     }
   }
+
+  /* fill in kwi.unicode_code table */
   
   for (i=0; i<kwi.num_keywords; i++)
     if (kwi.keyword[i].uni != U_NOT_FOUND) {
@@ -1737,12 +1739,15 @@ conclude_keywordfile(void)
       else PRINTF ("unicode_code entry %i is NULL\n", i);
     };
   };
-  
+
+  /* sort kwi.num_unicode_code */
+
   qsort((char*)kwi.unicode_code,
 	kwi.num_unicodes,
 	sizeof(&kwi),
 	compare_keyword_unicode);
   
+  /*
   if(debug & D_UTF8) {
     PRINTF("\nChecking unicode_code mapping (after sort): num_unicodes = %i\n\n", kwi.num_unicodes);
     fflush(NULL);
@@ -1756,15 +1761,11 @@ conclude_keywordfile(void)
       else PRINTF ("unicode_code entry %i is NULL\n", i);
     };
   };
+  */
   
   if(dump_keywords || (debug & D_SHOW_KEYWORD_TABLE))
     show_keywords();
-  
-  if(debug) {
-    PRINTF("show_keywords done, stop prog= %i\n", stop_prog);
-    fflush(NULL);
-  };
-  
+    
   if(stop_prog) EXIT(22);	
 }
 /*
@@ -2460,23 +2461,24 @@ read_line_as_ascii
 ------------------
 Reads a line into a the file cur_line buffer, and then,
 if the file is flagged as utf8, convert from utf8 to
-the ProofPower extended character encoding.
+ascii, using % keywords where necessary.
 
 If the utf8 flag is set in the file_data, the line is read first as
 utf8 characters into cur_line, then decoded into unicode code points 
 into file_data.code_line and is then translated back
-into cur_line using ProofPower extended character set where possible,
-then named percent keywords, then hexadecimal percent keywords as a
+into cur_line using named percent keywords, then hexadecimal percent keywords as a
 last resort.
 
-If the file is not in utf8, the line as read is returned, no translation
-from keywords to ext chars is undertaken. 
+If the file is not in utf8, it is read as ext and then converted to unicode
+sand finally translated to ascii. 
 */
 
 int read_line_as_ascii(struct file_data *file_F){
   int r = True;
   if (file_F->utf8){
-    if ((r = read_utf8_as_unicode(file_F))){code_line_to_ascii(file_F);}
+    if ((r = read_utf8_as_unicode(file_F))){
+      if (debug & D_UTF8) FPRINTF(stdout, "read_line_as_ascii 1\n");
+      code_line_to_ascii(file_F);}
     else {return r;};    
   }
   else {
