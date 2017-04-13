@@ -40,20 +40,15 @@ it sets up suit your needs. When you are happy with it, source it:
 It is useful to know the dependencies between the packages.
 
 - pptex has no dependencies
-- dev depends on pptex
-- xpp depends on pptex
+- dev depends on pptex (but only for typesetting the documentation)
+- xpp depends on pptex (for typesetting the documentation and for some C code)
 - hol depends on dev
 - zed depends on hol
 - daz depends on zed
 
-Note also that you will probably want to use xpp while you are developing
-any of hol, zed or daz. It will typically be easier to install it
-in $HOME/git/pp/bld rather than having another ProofPower installation on
-your PATH.
-
 Now visit each of the package directories in turn in some order respecting the
 above dependencies and build the `inst` target using the package make file.
-This eill build a ProofPower installation directory in $HOME/git/pp/bld. You
+This will build a ProofPower installation directory in $HOME/git/pp/bld. You
 could just build your package and the ones it depends on, but I usually do the
 lot:
 
@@ -62,6 +57,11 @@ lot:
         cd $HOME/git/pp/src/$p
         make -f $p.mkf inst
     done
+
+The above will install the xpp editor in $HOME/git/pp/bld so that (after
+sourcing dev_env) you can use it from there while you are developing any of
+hol, zed or daz.  This will typically be easier than picking up xpp from
+another ProofPower installation on your PATH.
 
 Now go to your package directory and do your stuff, using the `inst` target to
 recompile. For hol, zed and daz you can also use the `bininst` target which
@@ -74,7 +74,7 @@ to clean the package directory first. E.g.,
 (You could also use `git clean -xf` to do the clean, but it is more aggressive
 in what it removes. In particular, the `clean` targets will not delete files
 with `.txt` or `.sh` extensions or unknown files with no extension, so you can
-safely use such file names for temporarty working data or scripts.)
+safely use such file names for temporary working data or scripts.)
 
 Run the test suite for the package by making the target test, e.g., in hol:
 
