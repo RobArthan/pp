@@ -1055,6 +1055,29 @@ compare_keyword_unicode(
   else return 1;
 }
 
+/*
+---------------------------
+compare_keyword_unicode2
+---------------------------
+this function, given two references to keyword_information
+compares the unicode code points, and if same compares
+sequence number.
+*/
+
+int
+compare_keyword_unicode2(
+	const void *vp1,
+	const void *vp2)
+{
+  struct keyword_information **kw1 = (struct keyword_information**)vp1;
+  struct keyword_information **kw2 = (struct keyword_information**)vp2;
+  if ((*kw1)->uni < (*kw2)->uni) return -1;
+  if ((*kw1)->uni > (*kw2)->uni) return 1;
+  if ((*kw1)->seq < (*kw2)->seq) return -1;
+  if ((*kw1)->seq > (*kw2)->seq) return 1;
+  return 0;
+}
+
 void initialise_keyword_information(void) {
         int i;
 	for(i=0; i<MAX_KEYWORDS; i++) {
@@ -1453,7 +1476,7 @@ read_keyword_file(char *name)
 			ech = uni_to_pp(code);
 
 			/* This code used to look up in the table to find out whether
-			   keywoed was already defined, but until table is sorted the lookup
+			   keyword was already defined, but until table is sorted the lookup
 			   will not work, so this check has been deferred.
 			*/
 			/*
@@ -1563,9 +1586,8 @@ conclude_keywordfile(void)
   prev_ki = NULL;
   for(i=1; i<kwi.num_keywords; i++) {
     struct keyword_information *cur_ki = &kwi.keyword[i];
-    /*    if (debug & D_UTF8) FPRINTF(stderr, "kwi scan 1 i=%i, j=%i\n", i, j); */
     if (prev_ki != NULL && (strcmp(prev_ki->name, cur_ki->name) == 0)) {
-      /*      if (debug & D_UTF8) FPRINTF(stderr, "kwi scan 2 %i\n", i); */
+      /* if (debug & D_UTF8) FPRINTF(stderr, "%s\tsimple\t0x%06x\n", cur_ki->name, cur_ki->uni); */
       if (prev_ki->orig_kind != KW_SIMPLE || cur_ki->orig_kind != KW_SIMPLE)
 	grumble("Multiple keyword file entries for keyword %s, not all SIMPLE\n",
 		prev_ki->name, &keyword_F, false);
@@ -1745,11 +1767,22 @@ conclude_keywordfile(void)
   qsort((char*)kwi.unicode_code,
 	kwi.num_unicodes,
 	sizeof(&kwi),
-	compare_keyword_unicode);
-  
-  /*
+	compare_keyword_unicode2);
+
+  /* Remove duplicate entries (keeping the first keyword with each unicode code */
+
+  j = 0;
+  for(i=1; i<kwi.num_unicodes; i++) {  
+    if (kwi.unicode_code[i]->uni == kwi.unicode_code[j]->uni) continue;
+    if (++j < i) {
+      kwi.unicode_code[j] = kwi.unicode_code[i];
+      if (debug & D_UTF8) FPRINTF(stdout, "j = %04i, i = %04i\n", j, i);
+    };
+  };
+  kwi.num_unicodes=++j;
+
   if(debug & D_UTF8) {
-    PRINTF("\nChecking unicode_code mapping (after sort): num_unicodes = %i\n\n", kwi.num_unicodes);
+    PRINTF("\nChecking unicode_code mapping (after sort and sift): num_unicodes = %i\n\n", kwi.num_unicodes);
     fflush(NULL);
   };
   
@@ -1761,7 +1794,6 @@ conclude_keywordfile(void)
       else PRINTF ("unicode_code entry %i is NULL\n", i);
     };
   };
-  */
   
   if(dump_keywords || (debug & D_SHOW_KEYWORD_TABLE))
     show_keywords();
