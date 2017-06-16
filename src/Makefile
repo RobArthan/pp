@@ -6,43 +6,54 @@ default:
 	@echo "The following are the generally useful targets:"
 	@echo " "
 	@echo "make dir.ldd	(does cd dir; make -f dir.mkf clean, inst)"
-	@echo "make clean	(rm *.ldd)"
+	@echo "make dir.test	(does cd dir; make -f dir.mkf test > ../dir.test"
+	@echo "make clean	(rm *.ldd *.test)"
 	@echo "make all	(xpp.ldd daz.ldd, list db bin dirs)"
-	@echo "make rebuild	(clkean, all)"
+	@echo "make rebuild	(clean, all)"
+	@echo "make testref	(make a reference copy of test outputs)"
+	@echo "make diff	(diff the tests against testref)"
 
-env:
-	. ../dev_env
+TET=pptex.test dev.test hol.test zed.test daz.test
+DLDD=$(TET:.test=.ldd) xpp.ldd
 
-all: xpp.ldd daz.ldd list
+all: $(DLDD)
 
-clean:
-	-rm *ldd
+test: $(TET)
+
+diff: test
+	cat *.test > testdat
+	diff testref testdat > test.diff
+
+cleantest:
+	-rm *.test
+
+clean: cleantest
+	-rm *ldd testdat test.diff
 
 rebuild: clean all
 
-pptex.ldd: env
-	cd pptex; make -f pptex.mkf clean; make -f pptex.mkf inst
-	touch pptex.ldd
+retest: cleantest test
+	cat $(TET)
 
-dev.ldd:	pptex.ldd
-	cd dev; make -f dev.mkf clean; make -f dev.mkf inst
-	touch dev.ldd
+$(DLDD): %.ldd:
+	cd $*; make -f $*.mkf clean inst
+	touch $*.ldd
 
-xpp.ldd:	pptex.ldd
-	cd xpp; make -f xpp.mkf clean; make -f xpp.mkf inst
-	touch xpp.ldd
+$(TET): %.test: %.ldd
+	cd $*; make -f $*.mkf test > ../$*.test
 
-hol.ldd:	dev.ldd
-	cd hol; make -f hol.mkf clean; make -f hol.mkf inst
-	touch hol.ldd
+dev.ldd: pptex.ldd
 
-zed.ldd:	hol.ldd
-	cd zed; make -f zed.mkf clean; make -f zed.mkf inst
-	touch zed.ldd
+xpp.ldd: dev.ldd
 
-daz.ldd:	zed.ldd
-	cd daz; make -f daz.mkf clean; make -f daz.mkf inst
-	touch daz.ldd
+hol.ldd: pptex.ldd
+
+zed.ldd: hol.ldd
+
+daz.ldd: zed.ldd
+
+testref: $(TET)
+	cat *.test > testref
 
 list:
 	ls -lR ../bld/bin ../bld/db
