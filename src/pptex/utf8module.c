@@ -2457,10 +2457,8 @@ unicode ext_or_kw_to_unicode(char *line, int *len){
 --------------------------
 ext_seq_to_unicode
 --------------------------
-Takes a null terminated string of characters which are either asscii,
-or ProofPower extended characters, or perent enclosed keyword names
-(declared in the current keyword files) or percent enclosed ascii
-hexadecimal unicode code points and converst them to a null terminated
+Takes a null terminated string of characters which are either ascii,
+or ProofPower extended characters and converts them to a null terminated
 array of unicode code points. 
 */
 
@@ -2471,11 +2469,43 @@ void ext_seq_to_unicode(char *line, unicode codes[]){
     if (debug & D_UTF8) {
       PRINTF("ext_seq_to_unicode 1:ip=%i, op=%i\n", ip, op); fflush(NULL);
     };
+    res = (line[ip] & 0x80) ? ext_to_unicode(line[ip]) : line[ip];
+    if (debug & D_UTF8) PRINTF("ext_seq_to_unicode 2: res=%x\n", res);
+    if (res == U_NOT_FOUND){
+        if (debug & D_UTF8) PRINTF("ext_seq_to_unicode 3: len=%i, op=%i, ip=%i, line[ip]=%i\n",
+				   len, op, ip, line[ip]);
+	ip++;
+      }
+    else {
+      codes[op] = res; 
+      ip++;
+      op++;}
+  };
+  codes[op] = 0;
+}
+/*
+--------------------------
+ext_kw_seq_to_unicode
+--------------------------
+Takes a null terminated string of characters which are either asscii,
+or ProofPower extended characters, or perent enclosed keyword names
+(declared in the current keyword files) or percent enclosed ascii
+hexadecimal unicode code points and converst them to a null terminated
+array of unicode code points. 
+*/
+
+void ext_kw_seq_to_unicode(char *line, unicode codes[]){
+  int ip = 0, op = 0, len = 0;
+  unicode res;
+  while (line[ip] != 0){
+    if (debug & D_UTF8) {
+      PRINTF("ext_kw_seq_to_unicode 1:ip=%i, op=%i\n", ip, op); fflush(NULL);
+    };
     res = ext_or_kw_to_unicode(line+ip, &len);
-    if (debug & D_UTF8) PRINTF("ext_seq_to_unicode 2: res=%x, len=%i\n", res, len);
+    if (debug & D_UTF8) PRINTF("ext_kw_seq_to_unicode 2: res=%x, len=%i\n", res, len);
     if (res == U_NOT_FOUND)
       while(len-- >0) {
-        if (debug & D_UTF8) PRINTF("ext_seq_to_unicode 3: len=%i, op=%i, ip=%i, line[ip]=%i\n",
+        if (debug & D_UTF8) PRINTF("ext_kw_seq_to_unicode 3: len=%i, op=%i, ip=%i, line[ip]=%i\n",
 				   len, op, ip, line[ip]);
 	codes[op++] = line[ip++];
       }
@@ -2515,7 +2545,7 @@ int read_line_as_ascii(struct file_data *file_F){
   }
   else {
     r = simple_read_line(file_F->cur_line, MAX_LINE_LEN, file_F);
-    ext_seq_to_unicode(file_F->cur_line, file_F->code_line);
+    ext_kw_seq_to_unicode(file_F->cur_line, file_F->code_line);
     code_line_to_ascii(file_F);
   };
   return r;
@@ -2535,15 +2565,55 @@ void output_ext_as_utf8(char *line, FILE *file_F){
 };
 
 /*
-----------------------
+---------------------
+output_ext_kw_as_utf8
+---------------------
+*/
+
+void output_ext_kw_as_utf8(char *line, FILE *file_F){
+  static unicode codes[MAX_LINE_LEN+1];
+  if (debug & D_UTF8)  message("output_ext_kw_as_utf8, line=%s", line);
+  ext_kw_seq_to_unicode(line, codes);
+  output_unicode_sequence(codes, file_F);
+};
+
+/*
+-----------------------
 transcribe_file_to_utf8
-----------------------
+-----------------------
 This procedure transcribes data from an input stream which is taken
 to be in the ProofPower extended ascii character set to an output
 stream which is unicode as utf8.
 
 The input stream is to be supplied as a "file_data*", but the output
 stream as FILE*.
+
+This version will only translate ext codes, not keywords or literal code points.
+*/
+
+void
+transcribe_file_nkw_to_utf8(struct file_data *input_F, FILE *output_F){
+  if(debug & D_UTF8) message1("transcribe_file_to_utf8 1");
+  while (!feof(input_F->fp)) {
+  if(debug & D_UTF8) message1("transcribe_file_to_utf8 2");
+    read_line_as_ext(input_F);
+    if(debug & D_UTF8)
+      message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
+    output_ext_as_utf8(input_F->cur_line, output_F);
+  };
+  return;
+}
+/*
+-----------------------
+transcribe_file_to_utf8
+-----------------------
+This procedure transcribes data from an input stream which is taken
+to be in the ProofPower extended ascii character set to an output
+stream which is unicode as utf8.
+
+The input stream is to be supplied as a "file_data*", but the output
+stream as FILE*, and may contain named keywords or numeric code points
+which will be transformed.
 */
 
 void
@@ -2554,7 +2624,7 @@ transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F){
     read_line_as_ext(input_F);
     if(debug & D_UTF8)
       message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
-    output_ext_as_utf8(input_F->cur_line, output_F);
+    output_ext_kw_as_utf8(input_F->cur_line, output_F);
   };
   return;
 }

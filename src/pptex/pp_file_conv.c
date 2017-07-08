@@ -145,7 +145,7 @@ void
 usage(void)
 {
     FPRINTF(stderr,
-	"usage: %s [-l|v] [-d debug-level] [-K] [-k keyword_file] [-u] [-a]\n",
+	"usage: %s [-l|v] [-d debug-level] [-K] [-k keyword_file] [-u] [-a] [-n]\n",
 	program_name);
     FPRINTF(stderr, "%s version: %s\n", program_name, coprlemma1);
 }
@@ -195,7 +195,7 @@ for errors here.
 */
 
 void
-initialize(int argc, char **argv, int option, int *ascii_out,
+initialize(int argc, char **argv, int option, int *ascii_out, int *nokw,
 	   char *keyword_files[MAX_KEYWORD_FILES])
 {
 #ifdef __CYGWIN__
@@ -204,7 +204,9 @@ initialize(int argc, char **argv, int option, int *ascii_out,
 
 
 	main_F.utf8 = False;
-	while((option = getopt(argc, argv, "ad:f:Kk:luv")) != -1) {
+	*ascii_out = False;
+	*nokw = False;
+	while((option = getopt(argc, argv, "ad:f:Kk:lnuv")) != -1) {
 	    switch(option) {
 	    case 'a':
 		  *ascii_out = True;
@@ -226,6 +228,9 @@ initialize(int argc, char **argv, int option, int *ascii_out,
 	      break;							/* BREAK */
 	    case 'l':
 	      limits.opt_list = 1;
+	      break;							/* BREAK */
+	    case 'n':
+	      *nokw = true;
 	      break;							/* BREAK */
 	    case 'u':
 	      main_F.utf8 = True;
@@ -289,7 +294,7 @@ main
 int
 main(int argc, char **argv)
 {
-  int option, ascii_out = False;
+  int option, ascii_out, nokw = False;
   char *keyword_files[MAX_KEYWORD_FILES];
   
   limits.num_keyword_files = 0;
@@ -298,7 +303,7 @@ main(int argc, char **argv)
   
   main_F.fp = stdin;
   
-  initialize(argc, argv, option, &ascii_out, keyword_files);
+  initialize(argc, argv, option, &ascii_out, &nokw, keyword_files);
   
   read_keyword_files(keyword_files);
   
@@ -316,8 +321,8 @@ main(int argc, char **argv)
   if (main_F.utf8)
     if (ascii_out) transcribe_file_to_ascii(&main_F, stdout);
     else transcribe_file_to_ext(&main_F, stdout);
-  else transcribe_file_to_utf8(&main_F, stdout);
-  
+  else if (nokw) {transcribe_file_nkw_to_utf8(&main_F, stdout);}
+  else {transcribe_file_to_utf8(&main_F, stdout);}
   if(debug) message1("Sieving completed");
   
   if(limits.opt_list) list_limits();

@@ -190,6 +190,7 @@ const char *unicode2ppk(unicode cp);
 void output_ext_as_utf8(char *line, FILE *file_F);
 
 void transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F);
+void transcribe_file_nkw_to_utf8(struct file_data *input_F, FILE *output_F);
 void transcribe_file_to_ext(struct file_data *input_F, FILE *output_F);
 void transcribe_file_to_ascii(struct file_data *input_F, FILE *output_F);
 
