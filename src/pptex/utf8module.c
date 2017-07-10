@@ -2521,7 +2521,7 @@ void ext_kw_seq_to_unicode(char *line, unicode codes[]){
 ------------------
 read_line_as_ascii
 ------------------
-Reads a line into a the file cur_line buffer, and then,
+Reads a line into the file cur_line buffer, and then,
 if the file is flagged as utf8, convert from utf8 to
 ascii, using % keywords where necessary.
 
@@ -2532,7 +2532,7 @@ into cur_line using named percent keywords, then hexadecimal percent keywords as
 last resort.
 
 If the file is not in utf8, it is read as ext and then converted to unicode
-sand finally translated to ascii. 
+and finally translated to ascii. 
 */
 
 int read_line_as_ascii(struct file_data *file_F){
