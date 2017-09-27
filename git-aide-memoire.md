@@ -66,6 +66,7 @@ This is a list of example git command lines each with a potted explanation.
     `git merge fix-3.1w6`
 
 * To squash a sequence of commits starting at commit XYZ into one:
+
     `git reset -soft XYZ`
 
     `git commit`
