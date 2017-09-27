@@ -61,13 +61,13 @@ This is a list of example git command lines each with a potted explanation.
 * To delete an upstream branch:  
     `git push origin :fix-3.1w6`
 
-* To merge changes into current branch 
+* To merge changes into current branch:
 (In case of conflicts, resolve them by changing the conflicted files to be as you want them to be, add them and then commit):  
     `git merge fix-3.1w6`
 
-* To squash a sequence of commits starting at commit XYZ into one
+* To squash a sequence of commits starting at commit XYZ into one:
     `git reset -soft XYZ`
-    `git commit``
+    `git commit`
 
 ----
 
