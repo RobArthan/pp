@@ -531,7 +531,7 @@ int debug = 0;
 #define NOT_FOUND (-1)
 #define U_NOT_FOUND 0xFFFFFF
 
-struct file_data dummy_F = {"dummy file", NULL, 0, 0, NULL, 0, 0, 0};
+struct file_data dummy_F = {"dummy file", NULL, 0, 0, NULL, {0, 0, 0}};
 
 /*
 ========================
@@ -1089,7 +1089,9 @@ void initialise_keyword_information(void) {
 	for(i=0; i<256; i++)
 		kwi.char_code[i] = NULL;
 
+	/*	add_new_keyword("%%", NOT_FOUND, 37, KW_SIMPLE, "\\%", NULL, 0); */
 	add_new_keyword("%%", NOT_FOUND, U_NOT_FOUND, KW_SIMPLE, "\\%", NULL, 0);
+
 };
 
 /*
@@ -1379,7 +1381,7 @@ read_keyword_file(char *name)
 	while( (!feof(keyword_F.fp)) && (!ferror(keyword_F.fp)) ) {
 		char * def_kw;
 		char * kind_str;
-		int kind, icode, kwindex;
+		int kind, icode /* , kwindex */;
 		char * code_kw_str;
 		unicode code;
 		int ech;
@@ -1575,11 +1577,13 @@ conclude_keywordfile(void)
 	sizeof(struct keyword_information),
 	compare_keyword_information);
   
-  /* Then scan keyword table combining multiple entries for a keyword into a single entry,
-     where possible.
-     There are two pairs being tracked here.
-     i and j are positrions of source and destination as the keyword file
-     is transcribed into itself compressing multiple entries for single keyword into ine entry.
+  /* Then scan keyword table combining multiple entries for a keyword into
+     a single entry, where possible.
+
+     There are two positions being tracked here.
+     i and j are positions of source and destination during the copy.
+     The keyword file is transcribed into itself compressing multiple entries
+     for a single keyword into one entry.
   */
   
   j=0;
@@ -1769,7 +1773,7 @@ conclude_keywordfile(void)
 	sizeof(&kwi),
 	compare_keyword_unicode2);
 
-  /* Remove duplicate entries (keeping the first keyword with each unicode code */
+  /* Remove duplicate entries (keeping the first keyword with each unicode code) */
 
   j = 0;
   for(i=1; i<kwi.num_unicodes; i++) {  
@@ -2006,7 +2010,7 @@ struct keyword_information *unicode_to_kwi(unicode cp)
 {	
   struct keyword_information key, *keyr;
   struct keyword_information **search_result;
-  int i;
+  /*  int i; */
   key.uni = cp;
   keyr = &key;
   /*  if(debug & D_UTF8) {
@@ -2488,7 +2492,7 @@ void ext_seq_to_unicode(char *line, unicode codes[]){
 ext_kw_seq_to_unicode
 --------------------------
 Takes a null terminated string of characters which are either asscii,
-or ProofPower extended characters, or perent enclosed keyword names
+or ProofPower extended characters, or percent enclosed keyword names
 (declared in the current keyword files) or percent enclosed ascii
 hexadecimal unicode code points and converst them to a null terminated
 array of unicode code points. 
@@ -2578,9 +2582,9 @@ void output_ext_kw_as_utf8(char *line, FILE *file_F){
 };
 
 /*
------------------------
-transcribe_file_to_utf8
------------------------
+---------------------------
+transcribe_file_nkw_to_utf8
+---------------------------
 This procedure transcribes data from an input stream which is taken
 to be in the ProofPower extended ascii character set to an output
 stream which is unicode as utf8.

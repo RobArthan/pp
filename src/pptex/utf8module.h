@@ -1,3 +1,50 @@
+/* utf8module.h
+
+ utf8module was produced in the course of upgrading the sieve program
+ to support utf8 encoded unicode files, as well as files using the
+ original ProofPower extended character set (dating back to 1990).
+ The utf8 support has been placed in a separate module so that it can
+ also be used by other programs, e.g xpp.
+
+ The design of the various mappings results in certain previously existing
+ code in sieve being required for the implementation of the utf8 facilities,
+ notably the compilation of a keyword table from information read from
+ one or more keyword files, and the location of those files using
+ findfile.  Certain low level facilities are shared between these aspects
+ of sieve which are now provided in the utf8 module and the main body
+ of sieve, which therefore makes the interface between sieve and the utf8
+ module more complex and less elegant than it might otherwise have been.
+
+ Because xpp was built using Motif it is not expected that xpp
+ will ever fully support unicode, and it was therefore desirable to
+ provide a way of editing utf8 files with xpp by conversion to and from
+ the ProofPower extended character set.
+ Unicode characters not available in the extended character set
+ would be rendered as entities, using the established %keyword% convention.
+ As well as allowing the unicode code to be specified numerically,
+ it was thought desirable to allowed named entities, the declaration of
+ which would be given in the keyword file.
+
+ This code in utf8module falls into two principal parts.
+ A. Code implementng the findfile facility.
+ B. Code for reading keyword files and building the keyword table.
+ C. Code for doing the translations, using the information in a keyword table.
+ D. Code for reading and writing files while undertaking translation.
+
+ The code for reading the keyword files was already a part of sieve,
+ and shared use of many low-level routines with other parts of sieve (e.g. the
+ code for reading the control file) which would not be required by xpp.
+ There are also shared data structures.
+
+ Therefore, without an almost complete rewrite of sieve, the end result is
+ a rather ragged and unsatisfactory interface.
+
+ I have tried therefore to present low level aspects unlikely ever to be used
+ other than by sieve first, and to separate out as cleanly as possible the
+ features necessary for anoter application such as sieve to use the utf8 to pp
+ translation facilities.
+*/
+
 #ifndef UTF8MODULE
 #define UTF8MODULE
 
@@ -157,6 +204,8 @@ int compare_keyword_information(const void *vp1, const void *vp2);
 void initialise_keyword_information(void);
 */
 
+/******************************************************************/
+
 void read_keyword_files(char *keyword_files[]);
 
 struct limits{
@@ -186,6 +235,19 @@ unicode invalid_unicode(void);
 int unicode_to_pp_entry_cmp(const void *buf1, const void *buf2);
 const char *unicode2ppk(unicode cp);
 */
+
+/*
+--------------------------
+ext_kw_seq_to_unicode
+--------------------------
+Takes a null terminated string of characters which are either asscii,
+or ProofPower extended characters, or percent enclosed keyword names
+(declared in the current keyword files) or percent enclosed ascii
+hexadecimal unicode code points and converst them to a null terminated
+array of unicode code points. 
+*/
+
+void ext_kw_seq_to_unicode(char *line, unicode codes[]);
 
 void output_ext_as_utf8(char *line, FILE *file_F);
 
