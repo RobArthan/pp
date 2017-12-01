@@ -1804,11 +1804,16 @@ conclude_keywordfile(void)
     
   if(stop_prog) EXIT(22);	
 }
-/*
 
+/*
 ------------------
 read_keyword_files
 ------------------
+
+The following procedure is given an array of strings containing
+the names of the keyword files and then reads those files and
+constructs the keyword table.
+
 */
 
 void

@@ -238,18 +238,51 @@ const char *unicode2ppk(unicode cp);
 
 /*
 --------------------------
+ext_or_kw_to_unicode
+--------------------------
+Takes a null terminated string of characters which are either ascii,
+or ProofPower extended characters, or percent enclosed keyword names
+(declared in the current keyword files) or percent enclosed ascii
+hexadecimal unicode code points and converts the first to a unicode code point.
+
+If this function delivers U_NOT_FOUND then this means that a keyword which
+has no associated unicode code point was found.
+The *len parameter will in that case be set to the length of the keyword
+even though no unicode code point is returned.
+*/
+  
+unicode ext_or_kw_to_unicode(char *line, int *len);
+
+/*
+--------------------------
+ext_seq_to_unicode
+--------------------------
+Takes a null terminated string of characters which are either ascii,
+or ProofPower extended characters and converts them to a null terminated
+array of unicode code points. 
+*/
+
+void ext_seq_to_unicode(char *line, unicode codes[]);
+
+/*
+--------------------------
 ext_kw_seq_to_unicode
 --------------------------
 Takes a null terminated string of characters which are either asscii,
 or ProofPower extended characters, or percent enclosed keyword names
 (declared in the current keyword files) or percent enclosed ascii
-hexadecimal unicode code points and converst them to a null terminated
+hexadecimal unicode code points and converts them to a null terminated
 array of unicode code points. 
 */
 
 void ext_kw_seq_to_unicode(char *line, unicode codes[]);
 
 void output_ext_as_utf8(char *line, FILE *file_F);
+
+/*
+These high levek transcription procedures are used by pp_file_conv
+and may not be more genrally applicable.
+*/    
 
 void transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F);
 void transcribe_file_nkw_to_utf8(struct file_data *input_F, FILE *output_F);
