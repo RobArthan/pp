@@ -237,6 +237,48 @@ const char *unicode2ppk(unicode cp);
 */
 
 /*
+------------------
+utf8_line_to_codes
+------------------
+This procedure, given a line of utf8 encoded unicode will
+convert the line into an array of unicode code points.
+
+It should be passed the address of the utf8, which is required
+to be a null terminated string, and the address of a unicode array,
+which will also be null terminated when the procedure exits.
+The return value is the number of code points resulting.
+*/
+
+int utf8_line_to_codes(char line[], unicode codes[]);
+
+/*
+---------------
+unicode_to_aekw
+---------------
+(to Ascii, Extended character, or KeyWord)
+Convert a unicode code point to either:
+1. the same ascii character (<128)
+2. a ProofPower extended character (128-255)
+3. a percent enclose hexadecimal literal unicode code point
+4. a keyword in percents
+in that order of priority.
+*/
+
+char *unicode_to_aekw(unicode code_point);
+
+/*
+----------------
+code_line_to_ext
+----------------
+This procedure takes a line of input which has been translated into unicode
+code points into the ProofPower extended character set.
+The source and destination are buffers in a file_data parameter.
+*/
+
+void code_line_to_ext(struct file_data *file_F);
+
+
+/*
 --------------------------
 ext_or_kw_to_unicode
 --------------------------

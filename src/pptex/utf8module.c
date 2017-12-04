@@ -2642,7 +2642,7 @@ transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F){
 ----------------------
 transcribe_file_to_ext
 ----------------------
-This procedure transscribes data from an input stream which is taken
+This procedure transcribes data from an input stream which is taken
 to be in the ProofPower extended ascii character set to an output
 stream which is unicode using the ProofPower extended character set.
 
