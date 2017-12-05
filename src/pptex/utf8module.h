@@ -25,7 +25,7 @@
  it was thought desirable to allowed named entities, the declaration of
  which would be given in the keyword file.
 
- This code in utf8module falls into two principal parts.
+ This code in utf8module falls into the following principal parts.
  A. Code implementng the findfile facility.
  B. Code for reading keyword files and building the keyword table.
  C. Code for doing the translations, using the information in a keyword table.
@@ -50,12 +50,17 @@
 
 typedef int unicode;
 #define UNICODE_TO_PP_LEN 128
+
 typedef char bool;
 enum {False = 0, True = 1};
 
+/*
 #define bool short
-#define true 1
-#define false 0
+*/
+
+#define true True
+#define false False
+
 
 /* String Utilities */
 
@@ -204,7 +209,24 @@ int compare_keyword_information(const void *vp1, const void *vp2);
 void initialise_keyword_information(void);
 */
 
-/******************************************************************/
+/*
+------------------
+read_keyword_files
+------------------
+Before making use of any procedures which translate to or from
+named percent keywords it is necessary to construct a keyword file.
+This is done by reading one or more keyword files.
+The names of these files are determined by the -k and -K command
+parameters in existing applications.
+
+If the content of these parameters is compiled into an array
+of string references then this array may be passed to
+the following procedure, which will read the files and construct
+the keyword table.
+
+Examples of how to compile the array may be found in the sieve
+and pp_file_conv applications.
+*/
 
 void read_keyword_files(char *keyword_files[]);
 

@@ -23,15 +23,6 @@
 #define SLASH_ETC "/etc"
 
 /*
-typedef char bool;
-enum {False = 0, True = 1};
-*/
-
-#define bool short
-#define true 1
-#define false 0
-
-/*
 ================
 String Utilities
 ================
@@ -1809,11 +1800,19 @@ conclude_keywordfile(void)
 ------------------
 read_keyword_files
 ------------------
+Before making use of any procedures which translate to or from
+named percent keywords it is necessary to construct a keyword file.
+This is done by reading one or more keyword files.
+The names of these files are determined by the -k and -K command
+parameters in existing applications.
 
-The following procedure is given an array of strings containing
-the names of the keyword files and then reads those files and
-constructs the keyword table.
+If the content of these parameters is compiled into an array
+of string references then this array may be passed to
+the following procedure, which will read the files and construct
+the keyword table.
 
+Examples of how to compile the array may be found in the sieve
+and pp_file_conv applications.
 */
 
 void
