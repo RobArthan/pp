@@ -230,7 +230,7 @@ initialize(int argc, char **argv, int option, int *ascii_out, int *nokw,
 	      limits.opt_list = 1;
 	      break;							/* BREAK */
 	    case 'n':
-	      *nokw = true;
+	      *nokw = True;
 	      break;							/* BREAK */
 	    case 'u':
 	      main_F.utf8 = True;

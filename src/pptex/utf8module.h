@@ -56,11 +56,10 @@ enum {False = 0, True = 1};
 
 /*
 #define bool short
-*/
 
 #define true True
 #define false False
-
+*/
 
 /* String Utilities */
 

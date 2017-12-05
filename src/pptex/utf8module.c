@@ -832,7 +832,7 @@ add_new_keyword(
 	}
 
 	if(len > MAX_KW_LEN) {
-		grumble1("keyword too long", &keyword_F, true);
+		grumble1("keyword too long", &keyword_F, True);
 	}
 
 	if(len > kwi.max_kw_len) kwi.max_kw_len = len;
@@ -844,7 +844,7 @@ add_new_keyword(
 	  orig_kind = KW_SAMEAS;
 	  
 	  if(len2 > MAX_KW_LEN) {
-	    grumble1("sameas keyword too long", &keyword_F, true);
+	    grumble1("sameas keyword too long", &keyword_F, True);
 	  }
 	  if(len2 > kwi.max_kw_len) kwi.max_kw_len = len2;
 	};
@@ -865,7 +865,7 @@ add_new_keyword(
 	
 	if(kwi.num_keywords>1 && strcmp(kwi.keyword[kwi.num_keywords-1].name,
 				name) < 0) {
-		grumble1("keywords unsorted", &keyword_F, true);
+		grumble1("keywords unsorted", &keyword_F, True);
 	}
 }
 
@@ -1163,14 +1163,14 @@ void
 get_tex_arg(char *macro, regex_t **tex_arg, char *tex_arg_sense)
 {
 	char *p = macro;
-	char escaped = false;
+	char escaped = False;
 	int error_code;
 	int cflags = REG_EXTENDED;
 	while(*p) {
 		if(escaped) {
-			escaped = false;
+			escaped = False;
 		} else if (*p == '\\') {
-			escaped = true;
+			escaped = True;
 		} else if (*p == '#') {
 			break;
 		}
@@ -1193,7 +1193,7 @@ get_tex_arg(char *macro, regex_t **tex_arg, char *tex_arg_sense)
 			errbuf = malloc_and_check(errbufsize, 109);
 			(void) regerror(error_code, *tex_arg, errbuf, errbufsize);
 			grumble(" error in regular expression: %s", errbuf,
-				&keyword_F, true);
+				&keyword_F, True);
 			free(errbuf);
 			free(*tex_arg);
 			*tex_arg = 0;
@@ -1402,20 +1402,20 @@ read_keyword_file(char *name)
 			if(def_kw[len_m_1] == '"') def_kw[len_m_1] = '%';
 
 			if(def_kw[0] != '%' || def_kw[len_m_1] != '%') {
-				grumble1("missing '%%' on keyword", &keyword_F, true);
+				grumble1("missing '%%' on keyword", &keyword_F, True);
 				continue;					/* CONTINUE */
 			}
 		}
 
 		if(kind_str == NULL) {
-			grumble1("no keyword kind", &keyword_F, true);
+			grumble1("no keyword kind", &keyword_F, True);
 			continue;						/* CONTINUE */
 		}
 
 		code_kw_str = split_at_space(kind_str);
 
 		if(code_kw_str == NULL) {
-			grumble1("no code or second keyword", &keyword_F, true);
+			grumble1("no code or second keyword", &keyword_F, True);
 			continue;						/* CONTINUE */
 		}
 
@@ -1430,7 +1430,7 @@ read_keyword_file(char *name)
 		else if	(strcmp(kind_str, "white") == 0) kind = KW_WHITE;
 		else {
 			grumble("unknown keyword kind: %s",
-				kind_str, &keyword_F, true);
+				kind_str, &keyword_F, True);
 			continue;						/* CONTINUE */
 		}
 
@@ -1439,7 +1439,7 @@ read_keyword_file(char *name)
 				/* OK */
 			} else {
 				grumble("unexpected text \"%s\" with sameas keyword", macro,
-					&keyword_F, true);
+					&keyword_F, True);
 				continue;					/* CONTINUE */
 			}
 
@@ -1449,7 +1449,7 @@ read_keyword_file(char *name)
 	
 				if(code_kw_str[0] != '%' || code_kw_str[len_m_1] !='%') {
 					grumble1("missing '%%' on sameas keyword",
-						&keyword_F, true);
+						&keyword_F, True);
 					continue;				/* CONTINUE */
 				}
 			}
@@ -1460,7 +1460,7 @@ read_keyword_file(char *name)
 
 			if(!get_char_unicode(code_kw_str, &icode)) {
 				grumble1("unreadable or out of range char code",
-					&keyword_F, true);
+					&keyword_F, True);
 				continue;					/* CONTINUE */
 			}
 
@@ -1484,19 +1484,19 @@ read_keyword_file(char *name)
 				ki->ech = ech;
 			      } else {
 				if (ki->uni != code)
-				  grumble1("clashing keyword definitions", &keyword_F, true);
+				  grumble1("clashing keyword definitions", &keyword_F, True);
 			      };
 			    } else {
-			    grumble1("duplicate keyword", &keyword_F, true);
+			    grumble1("duplicate keyword", &keyword_F, True);
 			    }
-			  } else grumble1("duplicate keyword", &keyword_F, true);
+			  } else grumble1("duplicate keyword", &keyword_F, True);
 			  continue;
 			}
 			*/
 			
 			if((kind == KW_DIRECTIVE || kind == KW_START_DIR)
 					&& ech == -1) {
-				grumble1("ascii/ext code for directive is '-1'", &keyword_F, true);
+				grumble1("ascii/ext code for directive is '-1'", &keyword_F, True);
 				continue;					/* CONTINUE */
 			}
 
@@ -1585,12 +1585,12 @@ conclude_keywordfile(void)
       /* if (debug & D_UTF8) FPRINTF(stderr, "%s\tsimple\t0x%06x\n", cur_ki->name, cur_ki->uni); */
       if (prev_ki->orig_kind != KW_SIMPLE || cur_ki->orig_kind != KW_SIMPLE)
 	grumble("Multiple keyword file entries for keyword %s, not all SIMPLE\n",
-		prev_ki->name, &keyword_F, false);
+		prev_ki->name, &keyword_F, False);
       else {
 	if (prev_ki->ech != NOT_FOUND && cur_ki->uni != U_NOT_FOUND
 	    && cur_ki->uni != prev_ki->uni)
 	  grumble("Second keyword file entry for keyword %s, not permitted to change unicode for ext char\n",
-		  prev_ki->name, &keyword_F, false);
+		  prev_ki->name, &keyword_F, False);
 	else {
 	  if (cur_ki->uni != U_NOT_FOUND) {
 	    prev_ki->uni = cur_ki->uni;
@@ -1628,7 +1628,7 @@ conclude_keywordfile(void)
       
       if(copy_from_index == NOT_FOUND) {
 	grumble("undeclared keyword '%s' referred to by sameas",
-		cur_ki->macro, &keyword_F, false);
+		cur_ki->macro, &keyword_F, False);
 	dump_keywords = 1;
       } else {
 	struct keyword_information *copy_from
@@ -1646,7 +1646,7 @@ conclude_keywordfile(void)
 	   cur_ki->act_kind ==
 	   KW_SAMEAS_UNKNOWN) {
 	  grumble("unresolved 'sameas' for keyword '%s' (keyword referred to is also 'sameas')",
-		  cur_ki->name, &keyword_F, false);
+		  cur_ki->name, &keyword_F, False);
 	  dump_keywords = 1;
 	}
       }
@@ -1679,7 +1679,7 @@ conclude_keywordfile(void)
 	  kwi.char_code[cur_ki->ech] = cur_ki;
 	else {
 	  grumble("conflicting unicode codes for keyword '%s'",
-		  cur_ki->name, &keyword_F, false);
+		  cur_ki->name, &keyword_F, False);
 	  FPRINTF(stderr,
 		  "\tchar code %d already has keyword '%s'\n",
 		  cur_ki->ech,
@@ -1699,7 +1699,7 @@ conclude_keywordfile(void)
     }
     
     if(cur_ki->ech == -1 && cur_ki->uni == -1 && cur_ki->macro == NULL) {
-      grumble1("macro required when char code is -1", &keyword_F, false);
+      grumble1("macro required when char code is -1", &keyword_F, False);
       dump_keywords = 1;
     }
   }
@@ -1714,7 +1714,7 @@ conclude_keywordfile(void)
 	SET_DIRECTIVE_CHAR(cur_ki->ech);
       else
 	grumble("no extended char with directive keyword '%s'",
-		cur_ki->name, &keyword_F, false);
+		cur_ki->name, &keyword_F, False);
       
       if(cur_ki->name[1] != '\0' && cur_ki->name[1] != '%')
 	SET_SND_CHAR_DIR_KW(cur_ki->name[1]);
@@ -1725,7 +1725,7 @@ conclude_keywordfile(void)
 	SET_VERB_ALONE_CH(cur_ki->ech);
       else
 	grumble("no extended char with directive keyword '%s'",
-		cur_ki->name, &keyword_F, false);
+		cur_ki->name, &keyword_F, False);
       break;
       
     default:
@@ -1872,7 +1872,7 @@ get_hol_kw(char *str,
 		kw[MAX_KW_LEN / 4] = '\0';
 
 		if(warn) {
-			grumble("mal-formed keyword starting with %s", kw, file_F, true);
+			grumble("mal-formed keyword starting with %s", kw, file_F, True);
 		}
 	} else {
 		kw[kwlen++] = '%';
@@ -1888,7 +1888,7 @@ get_hol_kw(char *str,
 		}
 
 		if(ans<0 && warn) {
-grumble("unknown keyword: %s", kw, file_F, true);
+grumble("unknown keyword: %s", kw, file_F, True);
 		}
 	}
 
