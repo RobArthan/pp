@@ -41,7 +41,7 @@
 
  I have tried therefore to present low level aspects unlikely ever to be used
  other than by sieve first, and to separate out as cleanly as possible the
- features necessary for anoter application such as sieve to use the utf8 to pp
+ features necessary for another application such as sieve to use the utf8 to pp
  translation facilities.
 */
 

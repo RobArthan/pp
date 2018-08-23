@@ -1914,7 +1914,7 @@ Convert a unicode code point to a 6-digit hexadecimal in percents */
 
 char *unicode_to_hex(unicode code_point)
 {
-	static char buf[10];
+	static char buf[11];
 	sprintf(buf, "%%#x%06X%%", code_point);
 	return buf;
 }
@@ -2281,7 +2281,7 @@ int read_utf8_as_unicode(struct file_data *file_F){
 read_line_as_ext
 ----------------
 Reads a line into a the file cur_line buffer, and then,
-if the file is flagged as utf8, convert from utf8 to
+if the file is flagged as utf8, converts from utf8 to
 the ProofPower extended character encoding.
 
 If the utf8 flag is set in the file_data, the line is read first as
@@ -2601,13 +2601,14 @@ This version will only translate ext codes, not keywords or literal code points.
 
 void
 transcribe_file_nkw_to_utf8(struct file_data *input_F, FILE *output_F){
+  int r;
   if(debug & D_UTF8) message1("transcribe_file_to_utf8 1");
   while (!feof(input_F->fp)) {
-  if(debug & D_UTF8) message1("transcribe_file_to_utf8 2");
-    read_line_as_ext(input_F);
-    if(debug & D_UTF8)
-      message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
-    output_ext_as_utf8(input_F->cur_line, output_F);
+    if(debug & D_UTF8) message1("transcribe_file_to_utf8 2");
+    r=read_line_as_ext(input_F);
+    if(debug & D_UTF8) message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
+    if(!(feof(input_F->fp) && r==0))
+      output_ext_as_utf8(input_F->cur_line, output_F);
   };
   return;
 }
@@ -2626,13 +2627,15 @@ which will be transformed.
 
 void
 transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F){
+  int r;
   if(debug & D_UTF8) message1("transcribe_file_to_utf8 1");
   while (!feof(input_F->fp)) {
   if(debug & D_UTF8) message1("transcribe_file_to_utf8 2");
-    read_line_as_ext(input_F);
+    r=read_line_as_ext(input_F);
     if(debug & D_UTF8)
       message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
-    output_ext_kw_as_utf8(input_F->cur_line, output_F);
+    if(!(feof(input_F->fp) && r==0)){
+      output_ext_kw_as_utf8(input_F->cur_line, output_F);};
   };
   return;
 }
@@ -2641,9 +2644,8 @@ transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F){
 ----------------------
 transcribe_file_to_ext
 ----------------------
-This procedure transcribes data from an input stream which is taken
-to be in the ProofPower extended ascii character set to an output
-stream which is unicode using the ProofPower extended character set.
+This procedure transcribes data from a utf8 encoded unicoden input stream,
+ to an output stream using the ProofPower extended character set.
 
 The input stream is to be supplied as a "file_data*", but the output
 stream as FILE*.
@@ -2651,10 +2653,12 @@ stream as FILE*.
 
 void
 transcribe_file_to_ext(struct file_data *input_F, FILE *output_F){
+  int r;
   if (debug) fflush(NULL);
   while (!feof(input_F->fp)) {
-    read_line_as_ext(input_F);
-    FPRINTF(output_F, "%s\n", input_F->cur_line);
+    r=read_line_as_ext(input_F);
+    if(!(feof(input_F->fp) && r==0)){
+      FPRINTF(output_F, "%s\n", input_F->cur_line);};
     if (debug) fflush(NULL);
   };
   return;
@@ -2673,9 +2677,11 @@ be either utf8 or ascii/ext but the output stream as FILE* and will be ascii.
 
 void
 transcribe_file_to_ascii(struct file_data *input_F, FILE *output_F){
+  int r;
   while (!feof(input_F->fp)) {
-    read_line_as_ascii(input_F);
-    FPRINTF(output_F, "%s\n", input_F->cur_line);
+    r=read_line_as_ascii(input_F);
+    if(!(feof(input_F->fp) && r==0)){
+      FPRINTF(output_F, "%s\n", input_F->cur_line);};
   };
   return;
 }
