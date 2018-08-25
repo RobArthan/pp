@@ -2421,7 +2421,10 @@ unicode ext_to_unicode(unsigned char ch){
     message1("unknown ext code in input file");
     return NOT_FOUND;
   }
-  else return ki->uni;
+  else {
+    if (ki->uni == ch) (void)fputs("Warning: use of unassigned ext character code.\n", stderr);
+    return ki->uni;
+  };
 };
 
 /*
