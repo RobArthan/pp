@@ -184,6 +184,8 @@ void check_text_window_limit(Widget w, Cardinal max)
 		bytes_to_go = p - text + 1;
 	}
 
+	XtFree(text);
+
 	sprintf(msg, fmt, max);
 
 	updating_journal = True;
