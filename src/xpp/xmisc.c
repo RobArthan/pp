@@ -34,6 +34,7 @@
 #include "xpp.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include <X11/Xatom.h>
 #include <X11/Intrinsic.h>
@@ -284,15 +285,11 @@ void number_verify_cb(
 	XtPointer		unused2,
 	XtPointer		xtp)
 {
-	XmTextVerifyCallbackStruct *cbs = xtp;
+	XmTextVerifyCallbackStructWcs *cbs = xtp;
 	int i;
-	char *p = cbs->text->ptr;
-	if(cbs->text->format != XmFMT_8_BIT) {
-		cbs -> doit = False;
-		return;
-	}
+	wchar_t *p = cbs->text->wcsptr;
 	for(i = 0; i < cbs->text->length; ++i) {
-		if((p[i] & 0x80) || !isdigit(p[i] & 0x7f)) {
+		if(!iswdigit(p[i])) {
 			cbs->doit = False;
 			return;
 		}
@@ -310,26 +307,22 @@ void text_verify_cb(
 	XtPointer		unused2,
 	XtPointer		xtp)
 {
-	XmTextVerifyCallbackStruct *cbs = xtp;
+	XmTextVerifyCallbackStructWcs *cbs = xtp;
 	int i, j;
-	char *p = cbs->text->ptr;
+	wchar_t *p = cbs->text->wcsptr;
 	Boolean has_crs = False, has_controls = False;
-	if(cbs->text->format != XmFMT_8_BIT) {
-		cbs -> doit = False;
-		return;
-	}
 	for(i = 0; i < cbs->text->length; ++i) {
-		if(p[i] == '\r') {
+		if((p[i] & 0xff) == '\r') {
 			has_crs = True;
-		} else if(control_chars[p[i] & 0xff]) {
+		} else if(0 <= p[i] && p[i] <= 0xff && control_chars[p[i]]) {
 			has_controls = True;
 			p[i] = '?';
 		}
 	}
 	if(has_crs) {
 		for(i = 0, j = 0; j < cbs->text->length; ++i, ++j) {
-			if(p[j] == '\r') {
-				if(j + 1 < cbs->text->length && p[j+1] == '\n') {
+			if((p[j] & 0xff) == '\r') {
+				if(j + 1 < cbs->text->length && p[j+1] == L'\n') {
 					j += 1;
 				} else {
 					p[j] = '\n';
@@ -355,25 +348,21 @@ void text_field_verify_cb(
 	XtPointer		unused2,
 	XtPointer		xtp)
 {
-	XmTextVerifyCallbackStruct *cbs = xtp;
+	XmTextVerifyCallbackStructWcs *cbs = xtp;
 	int i, j;
-	char *p = cbs->text->ptr;
+	wchar_t *p = cbs->text->wcsptr;
 	Boolean has_crs = False, has_controls = False;
-	if(cbs->text->format != XmFMT_8_BIT) {
-		cbs -> doit = False;
-		return;
-	}
 	for(i = 0; i < cbs->text->length; ++i) {
-		if(p[i] == '\r') {
+		if((p[i] & 0xff) == '\r') {
 			has_crs = True;
-		} else if(control_chars[p[i] & 0xff]) {
+		} else if(0 <= p[i] && p[i] <= 0xff && control_chars[p[i]]) {
 			has_controls = True;
 			p[i] = '?';
 		}
 	}
 	for(i = 0, j = 0; j < cbs->text->length; ++i, ++j) {
-		if(p[j] == '\r') {
-			if(j + 1 < cbs->text->length && p[j+1] == '\n') {
+		if((p[j] & 0xff) == '\r') {
+			if(j + 1 < cbs->text->length && p[j+1] == L'\n') {
 				j += 1;
 			} else {
 				p[j] = ' ';
@@ -403,34 +392,37 @@ extern char *text_get_line(
 {
 	XmTextPosition ins_pos, left, right, prev_pos, cur_pos, last_pos;
 	int len;
-	char data[BUFSIZ + 1], *res;
+	wchar_t data[BUFSIZ + 1], *wres;
+	char *res;
 	ins_pos = XmTextGetInsertionPosition(text_w);
 	last_pos = XmTextGetLastPosition(text_w);
 	right = last_pos;
 	for(	cur_pos = ins_pos; cur_pos <= last_pos; cur_pos += BUFSIZ) {
-		char *p;
-		if(XmTextGetSubstring(text_w, cur_pos, BUFSIZ, BUFSIZ + 1, data)
+		wchar_t *p;
+		if(XmTextGetSubstringWcs(text_w, cur_pos,
+						BUFSIZ, BUFSIZ + 1, data)
 					== XmCOPY_FAILED ) {
 			return NULL;
 		}
-		for(p = data; *p && *p != '\n'; p += 1) {
+		for(p = data; *p && *p != L'\n'; p += 1) {
 			;
 		}
-		if(*p == '\n') {
+		if(*p == L'\n') {
 			right = cur_pos + (p - data);
 			break;
 		}
 	}
 	left = 0;
 	for(	prev_pos = ins_pos; prev_pos > 0; prev_pos = cur_pos) {
-		char *p, *q;
+		wchar_t *p, *q;
 		cur_pos = prev_pos > BUFSIZ ? prev_pos - BUFSIZ : 0;
-		if(XmTextGetSubstring(text_w, cur_pos, prev_pos - cur_pos, BUFSIZ + 1, data)
+		if(XmTextGetSubstringWcs(text_w, cur_pos,
+					prev_pos - cur_pos, BUFSIZ + 1, data)
 					== XmCOPY_FAILED ) {
 			return NULL;
 		}
 		for(p = data, q = 0; *p; p += 1) {
-			if(*p == '\n') {
+			if(*p == L'\n') {
 				q = p;
 			}
 		}
@@ -443,13 +435,16 @@ extern char *text_get_line(
 	if(len <= 0) { /* e.g., there is no text */
 		return NULL;
 	}
-	res = XtMalloc(len + 1);
-	if(XmTextGetSubstring(text_w, left, len, len + 1, res) == XmCOPY_FAILED ) {
+	wres = (wchar_t*)XtMalloc(len*sizeof(wchar_t) + 1);
+	if(XmTextGetSubstringWcs(text_w, left, len, len + 1, wres) == XmCOPY_FAILED ) {
 		return NULL;
 	}
 	if(eoln) {
 		*eoln = right;
 	}
+	res = XtMalloc(len*MB_CUR_MAX + 1);
+	(void) wcstombs(res, wres, len*MB_CUR_MAX + 1);
+	XtFree(wres);
 	return res;
 }
 

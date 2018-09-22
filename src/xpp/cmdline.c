@@ -173,7 +173,8 @@ void add_command_line_tool(Widget text_w)
 		xmTextWidgetClass,			paned,
 		NULL);
 
-	XtAddCallback(cmd_text, XmNmodifyVerifyCallback, text_field_verify_cb, NULL);
+	XtAddCallback(cmd_text, XmNmodifyVerifyCallbackWcs,
+						text_field_verify_cb, NULL);
 	register_selection_source(cmd_text);
 	register_palette_client(cmd_text);
 

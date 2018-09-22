@@ -1066,7 +1066,7 @@ static Boolean setup_main_window(
 	undo_ptr = add_undo(script, wp, EDIT_MENU_UNDO, EDIT_MENU_REDO);
 
 	XtAddCallback(script,
-		XmNmodifyVerifyCallback, undo_modify_cb, undo_ptr);
+		XmNmodifyVerifyCallbackWcs, undo_modify_cb, undo_ptr);
 
 	XtAddCallback(script,
 		XmNmotionVerifyCallback, line_number_cb, NULL);

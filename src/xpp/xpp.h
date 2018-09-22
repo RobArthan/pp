@@ -22,6 +22,7 @@
  * MACROS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+#include <wchar.h>
 #include <X11/Intrinsic.h>
 #include <Xm/XmAll.h>
 

@@ -499,9 +499,11 @@ Boolean add_search_tool(Widget text_w)
  * add callbacks
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtAddCallback(search_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
+	XtAddCallback(search_text, XmNmodifyVerifyCallbackWcs,
+						text_verify_cb, NULL);
 
-	XtAddCallback(replace_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
+	XtAddCallback(replace_text, XmNmodifyVerifyCallbackWcs,
+						text_verify_cb, NULL);
 
 	XtAddCallback(ignore_case_toggle, XmNvalueChangedCallback,
 		toggle_button_cb, (XtPointer)(&search_data.ignore_case));

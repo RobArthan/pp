@@ -59,6 +59,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <locale.h>
 #include "xpp.h"
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * externs for getopt(3):
@@ -650,6 +651,8 @@ int main(int argc, char **argv)
 
 	set_pp_home();
 
+	(void) setlocale(LC_ALL, "");
+
 	root = XtOpenApplication(&app,
 		APP_CLASS,
 		options,
@@ -659,6 +662,8 @@ int main(int argc, char **argv)
 		NULL, /* no fallback resources */
 		applicationShellWidgetClass,
 		NULL, 0); /* default widget resources*/
+
+	XtSetLanguageProc(app, NULL, NULL);
 
 	num_x_args = orig_argc - argc;
 

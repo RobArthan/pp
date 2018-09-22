@@ -308,7 +308,7 @@ if(!global_options.edit_only) {
  * add callbacks to restrict journal_max_text to numbers
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtAddCallback(journal_max_text, XmNmodifyVerifyCallback,
+	XtAddCallback(journal_max_text, XmNmodifyVerifyCallbackWcs,
 		(XtCallbackProc)number_verify_cb, (XtPointer)NULL);
 } /* now stuff common to edit-only and command sessions */
 	button_frame = XtVaCreateManagedWidget("button-frame",

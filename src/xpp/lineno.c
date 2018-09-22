@@ -252,7 +252,7 @@ Boolean add_line_no_tool(Widget text_w)
 	XtAddCallback(goto_line_no_btn, XmNactivateCallback,
 		goto_line_no_cb, (XtPointer)(&line_no_data));
 
-	XtAddCallback(line_no_text, XmNmodifyVerifyCallback,
+	XtAddCallback(line_no_text, XmNmodifyVerifyCallbackWcs,
 		(XtCallbackProc)number_verify_cb, (XtPointer)NULL);
 
 	XtAddCallback(line_no_text, XmNactivateCallback,
