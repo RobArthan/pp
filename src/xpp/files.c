@@ -620,9 +620,9 @@ static Boolean backup_file(
 		return file_yes_no_dialog(w,
 				cant_open_backup_message, name, NULL);
 	} else {
-		char buf[BUFSIZ];
+		char buf[MBSBUFSIZ];
 		size_t bytes_read;
-		while((bytes_read = fread(buf, 1, BUFSIZ, fp))) {
+		while((bytes_read = fread(buf, 1, MBSBUFSIZ, fp))) {
 			if(fwrite(buf, 1, bytes_read, backup_fp)
 					!= bytes_read) {
 				Boolean reply;

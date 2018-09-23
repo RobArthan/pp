@@ -156,7 +156,7 @@ static void clear_old_text(UndoBuffer *ub)
 static Boolean grow_old_text_to(UndoBuffer *ub, Cardinal len, Boolean *answer)
 {
 	/* Make the old_text buffer (at least) len+1 big */
-	char *ptr;
+	wchar_t *ptr;
 
 	if(ub->active == (UndoNode *) NULL) {
 		return False;
@@ -168,13 +168,14 @@ static Boolean grow_old_text_to(UndoBuffer *ub, Cardinal len, Boolean *answer)
 	}
 
 	if(ub->active->old_text_size == 0 || ub->active->old_text == (wchar_t *) NULL) {
-		ptr = lXtMalloc((len+1)*sizeof(wchar_t), ub, answer);
+		ptr = (wchar_t*)lXtMalloc((len+1)*sizeof(wchar_t), ub, answer);
 		if(ptr) {
 			*ptr = '\0';
 		}
 	} else {
 		ptr = ub->active->old_text;
-		ptr = lXtRealloc((char*)ptr, (len+1)*sizeof(wchar_t), ub, answer);
+		ptr = (wchar_t*)lXtRealloc((char*)ptr,
+					(len+1)*sizeof(wchar_t), ub, answer);
 	}
 	if(!ptr) {
 		return False;
@@ -193,8 +194,7 @@ static Boolean grow_old_text_to(UndoBuffer *ub, Cardinal len, Boolean *answer)
 static Boolean grow_old_text(UndoBuffer *ub, Boolean *answer)
 {
 	/* Make the old_text buffer (at least) one character bigger */
-	Cardinal len,
-	    new_size;
+	Cardinal len, new_size;
 	wchar_t *ptr;
 
 	/* There's a fair chance that the next thing that will happen *
@@ -206,7 +206,8 @@ static Boolean grow_old_text(UndoBuffer *ub, Boolean *answer)
 	}
 
 	len = 0;
-	if(ub->active->old_text_size != 0 && ub->active->old_text != (char *) NULL) {
+	if(ub->active->old_text_size != 0 &&
+				ub->active->old_text != (wchar_t*) NULL) {
 		len = wcslen(ub->active->old_text);
 	}
 	if(len+1 < ub->active->old_text_size) {
@@ -223,7 +224,8 @@ static Boolean grow_old_text(UndoBuffer *ub, Boolean *answer)
 			new_size += MIN_OT_SIZE;
 		}
 	}
-	if(ub->active->old_text_size == 0 || ub->active->old_text == (char *) NULL) {
+	if(ub->active->old_text_size == 0 ||
+				ub->active->old_text == (wchar_t*) NULL) {
 		ptr = (wchar_t*)lXtMalloc(new_size*sizeof(wchar_t), ub, answer);
 		if(!ptr) {
 			/* we're in real trouble, but try to be helpful */

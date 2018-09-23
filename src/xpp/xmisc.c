@@ -394,7 +394,7 @@ extern char *text_get_line(
 {
 	XmTextPosition ins_pos, left, right, prev_pos, cur_pos, last_pos;
 	int len;
-	wchar_t data[BUFSIZ + 1], *wres;
+	wchar_t data[MBSBUFSIZ + 1], *wres;
 	char *res;
 	ins_pos = XmTextGetInsertionPosition(text_w);
 	last_pos = XmTextGetLastPosition(text_w);
@@ -402,7 +402,7 @@ extern char *text_get_line(
 	for(	cur_pos = ins_pos; cur_pos <= last_pos; cur_pos += BUFSIZ) {
 		wchar_t *p;
 		if(XmTextGetSubstringWcs(text_w, cur_pos,
-						BUFSIZ, BUFSIZ + 1, data)
+						MBSBUFSIZ, MBSBUFSIZ + 1, data)
 					== XmCOPY_FAILED ) {
 			return NULL;
 		}
@@ -417,9 +417,9 @@ extern char *text_get_line(
 	left = 0;
 	for(	prev_pos = ins_pos; prev_pos > 0; prev_pos = cur_pos) {
 		wchar_t *p, *q;
-		cur_pos = prev_pos > BUFSIZ ? prev_pos - BUFSIZ : 0;
+		cur_pos = prev_pos > MBSBUFSIZ ? prev_pos - MBSBUFSIZ : 0;
 		if(XmTextGetSubstringWcs(text_w, cur_pos,
-					prev_pos - cur_pos, BUFSIZ + 1, data)
+					prev_pos - cur_pos, MBSBUFSIZ + 1, data)
 					== XmCOPY_FAILED ) {
 			return NULL;
 		}
@@ -446,7 +446,7 @@ extern char *text_get_line(
 	}
 	res = XtMalloc(len*MB_CUR_MAX + 1);
 	(void) wcstombs(res, wres, len*MB_CUR_MAX + 1);
-	XtFree(wres);
+	XtFree((char*)wres);
 	return res;
 }
 

@@ -397,11 +397,13 @@ static void goto_line_no_cb(
 long int get_line_no(Widget text_w)
 {
 	XmTextPosition ins_pos, cur_pos;
-	char data[BUFSIZ+1], *p;
+	char data[MBSBUFSIZ+1], *p;
 	long int line_ct;
 	ins_pos = XmTextGetInsertionPosition(text_w);
-	for(cur_pos = 0, line_ct = 1; cur_pos <= ins_pos; cur_pos += BUFSIZ) {
-		if(XmTextGetSubstring(text_w, cur_pos, BUFSIZ, BUFSIZ + 1, data)
+	for(cur_pos = 0, line_ct = 1; cur_pos <= ins_pos;
+							cur_pos += MBSBUFSIZ) {
+		if(XmTextGetSubstring(text_w, cur_pos, MBSBUFSIZ,
+							MBSBUFSIZ + 1, data)
 				== XmCOPY_FAILED ) {
 			return -1;
 		}

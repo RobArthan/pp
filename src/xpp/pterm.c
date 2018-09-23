@@ -833,7 +833,7 @@ static void get_from_application(
 	XtInputId	*unused_id)
 {
 	int ct;
-	char buf[XFER_SIZE + 1]; /* allow for null-termination in scroll_out */
+	char buf[XFER_SIZE];
 	if((ct = read(control_fd, buf, XFER_SIZE)) > 0) {
 		scroll_out(buf, ct, False);
 	}
