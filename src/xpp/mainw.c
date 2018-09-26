@@ -464,7 +464,7 @@ void scroll_out(char *buf, Cardinal ct, Boolean ignored)
 	static char *pending = 0;
 	static wchar_t *wtext = 0;
 	static int num_pending = 0;
-	static wchar_t  wc;
+	wchar_t  wc;
 	Boolean visible;
 	int i, j, r;
 	static Boolean last_was_cr = False;
@@ -473,23 +473,21 @@ void scroll_out(char *buf, Cardinal ct, Boolean ignored)
 		wtext = (wchar_t*)XtMalloc((ct + 1)*sizeof(wchar_t));
 	} else {
 		pending = XtRealloc(pending, ct + num_pending);
-		wtext = (wchar_t*)XtRealloc(wtext,
-				(ct + num_pending)*sizeof(wchar_t));
+		wtext = (wchar_t*)XtRealloc((char*)wtext,
+				(ct + num_pending + 1)*sizeof(wchar_t));
 	}
 	memcpy(pending + num_pending, buf, ct);
 /* Convert multibyte string in pending to wide characters in wtext
    checking for oddities as we go */
-/* scan the buffer for oddities and convert them to UNIX text: */
 	i = j = 0;
 	while(j < ct + num_pending) {
-		r = mbtowc(&wc, pending + j, ct + num_pending - j);
-		if(r < 0 && ct + num_pending - j >= MB_CUR_MAX) {
-/* invalid multibyte input; display a ? and go on to next byte */
+		r = mbrtowc(&wc, pending + j, ct + num_pending - j, NULL);
+		if(r == -1) {
 			wtext[i] = '?';
 			i += 1;
 			j += 1;
 			continue;
-		} else if (r < 0) {
+		} else if (r == -2) {
 /* conversion failed, but may succeed when we have more input */
 			num_pending = ct + num_pending - j;
 			memmove(pending, pending + j, num_pending);
@@ -505,7 +503,7 @@ void scroll_out(char *buf, Cardinal ct, Boolean ignored)
 			last_was_cr = True;
 			wtext[i] = L'\n';
 			i += 1;
-		} else if(last_was_cr && buf[j] == '\n') {
+		} else if(last_was_cr && wc == L'\n') {
 /* the LF in a CRLF; ignore it */
 			last_was_cr = False;
 		} else if(0 <= wc && wc <= 0xff && control_chars[wc]) {
