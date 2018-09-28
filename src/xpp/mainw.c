@@ -447,6 +447,9 @@ static XtActionsRec actions[] = {
  * the earlier complexity was that XmTextShowPosition didn't work
  * properly on some ancient implementations of Motif).
  *
+ * The buffer is interpreted as a multibyte string and may be incomplete;
+ * we detect this case and carry any bytes at the end of the buffer
+ * that can't be converted over to the next call.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static Boolean scroll_pending = False;
@@ -476,24 +479,26 @@ void scroll_out(char *buf, Cardinal ct, Boolean ignored)
 		wtext = (wchar_t*)XtRealloc((char*)wtext,
 				(ct + num_pending + 1)*sizeof(wchar_t));
 	}
-	memcpy(pending + num_pending, buf, ct);
+	memmove(pending + num_pending, buf, ct);
 /* Convert multibyte string in pending to wide characters in wtext
    checking for oddities as we go */
 	i = j = 0;
 	while(j < ct + num_pending) {
-		r = mbrtowc(&wc, pending + j, ct + num_pending - j, NULL);
-		if(r == -1) {
+		r = mbtowc(&wc, pending + j, ct + num_pending - j);
+		if(r == -1 && ct + num_pending - j >= MB_CUR_MAX) {
+/* conversion failed, more input won't help  */
 			wtext[i] = '?';
 			i += 1;
 			j += 1;
 			continue;
-		} else if (r == -2) {
+		} else if (r == -1) {
 /* conversion failed, but may succeed when we have more input */
 			num_pending = ct + num_pending - j;
 			memmove(pending, pending + j, num_pending);
 			break;
 		}
-/* if we get here the conversion succeeded */
+/* if we get here the conversion succeeded; we have no pending characters */
+		num_pending = 0;
 		if(r == 0) {
 /* conversion produced a null byte */
 			wtext[i] = L'?';
@@ -540,7 +545,6 @@ void scroll_out(char *buf, Cardinal ct, Boolean ignored)
 	XmTextSetInsertionPosition(journal, last_pos);
 /* check size of contents & done: */
 	check_text_window_limit(journal,  global_options.journal_max);
-
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

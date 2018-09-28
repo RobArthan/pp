@@ -243,7 +243,7 @@ macros before using them.
 	#undef  USE_STREAMS
 	#define USE_POSIX_TERMIO
 	#define SET_ATTRS_IN_PARENT
-	#define USE_CFMAKERAW /* again historical: we probably could now */
+	#define USE_CFMAKERAW
  	#undef  USE_TIOCEXCL
 #endif
 
