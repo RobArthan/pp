@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <limits.h>
+#include <errno.h>
 
 #include <stdio.h>
 
@@ -283,7 +284,7 @@ static Boolean file_yes_no_dialog(
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static char *get_file_contents(
+static wchar_t *get_file_contents(
 	Widget		w,
 	char		*name,
 	Boolean	 	cmd_line,
@@ -296,8 +297,8 @@ static char *get_file_contents(
 	struct stat status;
 	Cardinal siz;
 	FILE *fp;
-	char *buf, *p;
-	int whatgot;
+	wchar_t *buf, *p;
+	wint_t wi;
 	FileType file_type;
 	enum {FT_ANY, FT_UNIX, FT_DOS_OR_MAC, FT_DOS,  FT_MAC,
 		FT_MIXED,  FT_DOS_CR, FT_MAC_CR, FT_MIXED_CR, FT_BINARY} ft_state;
@@ -325,7 +326,9 @@ static char *get_file_contents(
 		return NULL;
 	}
 	siz = status.st_size;
-	if(!(buf = XtMalloc(siz + 1))) { /* note some space will be unused if its an MS-DOS file */
+	if(!(buf = (wchar_t*)XtMalloc((siz + 1)*sizeof(wchar_t)))) {
+/* Note that if there are multibyte strings or CRLF line terminators
+   some of this space will not be used */
 		file_error_dialog(w, no_space_message, name);
 		return NULL;
 	}
@@ -340,31 +343,43 @@ static char *get_file_contents(
 				*outcome = QUIT_NOW;
 			}
 		}
-		XtFree(buf);
+		XtFree((char*)buf);
 		return NULL;
 	}
 	p = buf;
 /*
  * Now the FSM that reads the file and copies it into the buffer mapping DOS and Mac line terminators
  * onto Unix ones. Exit from the loop is either the return in the error case where binary data is detected
- * or when end-of-file or read-error occurs. In those latter cases, the last value of whatgot to be read will be
+ * or when end-of-file or read-error occurs. In those latter cases, the last value of wi to be read will be
  * EOF, and ft_state will be one of FT_UNIX, FT_DOS, FT_MAC, FT_MIXED or FT_BINARY enabling the file type
  * and read-only options to be set up accordingly.
  */
 	ft_state = FT_ANY;
 	while( True ) {
-		whatgot = getc(fp);
-		if(whatgot != EOF && control_chars[whatgot & 0xff]) {
-			if(!including) {
-		 /* binary data: recover by mapping to question mark */
-				whatgot = '?';
-			} else {
-		/* recover by mapping to backspace, leaving text_verify_cb to recover that and report */
-				whatgot = '\b';
+		wi = getwc(fp);
+		if(	(0 <= wi && wi <= 0xff && control_chars[wi]) 
+		||	(wi == WEOF && errno == EILSEQ)) {
+/* Either a control character or invalid multibyte input */
+			if(wi == WEOF) {
+/* Invalid multibyte input: clear the error and skip a byte */
+				clearerr(fp);
+				(void) getc(fp);
+				if(feof(fp) || ferror(fp)) {
+					break; /* out of while( True ) */
+				}
 			}
 			ft_state = FT_BINARY;
+			if(!including) {
+		 /* Recover by mapping to question mark */
+				wi = L'?';
+			} else {
+		/* recover by mapping to backspace, leaving text_verify_cb to recover that and report */
+				wi = L'\b';
+			}
 		}
-		if(whatgot == '\r') {
+/* wi now holds a valid wide character or WEOF (if end-of-file or
+   error other than invalid multibyte input) */
+		if(wi == L'\r') {
 			switch(ft_state) {
 				case FT_ANY:
 		
@@ -372,11 +387,11 @@ static char *get_file_contents(
 					break;
 				case FT_UNIX:
 					ft_state = FT_MIXED;
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_DOS_OR_MAC:
 					ft_state = FT_MAC_CR;
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_DOS:
 					ft_state = FT_DOS_CR;
@@ -389,59 +404,59 @@ static char *get_file_contents(
 					break;
 				case FT_DOS_CR:
 					ft_state = FT_MIXED_CR;
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_MAC_CR:
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_MIXED_CR:
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_BINARY:
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 			}
-		} else if (whatgot == '\n') {
+		} else if (wi == L'\n') {
 			switch(ft_state) {
 				case FT_ANY:
 					ft_state = FT_UNIX;
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_UNIX:
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_DOS_OR_MAC:
 					ft_state = FT_DOS;
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_DOS:
 					ft_state = FT_MIXED;
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_MAC:
 					ft_state = FT_MIXED;
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_MIXED:
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_DOS_CR:
 					ft_state = FT_DOS;
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_MAC_CR:
 					ft_state = FT_MIXED;
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_MIXED_CR:
 					ft_state = FT_MIXED;
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 				case FT_BINARY:
-					*p++ = '\n';
+					*p++ = L'\n';
 					break;
 			}
-		} else if (whatgot == EOF) {
+		} else if (wi == WEOF) {
 			switch(ft_state) {
 				case FT_ANY:
 					ft_state = FT_UNIX;
@@ -476,49 +491,49 @@ static char *get_file_contents(
 		} else {
 			switch(ft_state) {
 				case FT_ANY:
-					*p++ = whatgot;
+					*p++ = wi;
 					break;
 				case FT_UNIX:
-					*p++ = whatgot;
+					*p++ = wi;
 					break;
 				case FT_DOS_OR_MAC:
 					ft_state = FT_MAC;
 					*p++ = '\n';
-					*p++ = whatgot;
+					*p++ = wi;
 					break;
 				case FT_DOS:
-					*p++ = whatgot;
+					*p++ = wi;
 					break;
 				case FT_MAC:
-					*p++ = whatgot;
+					*p++ = wi;
 					break;
 				case FT_MIXED:
-					*p++ = whatgot;
+					*p++ = wi;
 					break;
 				case FT_DOS_CR:
 					ft_state = FT_MIXED;
 					*p++ = '\n';
-					*p++ = whatgot;
+					*p++ = wi;
 					break;
 				case FT_MAC_CR:
 					ft_state = FT_MAC;
 					*p++ = '\n';
-					*p++ = whatgot;
+					*p++ = wi;
 					break;
 				case FT_MIXED_CR:
 					ft_state = FT_MIXED;
 					*p++ = '\n';
-					*p++ = whatgot;
+					*p++ = wi;
 					break;
 				case FT_BINARY:
-					*p++ = whatgot;
+					*p++ = wi;
 					break;
 			}
 		}
 	}
 	if(ferror(fp)) {
 		file_error_dialog(w, read_error_message, name);
-		XtFree(buf);
+		XtFree((char*)buf);
 		fclose(fp);
 		return NULL;
 	}
@@ -940,7 +955,7 @@ Boolean open_file(
 		Boolean cmd_line,
  		OpenOutcome *outcome)
 {
-	char *buf;
+	wchar_t *buf;
 	static struct stat status;
 	struct stat new_status;
 	Boolean binary, read_only;
@@ -964,7 +979,7 @@ Boolean open_file(
 			||	file_yes_no_dialog(w, read_only_message, name, NULL)) {
 				set_read_only(True);
 			} else {
-				XtFree(buf);
+				XtFree((char*)buf);
 				return False;
 			}
 		} else if (binary) {
@@ -975,15 +990,15 @@ Boolean open_file(
 					name, NULL)) {
 				set_read_only(True);
 			} else {
-				XtFree(buf);
+				XtFree((char*)buf);
 				return False;
 			}
 		} else {
 			set_read_only(read_only || orig_global_options.read_only);
 		}
 		XmTextDisableRedisplay(text);
-		XmTextSetString(text, buf);
-		XtFree(buf);
+		XmTextSetStringWcs(text, buf);
+		XtFree((char*)buf);
 /*
  * The following shouldn't be necessary according to the documentation on XmTextSetString.
  * However Shift+Button1 selections don't work right without it.
@@ -1012,15 +1027,15 @@ Boolean include_file(
 		Widget	w,
 		char	*name)
 {
-	char *buf;
+	wchar_t *buf;
 	XmTextPosition pos;
 	if((buf = get_file_contents(w, name, False, True,
 			NULL, NULL, NULL, NULL)) != NULL) {
 		XmTextDisableRedisplay(text);
 		pos = XmTextGetInsertionPosition(text);
 		XmTextClearSelection(text, CurrentTime);
-		XmTextInsert(text, pos, buf);
-		XtFree(buf);
+		XmTextInsertWcs(text, pos, buf);
+		XtFree((char*)buf);
 		XmTextEnableRedisplay(text);
 		return True;
 	} else {
