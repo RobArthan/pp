@@ -355,7 +355,7 @@ static void goto_line_no_cb(
 
 	line_no = wcstol(line_no_string, NULL, 10);
 
-	XtFree(line_no_string);
+	XtFree((char*)line_no_string);
 
 	if(line_no <= 0) {
 		ok_dialog(cbdata->shell_w, no_line_no);
