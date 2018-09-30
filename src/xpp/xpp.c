@@ -103,7 +103,7 @@ static char *file_name;
 #define TEST_FONT "holnormal"
 #define FONTS "fonts"
 
-static Boolean synchronous, havefonts;
+static Boolean synchronous, havefonts, using_ext;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Following option table reserves single lower-case letter
@@ -203,6 +203,15 @@ static XtResource resources[] = {
 		 "0.5"
 	},
 	{
+		 XtNlocale,
+		 XtCLocale,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, locale),
+		 XtRString,
+		 ""
+	},
+	{
 		 XtNoptionString,
 		 XtCOptionString,
 		 XtRString,
@@ -266,7 +275,7 @@ static XtResource resources[] = {
 		 (XtPointer) 32
 	}
 };
-\
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Usage line
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -601,6 +610,44 @@ char *default_command_line(char *cmd_line)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * choose_app_class: choose app_class and set using_ext based
+ * on the name used to inoked the program.
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+char *choose_app_class(char *argv0)
+{
+	int len = strlen(argv0);
+	using_ext = len > 3 && strcmp(argv0 + len - 3, "ext") == 0;
+	return using_ext ? APP_CLASS_EXT : APP_CLASS;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * choose_locale: choose locale based on value of using_ext
+ * and/or the resources.
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+void choose_locale(void)
+{
+	char *r;
+	r = setlocale(LC_ALL, using_ext ? "C" : xpp_resources.locale);
+	if(r == NULL) {
+		msg("initialisation warning: could not set locale:",
+			xpp_resources.locale);
+	}
+	if(!using_ext) {
+		char *mb = "\xe2\x84\x9a";
+		wchar_t wc;
+		mbtowc(&wc, mb, 3);
+		if(wc != 0x211a) {
+			msg("initialisation warning: locale set to",
+							xpp_resources.locale);
+			msg("initialisation warning",
+				"this locale does not use the UTF-8 encoding");
+			msg("initialisation warning",
+				"xpp has not been tested with this encoding");
+		}
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * main:
  * Apart from starting up Xt, there are several complications here:
  *
@@ -628,7 +675,7 @@ char *default_command_line(char *cmd_line)
 
 int main(int argc, char **argv)
 {
-	char **retry_argv;
+	char **retry_argv, *app_class;
 	int orig_argc, num_x_args;
 	Boolean use_default_command;
 	char *cmd_line;
@@ -645,10 +692,10 @@ int main(int argc, char **argv)
 
 	set_pp_home();
 
-	(void) setlocale(LC_ALL, "");
+	app_class = choose_app_class(argv0),
 
 	root = XtOpenApplication(&app,
-		APP_CLASS,
+		app_class,
 		options,
 		XtNumber(options),
 		&argc,
@@ -656,8 +703,6 @@ int main(int argc, char **argv)
 		NULL, /* no fallback resources */
 		applicationShellWidgetClass,
 		NULL, 0); /* default widget resources*/
-
-	XtSetLanguageProc(app, NULL, NULL);
 
 	num_x_args = orig_argc - argc;
 
@@ -712,11 +757,15 @@ int main(int argc, char **argv)
 	?	EXECUTE_ADD_NEW_LINES
 	:	xpp_resources.add_new_line_mode;
 
+	choose_locale();
+
+	XtSetLanguageProc(app, NULL, NULL);
+
 	command_line_list = xpp_resources.command_line_list;
 
 	(void) fcntl(x_fd, F_SETFD, 0);
 
-	if (!havefonts && get_pp_fonts())  {
+	if (using_ext && !havefonts && get_pp_fonts())  {
 		/* Need to restart to pick up the fonts added to the path by get_pp_fonts */
 		/* don't need X any more: */
 		XtDestroyApplicationContext(app);

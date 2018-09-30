@@ -1302,7 +1302,7 @@ static void default_sigs(void)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * new_session: run a program. either synchronously
- * or asynchronously as determined by Bollean parameter.
+ * or asynchronously as determined by Boolean parameter.
  *
  * If asynchronous, we actually fork a child which then forks again and
  * the grand-child becomes the new xpp process. The

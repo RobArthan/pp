@@ -43,6 +43,7 @@
 #define ACTION_PROC_ARGS Widget,XEvent*,String*,Cardinal*
 
 #define APP_CLASS "Xpp"
+#define APP_CLASS_EXT "XppExt"
 
 /* See the typedef for MenuItem for the following */
 
@@ -381,20 +382,21 @@ typedef enum {
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 typedef struct {
-	XtTranslations text_translations;
-	char *templates;
-	char *palette;
-	char *command_line_list;
 	int  add_new_line_mode;
-	char *default_command;
 	char *argument_checker;
-	char *option_string;
-	float journal_ratio;
-	unsigned char orientation;
-	int total_rows;
-	int total_columns;
-	int edit_only_rows;
+	char *command_line_list;
+	char *default_command;
 	int edit_only_columns;
+	int edit_only_rows;
+	float journal_ratio;
+	char *locale;
+	char *option_string;
+	unsigned char orientation;
+	char *palette;
+	char *templates;
+	XtTranslations text_translations;
+	int total_columns;
+	int total_rows;
 } XppResources;
 
 #ifdef _xpp
