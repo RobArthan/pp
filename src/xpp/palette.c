@@ -118,7 +118,7 @@ static void get_labels(PaletteConfig *palette_config)
 			sprintf(buf, binary_data_msg,
 				palette_config->num_rows + 1, col + 1);
 			ok_dialog(root, buf);
-			return;
+			break;
 		}
 		switch(wc) {
 			case L'\n': /* end of row */
@@ -148,6 +148,11 @@ static void get_labels(PaletteConfig *palette_config)
 		}
 		p += r;
 		l -= r;
+	}
+	if(palette_config->num_rows == 0 && col > 0) {
+/* Single row with no terminating new-line */
+		palette_config->num_rows = 1;
+		palette_config->num_cols = col;
 	}
 }
 

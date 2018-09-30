@@ -22,32 +22,34 @@
 #define LIMIT_RANGE(VAR,LOW,HIGH) \
 	(VAR) = (VAR) < (LOW) ? (LOW) : (VAR) > (HIGH) ? (HIGH) : (VAR);
 
-#define XtNtextTranslations	"textTranslations"
-#define XtCTextTranslations	"TextTranslations"
-#define XtNtemplates		"templates"
-#define XtCTemplates		"Templates"
 #define XtNaddNewlineMode	"addNewlineMode"
 #define XtCAddNewlineMode	"AddNewlineMode"
+#define XtNargumentChecker	"argumentChecker"
+#define XtCArgumentChecker	"ArgumentChecker"
 #define XtNcommandLineList	"commandLineList"
 #define XtCCommandLineList	"CommandLineList"
 #define XtNdefaultCommand	"defaultCommand"
 #define XtCDefaultCommand	"DefaultCommand"
-#define XtNargumentChecker	"argumentChecker"
-#define XtCArgumentChecker	"ArgumentChecker"
+#define XtNeditOnlyColumns	"editOnlyColumns"
+#define XtCEditOnlyColumns	"EditOnlyColumns"
+#define XtNeditOnlyRows		"editOnlyRows"
+#define XtCEditOnlyRows		"EditOnlyRows"
+#define XtNjournalRatio		"journalRatio"
+#define XtCJournalRatio		"JournalRatio"
+#define XtNlocale		"locale"
+#define XtCLocale		"Locale"
 #define XtNoptionString		"optionString"
 #define XtCOptionString		"OptionString"
 #define XtNpalette		"palette"
 #define XtCPalette		"Palette"
-#define XtNtotalRows		"totalRows"
-#define XtCTotalRows		"TotalRows"
+#define XtNtemplates		"templates"
+#define XtCTemplates		"Templates"
+#define XtNtextTranslations	"textTranslations"
+#define XtCTextTranslations	"TextTranslations"
 #define XtNtotalColumns		"totalColumns"
 #define XtCTotalColumns		"TotalColumns"
-#define XtNjournalRatio		"journalRatio"
-#define XtCJournalRatio		"JournalRatio"
-#define XtNeditOnlyRows		"editOnlyRows"
-#define XtCEditOnlyRows		"EditOnlyRows"
-#define XtNeditOnlyColumns	"editOnlyColumns"
-#define XtCEditOnlyColumns	"EditOnlyColumns"
+#define XtNtotalRows		"totalRows"
+#define XtCTotalRows		"TotalRows"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files:
@@ -138,133 +140,133 @@ static XrmOptionDescRec options [] = {
 
 static XtResource resources[] = {
 	{
-		XtNtextTranslations,
-		XtCTextTranslations,
-		XtRTranslationTable,
-		sizeof(char *),
-		XtOffsetOf(XppResources, text_translations),
-		XtRString,
-		""
+		 XtNaddNewlineMode,
+		 XtCAddNewlineMode,
+		 XtRInt,
+		 sizeof(int),
+		 XtOffsetOf(XppResources, add_new_line_mode),
+		 XtRImmediate,
+		 (XtPointer) 0
 	},
 	{
-		XtNtemplates,
-		XtCTemplates,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, templates),
-		XtRString,
-		""
+		 XtNargumentChecker,
+		 XtCArgumentChecker,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, argument_checker),
+		 XtRString,
+		 "pp -V"
 	},
 	{
-		XtNpalette,
-		XtCPalette,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, palette),
-		XtRString,
-		"no-palette-resource"
+		 XtNcommandLineList,
+		 XtCCommandLineList,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, command_line_list),
+		 XtRString,
+		 ""
 	},
 	{
-		XtNcommandLineList,
-		XtCCommandLineList,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, command_line_list),
-		XtRString,
-		""
+		 XtNdefaultCommand,
+		 XtCDefaultCommand,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, default_command),
+		 XtRString,
+		 "pp"
 	},
 	{
-		XtNaddNewlineMode,
-		XtCAddNewlineMode,
-		XtRInt,
-		sizeof(int),
-		XtOffsetOf(XppResources, add_new_line_mode),
-		XtRImmediate,
-		(XtPointer) 0
+		 XtNeditOnlyColumns,
+		 XtCEditOnlyColumns,
+		 XtRInt,
+		 sizeof(int),
+		 XtOffsetOf(XppResources, edit_only_columns),
+		 XtRImmediate,
+		 (XtPointer)80
 	},
 	{
-		XtNdefaultCommand,
-		XtCDefaultCommand,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, default_command),
-		XtRString,
-		"pp"
+		 XtNeditOnlyRows,
+		 XtCEditOnlyRows,
+		 XtRInt,
+		 sizeof(int),
+		 XtOffsetOf(XppResources, edit_only_rows),
+		 XtRImmediate,
+		 (XtPointer) 24
 	},
 	{
-		XtNargumentChecker,
-		XtCArgumentChecker,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, argument_checker),
-		XtRString,
-		"pp -V"
+		 XtNjournalRatio,
+		 XtCJournalRatio,
+		 XtRFloat,
+		 sizeof(float),
+		 XtOffsetOf(XppResources, journal_ratio),
+		 XtRString,
+		 "0.5"
 	},
 	{
-		XtNoptionString,
-		XtCOptionString,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, option_string),
-		XtRString,
-		"bchrf:d:i:F:nsve"
+		 XtNoptionString,
+		 XtCOptionString,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, option_string),
+		 XtRString,
+		 "bchrf:d:i:F:nsve"
 	},
 	{
-		XtNjournalRatio,
-		XtCJournalRatio,
-		XtRFloat,
-		sizeof(float),
-		XtOffsetOf(XppResources, journal_ratio),
-		XtRString,
-		"0.5"
+		 XtNorientation,
+		 XtCOrientation,
+		 XtROrientation,
+		 sizeof(unsigned char),
+		 XtOffsetOf(XppResources, orientation),
+		 XtRString,
+		 "VERTICAL"
 	},
 	{
-		XtNorientation,
-		XtCOrientation,
-		XtROrientation,
-		sizeof(unsigned char),
-		XtOffsetOf(XppResources, orientation),
-		XtRString,
-		"VERTICAL"
+		 XtNpalette,
+		 XtCPalette,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, palette),
+		 XtRString,
+		 "no-palette-resource"
 	},
 	{
-		XtNtotalRows,
-		XtCTotalRows,
-		XtRInt,
-		sizeof(int),
-		XtOffsetOf(XppResources, total_rows),
-		XtRImmediate,
-		(XtPointer) 32
+		 XtNtemplates,
+		 XtCTemplates,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, templates),
+		 XtRString,
+		 ""
 	},
 	{
-		XtNtotalColumns,
-		XtCTotalColumns,
-		XtRInt,
-		sizeof(int),
-		XtOffsetOf(XppResources, total_columns),
-		XtRImmediate,
-		(XtPointer)80
+		 XtNtextTranslations,
+		 XtCTextTranslations,
+		 XtRTranslationTable,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, text_translations),
+		 XtRString,
+		 ""
 	},
 	{
-		XtNeditOnlyRows,
-		XtCEditOnlyRows,
-		XtRInt,
-		sizeof(int),
-		XtOffsetOf(XppResources, edit_only_rows),
-		XtRImmediate,
-		(XtPointer) 24
+		 XtNtotalColumns,
+		 XtCTotalColumns,
+		 XtRInt,
+		 sizeof(int),
+		 XtOffsetOf(XppResources, total_columns),
+		 XtRImmediate,
+		 (XtPointer)80
 	},
 	{
-		XtNeditOnlyColumns,
-		XtCEditOnlyColumns,
-		XtRInt,
-		sizeof(int),
-		XtOffsetOf(XppResources, edit_only_columns),
-		XtRImmediate,
-		(XtPointer)80
+		 XtNtotalRows,
+		 XtCTotalRows,
+		 XtRInt,
+		 sizeof(int),
+		 XtOffsetOf(XppResources, total_rows),
+		 XtRImmediate,
+		 (XtPointer) 32
 	}
 };
-
+\
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Usage line
  * **** **** **** **** **** **** **** **** **** **** **** **** */
