@@ -1090,7 +1090,7 @@ void panic_save(
 
 {
 	extern char *mktemp(char *);
-	static char buf[BUFSIZ + 1];
+	static wchar_t buf[BUFSIZ + 1];
 	static char *name = panic_save_name + 5; /* skip "/tmp/" */
 	static int fd;
 	static FILE *fp;
@@ -1113,17 +1113,17 @@ void panic_save(
 		fchmod(fd, current_file_status->st_mode);
 	}
 	i = 0;
-	while((success = XmTextGetSubstring(text, i,
+	while((success = XmTextGetSubstringWcs(text, i,
 						BUFSIZ, BUFSIZ + 1, buf))
 			== XmCOPY_SUCCEEDED
 		&&
-		(bytes_written = fwrite(buf, sizeof(char), BUFSIZ, fp))
+		(bytes_written = fwprintf(fp, L"%S", buf))
 			== BUFSIZ) {
 		i += BUFSIZ;
 	}
 	if(success == XmCOPY_TRUNCATED) {
-		i = strlen(buf);
-		if( fwrite(buf, sizeof(char), i, fp) == i) {
+		i = wcslen(buf);
+		if( fwprintf(fp, L"%S", buf) == i) {
 			fprintf(stderr, panic_file_written, name);
 		} else {
 			fprintf(stderr, panic_file_error, name);
