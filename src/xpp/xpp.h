@@ -409,6 +409,7 @@ typedef struct {
 	extern char *pp_home;
 	extern Boolean pp_env_debug;
 	extern Boolean updating_journal;
+	extern Boolean using_ext_char_set;
 	extern const char *const file_type_names[]
 #ifdef _xpp
 	= {"Unix", "MS-DOS", "Macintosh" };

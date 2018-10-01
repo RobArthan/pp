@@ -884,11 +884,15 @@ static void selection_cb (
 }
 static char *get_remote_selection(Boolean *timed_out)
 {
+	Atom target; 
+	target = using_ext_char_set ?
+			XA_STRING :
+			XInternAtom(XtDisplay(root), "UTF8_STRING", False);
 	sel_req_info.data = NULL;
 	sel_req_info.failed = False;
 	XtGetSelectionValue(root,
 		XA_PRIMARY,
-		XA_STRING,
+		target,
 		selection_cb,
 		0,
 		XtLastTimestampProcessed(XtDisplay(root)));

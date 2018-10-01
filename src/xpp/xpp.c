@@ -103,7 +103,7 @@ static char *file_name;
 #define TEST_FONT "holnormal"
 #define FONTS "fonts"
 
-static Boolean synchronous, havefonts, using_ext;
+static Boolean synchronous, havefonts;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Following option table reserves single lower-case letter
@@ -610,29 +610,29 @@ char *default_command_line(char *cmd_line)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * choose_app_class: choose app_class and set using_ext based
+ * choose_app_class: choose app_class and set using_ext_char_set based
  * on the name used to inoked the program.
  * **** **** **** **** **** **** **** **** **** **** **** ****/
 char *choose_app_class(char *argv0)
 {
 	int len = strlen(argv0);
-	using_ext = len > 3 && strcmp(argv0 + len - 3, "ext") == 0;
-	return using_ext ? APP_CLASS_EXT : APP_CLASS;
+	using_ext_char_set = len > 3 && strcmp(argv0 + len - 3, "ext") == 0;
+	return using_ext_char_set ? APP_CLASS_EXT : APP_CLASS;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * choose_locale: choose locale based on value of using_ext
+ * choose_locale: choose locale based on value of using_ext_char_set
  * and/or the resources.
  * **** **** **** **** **** **** **** **** **** **** **** ****/
 void choose_locale(void)
 {
 	char *r;
-	r = setlocale(LC_ALL, using_ext ? "C" : xpp_resources.locale);
+	r = setlocale(LC_ALL, using_ext_char_set ? "C" : xpp_resources.locale);
 	if(r == NULL) {
 		msg("initialisation warning: could not set locale:",
 			xpp_resources.locale);
 	}
-	if(!using_ext) {
+	if(!using_ext_char_set) {
 		char *mb = "\xe2\x84\x9a";
 		wchar_t wc;
 		mbtowc(&wc, mb, 3);
@@ -765,7 +765,7 @@ int main(int argc, char **argv)
 
 	(void) fcntl(x_fd, F_SETFD, 0);
 
-	if (using_ext && !havefonts && get_pp_fonts())  {
+	if (using_ext_char_set && !havefonts && get_pp_fonts())  {
 		/* Need to restart to pick up the fonts added to the path by get_pp_fonts */
 		/* don't need X any more: */
 		XtDestroyApplicationContext(app);
