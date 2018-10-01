@@ -192,22 +192,6 @@ void check_text_window_limit(Widget w, Cardinal max)
 	XmTextReplace(w, 0, bytes_to_go, msg);
 	updating_journal = False;
 }
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * copy_font_list: copy the font list resource from one text
- * widget to another.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-void copy_font_list (
-	Widget	to_w,
-	Widget from_w)
-{
-	XmFontList fontlist;
-
-	XtVaGetValues(from_w, XmNfontList, &fontlist, NULL);
-	if(fontlist != NULL) {
-		XtVaSetValues(to_w,
-		XmNfontList, fontlist, NULL);
-	}
-}
 
 /* **** ** **** **** **** **** **** **** **** **** **** ****
  * flash_widget: make a widget flash by temporarily exchanging

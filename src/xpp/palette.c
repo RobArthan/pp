@@ -262,7 +262,6 @@ void popup_palette(Widget w)
 					XmNbottomAttachment,	XmATTACH_POSITION,
 					XmNbottomPosition,	y + palette_config->y_units,
 					NULL);
-				copy_font_list(button, w);
 				XmStringFree(lab);
 				cbdata = wc;
 				XtAddCallback(button, XmNactivateCallback, type_char_cb,

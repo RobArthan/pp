@@ -250,13 +250,11 @@ void add_command_line_tool(Widget text_w)
 	cmd_line_data.previous = 0;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * set up text widget translations and font
+ * set up text widget translations
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	XtOverrideTranslations(cmd_text,
 		xpp_resources.text_translations);
-
-	copy_font_list(list_w, cmd_text);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Make return in the text widget activate it
