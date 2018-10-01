@@ -638,11 +638,11 @@ void choose_locale(void)
 		mbtowc(&wc, mb, 3);
 		if(wc != 0x211a) {
 			msg("initialisation warning: locale set to",
-							xpp_resources.locale);
+	xpp_resources.locale);
 			msg("initialisation warning",
-				"this locale does not use the UTF-8 encoding");
+	"this locale does not use UTF-8 encoding");
 			msg("initialisation warning",
-				"xpp has not been tested with this encoding");
+	"xpp is unlikely to work well with the encoding used by this locale");
 		}
 	}
 }
