@@ -446,7 +446,7 @@ static void templates_help_cb(
 		NULL);
 
 	introduction = XtVaCreateManagedWidget("introduction",
-		xmLabelGadgetClass,	help_pane,
+		xmLabelWidgetClass,	help_pane,
 		XmNlabelString,		format_msg(Help_Templates_Tool,
 						HELP_LINE_LEN),
 		XmNalignment,		XmALIGNMENT_CENTER,
