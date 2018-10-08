@@ -894,33 +894,6 @@ static char *get_remote_selection(Boolean *timed_out)
 	return sel_req_info.data;
 }
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * get_selection_wcs: wide character interface to get_selection
- * **** **** **** **** **** **** **** **** **** **** **** ****/
-wchar_t *get_selection_wcs(Widget w, char *err_msg)
-{
-	wchar_t *wsel;
-	char *sel;
-	size_t r;
-	int len;
-	sel = get_selection(w, err_msg);
-	if(sel != 0) {
-		len = strlen(sel);
-		wsel = (wchar_t*)XtMalloc((len + 1)*sizeof(wchar_t));
-		r = mbstowcs(wsel, sel, len + 1);
-		if(r > 0) {
-			XtFree((char*)sel);
-			return wsel;
-		} else {
-			XtFree((char*)sel);
-			XtFree((char*)wsel);
-			return 0;
-		}
-	} else {
-		return 0;
-	}
-}
-
 #ifdef LISTWIDGETS
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * register_shell: register the shell ancestor of a widget for
