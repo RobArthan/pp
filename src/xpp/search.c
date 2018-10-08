@@ -916,12 +916,7 @@ static void replace_all_cb(
 				no_room_for_search_op);
 			XtFree((char*)replacement);
 		} else {
-			XmTextReplaceWcs(
-				cbdata->text_w,
-				0,
-				XmTextGetLastPosition(
-					cbdata->text_w),
-				all_replaced);
+			XmTextSetStringWcs(cbdata->text_w, all_replaced);
 			XmTextSetTopCharacter(cbdata->text_w, 0);
 			text_show_position(
 				cbdata->text_w,
