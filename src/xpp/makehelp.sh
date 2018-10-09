@@ -19,5 +19,8 @@
 rm -f help.c
 rm -f help.h
 YEAR=`date +%Y`
+# Work in C locale because we don't want things like en spaces that
+# nroff may insert in other locales.
+export LANG=C
 nroff -ms help.txt | sed -nf makehelp1.sed | sed -e /YEAR/s/YEAR/$YEAR/ >help.c
 sed -nf makehelp2.sed < help.c > help.h
