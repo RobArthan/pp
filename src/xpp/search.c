@@ -724,9 +724,9 @@ int my_regwexec(const regex_t *preg, const wchar_t *widestr,
 			pmatch[i].rm_eo = offset_to_woffset[pmatch[i].rm_eo];
 		}
 		if((pmatch[i].rm_so < 0) != (pmatch[i].rm_eo < 0)) {
-			XtFree(string);\
-			XtFree((char*)offset_to_woffset);\
-			return REG_INVARG;\
+			XtFree(string);
+			XtFree((char*)offset_to_woffset);
+			return REG_INVARG;
 		}
 	}
 	XtFree(string);
