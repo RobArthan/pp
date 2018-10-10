@@ -688,47 +688,59 @@ int my_regwcomp(regex_t *preg, const wchar_t *widepat, int cflags)
  * convert the wide character string into a multi-byte string 
  * the conversion would involve a similar O(N) overhead. To avoid
  * this, we use a "double-and-conquer" approach that makes the cost N*K.
+ *
+ * An earlier version of this just did two XtMalloc calls for enough
+ * memory to accommodate all of widestr before the the main loop.
+ * On big files this resulted in very poor  performance on replace_all
+ * operations. The approach that allocates just enough for the
+ * current chunk is 3 or 4 orders of magnitude faster on a 10Mb file.
+ * 
  */
 int my_regwexec(const regex_t *preg, const wchar_t *widestr,
 	size_t nmatch, regmatch_t pmatch[], int eflags)
 {
-	char *str, *pc;
+	char *str;
 	const wchar_t *pwc;
-	int *offset_to_woffset, i, j, curr_chunk;
-	int len = wcslen(widestr) * MB_CUR_MAX;
-	int cr, rer;
+	int *offset_to_woffset, i, str_i, curr_chunk, len, cr, rer;
+	len = INITCHUNK  * MB_CUR_MAX;
 	str = XtMalloc(len + 1);
 	if(str == 0) return REG_ESPACE;
 	offset_to_woffset = (int*)XtMalloc(sizeof(int)*(len + 1));
 	if(offset_to_woffset == 0) { XtFree(str); return REG_ESPACE; }
 	for(	curr_chunk = INITCHUNK,
 		pwc = widestr,
-		pc = str,
+		str_i = 0,
 		rer = REG_NOMATCH;
 		*pwc != 0;
-		curr_chunk += 2) {
+		curr_chunk *= 2) {
 /* convert up to curr_chunk elements from widestr into str */
+		len = curr_chunk * MB_CUR_MAX;
+		str = XtRealloc(str, len + 1);
+		if(str == 0) return REG_ESPACE;
+		offset_to_woffset = (int*)XtRealloc((char*)offset_to_woffset,
+							sizeof(int)*(len + 1));
+		if(offset_to_woffset == 0) { XtFree(str); return REG_ESPACE; }
 		while(pwc - widestr < curr_chunk && *pwc !=0) {
-			cr = wctomb(pc, *pwc);
+			cr = wctomb(str + str_i, *pwc);
 			if(cr == -1) {
 				XtFree(str);
 				XtFree((char*)offset_to_woffset);
 				return REG_INVARG;
 			}
 /* record offset of current element of widestr against this index in str */
-			offset_to_woffset[pc - str] = pwc - widestr;
+			offset_to_woffset[str_i] = pwc - widestr;
 /* mark remaining chars in this multi-byte char as invalid offsets */
-			for(j = 1; j < cr; j += 1) {
-				offset_to_woffset[pc - str + i] = -1;
+			for(i = 1; i < cr; i += 1) {
+				offset_to_woffset[str_i + i] = -1;
 			}
-			pc += cr;
+			str_i += cr;
 			pwc += 1;
 		}
-		*pc = 0;
-		offset_to_woffset[pc - str] = pwc - widestr;
+		str[str_i] = 0;
+		offset_to_woffset[str_i] = pwc - widestr;
 /* try to match */
 		rer = regexec(preg, str, nmatch, pmatch, eflags);
-		if(rer == 0 && (pmatch[0].rm_eo < pc - str || *pwc == L'\0')) {
+		if(rer == 0 && (pmatch[0].rm_eo < str_i || *pwc == L'\0')) {
 			/* match */
 			break;
 		} else if (rer != 0 && rer != REG_NOMATCH) {
