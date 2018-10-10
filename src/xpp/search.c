@@ -30,11 +30,17 @@ enum {FORWARDS, BACKWARDS};
 #include <ctype.h>
 #include <sys/types.h>
 #include <regex.h>
+#include <wctype.h>
 
 #include "xpp.h"
 
 #define INITCHUNK 4
 #define REGEXEC my_regwexec
+/* If we don't have REG_INVARG use the glibc non-standard error code instead */
+#ifndef REG_INVARG
+#define REG_INVARG REG_EEND
+#endif
+
 /*
  * The number of submatches that we record when we do RE matching.
  * Includes the overall match \0 and 9 proper submatches \1 .. \9
