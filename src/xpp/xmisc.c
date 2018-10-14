@@ -153,12 +153,12 @@ void set_menu_item_label(Widget w, Cardinal i, char *lab)
 void check_text_window_limit(Widget w, Cardinal max)
 {
 	XmTextPosition siz;
-	Cardinal bytes_to_go;
+	Cardinal glyphs_to_go;
 
-	char *text, *p;
-	const char *fmt =
-	"**** Text lost when buffer exceeded %ld bytes ****\n";
-	char msg[80]; /* enough for fmt with %ld expanded */
+	wchar_t *text, *p;
+	const wchar_t *fmt =
+		L"**** Text lost when buffer exceeded %ld characters ****\n";
+	wchar_t msg[80]; /* enough for fmt with %ld expanded */
 
 	if(max < 1000) {
 		return;
@@ -170,26 +170,26 @@ void check_text_window_limit(Widget w, Cardinal max)
 		return;
 	}
 
-	bytes_to_go = siz / 20;
+	glyphs_to_go = siz / 20;
 
-	text = XmTextGetString(w);
+	text = XmTextGetStringWcs(w);
 
-	for(p = text + bytes_to_go; p - text < 2*bytes_to_go; ++p) {
-		if(*p == '\n') {
+	for(p = text + glyphs_to_go; p - text < 2*glyphs_to_go; ++p) {
+		if(*p == L'\n') {
 			break;
 		}
 	}
 
-	if(*p == '\n') {
-		bytes_to_go = p - text + 1;
+	if(*p == L'\n') {
+		glyphs_to_go = p - text + 1;
 	}
 
-	XtFree(text);
+	XtFree((char*)text);
 
-	sprintf(msg, fmt, max);
+	swprintf(msg, 79, fmt, max);
 
 	updating_journal = True;
-	XmTextReplace(w, 0, bytes_to_go, msg);
+	XmTextReplaceWcs(w, 0, glyphs_to_go, msg);
 	updating_journal = False;
 }
 
