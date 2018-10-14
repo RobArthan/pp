@@ -894,6 +894,85 @@ static char *get_remote_selection(Boolean *timed_out)
 	return sel_req_info.data;
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Deferring scrolling in text widgets. Mice with wheel and 
+ * mice and trackpads that support swipe gestures can swamp a
+ * text widget with scrolling events. The function defer_scroll
+ * records the most recent scrolling event and ses up a work proc
+ * to dispatch the event. This means that most scrolling events
+ * are effectively ignored.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+typedef struct {
+	Boolean press_pending, release_pending;
+	XEvent press, release;
+	Widget w;
+} button_events;
+
+/* Allow for script, journal and help text widgets and one for luck */
+enum {MAX_DEFERRED_SCROLL = 4};
+
+static button_events deferred_button_events [MAX_DEFERRED_SCROLL];
+
+static Boolean deferring_scroll = True;
+
+static Boolean defer_scroll_work_proc(XtPointer xtp)
+{
+	button_events *pbe = xtp;
+	deferring_scroll = False;
+	if(pbe->press_pending) {
+			XtDispatchEvent(&pbe->press);
+	}
+	if(pbe->release_pending) {
+			XtDispatchEvent(&pbe->release);
+	}
+	pbe->press_pending = pbe->release_pending = False;
+	deferring_scroll = True;
+	return True; /* job done */
+}
+
+void defer_scroll(
+	Widget		w,
+	XtPointer	x,
+	XEvent		*evp,
+	Boolean		*continue_dispatch)
+{
+	if(	deferring_scroll
+	&&	(evp->type == ButtonPress || evp->type == ButtonRelease)) {
+		XButtonEvent *be = &evp->xbutton;
+		button_events *pbe;
+		for(	pbe = deferred_button_events;
+			pbe - deferred_button_events < MAX_DEFERRED_SCROLL
+		&&	pbe->w != w;
+			pbe += 1) {
+			if(pbe->w == 0) {
+				pbe->w = w;
+				break;
+			};
+		}
+		if(pbe - deferred_button_events == MAX_DEFERRED_SCROLL) {
+			*continue_dispatch = True;
+			return;
+		}
+		if(	pbe - deferred_button_events < MAX_DEFERRED_SCROLL
+		&&	(be->button == Button4 || be->button == Button5)) {
+			if(be->type == ButtonPress) {
+				pbe->press_pending = True;
+				pbe->press = *evp;
+			} else {
+				pbe->release_pending = True;
+				pbe->release = *evp;
+			}
+			(void)XtAppAddWorkProc(app, defer_scroll_work_proc,
+								(XtPointer)pbe);
+			*continue_dispatch = False;
+		} else {
+			*continue_dispatch = True;
+		}
+	} else {
+		*continue_dispatch = True;
+	}
+}
+
 #ifdef LISTWIDGETS
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * register_shell: register the shell ancestor of a widget for

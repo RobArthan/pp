@@ -368,6 +368,7 @@ typedef enum {
 		Widget w);
 	extern void attach_popup_menu(Widget work_w, Widget menu_w);
 	extern char *get_selection(Widget w, char *err_msg);
+	extern void defer_scroll (EVENT_HANDLER_ARGS);
 #ifdef EDITRES
 	extern void add_edit_res_handler(Widget shell);
 #endif

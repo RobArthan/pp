@@ -881,6 +881,13 @@ static Boolean setup_main_window(
 
 	line_number_cb(script, NULL, NULL);
 
+	XtInsertEventHandler(script,
+		ButtonPressMask | ButtonReleaseMask,
+		False,
+		defer_scroll,
+		NULL,
+		XtListHead);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -945,6 +952,14 @@ static Boolean setup_main_window(
 					XtListHead);
 			}
 		}
+
+
+		XtInsertEventHandler(journal,
+			ButtonPressMask | ButtonReleaseMask,
+			False,
+			defer_scroll,
+			NULL,
+			XtListHead);
 
 		XtInsertEventHandler(journal,
 			StructureNotifyMask,
@@ -2105,7 +2120,6 @@ static void defer_resize(
 		*continue_dispatch = False; /* keep Motif out */
 	} /* else, let Motif in */
 }
-
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * See if the user wants to save the text and if so do so.
