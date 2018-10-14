@@ -898,9 +898,9 @@ static char *get_remote_selection(Boolean *timed_out)
  * Deferring scrolling in text widgets. Mice with wheel and 
  * mice and trackpads that support swipe gestures can swamp a
  * text widget with scrolling events. The function defer_scroll
- * records the most recent scrolling event and ses up a work proc
- * to dispatch the event. This means that most scrolling events
- * are effectively ignored.
+ * records the most recent scrolling event and (if necessary)
+ * registers a timeout proc to dispatch the most recent recorded event.
+ * This means that most scrolling events are effectively ignored.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 typedef struct {
 	Boolean press_pending, release_pending;
@@ -911,11 +911,14 @@ typedef struct {
 /* Allow for script, journal and help text widgets and one for luck */
 enum {MAX_DEFERRED_SCROLL = 4};
 
+/* We rely on the iniitalisation of static data to zero below */
 static button_events deferred_button_events [MAX_DEFERRED_SCROLL];
+
+static Boolean defer_scroll_timeout_registered = False;
 
 static Boolean deferring_scroll = True;
 
-static Boolean defer_scroll_work_proc(XtPointer xtp)
+static void defer_scroll_timeout_proc(XtPointer xtp, XtIntervalId *ignored)
 {
 	button_events *pbe = xtp;
 	deferring_scroll = False;
@@ -927,7 +930,7 @@ static Boolean defer_scroll_work_proc(XtPointer xtp)
 	}
 	pbe->press_pending = pbe->release_pending = False;
 	deferring_scroll = True;
-	return True; /* job done */
+	defer_scroll_timeout_registered = False;
 }
 
 void defer_scroll(
@@ -962,8 +965,12 @@ void defer_scroll(
 				pbe->release_pending = True;
 				pbe->release = *evp;
 			}
-			(void)XtAppAddWorkProc(app, defer_scroll_work_proc,
-								(XtPointer)pbe);
+			if(!defer_scroll_timeout_registered) {
+				(void)XtAppAddTimeOut(app, 40,
+					defer_scroll_timeout_proc,
+					(XtPointer)pbe);
+				defer_scroll_timeout_registered = True;
+			}
 			*continue_dispatch = False;
 		} else {
 			*continue_dispatch = True;
