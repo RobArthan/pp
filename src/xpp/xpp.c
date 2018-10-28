@@ -67,8 +67,13 @@
  * externs for getopt(3):
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+/*
+* The following are not needed on Linux and Mac OS X and cause a warning on
+*  Cygwin.
+
 extern int optind, opterr, optopt;
 extern char *optarg;
+*/
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Static and global data

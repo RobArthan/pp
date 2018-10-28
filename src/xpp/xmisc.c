@@ -36,6 +36,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <wctype.h>
 #include <X11/Xatom.h>
 #include <X11/Intrinsic.h>
 #include <X11/Shell.h>
@@ -337,11 +338,9 @@ void text_field_verify_cb(
 	XmTextVerifyCallbackStructWcs *cbs = xtp;
 	int i, j;
 	wchar_t *p = cbs->text->wcsptr;
-	Boolean has_crs = False, has_controls = False;
+	Boolean has_controls = False;
 	for(i = 0; i < cbs->text->length; ++i) {
-		if((p[i] & 0xff) == '\r') {
-			has_crs = True;
-		} else if(0 <= p[i] && p[i] <= 0xff && control_chars[p[i]]) {
+		if(0 <= p[i] && p[i] <= 0xff && control_chars[p[i]]) {
 			has_controls = True;
 			p[i] = '?';
 		}

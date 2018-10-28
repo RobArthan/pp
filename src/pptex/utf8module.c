@@ -2042,7 +2042,7 @@ char *unicode_to_kw(unicode code_point)
 {
   struct keyword_information *kwi = unicode_to_kwi(code_point);
   if(debug & D_UTF8) {
-    PRINTF("unicode_to_kw: code_point = 0x%6X, kwi = 0x%8X\n", code_point, (unsigned int)kwi);
+    PRINTF("unicode_to_kw: code_point = 0x%6X, kwi = %p\n", code_point, (void *)kwi);
     fflush(NULL);}
   ;
   return (kwi == NULL) ? unicode_to_hex(code_point) : kwi->name;

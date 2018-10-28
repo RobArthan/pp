@@ -638,8 +638,9 @@ void get_pty(void)
  /******************************************************************/
 		char	buf;
 		char **arglist;
+#ifdef TIOCNOTTY
 		int tty_fd;
-
+#endif
 		default_sigs();
 		close(control_fd);
 		dup2(slave_fd, STDIN);
