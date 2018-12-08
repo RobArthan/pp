@@ -2071,7 +2071,7 @@ char *unicode_to_aekw(unicode code_point){
   };
   kwi = unicode_to_kwi(code_point);
   if(debug & D_UTF8) {
-    PRINTF("unicode_to_aekw: code_point = 0x%6X, kwi = 0x%8X\n", code_point, (unsigned int)kwi);
+    PRINTF("unicode_to_aekw: code_point = 0x%6X, kwi = %p\n", code_point, (void *)kwi);
     fflush(NULL);
   };
   if (kwi == NULL) return unicode_to_hex(code_point);
