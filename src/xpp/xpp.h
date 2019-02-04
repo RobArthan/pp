@@ -299,6 +299,8 @@ typedef enum {
 	extern Boolean init_templates_tool(
 		Widget	w);
 	extern void add_templates_tool(Widget w);
+/* Module: ucdnames */
+	extern void identify_unicode_cb(CALLBACK_ARGS);
 /* Module: undo */
 	extern void clear_undo(
 		XtPointer undo_ptr);

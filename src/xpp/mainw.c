@@ -269,7 +269,10 @@ static MenuItem file_menu_items[] = {
 
 #define EDIT_MENU_UNDO  4
 #define EDIT_MENU_REDO  5
-
+/*
+ * Identify Unicode must come last (so we can easily remove it
+ * when using the ext encodint.
+ */
 static MenuItem edit_menu_items[] = {
     { "Cut", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         edit_cut_cb, (XtPointer)0, (MenuItem *)NULL, False },
@@ -287,6 +290,9 @@ static MenuItem edit_menu_items[] = {
         popup_search_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Goto Line ...", &xmPushButtonGadgetClass, 'G', NULL, NULL,
         popup_line_no_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
+    { "Identify Unicode ...", &xmPushButtonGadgetClass, 'I', NULL, NULL,
+        identify_unicode_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -1020,9 +1026,11 @@ static Boolean setup_main_window(
  * edit_menu_items gets changed here and later on so be careful if moving this
  * code
  */
-	for(	i = 0;
-		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]);
-		i += 1 ) {
+	if(using_ext_char_set) {
+/* Don't want Identify Unicode item */
+		edit_menu_items[XtNumber(edit_menu_items)-2].label = NULL;
+	}
+	for(	i = 0; i < XtNumber(edit_menu_items); i += 1 ) {
 		edit_menu_items[i].callback_data = script;
 	}
 
@@ -1091,9 +1099,7 @@ static Boolean setup_main_window(
  * The pop-up edit menu looks a bit neater if we get rid of the accelerator
  * reminder in the pull-down one.
  */
-	for(	i = 0;
-		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]);
-		i += 1 ) {
+	for(	i = 0; i < XtNumber(edit_menu_items); i += 1 ) {
 		edit_menu_items[i].accelerator = NULL;
 	}
 
