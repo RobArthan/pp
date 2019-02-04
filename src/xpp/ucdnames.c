@@ -45,7 +45,8 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static char *no_selection =
 	"No text selection is available in this text window";
-
+static char *banner =
+	"==== Unicode Identification ====\n\n";
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * identify_ucd_cb: callback routine that brings up a
  * dialogue giving the name used inthe Unicode Code Database
@@ -101,8 +102,8 @@ void identify_unicode_cb(
 	wchar_t *sel, *p;
 	sel = XmTextGetSelectionWcs(text_w);
 	if(sel != 0) {
-		char *buf = XtMalloc(80);
-		buf[0] = 0;
+		char *buf = XtMalloc(strlen(banner) + 1);
+		strcpy(buf, banner);
 		for(p = sel; *p; p += 1) {
 			append_ucd_name(&buf, *p);
 		}
