@@ -1,0 +1,220 @@
+=IGN
+********************************************************************************
+dtd121.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+\documentclass[a4paper,12pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+\makeindex
+
+\def\Title{Theorem Finder: Detailed Design }
+
+\def\Abstract{\begin{center}
+{\bf Abstract}\par\parbox{0.7\hsize}
+{\small This document gives the detailed design for tools for querying the theory hierarchy to find theorems satisfying specified conditions.}
+\end{center}}
+
+\def\Reference{LEMMA1/HOL/DTD121}
+
+\def\Author{R.D. Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 118 958 4409}
+
+\def\Fax{+44 118 956 1920}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+\begin{centering}
+
+
+
+\end{centering}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+%%%%% STANDARD RED-TAPE SECTIONS (MAY WANT TO INTERLEAVE SOME \newpage COMMANDS IN THESE)
+
+%%%%% CONTENTS:
+
+\subsection{Contents}
+
+\tableofcontents
+
+%%%%% REFERENCES:
+
+\newpage
+\subsection{References}
+
+\bibliographystyle{fmu}
+
+%%%%% CHANGE THE FOLLOWING AS NECESSARY (E.G., TO PICK UP daz.bib):
+{\raggedright
+\bibliography{fmu}
+}
+%%%%% CHANGES HISTORY:
+\subsection{Changes History}
+\begin{description}
+\item[Issues 1.1 (2010/10/16)--1.3] Initial drafts.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+\item[2015/04/15]
+Now uses new date and version macros from doctex
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%%%%%  CHANGES FORECAST:
+
+\subsection{Changes Forecast}
+
+None.
+
+%%%%% DISTRIBUTION LIST
+
+\subsection{Distribution}
+
+Lemma 1 build system.
+
+\newpage
+
+\section{Introduction}
+\subsection{Scope}
+This document gives the detailed design for tools for querying the theory hierarchy to find theorems satisfying specified conditions.
+
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/HLD011}.
+
+
+\section{THE SIGNATURE}
+
+\subsubsection{Prologue}
+=SML
+signature ⦏TheoremFinder⦎ = sig
+=TEX
+\subsection{Supporting Data Types}
+=DOC
+datatype ⦏THM_TYPE⦎ = ⦏TTAxiom⦎ | ⦏TTDefn⦎ | ⦏TTSaved⦎;
+
+type ⦏THM_INFO⦎ = {
+	theory		: string,
+	names		: string list,
+	thm_type	: THM_TYPE,
+	thm		: THM};
+=DESCRIBE
+The types {\em THM\_TYPE} and {\em THM\_INFO} are used by the theorem finder functions, {\em find\_thm} etc., to represent information about a theorem stored in a theory. The representation gives:
+the name of the theory; the name or names under which the theorem is stored;
+an indicator of whether the theorem is an axiom, a definition or a theorem that has been proved and saved; and the actual theorem.
+=ENDDOC
+=DOC
+datatype 'a ⦏TEST⦎ =
+	⦏TFun⦎ of 'a -> bool
+|	⦏TAll⦎ of 'a TEST list
+|	⦏TAny⦎ of 'a TEST list
+|	⦏TNone⦎ of 'a TEST list;
+
+type ⦏THM_INFO_TEST⦎ = THM_INFO TEST;
+=DESCRIBE
+The type {\em THM\_INFO\_TEST} is used for the parameters of general theorem finder functions, {\em gen\_find\_thm} and {\em gen\_find\_thm\_in\_theories} that represent search criteria.
+The constructor {\em TFun} is used to represent a basic criterion.
+{\em TAll}, {\em TAny} and {\em TNone} construct new criteria from old by conjunction, disjunction and negated disjunction respectively.
+=SEEALSO
+{\em any\_substring\_tt} etc. (for ways of constructing basic criteria).
+=ENDDOC
+=TEX
+\subsection{Theorem Finder Functions}
+=DOC
+val ⦏gen_find_thm_in_theories⦎  : THM_INFO_TEST -> string list -> THM_INFO list;
+val ⦏gen_find_thm⦎ : THM_INFO_TEST -> THM_INFO list;
+
+val ⦏any_substring_tt⦎ : string list -> THM_INFO TEST;
+val ⦏all_substring_tt⦎ : string list -> THM_INFO TEST;
+val ⦏no_substring_tt⦎ : string list -> THM_INFO TEST;
+val ⦏any_subterm_tt⦎ : TERM list -> THM_INFO TEST;
+val ⦏all_subterm_tt⦎ : TERM list -> THM_INFO TEST;
+val ⦏no_subterm_tt⦎ : TERM list -> THM_INFO TEST;
+val ⦏any_submatch_tt⦎ : TERM list -> THM_INFO TEST;
+val ⦏all_submatch_tt⦎ : TERM list -> THM_INFO TEST
+val ⦏no_submatch_tt⦎ : TERM list -> THM_INFO TEST
+
+=DESCRIBE
+{\em gen\_find\_thm\_in\_theories} is the general theorem finder function.
+Its first parameter specifies the search criteria and its second parameter specifies the names of the theories to be searched. It returns a list representing the theorems satisfying the criteria. See the definitions of the parameter and return data types for more details.
+
+{\em gen\_find\_thm} calls {\em gen\_find\_thm\_in\_theories} with the specified search criteria and the list of all ancestors of the current theory as the list of theories to search (this include the current theory). Thus it finds all the theorems that are currently in scope that match the specified criteria.
+
+The remaining functions give convenient ways of specifying typical
+search criteria. These functions support three kinds of basic criterion:
+substring search criteria test for a specified string appearing as a substring of the name of the theorem; subterm search criteria test for the presence (up to $\alpha$-equivalence) in the conclusion of the theorem of a specified subterm;
+submatch search criteria test for the presence in the conclusition of the theorem of a subterm that is an instance of a specified pattern term.
+Given a list of strings or terms giving basic criteria, the functions test for theorems satisfying all of the criteria ({\em all\_\ldots}), at least one of the criteria ({\em any\_\ldots}) or none of the criteria ({\em no\_\ldots}).
+The constructors of the data type {\em THM\_INFO\_TEST}, q.v., allow more complex logical combinations of criteria to be built up from these.
+
+For example, the following will find all theorems in scope that have names containing ``plus'' or ``minus'' as a substring and that have a conclusion that does not contain any natural number additions.
+=GFT
+gen_find_thm(TAll[any_substring_tt["plus", "minus"], no_subterm_tt[⌜$+:ℕ → ℕ → ℕ⌝]]);
+=SEEALSO
+{\em find\_thm}
+=ENDDOC
+=DOC
+val ⦏find_thm⦎ : TERM list -> THM_INFO list;
+=DESCRIBE
+This is a simple interface for finding theorems.
+{\em find\_thm pats} searches for any theorems in the current theory and its ancestors that contains subterms matching each of the pattern terms {\em tms}.
+
+The return value is a list of records containing the conclusion of the theorem and other useful information, see the description of the type {\em THM\_INFO} for more details.
+
+For example, if the theory ℝ of real numbers is in scope, the following will find all theorems containing both real number addition and real number multiplication.
+=GFT
+find_thm [⌜x + y : ℝ⌝, ⌜x * y : ℝ⌝];
+=TEX
+=SEEALSO
+{\em gen\_find\_thm}
+=ENDDOC
+
+
+\subsection{Epilogue}
+=SML
+end (* of signature TheoremFinder *);
+=TEX
+
+\section{TEST POLICY}
+There are no special module test requirements.
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
+
+
+
+
+
+
+
+

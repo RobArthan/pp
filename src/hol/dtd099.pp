@@ -1,0 +1,508 @@
+=IGN
+********************************************************************************
+dtd099.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% $Id: dtd099.doc,v 1.15 2005/12/16 10:34:27 rda Exp rda $ ℤ
+
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of the UNIX Interface for ProofPower under Solaris 2}
+
+\def\AbstractText{This document contains the detailed design of the {\ppfont ProofPower} UNIX Interface, and in particular the standard way of invoking {\ppfont ProofPower}.}
+
+\def\Reference{DS/FMU/IED/DTD099}
+
+\def\Author{K. Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[11pt,TQ,hol1]{article}
+%% LaTeX2e port: 
+%% LaTeX2e port: \TPPtitle{Detailed Design of the UNIX Interface for ProofPower under Solaris 2}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD099}
+%% LaTeX2e port: \def\SCCSissue{$Revision: 1.15 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: 
+%% LaTeX2e port: \TPPissue{\SCCSissue}
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPproject{FST PROJECT}
+%% LaTeX2e port: 
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: \TPPtype{Literate Script}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design
+%% LaTeX2e port: 	of the \Product{} UNIX Interface, and in particular the
+%% LaTeX2e port: 	standard way of invoking \Product{}.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{center}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{center}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Previous work]
+The contents of this document come from \cite{DS/FMU/IED/DTD069}.
+It has been updated to work under Solaris 2.
+\item [Issue 1.1 (1994/05/09)]
+First version.
+
+\item [Issue 1.3 (1994/05/17)]
+Augmented the flags for $pp$, $hol$ and $zed$ to permit batch loading of files.
+\item [Issue 1.4 (1994/05/18)]
+Changed occurrence of imp021 to imp101.
+\item [Issue 1.5 (1994/08/22)]
+Added interface for xpp.
+\item [Issue 1.6 (1996/03/29)]
+Added notes on multiple script files.
+\item [Issue 1.7 (2001/12/13)]
+Added `-v' flag for pp\_make\_database.
+\item [Issue 1.8 (2002/03/21)]
+Documented version 2.5.5 updates to pp etc.
+{\it pp\_read} really has been withdrawn, i.e., removed, now.
+\subsection{Changes Forecast}
+\item[Issue 1.9 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.10 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.11 (2002/12/12)] Added `-c' flag for pp\_make\_database.
+\item[Issues 1.12 (2003/04/17), 1.13 (2003/04/17)] Updates to work with doc2man script.
+\item[Issue 1.14 (2004/10/12)] Description of {\tt xpp} is now vestigial.
+\item[Issue 1.15 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+\item[2015/06/15]
+Removed hol\_list and zed\_list.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+None.
+\newpage
+
+\section{GENERAL}
+
+\subsection{Scope}
+
+This document contains a detailed design of the \Product/ UNIX  interface programs
+called for by~\cite{DS/FMU/IED/HLD005}
+
+\subsection{Introduction}
+
+\subsubsection{Purpose and Background}
+This document provides designs for the methods of invoking
+\Product,
+making a new database and listing theories held in a
+database.
+It is closely modelled on the design material of \cite{DS/FMU/IED/HLD005},
+but made specific for a Poly/ML implementation.
+The methods allow the user to distinguish between \ProductHOL{}, \ProductZ{}, and generic use of \Product{}.
+
+The style of documentation and program coding commonly used for shell scripts
+on the FST project
+places both sorts of information in a single text file which is then
+processed in various ways.  The program code may be extracted for
+compilation.  The whole of the text may be used as source to the
+\LaTeX{} document processing system, after some preprocessing by {\tt doctex}.  The {\tt sieve} program
+(see \cite{DS/FMU/IED/DTD053}) performs the necessary extraction and
+adding of format instructions.  This process is known as
+``sieving''.  The source text is augmented by sieving directives
+which delimit the sorts of text.   The {\tt sieve} program is driven
+by steering files which describe how to process the various sorts of
+text.
+
+Thus the commands given a design in this document will be
+implemented by shell scripts ``sieved'' from \cite{DS/FMU/IED/IMP099}.
+
+\subsubsection{Dependencies}
+
+None of the commands will work without access to a
+\Product{} database of a certain minimum functionality
+(the initial system built via \cite{DS/FMU/IED/IMP101}
+satisfies the criteria)
+and (in this first release) Poly/ML.
+
+\subsubsection{Interface}
+
+The user interface is described in the style of UNIX manual pages in
+\cite{DS/FMU/IED/HLD005}.
+
+\subsubsection{Possible Enhancements}
+The changes necessary for working with other Standard ML systems
+become very apparent in implementing the functions described in this document.
+However, such changes may become necessary.
+
+\subsubsection{Deficiencies}
+The child database name in {\tt pp\_make\_database}
+may only be the ``root'' of the name, rather than
+the variants allowed by adding allowed suffixes and prefixes.
+\section{DESIGN CHOICES}
+\subsection{Finding a Named Database}
+When we are given a database search name $name$ by the user we do not immediately know
+if it is to be prefixed by an architecture name, or
+given the standard suffix ``.db''.
+We can however recognise any directory prefix.
+As is implied (but not explicitly stated) by the high level design, the actual
+filename (after the directory part) must start with the architecture, and end in ``.db''.
+
+We thus strip off, if present, any ``.db'' suffix, failing if any other
+suffix is found.
+We then strip off, if present, a correct architecture prefix, failing if any other
+architectural prefix is found.
+We then search, using {\tt findfile} from \cite{DS/FMU/IED/DTD053}
+for
+{\it Dir`arch`Base.db}.
+We use ``Dir'' to represent any directory prefix in the input
+name, including the final ``/'',
+and ``Base'' for the base name of the input (with any correct prefix and suffix removed).
+
+If no filename is given (as an argument to {\tt -d})
+then search name and database name are taken to be
+either some default (e.g. {\tt hol} in some cases),
+or the function will fail.
+
+For {\tt pp\_make\_database}, when we are creating a new database
+with a given name, then there must be neither suffix,
+nor any known architectural prefix for the name supplied.
+In addition, in this case, we do not allow a directory prefix.
+
+Note that these design choices imply that a list of known
+architecture prefixes is available to the programs.
+Initially this list will just contain ``sun3'' and ``sun4''.
+\subsection{What is a Database's Theory Hierarchy and Current Theory Name, Default Cache Theories, Etc?}
+These names may be found by loading the database into Poly/ML
+and then examining what is bound to the Standard ML variables
+(N.B. not an assignable variables)
+{\it pp'database\_info}, and {\it pp'theory\_hierarchy}.
+If the variables are not of the right type, or the current theory is not present in the theory hierarchy,
+or various other well-formedness problems,
+then the database may be considered corrupt,
+though the function will continue if appropriate and possible.
+These variables will be set as part of {\tt pp\_make\_database} and by $save\_and\_quit$,
+and should not be changed any other way.
+\section{THE PROGRAMS}
+\subsection{Invoking The Product}
+
+%doc2man_description:run an interactive or batch ProofPower session
+=DOC
+⦏pp⦎ -d database[#theoryname] [-i files] [-f files [-n|-s] [-v]] [-- ml_flags]
+=DESCRIBE
+{\tt pp}
+runs \Product{} on the indicated database. If no {\tt -d database} is provided to {\tt pp}, the function fails.
+For portability, the database name should be given without any architecture- or
+compiler-specific prefixes or suffixes.
+Any such prefixes or suffixes will be added automatically by {\tt pp},
+If the resulting file name is an absolute path name (i.e., starts with a `/' character),
+then that is used as the database file name.
+If the resulting file name is not an absolute path name,
+{\tt pp} searches for the database file using the
+search path given in the environment variable {\tt \$PPDATABASEPATH}, if set.
+If {\tt \$PPDATABASEPATH} is not set, {\tt pp} searches for the database in the current directory, then in the subdirectory {\tt db} of the user's home directory and then in the subdirectory {\tt db} of the {\Product} installation directory.
+
+If specified, {\it theoryname} gives the name of a theory to be made the
+current theory at the start of the session.
+If {\it theoryname} is not specified, then
+current theory will be set to the theory current when the database was last saved by
+$save\_and\_quit$ or, if just created,
+to the cache theory for the database.
+The files identified by any {\tt [-i files]} options are then
+executed in turn. $files$ is a comma-separated list of files.
+
+If {\tt -f files} is provided, then the files specified in the list $files$ are loaded in batch mode. Once loading is complete the database is saved and the batch session is terminated. The saving of the database can be suppress by providing the {\tt -n} flag. The default action if any of the files fails to load is for the session to terminate at that point and the database is not saved. By providing the {\tt -s} flag, the user can indicate to the system to save the database in batch mode upon failure. The {\tt -n} and {\tt -s} flags are mutually exclusive. If they are both provided, a warning message is issued and the {\tt -s} flag is ignored.
+
+By default, the production of subgoal package output in a batch load is as determined by the value of the flag {\em subgoal\_package\_quiet} stored in the  database.
+If the {\tt -v} flag is specified to {\tt pp}, the subgoal package output is produced whereas if the {\tt -q} flag  is  specified, it  is  suppressed.
+
+If {\tt -f files} is not provided, then the system then issues a prompt for user input.
+
+Flags which appear after {\tt -- } are passed directly onto the Standard ML system for processing. This mechanism can be used to tailor the heap size under SML/NJ: e.g.,
+{\tt  pp -d hol -- -h 32000}.
+The environment variable {\tt PPCOMPILER} may be used to select between the Poly/ML
+or SML/NJ compiler if {\Product} has been installed for both compilers.
+If it is set, the value of this variable must be either ``{\tt POLYML}'' or ``{\tt SMLNJ}''.
+
+The environment variable {\tt PPLINELENGTH}, if set, determines the initial value of the
+string control {\it line\_length}. This gives the line length used by various listing
+facilities, e.g., {\it print\_theory} and {\it output\_theory}. In interactive use,
+the {\tt xpp} interface will set {\tt PPLINELENGTH} automatically if it has not been
+set explicitly by the user.
+\paragraph{Errors}
+{\tt pp} prints a message and exits (with status~1) if
+the database cannot be accessed or if the theory name specified
+as part of the {\tt -d} argument
+does
+not exist in the database.
+=SEEALSO
+{\tt pp\_make\_database}, {\tt pp\_list}, {\tt pp\_read}, {\tt hol}, {\tt zed}
+=ENDDOC
+=DOC
+⦏hol⦎ [-d database[#theoryname]] [-i files] [-f files [-n|-s] [-v]] [-- ml_flags]
+⦏zed⦎ [-d database[#theoryname]] [-i files] [-f files [-n|-s] [-v]] [-- ml_flags]
+=DESCRIBE
+{\tt hol} and {\tt zed} are identical to {\tt pp}. q.v., except that they use default databases $hol$ and $zed$ respectively, and hence {\tt -d database} is optional.
+=ENDDOC
+
+\subsection{Making Child Databases}
+
+%doc2man_description:make a new ProofPower database
+=DOC
+⦏pp_make_database⦎ \
+	[-c][-v] [-f] [-p parentdatabase[#parenttheory]] newdatabase[#cachetheory]
+=DESCRIBE
+{\tt pp\_make\_database}
+makes a new child database to contain \Product{} theories. The new database initially
+contains a single theory, called the {\em cache theory}
+for the database, with name given by {\tt cachetheory}
+(which is used by
+certain system functions to cache various definitions and theorems and
+which is used as the initial current theory when the database
+is used by the {\tt pp}, {\tt hol} and {\tt zed} commands).
+If {\tt cachetheory} is omitted then the database name, prefixed by ``cache' '' is taken to be the same
+as the name of the new cache theory.
+
+The {\tt -p} option may be used to indicate
+the database which is to be the parent of the new database
+and to indicate which theory in it is to be the parent of the theory
+{\tt cachetheory}.
+The parent theory is taken to be the cache theory for the parent
+database if it is not given explicitly.
+
+For portability,
+the parent database name should normally be given without any architecture- or
+compiler-specific prefixes or suffixes.
+Any such prefixes or suffixes will be added automatically by {\tt pp\_make\_database},
+If the resulting file name is an absolute path name (i.e., starts with a `/' character),
+then that is used as the parent database file name.
+If the resulting file name is not an absolute path name,
+{\tt pp\_make\_database} looks for the parent database file first in the current directory and then in the user's
+search path (given in the environment variable {\tt \$PATH}).
+
+If the {\tt -p}
+option is not supplied then the database {\tt hol} supplied with the system is used
+as the parent database, and the parent theory is the theory {\it hol}.
+This is an appropriate default for a \ProductHOL{} child database.
+An appropriate value for \ProductZ{} might be the database {\tt zed} supplied with the system.
+
+In interactive use, {\tt pp\_make\_database}
+will normally ask for confirmation before overwriting the database if it
+already exists. The {\tt -f} (force) option may be used to suppress
+the request for confirmation before overwriting an existing database.
+
+The {\tt -v} option produces more output which may be useful for
+diagnostic purposes.
+
+Under Poly/ML, databases are subject to an adjustable size limit.
+By default, {\tt pp\_make\_database} will adjust the size limit of
+the parent database to the minimum possible
+and adjust the size limit of the child database to the maximum allowed.
+The {\tt -c} option suppresses these adjustments.
+
+The supplied child database name will be used to create the child database file name
+which is derived using an algorithm specific to the Standard ML compiler being used.
+=FAILUREC
+\paragraph{Errors}
+{\tt pp\_make\_database} prints a message and
+exits (with value 1) if the parent database or theory does not exist,
+if the new database cannot be created or if
+the name of the cache theory clashes with the name of a theory
+in the parent database.
+
+Some systems impose a limit on the depth of nesting of the
+database hierarchy and the command will print an error message and
+exit (with value 1) if this limit would be exceeded.
+
+The environment variable {\tt PPCOMPILER} may be used to select between the Poly/ML
+or SML/NJ compiler if {\Product} has been installed for both compilers.
+If it is set, the value of this variable must be either ``{\tt POLYML}'' or ``{\tt SMLNJ}''.
+=SEEALSO
+{\tt hol}, {\tt zed}, {\tt pp}.
+=ENDDOC
+\subsection{Making Theory Listings}
+
+%doc2man_description:list information from a ProofPower database
+=DOC
+⦏pp_list⦎ [-c] -d database[#theory] [-i scripts] [-l lang] [-v] theory ...
+⦏pp_list⦎ -d database[#theory] [-i scripts] [-l lang1 [-l lang2 ...]] [-v]
+⦏pp_list⦎ [-c] -d database [-i scripts] [-l lang1 [-l lang2 ...]] [-v] -a
+=DESCRIBE
+{\tt pp\_list} is used to obtain selected information from
+a \Product{} database.
+
+In the first form of use, where a list
+of one or more theory names is specified,
+{\tt pp\_list} uses \Product{} to generate on its standard output
+listings of the indicated theories held in the
+database given by the {\tt -d} option in a form suitable
+for processing by {\tt doctex}.
+
+If there is no {\tt -l} option then the theory lister used
+will depend on the language of the theory.
+If the language is ``HOL'' then $output\_theory$ is used.
+Otherwise it will attempt to use a function named:
+=GFT
+<language in lower case>_output_theory
+=TEX
+and only if that doesn't exist will it use $output\_theory$.
+All but the first language will be ignored.
+
+If the {\tt -l\ lang} option is given then it will take the language code of all theories given to be {\tt lang},
+and then work as above.
+
+If no {\tt -d} option is given then the function fails.
+
+Any cache theory (i.e. the theory name is in the list
+returned by $get\_cache\_theories$) will be printed
+with most of the theory detail elided, unless the {\tt -c}
+option is given.
+
+In the second form, with no list of theory names, {\tt pp\_list}
+lists the names of all the theories in the database one
+per line on its standard output channel in a sorted order.
+If any {\tt -l} options are given then only theories
+whose language is one of those listed will be noted.
+
+The third form, with {\tt -a}, is like the first but causes all
+of the theories in the database to be listed in a sorted order.
+If any {\tt -l} options are given then only theories
+whose language is one of those given will be listed,
+and they will be individually printed according to their own language.
+
+In any of the three forms,
+the program will start a session as if by command
+{\tt pp} with the supplied {\tt -d} and {\tt -i} arguments (if any),
+and it is in this environment that the theory
+listing is done.
+The output of this startup will be suppressed, including any indication of failure to load the initialisation scripts.
+
+Each theory is, if possible, made current, or at least in scope, when it is listed.
+
+In any form {\tt -v} indicates the log of the preprocessing
+should also be output.
+=FAILUREC
+\paragraph{Errors}
+{\tt pp\_list} prints a message and exits (with the value 1)
+if the database or any of the theories does not exist.
+The log of the failure is sent to the standard output, the message to the
+error output.
+=SEEALSO
+{\tt pp}, {\tt pp\_make\_database}
+
+%doc2man_extra:.I "USR029: ProofPower - HOL Reference Manual"
+
+%doc2man_extra:.I "USR030: ProofPower - Z Reference Manual"
+=ENDDOC
+\section{READING VALUES FROM DATABASE}
+\subsection{The Program {\tt pp\_read}}
+\pagebreak
+\section{X INTERFACE}
+=DOC
+⦏xpp⦎ [Standard X Toolkit options] [xpp options]
+=DESCRIBE
+The program {\tt xpp} provides a convenient way to prepare, check and execute
+ProofPower scripts under the X Windows System.
+{\tt xpp} combines a general purpose text editor with a command interface for
+operating the {\Product} specification and proof facilities.
+Consult the {\tt xpp} help menu or the {\tt xpp} {\it User Guide} for information on how to use it.
+
+`{\tt Standard X toolkit options}' refers to common options which are automatically supported by most X Windows applications.
+An example is the option `{\tt -display}', which may be used to specify the X server on which you wish {\tt xpp} output to be displayed.
+
+The {\tt xpp} option {\tt -f file} may be used to specify a file to be loaded into the editor when {\tt xpp} starts.
+If you omit this option, {\tt xpp} will start off editing an empty file.
+
+If you specify the {\tt xpp} option {\tt -d database}, {\tt xpp} will run an interactive command session working on the specified {\Product} database. If you omit this option, {\tt xpp} will just run as an editor.
+
+The command line options mentioned above are the most common ones. The program has a
+number of other options you may wish to use.
+Consult the {\tt xpp} {\it User Guide} for further details.
+
+=SEEALSO
+{\it USR031: ProofPower - Xpp User Guide}
+=ENDDOC
+=TEX
+section{TEST POLICY}
+The commands are simple and short shell scripts. There is
+little point in setting up special test harnesses for them. Instead
+they should be module and integration tested after the subsystems
+which they invoke have been integration tested.
+These tests are done in \cite{DS/FMU/IED/INT001}.
+
+The tests should try to check out that the commands exhibit the
+proper error action. They should also check that the commands
+leave the user environment tidy. E.g. any temporary files created
+should be deleted, even after an abnormal exit (say a keyboard
+interrupt, or when one of the programs called has been terminated
+by a trappable signal).
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
+

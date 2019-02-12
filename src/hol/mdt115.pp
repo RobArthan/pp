@@ -1,0 +1,156 @@
+=IGN
+********************************************************************************
+mdt115.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+\documentclass[a4paper,12pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+\makeindex
+
+\def\Title{ Module Test: Theory of Orderings }
+
+\def\Abstract{\begin{center}
+{\bf Abstract}\par\parbox{0.7\hsize}
+{\small This document gives the module test for the theory
+of orderings that is used in constructing the representation
+type for the real numbers in \ProductHOL.}
+\end{center}}
+
+\def\Reference{LEMMA1/HOL/MDT115}
+
+\def\Author{R.D. Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 118 958 4409}
+
+\def\Fax{+44 118 956 1920}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+\begin{centering}
+
+
+
+\end{centering}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+%%%%% STANDARD RED-TAPE SECTIONS (MAY WANT TO INTERLEAVE SOME \newpage COMMANDS IN THESE)
+
+%%%%% CONTENTS:
+
+\subsection{Contents}
+
+\tableofcontents
+
+%%%%% REFERENCES:
+
+\newpage
+\subsection{References}
+
+\bibliographystyle{fmu}
+
+%%%%% CHANGE THE FOLLOWING AS NECESSARY (E.G., TO PICK UP daz.bib):
+{\raggedright
+\bibliography{fmu}
+}
+%%%%% CHANGES HISTORY:
+\subsection{Changes History}
+\begin{description}
+\item[Issues 1.1 (2000/12/05)] First draft.
+\item[Issue 1.2 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.3 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+\item[2015/04/15]
+Now uses new date and version macros from doctex
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%%%%%  CHANGES FORECAST:
+
+\subsection{Changes Forecast}
+
+None.
+
+%%%%% DISTRIBUTION LIST
+
+\subsection{Distribution}
+
+Lemma 1 build system.
+
+\newpage
+
+\section{INTRODUCTION}
+\subsection{Scope}
+This document contains the module tests associated with the
+theory of orderings
+required by \cite{LEMMA1/HOL/DTD115} and
+implemented in \cite{LEMMA1/HOL/IMP115}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD115}.
+\subsubsection{Dependencies}
+The test material depends on \cite{DS/FMU/IED/DTD013},
+\cite{DS/FMU/IED/DTD035} and \cite{LEMMA1/HOL/IMP115}.
+
+\subsubsection{Deficiencies}
+None known.
+\section{INITIALISATION}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results ();
+=TEX
+\section{TEST CASES}
+There are no functional components for this theory; only
+the check on the theory design is required.
+
+\section{CHECK THE THEORY DESIGN}
+=SML
+use_file "dtd115.tch";
+store_mt_results mt_run[("theory design for theory of orderings",
+	theory_check_success,
+	(),
+	true)];
+=TEX
+\section{END OF TESTS}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+\end{document}
+
+
+
+
+
+
+
+

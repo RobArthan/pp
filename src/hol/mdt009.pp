@@ -1,0 +1,946 @@
+=IGN
+********************************************************************************
+mdt009.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  mdt009.doc  ℤ $Date: 2002/10/17 15:10:58 $ $Revision: 1.20 $ $RCSfile: mdt009.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for Tactics I}
+
+\def\AbstractText{This document gives the module tests for the first group of tactics and tacticals in ICL HOL.}
+
+\def\Reference{DS/FMU/IED/MDT009}
+
+\def\Author{K. Blackburn, R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: \TPPtitle{Module Tests for Tactics I}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT009}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.20 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $ %
+%% LaTeX2e port: }}  %% Mandatory field
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: %\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthors{K.~Blackburn & WIN01\\R.D.~Arthan & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document gives the module tests for the
+%% LaTeX2e port: first group of tactics and tacticals in ICL HOL.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Project Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/06/14)]
+First version.
+\item [Issue 1.2 (1991/08/20),1.3 (1992/02/12)]
+Changed to new fonts.
+Added lots of new material.
+\item [Issue 1.4 (1992/02/17)]
+Corrected $FAIL\_THEN$, etc.
+\item [Issue 1.5 (1992/02/27)]
+Changes because error reporting has changed.
+\item [Issue 1.6 (1992/03/18)(12th March 1992)] Various minor additions and extensions.
+\item [Issue 1.7 (1992/03/26)]
+Added $prove\_thm$.
+\item [Issue 1.8 (1992/03/30) (30th March 1992)]
+Added $GET/DROP\_FILTER\_ASMS\_T$.
+\item [Issue 1.10 (1992/04/14) (14th April 1992)]
+Changes required by CR0017.
+\item[Issue 1.11 (1992/05/15) (15 May 1992)] Use correct quotation symbols.
+\item [Issue 1.12 (1992/05/19),1.13 (1992/05/21) (18th May 1992)]
+Changed proof context material.
+\item [Issue 1.14 (1992/05/27) (27th May 1992)]
+Changing error text.
+\item [Issue 1.15 (1992/06/25) (25th June 1992)]
+Corrected proof context setting.
+\item [Issue 1.16 (1992/08/05) (24th November 1992)]
+Corrected $rename\_tac\ 12$ after affected by anti-quotation changes.
+\item [Issue 1.18 (1993/08/12) (12th August 1993)]
+Addition of $discard\_tac$.
+\item [Issue 1.19 (1999/02/22)]
+Update for SML'97.
+\item[Issue 1.20 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.21 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module tests for the material
+whose detailed design is given in \cite{DS/FMU/IED/DTD009}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module tests for the material
+whose detailed design is given in \cite{DS/FMU/IED/DTD009}.
+\subsubsection{Dependencies}
+This document depends on the test harness material, and \cite{DS/FMU/IED/IMP009}.
+\subsubsection{Deficiencies}
+None known.
+\section{TEST CASES}
+\begin{description}
+\item[Utilities]
+This checks the two utility functions provided in \cite{DS/FMU/IED/DTD009}.
+\item[Group 1]
+This checks the trivial tactics.
+\item[Group 2]
+This checks the simple tactic combinators.
+\item[Group 3]
+This checks the more advanced tactic combinators,
+and some utility tactics.
+\item[Group 4]
+This checks $(simple\_)tac\_proof$.
+\item[Error Cases]
+This checks the error handling of each of the functions.
+\end{description}
+\section{PREAMBLE}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+=TEX
+=SML
+open_theory"basic_hol";
+delete_theory "tst009" handle _ => ();
+new_theory"tst009";
+open Tactics1;
+=TEX
+This document is meant to be independent of proof context
+material, and indeed even the proof context tools may not be present, but just in case:
+=SML
+(use_string "set_pc \"initial\";" handle _ => ());
+=SML
+fun forge_seq ((seqasms, conc) : GOAL) : THM = (
+	let	val tm = list_mk_⇒ (seqasms @ [conc]);
+		val key = format_list string_of_term (conc::seqasms) "";
+		val thm = (get_axiom "-" key) handle Fail _ => new_axiom([key], tm);
+		fun aux [] thm = thm
+		|   aux (_ :: more) thm = aux more (undisch_rule thm);
+	in	aux seqasms thm
+	end
+);
+fun forge_tac (tac : TACTIC) (gl : GOAL) : GOAL list * SEQ = (
+	let	val (sgs, pf) = tac gl;
+	in	(sgs, dest_thm(pf (map forge_seq sgs)))
+	end		
+);
+=TEX
+=SML
+fun list_eq (eq:'a * 'a -> bool) ((a :: x), (b :: y)) : bool = (
+	eq(a,b) andalso list_eq eq (x, y)
+) | list_eq eq ([], []) = true
+| list_eq _ _ = false;
+=TEX
+=SML
+fun chk_res ((sgs1:GOAL list, (asms1, conc1):SEQ),
+	(sgs2:GOAL list, (asms2, conc2):SEQ))
+	: bool = (
+	list_eq (op =#) (sgs1, sgs2) andalso conc1 ~=$ conc2 andalso
+	length asms1 = length asms2 andalso all (combine asms1 asms2) (op ~=$)
+);
+=TEX
+To give some ability to split into multiple goals we
+provide $∧\_tac$, for when it is not available from
+structure $Tactics2$.
+=SML
+val ⦏∧_tac⦎ : TACTIC = (fn (seqasms, conc) =>
+	let	val (t1, t2) = dest_∧ conc
+	in	([(seqasms, t1), (seqasms, t2)],
+			 fn [th1, th2] => ∧_intro th1 th2
+			 |   _ => bad_proof "∧_tac" )
+	end handle ex => divert ex "dest_∧" "∧_tac" 28031 []
+);
+=TEX
+We also provide $undisch\_t$ for a bit of variety.
+=SML
+fun ⦏asm_ante_tac⦎ (t1 : TERM) : TACTIC = (fn (seqasms, conc) =>
+	(if t1 term_mem seqasms
+	then ([(seqasms term_less t1, mk_⇒(t1, conc))],
+		(fn [thm] => undisch_rule thm | _ => bad_proof "asm_ante_tac"))
+	else  term_fail "asm_ante_tac" 28052 [t1])
+	handle ex => divert ex "mk_⇒" "asm_ante_tac" 28055 []
+);
+=TEX
+=SML
+fun ⦏ante_tac⦎ (thm : THM) : TACTIC = (fn (seqasms, conc) =>
+	([(seqasms, mk_⇒(concl thm, conc))],
+	 fn [th] => ⇒_elim th thm | _ => bad_proof "ante_tac")
+	handle ex => divert ex "mk_⇒" "ante_tac" 28027 []
+);
+=TEX
+
+\section{TEST CODE AND DATA}
+
+\subsection{Utilities}
+=SML
+let
+fun sum_list lst = fold (fn (x,y) => x + y) lst 0;
+in
+store_mt_results mt_run [
+	("map_shape",
+	map_shape [(sum_list,3),(sum_list,2),(sum_list,1)],
+	[1,2,3,4,5,6],
+	[6,9,6])]
+end;
+store_mt_results mt_run_error [
+	("bad_proof",
+	bad_proof,
+	"a bad_proof",
+	gen_fail_msg "a bad_proof" 9001 [])];
+=TEX
+
+\section{Group 1}
+=SML
+val gl1_1 = ([⌜b:BOOL⌝, ⌜a:BOOL⌝], ⌜a ∧ b⌝);
+val gl1_2 = ([⌜b:BOOL⌝, ⌜a:BOOL⌝], ⌜(λx⦁x)a ∧ b⌝);
+val gl1_3 = dest_thm bool_cases_axiom;
+val tm1_2 = ⌜(λy⦁y)a ∧ b⌝;
+val sg1_2 = ([⌜b:BOOL⌝, ⌜a:BOOL⌝], tm1_2);
+store_mt_results (mt_runf chk_res)
+[
+ ("Tactics1.1.1", forge_tac id_tac, gl1_1, ([gl1_1], gl1_1)),
+ ("Tactics1.1.2", forge_tac (discard_tac tm1_2), gl1_1, ([gl1_1], gl1_1)),
+ ("Tactics1.1.3", forge_tac (accept_tac(asm_rule tm1_2)),
+	gl1_2, ([], ([tm1_2],tm1_2))),
+ ("Tactics1.1.4", forge_tac (accept_tac bool_cases_axiom),
+	gl1_3, ([], gl1_3))
+];
+=TEX
+\section{Group 2}
+=SML
+val tm2_1 = ⌜(λz⦁z)a ∧ b⌝;
+val sg2_1 = ([⌜b:BOOL⌝, ⌜a:BOOL⌝], tm2_1);
+val sg2_2 = ([], ⌜X:BOOL⌝);
+val tm2_2 = ⌜A1:BOOL⌝;
+val tm2_3 = ⌜A2:BOOL⌝;
+val tm2_4 = ⌜A3:BOOL⌝;
+val tac2_1 = accept_tac o asm_rule;
+
+store_mt_results (mt_runf chk_res)
+[
+ ("Tactics1.2.1", forge_tac(id_tac THEN id_tac), gl1_1,
+	 ([gl1_1], gl1_1)),
+ ("Tactics1.2.2", forge_tac (accept_tac(asm_rule tm1_2) THEN
+	accept_tac(asm_rule tm2_1)), sg2_1, ([], ([tm2_1],tm2_1))),
+ ("Tactics1.2.3", forge_tac (accept_tac bool_cases_axiom THEN
+	 fail_tac), gl1_3, ([], gl1_3)),
+ ("Tactics1.2.4", forge_tac (accept_tac bool_cases_axiom
+	ORELSE fail_tac), gl1_3, ([], gl1_3)),
+ ("Tactics1.2.5", forge_tac (fail_tac ORELSE accept_tac
+	 bool_cases_axiom), gl1_3, ([], gl1_3)),
+ ("Tactics1.2.6", forge_tac (EVERY[accept_tac
+	bool_cases_axiom, fail_tac]), gl1_3, ([], gl1_3))
+];
+=TEX
+\subsection{Group 3}
+=SML
+val avar = ⌜a:BOOL⌝;
+val bvar = ⌜b:BOOL⌝;
+val cvar = ⌜c:BOOL⌝;
+val λ_0 = ⌜a ∧ b ∧ c⌝;
+val λ_1 = ⌜(λ z ⦁ a ∧ b ∧ z) c⌝;
+val λ_2 = ⌜(λ y z ⦁ a ∧ y ∧ z) b c⌝;
+val λ_3 = ⌜(λ x y z ⦁ x ∧ y ∧ z)a b c⌝;
+val gl3_1 = ([avar, bvar],⌜a ∧ b⌝);
+val gl3_1' = ([bvar,avar],⌜a ∧ b⌝);
+val gl3_2 = ([],⌜a ∧ b ∧ c⌝):GOAL;
+val gl3_3 = ([],⌜(a ∧ b ∧ c) ∧ (c ∧ d ∧ e)⌝):GOAL;
+val gl3_4 = ([],⌜T ∧ T⌝):GOAL;
+val one_β_conv = ONCE_MAP_C simple_β_conv;
+=TEX
+=SML
+store_mt_results (mt_runf chk_res)
+[("THEN_TRY 1",forge_tac (∧_tac THEN_TRY t_tac),
+	gl3_4,
+	([],gl3_4)),
+("THEN_TRY 2",forge_tac (∧_tac THEN_TRY
+	 accept_tac(asm_rule avar)),
+	gl3_1,
+	([([avar, bvar],bvar)],gl3_1)),
+("THEN_TRY 3",forge_tac (∧_tac THEN_TRY
+	 accept_tac t_thm),
+	gl3_1,
+	([([avar, bvar],avar),([avar, bvar],bvar)],gl3_1)),
+("THEN_LIST",forge_tac (∧_tac THEN_LIST[
+	 accept_tac(asm_rule avar),
+	 accept_tac(asm_rule bvar)]),
+	gl3_1,
+	([],gl3_1)),
+("MAP_EVERY",forge_tac (MAP_EVERY asm_ante_tac [avar, bvar]),
+	gl3_1,
+	([([],⌜b ⇒ a ⇒ (a ∧ b)⌝)],gl3_1')),
+("FIRST",forge_tac (∧_tac THEN FIRST [
+	 accept_tac(asm_rule avar),
+	 accept_tac(asm_rule bvar)]),
+	gl3_1,
+	([],gl3_1)),
+("MAP_FIRST",forge_tac (∧_tac THEN MAP_FIRST accept_tac [
+	 (asm_rule avar),
+	 (asm_rule bvar)]),
+	gl3_1,
+	([],gl3_1)),
+("COND_T",forge_tac (∧_tac THEN
+	COND_T (fn (_,tm) => tm =$ avar)
+	 (accept_tac(asm_rule avar))
+	 (accept_tac(asm_rule bvar))),
+	gl3_1,
+	([],gl3_1)),
+("REPEAT",forge_tac (REPEAT ∧_tac),
+	gl3_2,
+	([([],avar),([],bvar),([],cvar)],gl3_2)),
+("REPEAT_N",forge_tac (REPEAT_N 2 ∧_tac),
+	gl3_3,
+	([([],avar),([],⌜b ∧ c⌝),([],cvar),([],⌜d ∧ e⌝)],gl3_3)),
+("REPEAT_UNTIL1",forge_tac (REPEAT_UNTIL1
+	 (fn (_,tm) => (not(is_∧(snd(dest_∧ tm))))) ∧_tac),
+	gl3_3,
+	([([],avar),([],⌜b ∧ c⌝),([],cvar),([],⌜d ∧ e⌝)],gl3_3)),
+("REPEAT_UNTIL",forge_tac (REPEAT_UNTIL
+	 (fn tm => (not(is_∧(snd(dest_∧ tm))))) ∧_tac),
+	gl3_3,
+	([([],avar),([],⌜b ∧ c⌝),([],cvar),([],⌜d ∧ e⌝)],gl3_3))];
+
+store_mt_results (mt_runf chk_res)
+[("THEN_TTCL/CONV_THEN/asm_tac",forge_tac
+	((CONV_THEN one_β_conv THEN_TTCL
+		CONV_THEN one_β_conv) asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_1,λ_3],mk_t)],([λ_3],mk_t))),
+("THEN_TTCL/TRY_TTCL/CONV_THEN/asm_tac",forge_tac
+	((CONV_THEN one_β_conv THEN_TTCL
+		TRY_TTCL(CONV_THEN one_β_conv)) asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_1,λ_3],mk_t)],([λ_3],mk_t))),
+("THEN_TRY_TTCL/CONV_THEN/asm_tac",forge_tac
+	((CONV_THEN one_β_conv THEN_TRY_TTCL
+		CONV_THEN one_β_conv) asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_1,λ_3],mk_t)],([λ_3],mk_t))),
+("ORELSE_TTCL/CONV_THEN",forge_tac
+	((CONV_THEN fail_conv ORELSE_TTCL
+		CONV_THEN one_β_conv) asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_2,λ_3],mk_t)],([λ_3],mk_t))),
+("THEN_TTCL/TRY_TTCL/CONV_THEN",forge_tac
+	((CONV_THEN one_β_conv THEN_TTCL
+		(TRY_TTCL (CONV_THEN fail_conv))) asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_2,λ_3],mk_t)],([λ_3],mk_t))),
+("THEN_TRY_TTCL_TTCL/CONV_THEN",forge_tac
+	((CONV_THEN one_β_conv THEN_TRY_TTCL
+		CONV_THEN fail_conv) asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_2,λ_3],mk_t)],([λ_3],mk_t))),
+("ID_THEN",forge_tac (ID_THEN asm_tac t_thm),
+	([],avar),
+	([([mk_t],avar)],([],avar)))];
+
+store_mt_results (mt_runf chk_res)
+[("ORELSE_TTCL/FAIL_THEN",forge_tac
+	((FAIL_THEN ORELSE_TTCL
+		CONV_THEN one_β_conv) asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_2,λ_3],mk_t)],([λ_3],mk_t))),
+("ORELSE_TTCL/FAIL_WITH_THEN",forge_tac
+	((FAIL_WITH_THEN "FAIL_WITH_THEN" 9401 [] ORELSE_TTCL
+		CONV_THEN one_β_conv) asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_2,λ_3],mk_t)],([λ_3],mk_t))),
+("REPEAT_TTCL",forge_tac
+	(REPEAT_TTCL (CONV_THEN one_β_conv) asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_0,λ_3],mk_t)],([λ_3],mk_t))),
+("EVERY_TTCL",forge_tac (EVERY_TTCL [CONV_THEN one_β_conv,
+	 CONV_THEN one_β_conv] asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_1,λ_3],mk_t)],([λ_3],mk_t))),
+("FIRST_TTCL",forge_tac (FIRST_TTCL [FAIL_THEN,
+	 CONV_THEN one_β_conv] asm_tac
+		(asm_rule λ_3)),
+	([λ_3],mk_t),
+	([([λ_2,λ_3],mk_t)],([λ_3],mk_t)))];
+
+store_mt_results (mt_runf chk_res)
+[("id_tac",forge_tac id_tac, gl3_1, ([gl3_1],gl3_1)),
+("conv_tac",forge_tac (conv_tac one_β_conv),
+	([],λ_3),
+	 ([([],λ_2)],([],λ_3))),
+("GET_ASM_T",forge_tac (GET_ASM_T avar ante_tac),
+	gl3_1,
+	 ([([avar,bvar],⌜a ⇒ (a ∧ b)⌝)],gl3_1')),
+("LIST_GET_ASM_T",forge_tac (LIST_GET_ASM_T [bvar,avar]
+		(MAP_EVERY ante_tac)),
+	gl3_1,
+	 ([([avar,bvar],⌜a ⇒ b ⇒ (a ∧ b)⌝)],gl3_1)),
+("DROP_ASM_T",forge_tac (DROP_ASM_T avar ante_tac),
+	gl3_1,
+	 ([([bvar],⌜a ⇒ (a ∧ b)⌝)],gl3_1')),
+("LIST_DROP_ASM_T",forge_tac (LIST_DROP_ASM_T [bvar,avar]
+		(MAP_EVERY ante_tac)),
+	gl3_1,
+	 ([([],⌜a ⇒ b ⇒ (a ∧ b)⌝)],gl3_1)),
+("TOP_ASM_T",forge_tac (TOP_ASM_T ante_tac),
+	gl3_1,
+	 ([([avar,bvar],⌜a ⇒ (a ∧ b)⌝)],gl3_1')),
+("POP_ASM_T",forge_tac (POP_ASM_T ante_tac),
+	gl3_1,
+	 ([([bvar],⌜a ⇒ (a ∧ b)⌝)],gl3_1')),
+("GET_ASMS_T",forge_tac (GET_ASMS_T (MAP_EVERY ante_tac)),
+	gl3_1,
+	 ([([avar,bvar],⌜b ⇒ a ⇒ (a ∧ b)⌝)],gl3_1')),
+("GET_FILTER_ASMS_T",forge_tac
+	(GET_FILTER_ASMS_T (fn x => x =$ avar) (MAP_EVERY ante_tac)),
+	gl3_1,
+	 ([([avar,bvar],⌜a ⇒ (a ∧ b)⌝)],gl3_1')),
+("DROP_ASMS_T",forge_tac (DROP_ASMS_T (MAP_EVERY ante_tac)),
+	gl3_1,
+	 ([([],⌜b ⇒ a ⇒ (a ∧ b)⌝)],gl3_1')),
+("DROP_FILTER_ASMS_T",forge_tac
+	(DROP_FILTER_ASMS_T (fn x => x =$ avar) (MAP_EVERY ante_tac)),
+	gl3_1,
+	 ([([bvar],⌜a ⇒ (a ∧ b)⌝)],gl3_1')),
+("GET_NTH_ASM_T",forge_tac (GET_NTH_ASM_T 1 ante_tac),
+	gl3_1,
+	 ([([avar,bvar],⌜a ⇒ (a ∧ b)⌝)],gl3_1')),
+("LIST_GET_NTH_ASM_T",forge_tac (LIST_GET_NTH_ASM_T [2,1]
+		(MAP_EVERY ante_tac)),
+	gl3_1,
+	 ([([avar,bvar],⌜a ⇒ b ⇒ (a ∧ b)⌝)],gl3_1)),
+("DROP_NTH_ASM_T",forge_tac (DROP_NTH_ASM_T 1 ante_tac),
+	gl3_1,
+	 ([([bvar],⌜a ⇒ (a ∧ b)⌝)],gl3_1')),
+("LIST_DROP_NTH_ASM_T",forge_tac
+	(LIST_DROP_NTH_ASM_T [2,1] (MAP_EVERY ante_tac)),
+	gl3_1,
+	 ([([],⌜a ⇒ b ⇒ (a ∧ b)⌝)],gl3_1))];
+
+store_mt_results (mt_runf chk_res)
+[("ROTATE_T",forge_tac (ROTATE_T 1 ∧_tac),
+	gl3_1,
+	 ([([avar,bvar],bvar),([avar,bvar],avar)],gl3_1)),
+("TRY_T 1",forge_tac (TRY_T(ROTATE_T 1 ∧_tac)),
+	gl3_1,
+	 ([([avar,bvar],bvar),([avar,bvar],avar)],gl3_1)),
+("TRY_T 2",forge_tac (TRY_T fail_tac),
+	gl3_1,
+	 ([gl3_1],gl3_1)),
+("CHANGED_T",forge_tac (CHANGED_T(TRY_T(ROTATE_T 1 ∧_tac))),
+	gl3_1,
+	 ([([avar,bvar],bvar),([avar,bvar],avar)],gl3_1)),
+("SOLVED_T",forge_tac (SOLVED_T(accept_tac (asm_rule avar))),
+	([avar],avar),
+	 ([],([avar],avar))),
+("LEMMA_T",forge_tac (LEMMA_T bvar asm_tac),
+	([],avar),
+	 ([([],bvar),([bvar],avar)],([],avar)))
+];
+=TEX
+\subsubsection{$rename\_tac$}
+=SML
+let
+val renamings = [(⌜x⌝,"y"),(⌜y⌝,"x"),
+	(mk_var("1",BOOL),"one"),
+	(mk_var("one'",ℕ),"1"),
+	(mk_var("brackets",BOOL),"[]"),
+	(mk_var("brackets'",BOOL),"[]"),
+	(mk_var("sigma'",BOOL),"σ'")];
+val one' = mk_var("1'",ℕ);
+val sigma' = mk_var("σ'",BOOL);
+val sigma'' = mk_var("σ''",BOOL);
+val sigma''' = mk_var("σ'''",BOOL);
+val sigmaa' = mk_var("σ'",ⓣ'a⌝);
+val sigmaa'' = mk_var("σ''",ⓣ'a⌝);
+val sigmaa''' = mk_var("σ'''",ⓣ'a⌝);
+val brackets = mk_var("[]",BOOL);
+val brackets' = mk_var("[]'",BOOL);
+val gl_rename1 = ([],⌜a ∧ a⌝);
+val gl_rename2 = ([],⌜a ∧ ∀ a ⦁ a = 1⌝);
+val gl_rename3= ([⌜∀ a ⦁ a = 1⌝],⌜a ∧ ∀ a ⦁ a = 1⌝);
+val gl_rename4 = ([⌜∀ a ⦁ a = []⌝],⌜a ∧ ∀ a ⦁ a = 1⌝);
+val gl_rename5 =([],⌜x ∧ ∀ x :'a⦁ x = y⌝);
+val gl_rename6 = ([⌜∀ x ⦁ x = []⌝,⌜∀ x :'a⦁ f x (y:'a)⌝],⌜x ∧ ∀ x :'a⦁ x = y⌝);
+val gl_rename7 = ([⌜∀ x ⦁ x = []⌝,⌜∀ σ :'a ⦁ g σ⌝,⌜∀ x :'a⦁ f x (y:'a) σ⌝],⌜x ∧ ∀ x :'a⦁ x = y⌝);
+val gl_rename8 = ([⌜∀ x ⦁ x = []⌝,⌜∀ σ :'a ⦁ g ⓜsigma'⌝ σ⌝,
+	⌜∀ x :'a⦁ f x (y:'a) (σ:'a)⌝],
+	⌜x ∧ ∀ x :'a⦁ x = y⌝);
+val gl_rename9 = ([⌜∀ x ⦁ ⓜmk_var("1",BOOL)⌝  ∨ (x = [])⌝,
+	⌜∀ σ :'a ⦁ g ⓜsigma'⌝ (σ:'a)⌝,
+	⌜∀ x :'a⦁ (1 = one') ∧ f x (y:'a) (σ:'a)⌝],
+	⌜x ∧ ∀ x :'a⦁ brackets ∧ brackets' ∧  ⓜmk_var("()",BOOL)⌝ ∧ (x = y) ∧ sigma'⌝);
+val gl_rename10 = ([],ⓜmk_var("1",BOOL)⌝);
+val gl_rename11 = ([⌜∀ x ⦁ ⓜmk_var("1",BOOL)⌝  ∨ (x = []) ∨ (1 = one')⌝],mk_t);
+local 	val gxxx=list_mk_app(⌜g:'a → 'b → 'c → BOOL⌝,[⌜x:'a⌝, ⌜x:'b⌝, ⌜x:'c⌝]);
+	val fxxx=list_mk_app(⌜f:'a → 'b → 'c → BOOL⌝,[⌜x:'a⌝, ⌜x:'b⌝, ⌜x:'c⌝]);
+	val ex_gxxx = list_mk_∃([⌜x:'a⌝, ⌜x:'b⌝, ⌜x:'c⌝],gxxx);
+	val bdy = mk_∨(fxxx, ex_gxxx);
+in
+val gl_rename12 = ([],list_mk_∀([⌜x:'a⌝, ⌜x:'b⌝, ⌜x:'c⌝], bdy));
+end;
+val gl_rename1' = ([],⌜a ∧ a⌝);
+val gl_rename2' = ([],⌜a ∧ ∀ a' ⦁ a' = 1⌝);
+val gl_rename3' = ([⌜∀ a' ⦁ a' = 1⌝],⌜a ∧ ∀ a' ⦁ a' = 1⌝);
+val gl_rename4' = ([⌜∀ a' ⦁ a' = []⌝],⌜a ∧ ∀ a' ⦁ a' = 1⌝);
+val gl_rename5' =([],⌜x' ∧ ∀ y :'a⦁ y = x⌝);
+val gl_rename6' = ([⌜∀ x'' ⦁ x'' = []⌝,⌜∀ y :'a⦁ f y (x':'a)⌝],
+	⌜x ∧ ∀ y :'a⦁ y = x'⌝);
+val gl_rename7' = ([⌜∀ x'' ⦁ x'' = []⌝,
+	mk_∀ (sigmaa',⌜ g ⓜsigmaa'⌝:BOOL⌝),⌜∀ y :'a⦁ f y (x':'a) σ⌝],⌜x ∧ ∀ y :'a⦁ y = x'⌝);
+val gl_rename8' = ([⌜∀ x'' ⦁ x'' = []⌝,
+	mk_∀ (sigmaa'',⌜g ⓜsigma'⌝ ⓜsigmaa''⌝:BOOL⌝),
+	⌜∀ y :'a⦁ f y (x':'a) (σ:'a)⌝],
+	⌜x ∧ ∀ y :'a⦁ y = x'⌝);
+val gl_rename9' = ([⌜∀ x'' ⦁ one  ∨ (x'' = [])⌝,
+	mk_∀ (sigmaa''',⌜g ⓜsigma''⌝ ⓜsigmaa'''⌝:BOOL⌝),
+	⌜∀ y :'a⦁ (1 = ⓜmk_var("1'",ℕ)⌝) ∧ f y (x':'a) (σ:'a)⌝],
+	⌜x ∧ ∀ y :'a⦁ ⓜbrackets'⌝ ∧ ⓜbrackets⌝ ∧
+	 ⓜmk_var("()",BOOL)⌝ ∧ (y = x') ∧ ⓜsigma'⌝⌝);
+val gl_rename10' = ([],⌜one:BOOL⌝);
+val gl_rename11' = ([⌜∀ x ⦁ one  ∨ (x = []) ∨ (1 = ⓜone'⌝)⌝],mk_t);
+val gl_rename12' = ([],⌜∀ (y:'a) ⦁ ∀ (x:'b) ⦁ ∀ (x':'c) ⦁ f ⌜y:'a⌝ ⌜x:'b⌝ ⌜x':'c⌝ ∨
+	∃ (y':'a) ⦁ ∃ (x'':'b) ⦁ ∃ (x''':'c) ⦁ g ⌜y':'a⌝ ⌜x'':'b⌝ ⌜x''':'c⌝⌝);
+in
+store_mt_results (mt_runf chk_res) [
+("rename_tac 1", forge_tac (rename_tac renamings),
+	gl_rename1,
+	([gl_rename1'],gl_rename1)),
+("rename_tac 2", forge_tac (rename_tac renamings),
+	gl_rename2,
+	([gl_rename2'],gl_rename2)),
+("rename_tac 3", forge_tac (rename_tac renamings),
+	gl_rename3,
+	([gl_rename3'],gl_rename3)),
+("rename_tac 4", forge_tac (rename_tac renamings),
+	gl_rename4,
+	([gl_rename4'],gl_rename4)),
+("rename_tac 5", forge_tac (rename_tac renamings),
+	gl_rename5,
+	([gl_rename5'],gl_rename5)),
+("rename_tac 6", forge_tac (rename_tac renamings),
+	gl_rename6,
+	([gl_rename6'],gl_rename6)),
+("rename_tac 7", forge_tac (rename_tac renamings),
+	gl_rename7,
+	([gl_rename7'],gl_rename7)),
+("rename_tac 8", forge_tac (rename_tac renamings),
+	gl_rename8,
+	([gl_rename8'],gl_rename8)),
+("rename_tac 9", forge_tac (rename_tac renamings),
+	gl_rename9,
+	([gl_rename9'],gl_rename9)),
+("rename_tac 10", forge_tac (rename_tac renamings),
+	gl_rename10,
+	([gl_rename10'],gl_rename10)),
+("rename_tac 11", forge_tac (rename_tac renamings),
+	gl_rename11,
+	([gl_rename11'],gl_rename11)),
+("rename_tac 12", forge_tac (rename_tac renamings),
+	gl_rename12,
+	([gl_rename12'],gl_rename12))]
+end;
+=TEX
+\subsection{Group 4}
+Case $simple\_tac\_proof\ 2$ demonstates the lack of checks
+in that function.
+=SML
+store_mt_results (mt_runf (op =#)) [("simple_tac_proof 1",
+	dest_thm o simple_tac_proof,
+	(gl3_1,REPEAT strip_tac),
+	gl3_1),
+	("simple_tac_proof 2",
+	dest_thm o simple_tac_proof,
+	(([⌜(λx⦁x = x)⌝, ⌜a:BOOL⌝], ⌜T⌝),accept_tac t_thm),
+	([],mk_t))];
+=TEX
+=SML
+store_mt_results (mt_runf (op =#)) [("tac_proof",
+	dest_thm o tac_proof,
+	(gl3_1,REPEAT strip_tac),
+	gl3_1)];
+=TEX
+=SML
+store_mt_results (mt_runf (op =#)) [("prove_thm a",
+	dest_thm o prove_thm,
+	("test",⌜∀ x y ⦁ T⌝,REPEAT strip_tac),
+	([],⌜∀ x y ⦁ T⌝))];
+store_mt_results (mt_runf (op =#)) [("prove_thm b",
+	dest_thm o get_thm "-",
+	"test",
+	([],⌜∀ x y ⦁ T⌝))];
+=TEX
+
+\subsection{Error Cases}
+=SML
+store_mt_results mt_run_fail [("THEN_LIST 9101",
+	forge_tac (∧_tac THEN_LIST[
+	 accept_tac(asm_rule bvar)]),
+	gl3_1,
+	gen_fail_msg "THEN_LIST_T" 9101 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("THEN_TRY_LIST 9101",
+	forge_tac (∧_tac THEN_TRY_LIST[
+	 accept_tac(asm_rule bvar)]),
+	gl3_1,
+	gen_fail_msg "THEN_TRY_LIST_T" 9101 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("FIRST 9105",
+	FIRST [],
+	gl3_1,
+	gen_fail_msg "FIRST_T" 9105 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("MAP_FIRST 9105",
+	MAP_FIRST ante_tac [],
+	gl3_1,
+	gen_fail_msg "MAP_FIRST_T" 9105 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("CONV_THEN 9400 a",
+	CONV_THEN (fn _ => t_thm) ante_tac,
+	t_thm,
+	gen_fail_msg "CONV_THEN" 9400 ["⊢ T","⌜T⌝"]),
+	("CONV_THEN 9400 b",
+	CONV_THEN (fn _ => refl_conv ⌜F⌝) ante_tac,
+	t_thm,
+	gen_fail_msg "CONV_THEN" 9400 ["⊢ F ⇔ F","⌜T⌝"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("FAIL_THEN 9401",
+	FAIL_THEN ante_tac,
+	t_thm,
+	gen_fail_msg "FAIL_THEN" 9401 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("THEN_TTCL fail1",
+	(FAIL_THEN THEN_TTCL ID_THEN) ante_tac,
+	t_thm,
+	gen_fail_msg "FAIL_THEN" 9401 [])];
+store_mt_results mt_run_fail [("THEN_TTCL fail2",
+	(ID_THEN THEN_TTCL FAIL_THEN) ante_tac,
+	t_thm,
+	gen_fail_msg "FAIL_THEN" 9401 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("THEN_TRY_TTCL fail",
+	(FAIL_THEN THEN_TRY_TTCL ID_THEN) ante_tac,
+	t_thm,
+	gen_fail_msg "FAIL_THEN" 9401 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("FAIL_WITH_THEN",
+	FAIL_WITH_THEN "FAIL_WITH_THEN" 9401 [] ante_tac,
+	t_thm,
+	gen_fail_msg "FAIL_WITH_THEN" 9401 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("FIRST_TTCL 9402",
+	FIRST_TTCL [] ante_tac,
+	t_thm,
+	gen_fail_msg "FIRST_TTCL" 9402 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("fail_tac 9201",
+	fail_tac,
+	gl3_1,
+	gen_fail_msg "fail_tac" 9201 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("fail_with_tac",
+	fail_with_tac "fail_with_tac" 9201 [],
+	gl3_1,
+	gen_fail_msg "fail_with_tac" 9201 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("accept_tac",
+	accept_tac t_thm,
+	gl3_1,
+	gen_fail_msg "accept_tac" 9102 ["⊢ T","⌜a ∧ b⌝"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("conv_tac 9400 a",
+	conv_tac (fn _ => t_thm),
+	gl3_1,
+	gen_fail_msg "conv_tac" 9400 ["⊢ T","⌜a ∧ b⌝"])];
+
+let val (sgs,prf) = (conv_tac (fn _ => refl_conv ⌜F⌝) gl3_1);
+in
+store_mt_results mt_run_fail [
+	("conv_tac 9400 b",
+	prf,
+	[t_thm],
+	gen_fail_msg "conv_tac" 9400 ["⊢ F ⇔ F","⌜a ∧ b⌝"])]
+end;
+=TEX
+=SML
+store_mt_results mt_run_fail [("GET_ASM_T 9301",
+	GET_ASM_T ⌜T⌝ ante_tac,
+	gl3_1,
+	gen_fail_msg "GET_ASM_T" 9301 ["⌜T⌝"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("LIST_GET_ASM_T 9301",
+	LIST_GET_ASM_T [⌜T⌝] (MAP_EVERY ante_tac),
+	gl3_1,
+	gen_fail_msg "LIST_GET_ASM_T" 9301 ["⌜T⌝"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("DROP_ASM_T 9301",
+	DROP_ASM_T ⌜T⌝ ante_tac,
+	gl3_1,
+	gen_fail_msg "DROP_ASM_T" 9301 ["⌜T⌝"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("LIST_DROP_ASM_T 9301",
+	LIST_DROP_ASM_T [⌜T⌝] (MAP_EVERY ante_tac),
+	gl3_1,
+	gen_fail_msg "LIST_DROP_ASM_T" 9301 ["⌜T⌝"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("TOP_ASM_T 9302",
+	TOP_ASM_T ante_tac,
+	([],⌜T⌝),
+	gen_fail_msg "TOP_ASM_T" 9302 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("POP_ASM_T 9302",
+	POP_ASM_T ante_tac,
+	([],⌜T⌝),
+	gen_fail_msg "POP_ASM_T" 9302 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("GET_NTH_ASM_T 9303",
+	GET_NTH_ASM_T 4 ante_tac,
+	gl3_1,
+	gen_fail_msg "GET_NTH_ASM_T" 9303 ["4"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("LIST_GET_NTH_ASM_T 9303",
+	LIST_GET_NTH_ASM_T [4] (MAP_EVERY ante_tac),
+	gl3_1,
+	gen_fail_msg "LIST_GET_NTH_ASM_T" 9303 ["4"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("DROP_NTH_ASM_T 9303",
+	DROP_NTH_ASM_T 4 ante_tac,
+	gl3_1,
+	gen_fail_msg "DROP_NTH_ASM_T" 9303 ["4"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("LIST_DROP_NTH_ASM_T 9303",
+	LIST_DROP_NTH_ASM_T [4] (MAP_EVERY ante_tac),
+	gl3_1,
+	gen_fail_msg "LIST_DROP_NTH_ASM_T" 9303 ["4"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("CHANGED_T 9601",
+	CHANGED_T id_tac,
+	gl3_1,
+	gen_fail_msg "CHANGED_T" 9601 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("SOLVED_T 9602",
+	SOLVED_T ∧_tac,
+	gl3_1,
+	gen_fail_msg "SOLVED_T" 9602 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("LEMMA_T 9603",
+	LEMMA_T ⌜a:'a⌝ ante_tac,
+	gl3_1,
+	gen_fail_msg "LEMMA_T" 9603 ["⌜a⌝"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("simple_tac_proof 9501",
+	simple_tac_proof,
+	(([],⌜a ∧ b⌝),∧_tac),
+	gen_fail_msg "simple_tac_proof" 9501 ["([], ⌜a⌝), ([], ⌜b⌝)"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("simple_tac_proof 9502",
+	simple_tac_proof,
+	(([],⌜a ∧ b⌝),fail_tac),
+	gen_fail_msg "simple_tac_proof" 9502 ["* failed as requested [fail_tac.9201] *"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("simple_tac_proof 9503",
+	simple_tac_proof,
+	(([],⌜a ∧ b⌝),(fn _ => ([],fn _ => fail "dummy" 9503 [fn () => "@"]))),
+	gen_fail_msg "simple_tac_proof" 9503
+	["* the proof returned by the tactic failed: @ [dummy.9503] *"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9501",
+	tac_proof,
+	(([],⌜a ∧ b⌝),∧_tac),
+	gen_fail_msg "tac_proof" 9501 ["([], ⌜a⌝), ([], ⌜b⌝)"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9502",
+	tac_proof,
+	(([],⌜a ∧ b⌝),fail_tac),
+	gen_fail_msg "tac_proof" 9502 ["* failed as requested [fail_tac.9201] *"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9503",
+	tac_proof,
+	(([],⌜a ∧ b⌝),(fn _ => ([],fn _ => fail "dummy" 9503 [fn () => "@"]))),
+	gen_fail_msg "tac_proof" 9503
+	["* the proof returned by the tactic failed: @ [dummy.9503] *"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9504",
+	tac_proof,
+	(([],⌜a ∧ b⌝),(fn _ => ([],fn _ => t_thm))),
+	gen_fail_msg "tac_proof" 9504 ["⊢ T"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9505",
+	tac_proof,
+	(([avar,avar,bvar],⌜a ∧ b⌝),REPEAT strip_tac),
+	gen_fail_msg "tac_proof" 9505 ["⌜a⌝","⌜a⌝"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9506",
+	tac_proof,
+	(([⌜a:'a⌝,avar,bvar],⌜a ∧ b⌝),REPEAT strip_tac),
+	gen_fail_msg "tac_proof" 9506 ["⌜a⌝"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("prove_thm 9501",
+	prove_thm,
+	("test1",⌜a ∧ b⌝,∧_tac),
+	gen_fail_msg "prove_thm" 9501 ["([], ⌜a⌝), ([], ⌜b⌝)"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("prove_thm 9502",
+	prove_thm,
+	("test1",⌜a ∧ b⌝,fail_tac),
+	gen_fail_msg "prove_thm" 9502 ["* failed as requested [fail_tac.9201] *"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("prove_thm 9503",
+	prove_thm,
+	("test1",⌜a ∧ b⌝,(fn _ => ([],fn _ => fail "dummy" 9503 [fn () => "@"]))),
+	gen_fail_msg "prove_thm" 9503
+	["* the proof returned by the tactic failed: @ [dummy.9503] *"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("prove_thm 9504",
+	prove_thm,
+	("test1",⌜a ∧ b⌝,(fn _ => ([],fn _ => t_thm))),
+	gen_fail_msg "prove_thm" 9504 ["⊢ T"])];
+=TEX
+We do not test the theorem saving aspects of $prove\_thm$ failures.
+=SML
+store_mt_results mt_run_fail [("rename_tac 3007",
+	rename_tac,
+	[(mk_t,"a")],
+	gen_fail_msg "rename_tac" 3007 ["⌜T⌝"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9507",
+	tac_proof,
+	(([avar,bvar],⌜a:'a⌝),REPEAT strip_tac),
+	gen_fail_msg "tac_proof" 9507 ["⌜a⌝"])];
+=TEX
+\subsection{End of Tests}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+
+=TEX
+\printindex
+\end{document}
+

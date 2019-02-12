@@ -1,0 +1,603 @@
+=IGN
+********************************************************************************
+dtd108.doc: this file is part of the PPDev system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  $Date: 2012/02/02 11:39:30 $ $Revision: 1.27 $ $RCSfile: dtd108.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Porting Strategy and Portability Infrastructure Detailed Design}
+
+\def\AbstractText{This document defines the strategy for the port of {{\ppfont ProofPower}} to SML'97 and gives the detailed design of the infrastructure to support the porting exercise.}
+
+\def\Reference{DS/FMU/IED/DTD108}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Porting Strategy and Portability Infrastructure Detailed Design}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD108}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.27 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2012/02/02 11:39:30 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPstatus{Draft}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & Lemma 1}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & Lemma 1}
+%% LaTeX2e port: \TPPabstract{This document defines the strategy for the port of {\Product} to SML'97 and gives the detailed design of the infrastructure to support the porting exercise.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Project Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item [Issues 1.1 (1999/01/31)-1.12 (2000/06/30)]
+Initial versions.
+\item [Issue 1.13 (2000/09/06)]
+Minor formatting changes.
+\item [Issue 1.14 (2000/12/13)]
+Added structure for SML 97 basis library.
+\item [Issue 1.15 (2001/12/02)]
+Port back to Poly/ML.
+\item [Issue 1.16 (2002/03/13)]
+Updates to {\it ExtendedIO} structure to work better with SML 97 basis library.
+\item [Issue 1.17 (2002/03/13)]
+Added shell script to substitute for .arch-n-opsys when SML/NJ not available.
+\item[Issue 1.19 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.20 (2002/10/17)] PPDev-specific updates for open source release
+\item[Issue 1.21 (2002/12/16)] SML97BasisLibrary now contains substructure for functions that
+are defined in the standard and are redefined in {\Product}.
+\item[Issue 1.22 (2003/03/17)] Mac OS X port.
+\item[Issue 1.23 (2008/01/27)--1.26 (2008/02/04)] Poly/ML 5.1 port.
+\item[Issue 1.27 (2012/02/02)] Fixes for SML/NJ.
+\item[Issue 1.28 (2012/03/27)] Made {\tt arch-os} support Intel on Mac.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+
+\item[2015/11/23]
+Adjustments for MLton.
+
+\item[2015/11/25]
+Fixed changes history.
+
+\item[2017/03/05]
+Now supports Poly/ML 5.6.1 (as well as earlier versions).
+
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+As determined by experience during the porting process.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+Under contract CSM/927 with DERA Malvern, Lemma 1 Ltd. have undertaken a port of {\Product}
+onto New Jersey ML v1.10.
+
+This document describes the strategy for this port and gives the design
+of some new infrastructure which is intended to support the porting work.
+This infrastructure offers a compiler-independent interface to the non-standard
+compiler features needed by {\Product}.
+
+\subsection{Introduction}
+
+%\subsection{Purpose and Background}
+See the proposal LEMMA1/DAZ/PLN018 for background and requirements.
+
+%\subsection{Dependencies}
+
+%\subsection{Possible Enhancements}
+
+%\subsection{Deficiencies}
+
+\section{Strategy}
+\subsection{Standard ML Language Changes}
+General guidelines for conversion from SML'90 to SML'97 are given
+in the ``SML'97 Conversion Guide'' that is supplied with NJML.
+In particular, the section ``Top Level Environment Comparison'' gives a useful
+table.
+The portability infrastructure whose design is given in section~\ref{Infrastructure} of this document covers many of the differences.
+The basic idea behind this infrastructure as regards the language and basis changes is to reproduce the SML'90 facilities expected by the {\Product} code using the SML'97 ones.
+
+
+\subsection{Conditional Compilation}
+The {\Product} ML code is packaged in literate scripts.
+The {\tt docsml} shell script is used to extract the ML source from the scripts.
+{\tt docsml} decides which material to include in the source on the basis of a configuration file called the ``sieve view file''.
+
+Where minor adjustments need to be made to the code, alternative sieve view files will be used to distinguish between the Poly/ML and NJML variants.
+The directives used will be ``{\tt =POLYML}'' and ``{\tt =NJML}''' respectively.
+The rules will be that code marked ``{\tt =SML}'' will be common to both
+compilers whereas code marked for a particular compiler will be produced
+for that compiler only.
+
+Where the changes to a module are greater than can be accomodated with
+the sieve view file mechanism, an alternate source file will be derived
+for the NJML compiler. The build process will select the right version
+based on the target compiler.
+
+A sieve file ``hol.svf'' is available for initial  experimentation
+in the IED SCCS directory.
+A convenient way of doing a test build is to include a symbolic link
+called ``sieveview'' to this file.
+
+
+\section{Portability Infrastructure}\label{Infrastructure}
+\subsection{Input/Output}
+The SML'97 I/O features are richer than those of SML'90. Unfortunately,
+the elementary features that are needed for {\tt Product} have been
+renamed. The approach for the port is to implement the SML'90 interface
+in terms of the SML'97 interface.
+=DOC
+signature ⦏BasicIO⦎ = sig
+	type ⦏instream⦎;
+	type ⦏outstream⦎;
+	exception ⦏Io⦎ of {cause:exn, function:string, name:string}
+	val ⦏close_in⦎ : instream -> unit
+	val ⦏close_out⦎ : outstream -> unit
+	val ⦏end_of_stream⦎ : instream -> bool
+	val ⦏input⦎ : instream * int -> string
+	val ⦏lookahead⦎ : instream -> string
+	val ⦏open_in⦎ : string -> instream
+	val ⦏open_out⦎ : string -> outstream
+	val ⦏output⦎ : outstream * string -> unit
+	val ⦏std_in⦎ : instream
+	val ⦏std_out⦎ : outstream
+end;
+signature ⦏ExtendedIO⦎ = sig
+	type ⦏instream⦎;
+	type ⦏outstream⦎;
+	val ⦏can_input⦎ : instream * int -> bool
+	val ⦏flush_out⦎ : outstream -> unit
+	val ⦏open_append⦎ : string -> outstream
+	val ⦏is_term_in⦎ : instream -> bool
+	val ⦏input_line⦎ : instream -> string
+	val ⦏is_term_out⦎ : outstream -> bool
+	val ⦏system⦎ : string -> bool
+	val ⦏get_env⦎ : string -> string
+	val ⦏std_err⦎ : outstream
+end;
+=DESCRIBE
+These are the signatures of the structures that implement SML'90-style I/O.
+{\it BasicIO} is open. {\it ExtendedIO} is not.
+
+{\it ExtendedIO} differs from the original SML'90 in several respects:
+\begin{itemize}
+\item
+It provides {\it system} instead of {\it execute} (which cannot be implemented
+cleanly on UNIX implementation sof the SML'97 standard basis library, since the SML'90
+signature does not give an interface for the caller to reap the executed process).
+\item
+It provides {\it std\_err}, which was not in the SML'90 library at all (and
+is the same as {\it TextIO.stdErr} in the SML'97 standard basis library).
+\item
+It provides {\it get\_env} which is the UNIX {\it get\_env} with non-existent
+environnent variables returning an empty string.
+\end{itemize}
+=ENDDOC
+
+\subsection{Compiler Interface}
+At V0.8, {\Product} uses the PolyML interface to invoke the compiler.
+=GFT
+	 PolyML.compiler : (unit -> string) * (string -> unit) -> unit -> unit
+=TEX
+The call:
+=GFT
+	 PolyML.compiler (infunc : unit -> string, outfunc : string -> unit)()
+=TEX
+invokes the compiler using $infunc$ to obtain input and $outfunc$ to
+process compiler output. In fact, $PolyML.compiler$ only reads the
+first top-level binding from the input obtained from $infunc$.
+So for example:
+=GFT
+	 PolyML.compiler (fn () => "val x = 1; val y = 2", ...
+=TEX
+will not process the binding for $y$. To resolve this the V0.8 Reader/Writer
+module in \cite{DS/FMU/IED/DTD005} in effect calls PolyML.compiler in
+a while-loop. This approach does not port very well and so must change
+during the present exercise.
+However, in all cases (whether reading source from a string, from a file or
+from a terminal), the Reader/Writer reads all of its input stream.
+
+In NJML, the function giving access to the compiler is:
+=GFT
+	Compiler.Interact.useStream : TextIO.instream -> unit
+=TEX
+This is given an input stream as its parameter and causes the compiler
+to process all the input in the stream. Since that is just what we want
+to do in the Reader/Writer a portability interface based on streams
+could be provided. However, the SML'90 I/O package does not provide a
+means of generating a stream from a string (for example). We therefore
+settle for the following design:
+
+=MLTON
+(* MLton does not have a read-eval-print loop
+=DOC
+signature ⦏PPCompiler⦎ = sig
+	type instream;
+	type ⦏TEXT_SOURCE⦎ (* = unit -> string *);
+	type ⦏TEXT_FILTER⦎ (* = string -> string *);
+	type ⦏HANDLER⦎ (* = exn -> unit *)
+	val ⦏compile1⦎ : string * TEXT_SOURCE * TEXT_FILTER * HANDLER -> unit;
+	val ⦏compile2⦎ : instream * TEXT_SOURCE * TEXT_FILTER * HANDLER -> unit;
+	val ⦏exit⦎ : int -> unit;
+	val ⦏print_depth⦎ : int -> unit;
+	type 'a ⦏PP_SPEC⦎; (* = compiler-dependent *)
+	val ⦏make_pp⦎ :
+		string list ->
+		((string -> unit) * (int * bool -> unit)
+			* (int * int -> unit) * (unit -> unit) -> 'a -> unit)
+				-> 'a PP_SPEC;
+=NJML
+	val ⦏install_pp⦎ : 'a PP_SPEC -> unit;
+=SML
+	val ⦏gc_messages⦎ : bool -> unit;
+end;
+=DESCRIBE
+This is the signature of a structure that provides interfaces to
+the underlying Standard ML compiler.
+This by-passes the pre- and post-processing carried out by the
+{\Product} Reader/Writer interface and is only intended for use
+by those extending the system in quite radical ways.
+
+=ENDDOC
+=MLTON
+end of code commented out for MLton *)
+=TEX
+
+The components of the parameter to
+=INLINEFT
+PPCompiler.compile1
+=TEX
+\ are: a string that may be used to identify the origin of the ML source code
+in compiler error messages, a function to obtain source code, a function to preprocess compiler messages before they are output and a function to handle
+any exceptions generated.
+Source is read repeatedly until the source function returns an empty string.
+It is therefore that function's responsibility to wait if no input is
+available, but input may become available later.
+
+=INLINEFT
+PPCompiler.compile2
+=TEX
+\ is very similar to
+=INLINEFT
+PPCompiler.compile1
+=TEX
+\ and should be used where the text source is actually associated with
+a file or other input stream. It does not read the data from the stream
+directly, it uses the source function passed as the second component
+of the parameter to do that. However, if appropriate to the ML compiler
+being used, it passes the attributes
+of the input stream into the underlying ML compiler interfaces where they
+may be used to identify the origin of the ML source code in error messages.
+
+$exit$ finishes a session returning the integer parameter value as an exit
+status to the operating environment.
+
+$print\_depth$ is intended to control the depth to which the values of top-level
+expressions are traversed when they are pretty-printed.
+
+The type $PP\_SPEC$ is the type of the parameter to the underlying function which installs a user defined pretty-printer. $make\_pp$ produces an appropriate value of this type given the path name of the type to be printed and an Oppen-style pretty-printing function for that type. The directive ``=INSTALLPP'' may be used to produce the name of the pretty-printer installation function.
+Direct use of $install\_pp$ will not be portable.
+
+$exit$ finishes a session returning the integer parameter value as an exit
+status to the operating environment.
+
+$print\_depth$ is intended to control the depth to which the values of top-level
+expressions are traversed when they are pretty-printed.
+
+{\it gc\_messages} turns garbage collection messages on and off ({\it true} meaning on)
+if the compiler supports that.
+The user interface to this is in \cite{DS/FMU/IED/DTD036}.
+The messages should be turned off by default.
+
+\subsection{Build Interfaces}
+=MLTON
+(* MLton does not have a persistent object store
+=DOC
+signature ⦏PPBuild⦎ = sig
+	val ⦏pp'save_name⦎ : string ref;
+	val ⦏pp'set_use⦎ : (string -> unit) -> (string -> unit);
+	val ⦏pp'use⦎ : string -> unit;
+	val ⦏pp'load⦎ : string -> unit;
+	val ⦏pp'save⦎ : unit -> unit;
+	val ⦏pp'save_then⦎ : {this_session : unit -> unit, next_session : unit -> unit} -> unit;
+	val ⦏pp'loaded_file_names⦎ : unit -> string list;
+=POLYML
+	val ⦏pp'main⦎ : unit -> unit;
+	val ⦏pp'make_database⦎ : string -> unit;
+=SML
+end;
+=DESCRIBE
+This is the signature of a structure that provides interfaces to
+the underlying Standard ML compilation system used to build {\Product}.
+
+$pp'use$ is a command for loading a file without saving the state.
+If all is well, it appends the name of the file it has loaded to a list
+This is initially set to use the compiler's native comand for doing this.
+It may subsequently changed using $pp'set\_use$.
+
+$pp'load$ loads a file using $pp'use$ and if that succeeds, it then saves the state using $pp'save$.
+It ends the session returning an error code if loading the file fails.
+
+$pp'save$ and $pp'save\_then$ onto the compiler's native command for saving its state
+to filestore.
+On compilers that need it, $pp'save\_name$ names the file to which the state will be saved.
+$pp'save\_then$ has a parameter which specifies functions to call after the state has been
+saved in this session and when a new session is started in the saved state.
+The exact mechanism for implementing this is compiler-dependent.
+
+Under Poly/ML, $pp'main$ is the entry point of the {\tt pp-poly} program that
+is used by {\tt pp} and other scripts to launch {\Product} sessions;
+also $pp'make\_database$ makes a child database and then terminates the session.
+=ENDDOC
+=MLTON
+end of code commented out for ML *)
+=TEX
+\subsection{String Processing}
+=DOC
+signature ⦏PPString⦎ = sig
+	val implode : string list -> string;
+	val explode : string -> string list;
+	exception Ord;
+	val ord : string -> int;
+	val chr : int -> string;
+	val string_of_exn : exn -> string;
+end;
+=DESCRIBE
+This is the signature of an open structure that provides string functions
+compatible with the {\Product} code (independent of the underlying compiler).
+=ENDDOC
+
+\subsection{Array Processing}
+=DOC
+signature ⦏PPArray⦎ = sig
+	exception Subscript
+	type 'a array
+	val arrayoflist: '_a list -> '_a array
+	val array : int * '_a -> '_a array
+	val length  : 'a array -> int
+	val sub : 'a array * int -> 'a
+	val tabulate : int * (int -> '_a) -> '_a array
+	val update : 'a array * int * 'a -> unit
+end;
+=DESCRIBE
+This is the signature of a structure that provides an array datatype
+compatible with the {\Product} code (independent of the underlying compiler).
+=ENDDOC
+
+\subsection{Vector Processing}
+=DOC
+signature ⦏PPVector⦎ = sig
+	exception Subscript
+	exception Size
+	type '_a vector
+	val vector: '_a list -> '_a vector
+	val length  : 'a vector -> int
+	val sub : 'a vector * int -> 'a
+	val tabulate : int * (int -> '_a) -> '_a vector
+end;
+=DESCRIBE
+This is the signature of a structure that provides a vector (read-only array) datatype
+compatible with the {\Product} code (independent of the underlying compiler).
+=ENDDOC
+
+\subsection{Standard ML '97 Basis Library}
+=DOC
+(*
+structure ⦏SML97BasisLibrary⦎ = struct
+	val explode : string -> char list; ...
+	structure Array = Array; ...
+end;
+*)
+=DESCRIBE
+This is a structure containing the required structures of the Standard ML '97 Basis Library
+together with some functions from the '97 standard for the language
+that are redefined by {\Product}.
+
+It is provided so that these structures can still be accessed when {\Product} defines
+a structure of the same name as a basis library structure (e.g., ``{\it Char}'').
+
+The structure {\it SML97BasicLibrary.Prelude} contains the functions from the '97 standard for the language that are redefined by {\Product}.
+If you open this structure and later wish to revert to the {\Product} versions of
+{\it explode}, {\it hd}, etc., open the structures {\it PPString} and {\it ListUtilities}.
+=ENDDOC
+
+\section{SHELL SCRIPT}
+=DUMP arch-os
+#!/bin/sh
+#  arch-os from $Date: 2012/02/02 11:39:30 $ $Revision: 1.27 $ $RCSfile: dtd108.doc,v $
+
+OS=`uname -s | dd conv=lcase 2>/dev/null`
+case $OS in
+	sunos)
+	case `uname -r` in
+		4.*)
+			case `/usr/bin/arch` in
+				sun4) ARCH=sparc;;
+				*) exit 1;;
+			esac;;
+		5.*)
+			OS=solaris
+			case `uname -p` in
+				sparc) ARCH=sparc;;
+				i386) ARCH=x86;;
+				i486) ARCH=x86;;
+				i586) ARCH=x86;;
+				i686) ARCH=x86;;
+				*) ARCH=unsupported;;
+			esac;;
+	esac;;
+	linux)
+	case `uname -m` in
+		i386) ARCH=x86;;
+		i486) ARCH=x86;;
+		i586) ARCH=x86;;
+		i686) ARCH=x86;;
+		*) ARCH=unsupported;;
+	esac;;
+	darwin)
+	case `uname -p` in
+		powerpc) ARCH=powerpc;;
+		i386) ARCH=x86;;
+		i486) ARCH=x86;;
+		i586) ARCH=x86;;
+		i686) ARCH=x86;;
+		*) ARCH=unsupported;;
+	esac;;
+	*)	
+	ARCH=unsupported;;
+esac
+echo "ARCH=$ARCH; OS=$OS"
+=SH
+chmod +x arch-os
+=TEX
+\section{COMPILER OPTIONS}
+
+Under Poly/ML, the variable
+{\tt PolyML.Compiler.printInAlphabeticalOrder}
+is set to {\tt false}.
+
+For version 5.6.1 of Poly/ML and later, the default integer type {\tt int} is  {\tt FixedInt.int},
+although this can be changed either by a {\tt configure} parameter ({\tt --intinf-as-int}
+or by loading a special module. However, the type {\tt FixedInt.int} is still used in certain
+compiler-dependent interfaces including the pretty-printer interface. We set up an include file
+for use in the {\Product} pretty-printer interface.
+Note that the type {\tt FixedInt.int} was not defined in versions of PolyML prior to 5.6.1.
+=DUMP dtd108-gen-pp-include.sml
+val _ =
+let
+	fun no_fixed_int () = (
+		let	fun aux [] = true
+			|   aux (("FixedInt", _)::_) = false
+			|   aux (_::strs) = aux strs;
+		in	(aux o #allStruct PolyML.globalNameSpace) ()
+		end
+	);
+	val pp_int_is_fixed_int_code = "type PP_INT = FixedInt.int;"
+	val pp_int_is_int_code = "type PP_INT = int;";
+	val no_conversion_code = "val int_to_pp_int : int -> PP_INT = fn i => i;";
+	val conversion_code = "val int_to_pp_int : int -> PP_INT = FixedInt.fromInt;";
+	val strm = TextIO.openOut "imp108-pp-include.sml";
+	fun out_line l = (TextIO.output(strm, l); TextIO.output(strm, "\n"));
+	val int_is_fixed = Int.maxInt <> NONE;
+in	if	no_fixed_int ()
+	then	(out_line pp_int_is_int_code; out_line no_conversion_code)
+	else 	(out_line pp_int_is_fixed_int_code;
+		if	int_is_fixed
+		then	out_line no_conversion_code
+		else	out_line conversion_code);
+	TextIO.closeOut strm
+end;
+=TEX
+=SH
+if	[ "$PPCOMPILER" = POLYML ]
+then	poly < dtd108-gen-pp-include.sml >/dev/null 2>&1
+else	echo > imp108-pp-include.sml
+fi
+=TEX
+\section{TEST POLICY}
+The module tests for these modules are to follow the guidelines
+laid down in the quality plan~\cite{DS/FMU/IED/PLN008}.
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
+
+
+

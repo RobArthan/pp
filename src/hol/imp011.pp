@@ -1,0 +1,423 @@
+=IGN
+********************************************************************************
+imp011.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation of Antiunification}
+
+\def\AbstractText{This document contains the implementation of the antiunification function.}
+
+\def\Reference{DS/FMU/IED/IMP011}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation of Antiunification}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP011}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 2.4 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the implementation of the
+%% LaTeX2e port: antiunification function.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library \\ R.D. Arthan\\ D.J. King}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 2.1 (1991/08/20)]
+This is an approved version of issue 1.7.
+
+
+\item[Issue 2.2 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 2.3 (1992/04/09) (1st April 1992)]
+Changes required by CR0016.
+
+\item[Issue 2.4 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.5 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+
+This document contains the Standard ML code for implementing
+the antiunify function. It corresponds to the
+detailed design of antiunify as specified in \cite{DS/FMU/IED/DTD011}.
+
+\subsection{Introduction}
+
+\subsubsection{Background and Purpose}
+
+The function antiunify is required as part of the
+library of utilities for supporting the development and
+use of ICL HOL. This work has in part served as a training
+exercise for the author in writing Standard ML.
+
+\subsubsection{Dependencies}
+
+The Standard ML code in this document depends on the literate script
+contained in \cite{DS/FMU/IED/DTD011} for the signature of Antiunify.
+
+\subsubsection{Possible Enhancements}
+
+This document and the Standard ML code contained within it is
+subject to change. The document will be inspected in due
+course according to project standards and procedures. Also,
+the Standard code will be tested using the tests specified in
+the document \cite{DS/FMU/IED/MDT011}.
+
+\subsubsection{Deficiencies}
+
+At present, there are no known deficiencies in this document.
+
+\section{THE STRUCTURE ANTIUNIFY}
+
+The Antiunify structure binds together the function
+antiunify and various subsidiary functions which are used
+to define antiunify. The structure has the signature Antiunify
+defined in \cite{DS/FMU/IED/DTD011}.
+
+=SML
+structure ⦏Antiunify⦎ : Antiunify = struct
+=TEX
+
+\subsection{Generation of Unique Names}
+
+The antiunification of two completely different types yields
+a new type which must be unique with respect to the two types
+and all the types constructing those two types.
+
+A list of all type constructors forming the two types is produced.
+A count of the maximum number of ``\/\'\/'' characters preceding
+each type constructor name is made. New type constructor
+names are then formed by the concatentation of the number of
+``\/\'\/'' characters plus one extra one for uniqueness with
+a number. The number starts at 0 and is incremented for each
+new type constructor name required. The name is unique with
+respect to names of the two types since the number
+of preceding ``\/\'\/'' characters in a new constructor name will always exceed
+the number of ``\/\'\/'' characters in the constructor names of the
+two types. The name is unique with respect to other newly
+generated constructor names because the number part of the name
+will be different for each name produced.
+
+For example, consider two types, t1 and t2 such that
+
+	val t1 = mk\_vartype ``\/\'\/\'\/TY1'';
+	val t2 = mk\_vartype ``\/\'\/\'\/\'\/TY2'';
+
+Then the name generated will be ``\/\'\/\'\/\'\/\'\/0''. The antiunification of
+t1 and t2 is therefore
+
+	val it = mk\_vartype ``\/\'\/\'\/\'\/\'\/0'';
+
+Were there to be more than one new name generated for this example,
+then they would be ``\/\'\/\'\/\'\/\'\/1'', ``\/\'\/\'\/\'\/\'\/2'' and so on.
+	
+The function $ext\_constr$ extracts all type constructor names
+from a list of types of type $TYPE$. For a type variable, this yields
+a list containing
+one constructor name. For a type formed by the Standard ML constructor
+$Type$, the constructor is extracted; then $ext\_constr$ is
+applied recursively to each element in the type list to
+extract each constructor.
+
+=SML
+fun ⦏ext_constr⦎ (nil : TYPE list) : string list = nil
+  | ext_constr (t::tlist) = (
+	if is_vartype t
+	then
+		(dest_vartype t)::(ext_constr tlist)
+	else
+		let	val constr = (fst o dest_ctype) t;
+			val args   = (snd o dest_ctype) t;
+		in
+			constr::(ext_constr (tlist@args))
+   		end);
+=TEX
+
+$count\_primes$ counts the number of primes (``\/\'\/``
+characters) at the beginning of a string.
+
+=SML
+fun ⦏count_primes⦎ (s : string) : int = (
+	let fun aux n nil = n
+	      | aux n (c::cs) = (
+		if c = "'"
+		then
+			aux (n+1) cs
+		else
+			n);
+	in
+		aux 0 (explode s)
+	end);
+=TEX
+
+$maxl$ delivers the highest integer in a list of integers.
+=SML
+fun ⦏maxl⦎ (nlst : int list) : int = (
+	let fun aux n (nil : int list) = n
+	      | aux n (x::xs) = (
+		if x > n
+		then
+			aux x xs
+		else
+			aux n xs)
+	in
+		aux ~1 nlst
+	end);
+=TEX
+
+$max\_mcp$ delivers a count of the highest number of primes in
+the type constructor names of a list of types. This is used
+to ensure that all new names constructed have at least this
+many leading primes.
+
+=SML
+fun ⦏max_mcp⦎ (tl : TYPE list) : int =
+	(maxl (map count_primes (ext_constr tl)));
+=TEX
+
+$au\_string$ will generate names which are the concatenation
+of $nprimes$ number of leading primes, and a string representation
+of a number.
+
+=SML
+fun ⦏au_string⦎ (nprimes : int) (n : int) : string = (
+	let fun aux 0 = ""
+	      | aux n = "'"^(aux (n - 1));
+	in
+		(aux nprimes)^(string_of_int n)
+	end);
+=TEX
+
+The function $gen$ generates unique names for antiunify.
+The names are unique with respect to the names of the
+types being antiunified ($f$), and with respect to
+new names already generated during the process of
+antiunification ($tp$). The last name produced is
+given by the function $pren$.
+
+=SML
+fun ⦏gen⦎ (f : (TYPE * 'a) list) (tp : ('b * 'b) as (t1,t2))
+    (pren : int -> string) : string = (
+	let fun aux i f tl pren = (
+		if any f (fn (x,_) => x =: (mk_vartype (pren i)))
+		then
+			aux (i+1) f tl pren
+		else
+			pren i);
+	in
+		aux 0 f [t1,t2] pren
+	end);
+=TEX
+
+\subsection{Implementation of antiunify}
+
+The implementation of antiunify follows closely the
+algorithm specified in \cite{DS/FMU/IED/DTD011}. Most of the
+functionality is contained in the function $au$. Two
+useful functions $apply$ and $easy$ are introduced first.
+
+$apply$ repeatedly applies a finite function $f$ to arguments.
+This is described in \cite{DS/FMU/IED/DTD011}, Section 2.1 (Method),
+and the reader is referred to that description.
+
+=SML
+fun ⦏apply⦎ (f : 'a * 'b -> 'c -> 'b * 'd) (nil : 'a list)
+    (g : 'b) (p : 'c) : ('b * 'd) list = nil
+  | apply f (x::xs) g p = (
+	let val (a,b) = f(x,g) p;
+	in
+		(a,b)::(apply f xs a p)
+	end);
+=TEX
+
+$easy$ determines whether the antiunification of two
+types is going to be easy.
+
+=SML
+fun ⦏easy⦎ (t1 : TYPE,t2 : TYPE) : bool = (
+	not (is_ctype t1 andalso is_ctype t2 andalso
+		let val cns = (fst o dest_ctype);
+		    val len = (length o snd o dest_ctype);
+		in
+			cns t1 = cns t2 andalso
+				len t1 > 0 andalso
+					len t1 = len t2
+		end));
+=TEX
+
+$au$ implements the antiunification algorithm described
+in the design document. The code closely follows the
+algorithm of the detailed design.
+=SML
+fun ⦏local_rassoc3⦎ ((x, (y1,y2)) :: rest : ('a * (TYPE * TYPE)) list)((what1,what2) : (TYPE * TYPE)) : 'a = (
+	if (y1 =: what1) andalso (y2 =: what2)
+	then x
+	else local_rassoc3 rest (what1,what2)
+) | local_rassoc3 [] _ = fail "local_rassoc3" 1005 [];
+=TEX
+
+=SML
+fun ⦏au⦎ ((tp : (TYPE * TYPE) as (t1,t2)), f : (TYPE * (TYPE * TYPE)) list)
+    (pren : int -> string) : (TYPE * (TYPE * TYPE)) list * TYPE = (
+	if t1 =: t2
+	then
+		(f, t1)
+	else if easy tp
+	then
+		if any f (fn (_,(y1,y2)) => (y1 =: t1) andalso (y2 =: t2))
+		then
+			(f,local_rassoc3 f tp)
+		else
+			let val beta = mk_vartype(gen f tp pren);
+			in
+				((beta,tp)::f, beta)
+			end
+	else
+		let val constr = (fst o dest_ctype) t1;
+		    val cl1 = (snd o dest_ctype) t1;
+		    val cl2 = (snd o dest_ctype) t2;
+	     	    val ll = apply au (combine cl1 cl2) f pren;
+		    val (fs,ss) = split ll;
+		    val last = (hd o rev);
+		in
+			(last fs,mk_ctype (constr,ss))
+		end);
+=TEX
+
+$antiunify$ is the only public interface in this structure.
+It calculates a function which, given a number will produce
+a unique name with respect to type constructor names of
+$t1$ and $t2$. It calls $au$ which returns a new finite
+function as the first of a pair. However, we are interested
+in the second of the pair which is the antiunifier of $t1$ and
+$t2$.
+
+=SML
+fun ⦏antiunify⦎ (tp : TYPE * TYPE as (t1,t2)) : TYPE = (
+	let	val prename = au_string (max_mcp [t1,t2] + 1);
+	in
+		snd (au (tp,nil) prename)
+	end);
+=TEX
+
+=SML
+end; (* of structure Antiunify *)
+=TEX
+
+\twocolumn[\section{INDEX OF DEFINED TERMS}]
+\printindex
+\end{document}
+
+
+

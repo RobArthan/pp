@@ -1,0 +1,438 @@
+=IGN
+********************************************************************************
+int003.doc: this file is part of the PPZed system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{{{\ppfont ProofPower-{\ppsmall HOL}}} Regression Tests}
+
+\def\AbstractText{This document contains various regression tests that are best run on the completely built system rather than as module tests.}
+
+\def\Reference{DS/FMU/IED/INT008}
+
+\def\Author{R.D.Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST Project}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{{\ProductHOL} Regression Tests}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/INT008}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.5 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2012/03/18 13:14:14 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{R.D.Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & Project Manager}
+%% LaTeX2e port: \TPPabstract{This document contains various regression tests that are best run on the completely built system rather than as module tests.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item[Issue 1.1 (2006/02/08)]
+First drafts with a regression tests for recent work on the global index tables now used in the kernel interface module.
+\item[Issue 1.2 (2009/06/10)] Added regression test for new parent bug fix.
+\item[Issue 1.3 (2011/02/11)] Added tests for matching rule that are easier to do here.
+\item[Issue 1.4 (2012/03/17), 1.5 (2012/03/18)] Added tests for use of type abbreviations in printing types.
+\item[Issue 1.6 (2012/04/07)] Added tests for fix to automatic existence prover.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+\item[2014/09/07]
+Added tests for fix to rollback function.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+%\subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}\label{Scope}
+This document provides regression tests for {\ProductHOL}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document provides regression tests for {\ProductHOL}.
+The tests are all run automatically be the makefile using the module test harness to report results.
+
+\subsubsection{Dependencies}
+The usual test harness of \cite{DS/FMU/IED/DTD013,DS/FMU/IED/IMP013} is used.
+
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Changes Forecast}
+N/A
+\section{TEST CASES}
+There are currently the following batches of tests
+corresponding to the subsections of section~\ref{THETESTS} below.
+The test cases may be further subdivided in those subsections.
+
+\begin{description}
+\item[Kernel Interface] This tests the consistency of the kernel interface tables set up during system build.
+\item[New parent bug] This tests the fix to a problem with the checks made when a new parent is added.
+\end{description}
+
+\section{PRELIMINARIES}
+=SML
+val ⦏orig_thys⦎ = get_descendants "min";
+val ⦏clean_up⦎ : unit -> unit = (fn () =>
+	let	val to_go = get_descendants "min" diff orig_thys;
+		fun kill thy = force_delete_theory thy handle Fail _ => ();
+	in	app kill to_go
+	end
+);
+use_file "dtd013.sml";
+use_file "imp013.sml";
+=SML
+fun ⦏check_fail⦎ f = (f (); false) handle Fail _ => true;
+=TEX
+\section{THE TESTS}\label{THETESTS}
+\subsection{Kernel Interface Tables}
+The tests are run using the kernel interface diagnostic function to extract the values of the tables.
+The supplied system does not contain any theories that contain constants that would clash with other theories.
+The following test cases are done:
+\begin{description}
+\item[Block 1] Test consistency of constants and types with tables in supplied system.
+\item[Block 2] Test behaviour when new constants and types with clashing names are introduced.
+\end{description}
+
+\subsubsection{Block 1}
+=SML
+clean_up();
+new_theory"kit.1";
+mapfilter new_parent (get_descendants "min");
+fun const_chk1 name = (
+	let	val thy = get_const_theory name;
+	in	name mem map (fst o dest_const) (get_consts thy)
+	end
+);
+val {const_thys, ...} = kernel_interface_diagnostics false;
+val const_dicts = map e_flatten const_thys;
+val const_names = flat (map (map fst) const_dicts);
+val excess_consts = const_names drop const_chk1;
+fun const_chk2 c = (
+	not (all (map (e_lookup (fst(dest_const c))) const_thys) is_Nil)
+);
+val cs = flat (map get_consts (get_descendants"min"));
+val missing_consts = map (fst o dest_const) (cs drop const_chk2);
+fun type_chk1 name = (
+	let	val thy = get_type_theory name;
+	in	name mem map (fst o dest_ctype) (get_types thy)
+	end
+);
+val {type_thys, ...} = kernel_interface_diagnostics false;
+val type_dicts = map e_flatten type_thys;
+val type_names = flat (map (map fst) type_dicts);
+val excess_types = type_names drop type_chk1;
+fun type_chk2 c = (
+	not (all (map (e_lookup (fst(dest_ctype c))) type_thys) is_Nil)
+);
+val ts = flat (map get_types (get_descendants"min"));
+val missing_types = map (fst o dest_ctype) (ts drop type_chk2);
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("kit.1.1", (fn x => x), excess_consts, []),
+	("kit.1.2", (fn x => x), missing_consts, []),
+	("kit.1.3", (fn x => x), excess_types, []),
+	("kit.1.4", (fn x => x), missing_types, [])
+];
+=TEX
+\subsection{New Parent Bug}
+=SML
+clean_up();
+open_theory "basic_hol";
+new_theory "npb1";
+open_theory "npb1";
+new_const("Set", BOOL);
+open_theory "basic_hol";
+new_theory "npb2";
+open_theory "npb2";
+ⓈHOLCONST
+│ ⦏NeSet⦎ : 'a LIST → 'a LIST;
+│ ⦏Set⦎ : 'a LIST → 'a LIST
+├───────────
+│	T
+■
+=SML
+open_theory "npb1";
+store_mt_results
+mt_run_fail[("npb.1.1", new_parent, "npb2",
+	gen_fail_msg "new_parent" 6067 ["npb2"])];
+=TEX
+\subsection{Type Variables in Matching Modus Ponens Rule}
+=SML
+clean_up();
+open_theory "bin_rel";
+val thm1_1 = merge_pcs_rule1 ["'bin_rel", "sets_ext1"] prove_rule[]
+	 ⌜∀ (a : 'a SET, b : 'b SET)⦁ a = {} ⇒ b = {} ⇒ (a × b) = {}⌝;
+val thm1_2 = asm_rule ⌜c : 'b SET = {}⌝;
+val thm1_3 = ⇒_match_mp_rule2 thm1_1 thm1_2;
+val tyvs1 = sort type_order (map type_of
+	(frees (mk_list (concl thm1_3::asms thm1_3))));
+val thm2_1 = ⇒_intro ⌜1 = 1⌝ (refl_conv⌜x : 'a⌝);
+val thm2_2 = undisch_rule (⇒_intro⌜y : 'a = y⌝ (refl_conv ⌜1⌝));
+val thm2_3 = ⇒_match_mp_rule2 thm2_1 thm2_2;
+val tyvs2 = sort type_order (map type_of
+	(frees (mk_list (concl thm2_3::asms thm2_3))));
+val thm3_1 = undisch_rule (⇒_intro⌜z:'a = z⌝ thm2_1);
+val thm3_2 = thm2_2;
+val thm3_3 = ⇒_match_mp_rule2 thm3_1 thm3_2;
+val tyvs3 = sort type_order (map type_of
+	(frees (mk_list (concl thm3_3::asms thm3_3))));
+store_mt_results
+mt_run [
+("⇒_match_mpp_rule2.1", length, tyvs1, 2),
+("⇒_match_mpp_rule2.2", length, tyvs2, 2),
+("⇒_match_mpp_rule2.3", length, tyvs3, 1)
+];
+=TEX
+\subsection{Using Type Abbreviations when Pretty-printing Types}
+=SML
+clean_up();
+open_theory "ℝ";
+new_theory "type-abbrev";
+declare_type_abbrev("ℂ", [], ⓣℝ × ℝ⌝);
+declare_type_abbrev("TimesC", ["'a"], ⓣ'a × ℝ × ℝ⌝);
+fun compare (sl1 : string list, s2 : string) : bool = (
+	let	fun norm sl = (
+			fold (fn (a, b) => if b <>"" then a ^ " " ^ b else a)
+			sl ""
+		);
+		val s1 = norm sl1;
+	in	if	s1 = s2
+		then	(print("Got: \"" ^ s1 ^ "\"\n"); true)
+		else	(print("Got: \"" ^ s1 ^ "\"; Expected: \"" ^ s2 ^ "\"\n"); false)
+	end
+);
+=TEX
+=SML
+store_mt_results_show
+(mt_runf compare) [
+	("pp_use_type_abbrev.1.1", PrettyPrinter.format_type false,
+		ⓣℝ × ℝ⌝, "ℂ"),
+	("pp_use_type_abbrev.1.2", PrettyPrinter.format_type false,
+		ⓣℝ × ℝ × ℝ⌝, "ℝ TimesC")
+];
+=TEX
+=SML
+declare_type_abbrev("alphaTimesC", [], ⓣ'a × ℝ × ℝ⌝);
+store_mt_results_show
+(mt_runf compare) [
+	("pp_use_type_abbrev.2.1", PrettyPrinter.format_type false,
+		ⓣℝ × ℝ × ℝ⌝, "ℝ TimesC"),
+	("pp_use_type_abbrev.2.2", PrettyPrinter.format_type false,
+		ⓣ'a × ℝ × ℝ⌝, "alphaTimesC"),
+	("pp_use_type_abbrev.2.3", PrettyPrinter.format_type false,
+		ⓣ'b × ℝ × ℝ⌝, "'b TimesC"),
+	("pp_use_type_abbrev.2.4", PrettyPrinter.format_type false,
+		ⓣℤ × ℝ × ℝ⌝, "ℤ TimesC")
+];
+=TEX
+=SML
+declare_type_abbrev("WEIRD1", ["'a"], ⓣ'a⌝);
+declare_type_abbrev("WEIRD2", ["'a", "'b"], ⓣ'a⌝);
+store_mt_results_show
+(mt_runf compare) [
+	("pp_use_type_abbrev.3.1", PrettyPrinter.format_type false,
+		ⓣ'a WEIRD1⌝, "'a"),
+	("pp_use_type_abbrev.3.2", PrettyPrinter.format_type false,
+		ⓣ(ℝ × ℝ, 'b) WEIRD2⌝, "ℂ")
+];
+=TEX
+=SML
+declare_type_abbrev("TimesRxR", ["'a"], ⓣ'a × ℂ⌝);
+store_mt_results_show
+(mt_runf compare) [
+	("pp_use_type_abbrev.4.1", PrettyPrinter.format_type false,
+		ⓣ(ℤ × ℝ × ℝ, 'b) WEIRD2⌝, "ℤ TimesRxR")
+];
+=TEX
+=SML
+new_theory"type-abbrev2";
+undeclare_type_abbrev "TimesRxR";
+store_mt_results_show
+(mt_runf compare) [
+	("pp_use_type_abbrev.5.1", PrettyPrinter.format_type false,
+		ⓣ(ℤ × ℝ × ℝ, 'b) WEIRD2⌝, "ℤ TimesC")
+];
+=TEX
+=SML
+open_theory"type-abbrev";
+store_mt_results_show
+(mt_runf compare) [
+	("pp_use_type_abbrev.6.1", PrettyPrinter.format_type false,
+		ⓣ(ℤ × ℝ × ℝ, 'b) WEIRD2⌝, "ℤ TimesRxR")
+];
+=TEX
+The above detected a bug that also applied to aliases, so we test those too.
+=SML
+declare_alias("Vrai", mk_t);
+store_mt_results_show
+(mt_runf compare) [
+	("pp_use_type_abbrev.7.1", PrettyPrinter.format_term false,
+		⌜T⌝, "Vrai")
+];
+declare_alias("Treu", mk_t);
+store_mt_results_show
+(mt_runf compare) [
+	("pp_use_type_abbrev.8.1", PrettyPrinter.format_term false,
+		⌜T⌝, "Treu")
+];
+=TEX
+=SML
+open_theory "ℝ";
+open_theory"type-abbrev";
+store_mt_results_show
+(mt_runf compare) [
+	("pp_use_type_abbrev.9.1", PrettyPrinter.format_term false,
+		⌜T⌝, "Treu")
+];
+=TEX
+=SML
+let
+	val old_ignore_warnings = set_flag("ignore_warnings", true);
+in
+	declare_type_abbrev("×", ["'a", "'b"], ⓣ'a × 'b⌝);
+store_mt_results_show
+(mt_runf compare) [
+	("pp_use_type_abbrev.10.1", PrettyPrinter.format_type false,
+		ⓣℕ × ℝ × ℝ⌝, "ℕ × ℝ × ℝ"),
+	("pp_use_type_abbrev.10.2", PrettyPrinter.format_type false,
+		ⓣℝ × ℝ⌝, "ℝ × ℝ")
+];
+	set_flag("ignore_warnings", old_ignore_warnings)
+end;
+=TEX
+\subsection{Unwanted Proof-Context Dependency in automatic existence provers}
+=SML
+clean_up();
+open_theory "basic_hol";
+new_pc "uncanonical";
+set_rw_canons [] "uncanonical";
+set_pc "uncanonical";
+store_mt_results_show
+mt_run[
+	("basic_prove_∃_conv.pc.1.1",
+		concl o ⇔_t_elim o basic_prove_∃_conv,
+		⌜∃ f g ⦁ ∀ a ⦁ ∃ b ⦁ g = f a b⌝,
+		⌜∃ f g ⦁ ∀ a ⦁ ∃ b ⦁ g = f a b⌝)
+];
+=TEX
+\subsection{Current Theory after Rollback}
+=SML
+clean_up();
+open_theory "basic_hol";
+new_theory "parent";
+new_theory "child";
+store_mt_results
+mt_run[
+	("rollback.1.setup.1", get_current_theory_name, (), "child")
+];
+store_mt_results
+mt_run[
+	("rollback.1.setup.2", get_parents, "child",  ["parent"])
+];
+new_const("BANANA", BOOL);
+val cp = checkpoint"parent";
+store_mt_results
+mt_run[
+	("rollback.1.setup.3", get_current_theory_name, (), "child")
+];
+new_const("CHERRY", BOOL);
+store_mt_results
+mt_run[
+	("rollback.1.setup.4", length o get_consts, "child", 2)
+];
+rollback cp;
+store_mt_results
+mt_run[
+	("rollback.1.4", get_current_theory_name, (), "parent")
+];
+store_mt_results
+mt_run[
+	("rollback.1.5", get_current_theory_name, (), "parent")
+];
+store_mt_results
+mt_run[
+	("rollback.1.6", length o get_consts, "child", 1)
+];
+
+=TEX
+\section{EPILOGUE}
+=SML
+val _ = diag_line(summarize_mt_results());
+=TEX
+\end{document}
+

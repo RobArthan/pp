@@ -1,0 +1,619 @@
+=IGN
+********************************************************************************
+mdt046.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% mdt046.doc  ℤ $Date: 2014/04/12 16:03:18 $ $Id: mdt046.doc,v 1.26 2014/04/12 16:03:18 rda Exp rda $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for the Constant Specification Tools}
+
+\def\AbstractText{A set of module tests are given for the the constant specification tools.}
+
+\def\Reference{DS/FMU/IED/MDT046}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests for the Constant Specification Tools}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Module Tests for the \cr Constant Specification Tools}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT046}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.26 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2014/04/12 16:03:18 $ %
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{ML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & Project Manager}
+%% LaTeX2e port: \TPPabstract{A set of module tests are given for the
+%% LaTeX2e port: the constant specification tools.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/11/22)]
+First draft.
+\item [Issue 1.2 (1991/11/25)]
+Fixed a bug in $a\_get\_epc\_cs\_∃\_rule$.
+
+\item[Issue 1.3 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.4 (1992/01/28)]
+Reacted to change in $HOL\_const\_recogniser$.
+\item [Issue 1.5 (1992/01/31)]
+Fixed duplicated test identities.
+\item [Issue 1.6 (1992/02/07)]
+Modified declarations in constant specifications to
+be separated by semicolons rather than commas - to
+work with the new version hol constant recogniser.
+\item[Issue 1.7 (1992/02/10)]
+Changed name of parent theory to $basic\_hol$.
+\item [Issue 1.8 (1992/03/26) (26th March 1992)]
+Changed to use proof context material of issue 1.13 of \cite{DS/FMU/IED/DTD051}.
+\item [Issue 1.9 (1992/04/09) (9th April 1992)]
+Changes required by CR0016.
+\item [Issue 1.10 (1992/04/14) (14th April 1992)]
+Changes required by CR0017.
+\item [Issue 1.11 (1992/05/13),1.12 (1992/05/14) (13th May 1992)]
+Changed signature of $get\_spec$ et al.
+\item [Issue 1.13 (1992/05/18),1.14 (1992/05/19) (18th May 1992)]
+Changed proof context material.
+\item [Issue 1.15 (1992/05/21) (20th May 1992)]
+Rearranging build proof contexts.
+\item [Issue 1.17 (1992/05/22) (22nd May 1992)]
+Getting 6062 right.
+\item[Issue 1.18 (1992/06/24) (24th June 1992)]
+Renamings from issue 1.6 of \cite{DS/FMU/IED/WRK038},
+mostly proof context name changes.
+\item[Issue 1.19 (1992/07/24) (24th July 1992)]
+To match detailed design version 1.13.
+\item[Issue 1.20 (1992/07/24) (24th July 1992)]
+Changed messages 6056 and 6062.
+\item[Issue 1.21 (1992/12/03),1.22 (1992/12/03) (3rd December 1992)]
+Added $get\_spec$ language processing.
+\item[Issue 1.24 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.25 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.26 (2014/04/12)] Accommodated replacement of
+=INLINEFT
+simple_new_defn
+=TEX
+\ by
+=INLINEFT
+gen_new_spec
+=TEX
+.
+\item[Issue 1.27 (2014/04/14)] Allowed for changes to error handling.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the contant specification tools.
+The design is in \cite{DS/FMU/IED/DTD046}
+and it is
+implemented in \cite{DS/FMU/IED/IMP046}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module testing of the material given a design in \cite{DS/FMU/IED/DTD046},
+following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+
+\subsubsection{Dependencies}
+This document is derived from the detailed design in \cite{DS/FMU/IED/DTD046},
+and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP046}.
+\subsubsection{Deficiencies}
+None known.
+\section{TEST CASES}
+We test each function of the signature of \cite{DS/FMU/IED/DTD046}
+in turn, where possible in the same order as in the design document, testing both successful, and all error, cases,
+except for 6037 and 6071, concerning the writability of theories.
+These are untested here because they were extensively tested for the primitive theory functions, elsewhere.
+\section{PROLOGUE}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+repeat drop_main_goal;
+open_theory "basic_hol";
+push_merge_pcs ["'propositions","'paired_abstractions"];
+
+delete_theory "mdttest_046b" handle _ => ();
+delete_theory "mdttest_046" handle _ => ();
+new_theory "mdttest_046";
+new_theory "mdttest_046b";
+=TEX
+ⓈHOLCONST
+OutOfContext : 'a
+├
+T
+■
+=TEX
+=SML
+open_theory "mdttest_046";
+=TEX
+\section{SETTING THE PROOF CONTEXT}
+To make the tests independent of some outside changes, we give a local
+proof context:
+=SML
+val ⦏∃_rewrite_thm1⦎ = (
+	push_goal([],⌜∀ t :'a⦁ (∃ x ⦁ x = t) ∧ (∃ x ⦁ t = x)⌝);
+	a(REPEAT strip_tac);
+	a(∃_tac ⌜t:'a⌝ THEN rewrite_tac[]);
+	a(∃_tac ⌜t:'a⌝ THEN rewrite_tac[]);
+	pop_thm());
+
+fun ⦏a_cs_∃_conv⦎ (tm:TERM) : THM =
+	tac_proof(([],mk_⇔(tm,mk_t)),rewrite_tac[∃_rewrite_thm1]);
+
+new_pc "mdt046";
+merge_pcs ["'propositions","'paired_abstractions"] "mdt046";
+delete_pc_fields ["cs_∃_convs"] "mdt046";
+set_cs_∃_convs [a_cs_∃_conv] "mdt046";
+push_pc "mdt046";
+=TEX
+\section{THE TESTS}
+\subsection{$HOL\_axiomatic\_recogniser$}
+ⓈHOLCONST
+c5 : BOOL → BOOL;
+c6 : BOOL → BOOL
+├
+(∀ x ⦁ c5 x = ¬ x)
+∧
+(∀ y ⦁ c6 y = y)
+■
+=TEX
+ⓈHOLCONST
+c7 : 'a × 'b;
+c8 : 'b × 'a
+├
+T
+■
+=TEX
+ⓈHOLCONST
+c9 : 'a × 'b
+├
+F
+■
+=TEX
+
+=TEX
+=SML
+store_mt_results (mt_runf (op =#))[
+	("HOL_const_recogniser 1",
+	dest_thm o get_defn "-",
+	"c5",
+	([],⌜ConstSpec (λ(c5',c6')⦁ (∀ x ⦁ c5' x = ¬ x)
+		∧
+		(∀ y ⦁ c6' y = y)) (c5,c6)⌝)),
+	("HOL_const_recogniser 2",
+	dest_thm o get_defn "-",
+	"c6",
+	([],⌜ConstSpec (λ(c5',c6')⦁ (∀ x ⦁ c5' x = ¬ x)
+		∧
+		(∀ y ⦁ c6' y = y)) (c5,c6)⌝)),
+	("HOL_const_recogniser 3",
+	dest_thm o get_defn "-",
+	"c7",
+	([],⌜T⌝)),
+	("HOL_const_recogniser 4",
+	dest_thm o get_defn "-",
+	"c8",
+	([],⌜T⌝))
+	];
+=TEX
+The following will perhaps change (and also cause some output to the screen):
+=SML
+store_mt_results mt_run_fail [
+	("HOL_const_recogniser 46000",
+	HOL_const_recogniser,
+	("(",")",[],"[]"),
+	gen_fail_msg "HOL_const_recogniser" 46000 [])
+	];
+=TEX
+\subsection{$const\_spec$}
+=SML
+const_spec (["c1","c2","c3"],[⌜c1:BOOL⌝,⌜(c2:BOOL,c3:BOOL)⌝],
+	⌜c1 ∧ c2 ∧ c3⌝);
+const_spec (["c4"],[⌜c4:BOOL⌝],⌜c4 ⇔ T⌝);
+=TEX
+=SML
+store_mt_results (mt_runf (op =#))[
+	("const_spec 1",
+	dest_thm o get_defn "-",
+	"c1",
+	([],⌜ConstSpec (λ(c1',c2',c3')⦁c1' ∧ c2' ∧ c3')(c1,c2,c3)⌝)),
+	("const_spec 2",
+	dest_thm o get_defn "-",
+	"c2",
+	([],⌜ConstSpec (λ(c1',c2',c3')⦁c1' ∧ c2' ∧ c3')(c1,c2,c3)⌝)),
+	("const_spec 3",
+	dest_thm o get_defn "-",
+	"c2",
+	([],⌜ConstSpec (λ(c1',c2',c3')⦁c1' ∧ c2' ∧ c3')(c1,c2,c3)⌝)),
+	("const_spec 4",
+	dest_thm o get_defn "-",
+	"c4",
+	([],⌜c4 ⇔ T⌝))
+	];
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("const_spec 3031",
+	const_spec,
+	(["ec1"],[⌜x⌝],⌜y⌝),
+	gen_fail_msg "const_spec" 3031 ["⌜y⌝"]),
+	("const_spec 6031",
+	const_spec,
+	([],[⌜x⌝],⌜T⌝),
+	gen_fail_msg "const_spec" 6031 []),
+	("const_spec 6044",
+	const_spec,
+	(["test"],[],⌜T⌝),
+	gen_fail_msg "const_spec" 6044 []),
+	("const_spec 6049",
+	const_spec,
+	(["test"],[mk_var("T",BOOL)],⌜T⌝),
+	gen_fail_msg "const_spec" 6049 ["T"]),
+	("const_spec 6051",
+	const_spec,
+	(["c1"],[⌜v1⌝],⌜T⌝),
+	gen_fail_msg "const_spec" 6051 ["c1","mdttest_046"]),
+	("const_spec 46014 a",
+	const_spec,
+	(["ec1"],[⌜ec1⌝],⌜var:BOOL⌝),
+	gen_fail_msg "const_spec" 46014
+		["⌜∃ ec1⦁ var⌝", "", "var"]),
+	("const_spec 46014 b",
+	const_spec,
+	(["ec1"],[⌜ec1⌝],⌜var:BOOL = var1⌝),
+	gen_fail_msg "const_spec" 46014 [ "⌜∃ ec1⦁ var ⇔ var1⌝", "s", "var1, var"]),
+	("const_spec 6061",
+	const_spec,
+	(["ec1"],[⌜ec1⌝],⌜∀ x : 'b ⦁ x = x⌝),
+	gen_fail_msg "const_spec" 6061 ["⊢ ∃ ec1⦁ ∀ x⦁ x = x", "'b"]),
+	("const_spec 6063",
+	const_spec,
+	(["OutOfContext"],[⌜OutOfContext⌝],⌜T⌝),
+	gen_fail_msg "const_spec" 6063 ["OutOfContext"]),
+	("const_spec 6081",
+	const_spec,
+	(["ec1","ec2"],[⌜ec1,ec2⌝],⌜T⌝),
+	gen_fail_msg "const_spec" 6081 ["⌜ec1⌝","⌜ec2⌝"]),
+	("const_spec 46003",
+	const_spec,
+	(["ec1","ec2"],[⌜ec1, ec1⌝],⌜T⌝),
+	gen_fail_msg "const_spec" 46003 ["ec1"]),
+	("const_spec 46004",
+	const_spec,
+	(["ec1","ec2"],[⌜(ec1, T)⌝],⌜T⌝),
+	gen_fail_msg "const_spec" 46004 ["⌜(ec1, T)⌝"])	
+	];
+=TEX
+\subsection{$get\_spec$ Part I}
+Preparation for axiomatic lookup for $get\_spec$:
+=SML
+new_const("AxiomDefined",BOOL);
+new_axiom(["AxiomDefined"],⌜AxiomDefined ⇔ T⌝);
+const_spec(["AxiomConsistent"],[⌜AxiomConsistent:BOOL → BOOL⌝],⌜AxiomConsistent T ∧ F⌝);
+new_axiom(["AxiomConsistent_consistent"],⌜Consistent AxiomConsistent⌝);
+=TEX
+=SML
+store_mt_results (mt_runf (op =#))[
+	("get_spec 1",
+	dest_thm o get_spec,
+	⌜c1⌝,
+	([⌜Consistent (λ(c1',c2',c3')⦁c1' ∧ c2' ∧ c3')⌝],
+		⌜c1 ∧ c2 ∧ c3⌝)),
+	("get_spec 2",
+	dest_thm o get_spec,
+	⌜c2⌝,
+	([⌜Consistent (λ(c1',c2',c3')⦁c1' ∧ c2' ∧ c3')⌝],
+		⌜c1 ∧ c2 ∧ c3⌝)),
+	("get_spec 3",
+	dest_thm o get_spec,
+	⌜c3⌝,
+	([⌜Consistent (λ(c1',c2',c3')⦁c1' ∧ c2' ∧ c3')⌝],
+		⌜c1 ∧ c2 ∧ c3⌝)),
+	("get_spec 4",
+	dest_thm o get_spec,
+	⌜c4⌝,
+	([],⌜c4 ⇔ T⌝)),
+	("get_spec 5",
+	dest_thm o get_spec,
+	⌜AxiomDefined⌝,
+	([],⌜AxiomDefined ⇔ T⌝)),
+	("get_spec 6",
+	dest_thm o get_spec,
+	⌜AxiomConsistent⌝,
+	([⌜Consistent (λ AxiomConsistent'⦁ AxiomConsistent' T ∧ F)⌝],⌜AxiomConsistent T ∧ F⌝)),
+	("get_spec 7",
+	dest_thm o get_spec,
+	⌜AxiomConsistent F⌝,
+	([⌜Consistent (λ AxiomConsistent'⦁ AxiomConsistent' T ∧ F)⌝],⌜AxiomConsistent T ∧ F⌝))
+	];
+
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("get_spec 46009",
+	get_spec,
+	⌜rubbish⌝,
+	gen_fail_msg "get_spec" 46009 ["⌜rubbish⌝"]),
+	("get_spec 46005",
+	get_spec,
+	(mk_const ("rubbish",BOOL)),
+	gen_fail_msg "get_spec" 46005 ["rubbish"]),
+	("get_spec 46006",
+	get_spec,
+	⌜$⇒⌝,
+	gen_fail_msg "get_spec" 46006 ["⇒"])
+	];
+=TEX
+\subsection{$push\_consistency\_goal$}
+=SML
+push_consistency_goal ⌜c2⌝;
+store_mt_results (mt_runf (op =#))[
+	("push_consistency_goal",
+	top_goal,
+	(),
+	([],⌜∃ (c1', c2', c3') ⦁ c1' ∧ c2' ∧ c3'⌝))
+	];
+
+store_mt_results mt_run_fail [
+	("push_consistency_goal 46009",
+	push_consistency_goal,
+	⌜rubbish⌝,
+	gen_fail_msg "push_consistency_goal" 46009 ["⌜rubbish⌝"]),
+	("push_consistency_goal 46005",
+	push_consistency_goal,
+	mk_const("rubbish",BOOL),
+	gen_fail_msg "push_consistency_goal" 46005 ["rubbish"]),
+	("push_consistency_goal 46006",
+	push_consistency_goal,
+	⌜$⇒⌝,
+	gen_fail_msg "push_consistency_goal" 46006 ["⇒"]),
+	("push_consistency_goal 46007",
+	push_consistency_goal,
+	⌜c4⌝,
+	gen_fail_msg "push_consistency_goal" 46007 ["c4"])
+	];
+=TEX
+\subsection{$save\_consistency\_thm$}
+=SML
+a(∃_tac ⌜(T,T,T)⌝);
+a(rewrite_tac[]);
+val thm = pop_thm();
+save_consistency_thm ⌜c3⌝ thm;
+store_mt_results (mt_runf (op =#))[
+	("save_consistency_thm",
+	dest_thm o get_thm "-",
+	"c2_consistent",
+	([],⌜Consistent (λ(c1',c2',c3')⦁c1' ∧ c2' ∧ c3')⌝))
+	];
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("save_consistency_thm 46009",
+	save_consistency_thm ⌜rubbish⌝,
+	thm,
+	gen_fail_msg "save_consistency_thm" 46009 ["⌜rubbish⌝"]),
+	("save_consistency_thm 46005",
+	save_consistency_thm (mk_const("rubbish",BOOL)),
+	thm,
+	gen_fail_msg "save_consistency_thm" 46005 ["rubbish"]),
+	("save_consistency_thm 46006",
+	save_consistency_thm ⌜$⇒⌝,
+	thm,
+	gen_fail_msg "save_consistency_thm" 46006 ["⇒"]),
+	("save_consistency_thm 46008",
+	save_consistency_thm ⌜c2⌝,
+	t_thm,
+	gen_fail_msg "save_consistency_thm" 46008 ["⌜T⌝"]),
+	("save_consistency_thm 46011",
+	save_consistency_thm ⌜c5⌝,
+	thm,
+	gen_fail_msg "save_consistency_thm" 46011
+		["⊢ Consistent (λ (c1', c2', c3')⦁ c1' ∧ c2' ∧ c3')",
+		"c5"]),
+	("save_consistency_thm 46012",
+	save_consistency_thm ⌜c4⌝,
+	thm,
+	gen_fail_msg "save_consistency_thm" 46012 ["⌜c4 ⇔ T⌝"])
+	];
+=TEX
+Now to try applications to arguments:
+=SML
+const_spec (["C1"],[⌜C1 : BOOL → BOOL⌝],
+	⌜∀ x:BOOL ⦁ C1 x ∧ F⌝);
+push_consistency_goal ⌜C1 T⌝;
+store_mt_results (mt_runf (op =#))[
+	("push_consistency_goal 1",
+	top_goal,
+	(),
+	([],⌜∃ C1' ⦁ ∀ x :BOOL ⦁ C1' x ∧ F⌝))
+	];
+a(accept_tac(new_axiom(["Total rubbish"],⌜∃ C1' ⦁ ∀ x:BOOL ⦁ C1' x ∧ F⌝)));
+save_consistency_thm ⌜C1 T⌝ (pop_thm());
+store_mt_results (mt_runf (op =#))[
+	("save_consistency_thm 1",
+	dest_thm o get_thm "-",
+	"C1_consistent",
+	([],⌜Consistent (λ C1'⦁ ∀ x:BOOL ⦁ C1' x ∧ F)⌝))
+	];
+=TEX
+
+\subsection{$get\_spec$ Part II}
+Now we have a consistency property saved we can use it:
+=SML
+store_mt_results (mt_runf (op =#))[
+	("get_spec 1 a",
+	dest_thm o get_spec,
+	⌜c1⌝,
+	([], ⌜c1 ∧ c2 ∧ c3⌝)),
+	("get_spec 2 a",
+	dest_thm o get_spec,
+	⌜c2⌝,
+	([], ⌜c1 ∧ c2 ∧ c3⌝))
+	];
+=TEX
+Language Processing:
+=SML
+gen_new_spec (["const1"], asm_rule ⌜HOL'const1 ⇔ T⌝);
+store_mt_results (mt_runf (op =#))[
+	("get_spec language 1",
+	dest_thm o get_spec,
+	⌜HOL'const1⌝,
+	([],⌜HOL'const1 ⇔ T⌝))];
+gen_new_spec (["const2"], asm_rule ⌜HoL'const2 ⇔ T⌝);
+store_mt_results (mt_runf (op =#))[
+	("get_spec language 2",
+	dest_thm o get_spec,
+	⌜HoL'const2⌝,
+	([],⌜HoL'const2 ⇔ T⌝))];
+set_current_language "HOL'2";
+gen_new_spec (["2'const1"], asm_rule ⌜HOL'2'const1 ⇔ F⌝);
+declare_const_language ("HOL'2'const1","HOL");
+store_mt_results mt_run_fail [(
+	"get_spec 46013",
+	get_spec,
+	⌜HOL'2'const1⌝,
+	gen_fail_msg "get_spec" 46013
+		["HOL'2'const1",
+		format_list string_of_thm
+		[get_defn "-" "const1",
+		get_defn "-" "2'const1"] ", "])];
+=TEX
+More such:
+=SML
+val lthy = get_current_theory_name();
+delete_theory "Ztemp" handle (Fail _) => ();
+new_theory "Ztemp";
+set_current_language "Z";
+const_spec (["AnExample"],[mk_var("z'AnExample",BOOL)],mk_f);
+get_spec ⌜z'AnExample⌝;
+push_consistency_goal ⌜z'AnExample⌝;
+a(rewrite_tac[new_axiom(["temp"],mk_f)]);
+store_mt_results (mt_runf (op =#))
+	[("language-processing 1",
+	dest_thm o save_consistency_thm ⌜z'AnExample⌝,
+	pop_thm(),
+	([],⌜Consistent (λ z'AnExample':BOOL⦁ F)⌝))
+	];
+store_mt_results (mt_runf (op =#))
+	[("language-processing 2",
+	dest_thm o get_spec,
+	⌜z'AnExample⌝,
+	([],mk_f))
+	];
+store_mt_results mt_run_fail [
+	("get_defn without z'",
+	get_defn "-",
+	"z'AnExample",
+	gen_fail_msg "get_defn" 12004 ["-","z'AnExample"])
+	];
+open_theory lthy;
+delete_theory "Ztemp";
+=TEX
+=IGN
+\subsection{}
+store_mt_results mt_run [
+	("",
+	,
+	,
+	)
+	];
+store_mt_results mt_run_fail [
+	("",
+	,
+	,
+	gen_fail_msg ""  [])
+	];
+=TEX
+\subsection{End of Tests}
+=SML
+diag_string(summarize_mt_results());
+delete_pc "mdt046";
+=TEX
+\end{document}
+
+
+

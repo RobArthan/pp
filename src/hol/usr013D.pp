@@ -1,0 +1,348 @@
+=IGN
+********************************************************************************
+usr013D.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+% usr013D.doc $Date: 2004/08/28 16:35:36 $ $Revision: 2.5 $ $RCSfile: usr013D.doc,v $
+% COPYRIGHT (c) Lemma 1 Ltd.
+\ignore{
+=SML
+(* usr013D.sml $Date: 2004/08/28 16:35:36 $ $Revision: 2.5 $ $RCSfile: usr013D.doc,v $
+   COPYRIGHT (c) Lemma 1 Ltd. *)
+=TEX
+}
+
+\chapter{THEORIES}
+
+Having decribed the HOL {\type} and {\term} languages, we now consider other aspects of {\Product} which enable these to be used in writing specifications and conducting formal proofs.
+
+The term ⦏specification⦎ has a dual use in the following.
+It is used to describe a quantitity of formal material perhaps consisting of many documents and spread over several ⦏THEORY⦎s.
+It is also used in the name of some of the procedures available for entering parts of a specification into the system (usually abbreviated to {\it spec}), or of {\it paragraphs} which provide an alternative concrete syntax for undertaking such specifications.
+
+A specification (in the first sense), when processed by {\Product} extends the logical system which {\Product} provides with new {\type} constructors and constants which constitute mathematical models of the system specified.
+The means of extension may be classified into those which are {\it conservative} and those which are not.
+A conservative extension is one which is guaranteed safe, insofar as its introduction will not render the logical system inconsistent.
+For most purposes conservative extensions are sufficient, though it is sometimes desirable to make non-conservative extensions, either for reasons of cost and convenience, or (very rarely in applications) because there is a real need to strengthen the logic.
+Because of the risk associated with non-conservative extensions these are always recorded as new {\it axioms}.
+The use of an axiom is confined to the theory in which it is declared and its descendants, and it is always possible to discover the full set of axioms which are present in a theory and its ancestry.
+
+\begin{itemize}
+\item
+Information about specifications is held in the theory database.
+\item
+The theory database consists of a hierarchy of theories interconnected by the parent-child relationship.
+\item
+The details of a specification are put in the theories using various declarations, definitions and specifications which are calls to ML functions, or by the use of paragraphs which provide an alternative syntax for some of these procedure calls which avoids explicit use of the meta-language.
+\end{itemize}
+
+\section{Theories}
+\subsection{Introduction}
+A HOL theory contains the following information:
+\begin{itemize}
+\item
+The name of the theory and the names of its parents and children.
+\item
+The names and arities of {\type} constructors declared in the theory.
+\item
+The names and {\type}s of constants declared in the theory.
+\item
+Fixity and aliasing information.
+\item
+Possibly some axioms.
+\item
+Definitions of constants.
+\item
+A collection of saved theorems.
+\end{itemize}
+
+\subsection{Access to Theories}
+To use a theory it must be ``in context'', this can be achieved by opening the theory or one of its descendents:
+=SML
+⦏open_theory⦎ : string -> unit;
+=TEX
+Open theory makes the named theory the ⦏current\ theory⦎.
+
+The theory `basic_hol' must always be in context, since its ancestors contain definitions on which the soundness of the built-in inference rules depend.
+The ancestors of {\it basic_hol} may not themselves be opened (since this would permit theories to be created with incorrect variants of these critical definitions), but will always be in the ancestry of the currently opened theory.
+
+To display the contents of a theory use:
+=SML
+⦏print_theory⦎ : string -> unit;
+=TEX
+{\it print_theory} takes as parameter the name of the theory to be printed, and accepts the abbreviation \verb!"-"! instead of the current theory name.
+The theory must be in context, i.e. the current theory or an ancestor of it.
+
+To create a new theory which is a child of the current theory:
+=SML
+⦏new_theory⦎	: string -> unit;
+=TEX
+{\it new_theory} will create a new theory whose parent is the current theory and whose name is the string supplied as parameter.
+This new theory will then become the current theory.
+
+To add a new parent to the current theory:
+=SML
+⦏new_parent⦎	: string -> unit;
+=TEX
+{\it new_parent} will add a new parent to the current theory.
+This enables the contents of the parent theory and any of its ancestors to be used in the current theory or its descendants.
+
+To get things from the theory a range of functions are provided.
+These will normally be used only when the value retrieved is required for computations rather than for display, since {\it print_theory } will display the information suitably formatted, while these functions simply return the value rather than formatting it for display.
+
+These functions, with the sole exception of {\it get_spec} take a string parameter which is the name of the theory to be accessed, and sometimes require a further string parameter which is a keyword under which the required value has been saved.
+The second parameter is omitted in those functions which retrieve all the values of a certain kind from a theory (usually names ending in `s', e.g. {\it get_binders}).
+
+=SML
+	⦏get_aliases⦎		: string -> (string * TERM) list;
+	⦏get_ancestors⦎	: string -> string list;
+	⦏get_axiom⦎		: string -> string -> THM;
+	⦏get_axioms⦎		: string -> (string list * THM) list;
+	⦏get_binders⦎		: string -> string list;
+	⦏get_children⦎		: string -> string list;
+	⦏get_consts⦎		: string -> TERM list;
+	⦏get_defn⦎		: string -> string -> THM;
+	⦏get_defns⦎		: string -> (string list * THM) list;
+	⦏get_descendants⦎	: string -> string list;
+	⦏get_parents⦎		: string -> string list;
+	⦏get_thm⦎		: string -> string -> THM;
+	⦏get_thms⦎		: string -> (string list * THM) list;
+	⦏get_spec⦎		: TERM -> THM;
+=TEX
+
+To save things in the theory use declarations, definitions, specifications or paragraphs (see below), or {\it save_thm}.
+
+You should now be able to do the exercises in section \ref{HOLTheoryExplorations}.
+
+\section{Declarations, Definitions and Specifications}
+
+\subsection{{\type} constructors}
+
+An uninterpreted new {\type} constructor may be introduced using {\it new_type}, which requires to know only the name and arity of the new {\type} constructor.
+
+=SML
+⦏new_type⦎		: string * int -> TYPE;
+=TEX
+
+A {\typeconstructor} may be {\it defined} using {\it new_type_definition} by identifying a non-empty subset of an existing {\type} with which the new {\type} is required to be in one-one correspondence.
+=SML
+⦏new_type_defn⦎	: string list * string * string list * THM -> THM;
+=TEX
+The parameters to {\it new_type_definition} are:
+
+\begin{enumerate}
+\item
+A list of keywords under which the {\type} definition will be stored (in the current theory).
+\item
+the name of the new {\typeconstructor} to be introduced
+\item
+A list of the names of the {\type} variables present in definition of the property which determines the subset of the representation {\type} to be in one-one correspondence with the new {\type}.
+
+These {\type} variables will correspond to {\type} parameters to the newly introduced {\typeconstructor}, and their order determines the order in which the {\type} parameters must be supplied to the new {\typeconstructor}.
+\item
+the theorem stating that the set determined by the defining property is non-empty
+\end{enumerate}
+
+⦏TYPE\ abbreviations⦎ may also be introduced using:
+
+=SML
+⦏declare_type_abbrev⦎	: string * string list * TYPE -> unit;
+=TEX
+
+Where the first name is the name of the {\type} abbreviation and the second is a list of {\type} variables occurring in the {\type} supplied as third parameter.
+These are effectively formal parameters to the definition.
+The actual parameters supplied when using the {\type} abbreviation will effectively be substituted for the formal parameters in the defining {\type}.
+
+\subsection{Constants}
+
+{\it new_const} enables a completely uninterpreted new constant to be introduced.
+This results in no definition of the constant.
+
+{\it new_spec} allows us to introduce a constant with an arbitrary defining property, but to ensure that the introduction is a conservative extension a prior proof is required that a value satisfying the definition already exists.
+A single call to {\it new_spec} can introduce several constants at once.
+
+{\it const_spec} is a variant of {\it new_spec} which avoids the need to prove consistency prior to introducing the new constants.
+It will attempt a consistency proof itself using a consistency prover taken from the current proof context, and if it fails to complete the consistency the constants are nevertheless introduced, in a form which permits them to be used for their intended purpose only if the consistency proof completed later.
+
+=SML
+⦏new_const⦎		: string * TYPE -> TERM;
+⦏new_spec⦎		: string list * int * THM -> THM;
+⦏const_spec⦎		: string list * TERM list * TERM -> THM;
+=TEX
+
+\subsection{Product Specifications}
+
+Two special functions are provided for introducing new product {\type}s, both labelled and unlabelled.
+These introduce a new {\type} at the same time as a number of new constants.
+
+=SML
+⦏unlabelled_product_spec⦎
+	:	{tyi		: TYPE list,	tykey		: string,
+		tyname		: string,	tyvars		: TYPE list OPT,
+		conkeys	: string list,	conname	: string}
+		-> THM;
+
+⦏labelled_product_spec⦎
+	:	{tykey		: string,	labels		: (string * TYPE) list,
+		 tyname	: string,	tyvars		: TYPE list OPT,
+		 conname	: string,	constkeys	: string list}
+		 -> THM;
+=TEX
+
+\subsection{Lexical Declarations}
+
+Any identifier can be declared:
+
+\begin{itemize}
+\item
+⦏prefix⦎, ⦏infix⦎, ⦏postfix⦎ (with a ⦏priority⦎)
+\item
+a ⦏binder⦎ (like ``∀'' and ``∃'')
+\end{itemize}
+
+using the following ⦏fixity\ declaration⦎ procedures:
+
+=SML
+⦏declare_prefix⦎	: int * string -> unit;
+⦏declare_infix⦎		: int * string -> unit;
+⦏declare_postfix⦎	: int * string -> unit;
+⦏declare_binder⦎	: string -> unit;
+=TEX
+
+Such a declaration affects all uses of the name including the use of the name as a variable, however the ⦏lexical⦎ status of names may vary from one theory to another, or the special fixity may be removed using:
+
+=SML
+⦏declare_nonfix⦎	: string -> unit;
+=TEX
+
+The following procedure may be used to discover the lexical status of a name in the current theory.
+
+=SML
+⦏get_fixity⦎		: string -> Lex.FIXITY;
+=TEX
+
+\section{Paragraphs}
+
+Some declarations may be done without resort to the metalanguage.
+This facility enables specifications to be presented almost entirely in HOL without having to make use of standard ML as well throughout the specification documents.
+
+The form of these ⦏paragraphs⦎ is similar to some of the paragraphs forms in the Z specification language \cite{spivey92}, which is supported by {\Product}.
+These paragraphs, despite their similarity to Z are distinct from the similar Z paragraphs (which are also accepted by {\Product}).
+An introduction to {\Product} support for Z may be found in {\ZTUTORIAL}.
+
+\subsection{Constant Declaration Paragraphs}
+
+This is a special syntactic form used for invoking {\it const_spec}.
+
+=SML
+(open_theory "usr013" handle _ => (open_theory "hol"; new_theory "usr013"));
+set_pc "hol2";
+declare_postfix (200, "!");
+=TEX
+
+A HOL constant specification (⦏HOLCONST⦎) paragraph is entered into a document or into {\Product} as follows:
+
+{\ftlmargin=0in
+=GFTSHOW
+	ⓈHOLCONST
+	│ length : 'a LIST → ℕ
+	├────────────────
+	│		length [] = 0
+	│∧ ∀ h t⦁	length (Cons h t) = length t + 1
+	│
+	■
+=TEX
+}
+
+and this normally results in a printed form like this:
+
+ⓈHOLCONST
+│ length : 'a LIST → ℕ
+├────────────────
+│		length [] = 0
+│∧ ∀ h t⦁	length (Cons h t) = length t + 1
+│
+■
+
+This results in a new definition being entered into the {\it current theory} (see below).
+
+Provided that the system succeeded in proving the consistency of the definition  (which it did in this case) it can immediately be used as follows:
+=SML
+rewrite_conv[get_spec⌜length⌝] ⌜length [1;2;3;4;5]⌝;
+=TEX
+=GFT ProofPower output
+val it = ⊢ length [1; 2; 3; 4; 5] = 5 : THM
+=TEX
+
+\subsection{Labelled Product Paragraphs}
+
+These provide an object language construct (⦏HOLLABPROD⦎ paragraph) for introducing ⦏labelled\ products⦎ using {\it labelled_product_spec}.
+
+The entry in the source document, which may be read or pasted into {\Product}is:
+
+
+{\ftlmargin=0in
+=GFTSHOW
+	ⓈHOLLABPROD Date───────
+	│	day month year:ℕ
+	■────────────────
+=TEX
+}
+
+Which is printed as:
+
+ⓈHOLLABPROD Date───────
+│	day month year:ℕ
+■────────────────
+
+The following definitions result:
+
+=SML
+print_theory "usr013";
+=GFT ProofPower output
+ === The theory usr013 ===
+
+--- Parents ---
+
+		cache'hol	hol
+
+--- Constants ---
+
+length		'a LIST → ℕ
+year		Date → ℕ
+month		Date → ℕ
+day		Date → ℕ
+MkDate		ℕ → ℕ → ℕ → Date
+
+--- Types ---
+
+Date
+
+--- Fixity ---
+
+Postfix 200:	!
+
+--- Definitions ---
+
+length		⊢ length [] = 0
+		    ∧ (∀ h t⦁ length (Cons h t) = length t + 1)
+Date		⊢ ∃ f⦁ TypeDefn (λ x⦁ T) f
+MkDate
+day
+month
+year		⊢ ∀ t x1 x2 x3
+		  ⦁ day (MkDate x1 x2 x3) = x1
+		      ∧ month (MkDate x1 x2 x3) = x2
+		      ∧ year (MkDate x1 x2 x3) = x3
+		      ∧ MkDate (day t) (month t) (year t) = t
+
+ === End of listing of theory usr013 ===
+=TEX
+You should now be able to attempt the exercises in section \ref{Specification}.
+

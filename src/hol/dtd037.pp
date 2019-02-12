@@ -1,0 +1,339 @@
+=IGN
+********************************************************************************
+dtd037.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  dtd037.doc  ℤ $Date: 2012/03/27 10:47:38 $ $Revision: 1.11 $ $RCSfile: dtd037.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design for the Theory of Pairs}
+
+\def\AbstractText{This document contains the detailed design for the theory of pairs for ICL HOL.}
+
+\def\Reference{DS/FMU/IED/DTD037}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design for the Theory of Pairs}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD037}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.11 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: %\TPPdate{}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.B.Jones & HAT Team Leader}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the detailed design for the
+%% LaTeX2e port: theory of pairs for ICL HOL.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item [Issue 1.1 (1991/10/02) (2nd October 1991)]
+First draft.
+\item [Issue 1.2 (1991/10/02) (2nd October 1991)]
+Tidying up.
+\item [Issue 1.3 (1991/10/17) (17th October 1991)]
+Gained $fun\_rel\_thm$ from \cite{DS/FMU/IED/IMP038}.
+\item [Issue 1.4 (1991/11/29) (29th November 1991)]
+Added some explicit typing information.
+
+\item[Issue 1.5 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.6 (1992/01/27) (23rd January 1992)]
+$new\_axiom$, $simple\_new\_type\_defn$ and $new\_type\_defn$
+all changed to take lists of keys, rather than single ones.
+
+\item[Issue 1.7 (1992/05/14) (14 May 1992)] Use correct quotation symbols.
+
+\item[Issue 1.8 (1992/07/06) (6 July 1992)] Insert Missing ENDDOC.
+
+\item[Issue 1.9 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.10 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.11 (2012/03/27)] Added the function {\em Pair}.
+\item[Issue 1.12 (2014/04/13)] Allowed for changes to definitions arising from use of
+=INLINEFT
+gen_new_spec
+=TEX
+.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the detailed design for the theory of pairs ICL HOL.
+The high level design for this material is given in \cite{DS/FMU/IED/HLD011}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+See \cite{DS/FMU/IED/HLD011}.
+\subsubsection{Dependencies}
+This document is dependent on the theory design support
+tools in \cite{DS/FMU/IED/DTD035}. The implementation
+will be dependent on the tactics in \cite{DS/FMU/IED/IMP028}
+and on the subgoal package in \cite{DS/FMU/IED/IMP028}.
+\subsubsection{Possible Enhancements}
+None known.
+\subsubsection{Deficiencies}
+None known.
+
+\section{THE THEORY CONTENTS}
+Note that additions to theory ``misc'' are given a design in
+\cite{DS/FMU/IED/DTD023}.
+\subsection{Theory Name}
+=THDOC
+req_name "pair" (Value "misc");
+=DESCRIBE
+The theory ``⦏pair⦎'' defines a type of pairs, operators upon the type,
+and some associated theorems.
+=ENDDOC
+
+=THDOC
+req_const ("IsPairRep", ⓣ('a → 'b → BOOL) → BOOL⌝);
+req_defn(["IsPairRep","is_pair_rep_def"],([], ⌜
+	∃ comma:'a→'b→'a→'b→BOOL; fst snd⦁
+		  (∀ x y⦁ IsPairRep (comma x y) ∧ fst (comma x y) = x ∧
+		  snd (comma x y) = y) ∧
+		  (∀ x y a b⦁ (comma a b) = comma x y ⇔ a = x ∧ b = y) ∧
+		  (∀ p⦁ IsPairRep p ⇒ (comma (fst p) (snd p)) = p)⌝
+));
+=DESCRIBE
+The representation type for pairs, as given by
+$⦏IsPairRep⦎$ is the type of a function of two arguments to $ⓣBOOL⌝$.
+It is bound to the ML variable $is\_pair\_rep\_def$.
+=ENDDOC
+A possible representation predicate for $IsPairRep$ is one which
+only return true if the first argument equals the first of the pair to be represented,
+ and the second argument equals the second of the pair.
+
+=THDOC
+req_infix (150, "×");
+req_terminator"×";
+req_type ("×", 2);
+req_defn(["×","×_def"], ([], ⌜
+	∃f:'a × 'b → 'a → 'b → BOOL⦁TypeDefn IsPairRep f
+⌝));
+=DESCRIBE
+The HOL type constructor $⦏×⦎$ creates the type of pairs.
+It is bound to the ML variable $×\_def$.
+=ENDDOC
+=THDOC
+req_const ("Fst", ⓣ'a × 'b → 'a⌝);
+req_const ("Snd", ⓣ'a × 'b → 'b⌝);
+req_const (",", ⓣ'a → 'b → 'a × 'b⌝);
+req_infix (150, ",");
+req_defn(["comma_def"], ([], ⌜∃fst : 'a × 'b → 'a; snd : 'a × 'b → 'b⦁
+		(∀ x y⦁ fst (x, y) = x ∧ snd (x, y) = y) ∧
+		(∀ x:'a; y:'b; a:'a; b:'b⦁ (a, b) = (x, y) ⇔ a = x ∧ b = y) ∧
+		(∀ p⦁ (fst p, snd p) = p)
+⌝));
+req_defn(["fst_def"], ([], ⌜∃snd : 'a × 'b → 'b⦁
+		(∀ x y⦁ Fst (x, y) = x ∧ snd (x, y) = y) ∧
+		(∀ x:'a; y:'b; a:'a; b:'b⦁ (a, b) = (x, y) ⇔ a = x ∧ b = y) ∧
+		(∀ p⦁ (Fst p, snd p) = p)
+⌝));
+req_defn(["Fst", "Snd", ",", "pair_ops_def", "snd_def"], ([], ⌜
+		(∀ x:'a; y:'b⦁ Fst (x, y) = x ∧ Snd (x, y) = y) ∧
+		(∀ x:'a; y:'b; a:'a; b:'b⦁ (a, b) = (x, y) ⇔ a = x ∧ b = y) ∧
+		(∀ p:'a × 'b⦁ (Fst p, Snd p) = p)
+⌝));
+=DESCRIBE
+The HOL constants $⦏Fst⦎$ and $⦏Snd⦎$ are the two projector
+functions for the type of pairs,
+and $⦏,⦎$ is the constructor function.
+Their definition is saved under each of the constant names as keys.
+It is bound to the ML variable $fst\_snd\_comma\_def$.
+=ENDDOC
+=THDOC
+req_const ("Curry", ⓣ('a × 'b → 'c) → 'a → 'b → 'c⌝);
+req_const ("Uncurry", ⓣ('a → 'b → 'c) → 'a × 'b → 'c⌝);
+req_defn(["Curry","curry_def"], ([], ⌜∀(f:'a × 'b → 'c) x y⦁ Curry f x y = f(x, y)⌝));
+req_defn(["Uncurry", "uncurry_def"], ([], ⌜∀(f:'a → 'b → 'c) x y⦁ Uncurry f (x, y) = f x y⌝));
+=DESCRIBE
+The HOL constants $⦏Curry⦎$ and $⦏Uncurry⦎$ allow
+translation between curried and uncurried functions.
+Their definitions are saved under keys with the same name.
+They are bound to the ML variables $curry\_def$ and $uncurry\_def$.
+=ENDDOC
+=THDOC
+req_const ("Pair", ⓣ ('a → 'b) × ('a → 'c) → 'a → 'b × 'c⌝);
+req_defn(["Pair" ,"pair_def"], ([], ⌜
+	∀f: 'a → 'b; g : 'a → 'c⦁ Pair(f, g) = (λx⦁ (f x, g x))
+⌝));
+=DESCRIBE
+The HOL constants $⦏Fst⦎$ and $⦏Snd⦎$ are the two projector
+functions for the type of pairs,
+and $⦏,⦎$ is the constructor function.
+Their definition is saved under each of the constant names as keys.
+It is bound to the ML variable $fst\_snd\_comma\_def$.
+=ENDDOC
+
+=THDOC
+req_thm("pair_clauses",([],⌜∀ (x: 'a) (y: 'b) (a:'a) (b:'b)
+	(p:'a × 'b)
+	(fu : 'a → 'b → 'c)
+	(fc : ('a × 'b) → 'c)
+	(fg : ('a → 'b) × ('a → 'c)) ⦁
+	Fst (x, y) = x ∧
+	Snd (x, y) = y ∧
+	((a, b) = (x, y) ⇔ a = x ∧ b = y) ∧
+	(Fst p, Snd p) = p ∧
+	Curry fc x y = fc (x, y) ∧
+	Uncurry fu (x, y) = fu x y ∧
+	Uncurry fu p = fu (Fst p) (Snd p) ∧	
+	((a,b) = p ⇔ (a = Fst p ∧ b = Snd p)) ∧
+	(p = (a,b)  ⇔ (Fst p = a ∧ Snd p = b)) ∧
+	Pair fg x = (Fst fg x, Snd fg x)⌝));
+=DESCRIBE
+In the theorem $⦏pair\_clauses⦎$ we gather together
+a collection of rewriting theorems derived from the theory ``pair''.
+=ENDDOC
+\subsection{THE SIGNATURE}
+=DOC
+signature ⦏PairTheory⦎ = sig
+=DESCRIBE
+This is the signature in which we declare theory ``pair'',
+and add a few theorems to theory ``misc''.
+=ENDDOC
+=DOC
+val ⦏type_lemmas_thm⦎ : THM;
+val ⦏one_one_thm⦎ : THM;
+val ⦏ext_thm⦎ : THM;
+val ⦏fun_rel_thm⦎ : THM;
+=DESCRIBE
+These four theorems are saved under their names as keys in theory ``misc''.
+Their design is given in theory ``misc'', and not here,
+though they are implemented within the structure $PairTheory$.
+=ENDDOC
+=DOC
+val ⦏pair_ops_def⦎ : THM;
+val ⦏curry_def⦎ : THM;
+val ⦏uncurry_def⦎ : THM;
+val ⦏pair_def⦎ : THM;
+val ⦏is_pair_rep_def⦎ : THM;
+=DESCRIBE
+These definitions are saved under their names as keys in theory ``misc'', and are the definitions for
+$Fst$, $Snd$, $,$, and $IsPairRep$.
+=ENDDOC
+=DOC
+val ⦏pair_clauses⦎ : THM;
+end;
+=DESCRIBE
+This single theorem collects all the externally useful results of the
+theory of pairs into one portmanteau theorem.
+It is saved in theory ``pair'' with its name as its key.
+=ENDDOC
+\section{TEST POLICY}
+
+Any functions are to be tested according to then
+general criteria laid down in the quality plan, \cite{DS/FMU/IED/PLN008},
+with tests given in \cite{DS/FMU/IED/MDT037}.
+Also in \cite{DS/FMU/IED/MDT037} the theory produced is checked by the theory design tools
+of \cite{DS/FMU/IED/DTD035}, against the theory design provided.
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
+
+
+

@@ -1,0 +1,1853 @@
+=IGN
+********************************************************************************
+mdt004.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% mdt004.doc   ℤ $Date: 2006/12/02 15:37:26 $ $Revision: 2.14 $ $RCSfile: mdt004.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for Derived Terms}
+
+\def\AbstractText{A set of module tests are given for the derived term functions.}
+
+\def\Reference{DS/FMU/IED/MDT004}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests for Derived Terms}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Module Tests for Derived Terms}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT004}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 2.14 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/12/02 15:37:26 $ %
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{A set of module tests are given for the derived term functions.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/02/07) to 1.12 (1991/10/31)]
+First drafts.
+\item [Issue 1.13 (1991/11/08)]
+Changes in response to deskcheck ID0092.
+\item [Issue 2.1 (1991/11/20) (20th November 1991)]
+Approved version of issue 1.13.
+
+\item[Issue 2.2 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 2.3 (1992/02/11), (11th February 1992)]
+Added tests for $list\_mk\_→\_type$, $strip\_→\_type$,
+$is\-\_empty\-\_list$, $dest\-\_empty\-\_list$,
+$dest\-\_t$, $dest\-\_f$,
+$is\-\_∅$, and $dest\-\_∅$.
+\item [Issue 2.4 (1992/03/18) (16th March 1992)]
+Added stripping combinators.
+\item [Issue 2.5 (1992/03/19) (19th March 1992)]
+Removed some percent keywords.
+\item [Issue 2.6 (1992/04/09) (3rd April 1992)]
+Changes following CR0016.
+\item [Issue 2.7 (1992/04/14) (14 April 1992)]
+Changes following CR0017.
+\item [Issue 2.8 (1992/04/21) (21 April 1992)]
+Reduce dependency upon the exact format of the pretty printer's outputs.
+\item [Issue 2.9 (1992/06/03) (3rd June 1992)]
+Added literals to $DEST\_TERM$.
+\item [Issue 2.10 (1999/02/22)]
+Update for SML'97
+\item [Issue 2.11 (1999/03/09)] Update for new INTEGER type.
+\item[Issue 2.12 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.13 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 2.14 (2006/12/02)] Added pointer to tests for floating point literal syntax functions.
+\item[Issue 2.15 (2010/09/02)] Added tests for {\em term\_fold}.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+%\subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the derived term functions, required by Release 1 ICL HOL Product Requirement Specification \cite{DS/FMU/IED/DEF004}.
+The design is in \cite{DS/FMU/IED/DTD004}
+and it is
+implemented in \cite{DS/FMU/IED/IMP004}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module testing of the material given a design in \cite{DS/FMU/IED/DTD004},
+following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+
+The tests use the test harness of \cite{DS/FMU/IED/DTD013}.
+\subsubsection{Dependencies}
+This document is derived from the detailed design in \cite{DS/FMU/IED/DTD004},
+and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP004}.
+\subsubsection{Deficiencies}
+None known.
+\section{TEST CASES}
+We test each function of the signature of \cite{DS/FMU/IED/DTD004}
+in turn, where possible in the same order as in the design document,
+except for those exceptions noted in section \ref{untested}.
+\section{INITIALISATION}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+open_theory "basic_hol";
+=TEX
+\section{VALUE BINDINGS}
+=SML
+val tv1 = mk_vartype "'tv1";
+val tv2 = mk_vartype "'tv2";
+val tv3 = mk_vartype "'tv3";
+val vb = mk_var("vb", BOOL);
+val v1 = mk_var("v1", tv1);
+val v2 = mk_var("v2", tv2);
+val v3 = mk_var("v3", tv3);
+val c1 = mk_const("c1",BOOL);
+val c2 = mk_const("c2",mk_ctype("triple",[tv1,tv2,tv3]));
+val cv1 = mk_const("cv1",tv1);
+val v11 = mk_var("v11",BOOL);
+val cp1 = mk_const("cp1",mk_×_type(tv1, BOOL));
+val cv2 = mk_const("cv2",tv2);
+val f = mk_var("f",mk_→_type(BOOL,BOOL));
+val T = mk_const("T",BOOL);
+val F = mk_const("F",BOOL);
+val ftv1 = mk_var("f",mk_→_type(tv1,BOOL));
+val c3 = mk_const("c3",mk_→_type(tv1,mk_→_type(tv2,mk_→_type(tv3,
+	mk_ctype("triple",[tv1,tv2,tv3])))));
+val cm1 = mk_app(c3,v1);
+val cm2 = mk_app(cm1,v2);
+val cm3 = mk_app(cm2,v3);
+=TEX
+=SML
+fun list_eq (eq:'a * 'a -> bool) ((a :: x), (b :: y)) : bool = (
+	eq(a,b) andalso list_eq eq (x, y)
+) | list_eq eq ([], []) = true
+| list_eq _ _ = false;
+=TEX
+=SML
+infix 3 =**$;
+infix 3 =**:;
+infix 3 =*$;
+infix 3 =*:;
+
+fun (a,b) =**$ (c,d) = (a =$ c) andalso (b =$ d);
+fun  (a,b) =**: (c,d) = (a =: c) andalso (b =: d);
+fun (a,b) =*$ (c,d) = (a = c) andalso (b =$ d);
+fun (a,b) =*: (c,d) = (a = c) andalso (b =: d);
+=TEX
+=SML
+fun =::$ ((a,b),(c,d)) = list_eq (op =$) (a,c) andalso b =$ d;
+=TEX
+
+Some functions to isolate this test material from the precise details
+of the pretty printer's output.  These functions are used when testing
+error conditions where the error message contains a formatted type or
+term.  These routines might use the HOL pretty printer (via routines
+$format_term1$ and $format_type1$ from $PrettyPrinter$) however they
+might not be installed, so instead we use the $string\_of\_XXX$ functions.
+=SML
+fun pr_term(tm:TERM) : string = (
+	string_of_term tm
+);
+
+fun pr_type(ty:TYPE) : string = (
+	string_of_type ty
+);
+=TEX
+
+=IGN
+Or, we could use the printer formatting routines, in which case:
+
+The pretty printer formatting routines return a list of strings
+of up to some given line length.  Here we are dealing with short
+printed texts that should fit onto one line, to encourage this we ask
+for an excessively large line length.
+
+..=SML
+fun pr_term(tm:TERM) : string = (
+	implode(PrettyPrinter.format_term1 true 10000 tm)
+);
+
+fun pr_type(ty:TYPE) : string = (
+	implode(PrettyPrinter.format_type1 true 10000 ty)
+);
+=TEX
+
+\section{THE TESTS}
+\subsection{Type and Term Utilities}
+\subsubsection{term\_fold}
+=SML
+store_mt_results (mt_runf (op =)) [
+	("term_fold 1",
+	term_fold (fn _ => fn (tm, a) => (dest_var tm; a + 1)),
+	(cm3, 0),
+	3),
+	("term_fold 2",
+	term_fold (fn _ => fn (tm, a) => (dest_var tm; a + 1)),
+	(mk_⇒(T,F), 0),
+	0),
+	("term_fold 3",
+	term_fold (fn _ => fn (tm, a) => (dest_const tm; a + 1)),
+	(mk_⇒(vb,F), 0),
+	2),
+	("term_fold 4",
+	term_fold (fn vs => fn (tm, a) => (dest_var tm; if tm mem vs then a else a + 1)),
+	(mk_simple_∃(v1,mk_app(ftv1,v1)), 0),
+	1)
+	];
+=TEX
+\subsection{Derived Type Functions}
+=SML
+store_mt_results (mt_runf (op =:))[
+	("list_mk_→_type 1",
+	list_mk_→_type,
+	[BOOL],
+	BOOL),
+	("list_mk_→_type 2",
+	list_mk_→_type,
+	[tv1,tv2,tv3],
+	mk_→_type(tv1,mk_→_type(tv2,tv3)))
+	];
+store_mt_results mt_run_fail [
+	("list_mk_→_type 3017",
+	list_mk_→_type,
+	[],
+	gen_fail_msg "list_mk_→_type" 3017 [])];
+
+store_mt_results (mt_runf (list_eq (op =:)))[
+	("strip_→_type 1",
+	strip_→_type,
+	BOOL,
+	[BOOL]),
+	("strip_→_type 2",
+	strip_→_type,
+	mk_→_type(tv1,mk_→_type(tv2,tv3)),
+	[tv1,tv2,tv3])
+	];
+=TEX
+\subsection{Boolean Constants}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_t",
+	Combinators.I,
+	mk_t,
+	mk_const("T",BOOL)),
+	("mk_f",
+	Combinators.I,
+	mk_f,
+	mk_const("F",BOOL))
+	];
+store_mt_results mt_run[
+	("dest_t",
+	dest_t,
+	mk_t,
+	()),
+	("dest_f",
+	dest_f,
+	mk_f,
+	())
+	];
+store_mt_results mt_run_fail [
+	("dest_t 4036",
+	dest_t,
+	mk_f,
+	gen_fail_msg "dest_t" 4036 [pr_term mk_f]),
+	("dest_f 4037",
+	dest_f,
+	mk_t,
+	gen_fail_msg "dest_f" 4037 [pr_term mk_t])];
+store_mt_results mt_run[
+	("is_t 1",
+	is_t,
+	mk_t,
+	true),
+	("is_t 2",
+	is_t,
+	mk_f,
+	false),
+	("is_f 1",
+	is_f,
+	mk_t,
+	false),
+	("is_f 2",
+	is_f,
+	mk_f,
+	true)
+	];
+=TEX
+\subsection{Generic Binder Functions}
+The $?\_binder$, etc, functions will be considered
+tested by the functions they are used to implement,
+as noted in \ref{untested}.
+\subsection{Pairs}
+=SML
+store_mt_results (mt_runf (op =:))[
+	("mk_×_type",
+	mk_×_type,
+	(BOOL, ℕ),
+	mk_ctype("×",[BOOL, ℕ]))
+	];
+store_mt_results mt_run_fail [
+	("dest_×_type 4018",
+	dest_×_type,
+	BOOL,
+	gen_fail_msg "dest_×_type" 4018 [pr_type BOOL])
+	];
+store_mt_results (mt_runf (op =**:))[
+	("dest_×_type",
+	dest_×_type o mk_×_type,
+	(BOOL, ℕ),
+	(BOOL, ℕ))
+	];
+store_mt_results mt_run[
+	("is_×_type 1",
+	is_×_type,
+	mk_×_type(BOOL, ℕ),
+	true),
+	("is_×_type 2",
+	is_×_type,
+	BOOL,
+	false)
+	];
+
+store_mt_results (mt_runf (op =$))[
+	("mk_pair",
+	mk_pair,
+	(c1, c2),
+	list_mk_app(mk_const(",",mk_→_type(type_of c1,mk_→_type(type_of c2,
+		mk_×_type(type_of c1,type_of c2)))),
+		[c1,c2]))
+	];
+store_mt_results (mt_runf (op =**$))[
+	("dest_pair",
+	dest_pair,
+	mk_pair(c1,c2),
+	(c1,c2))
+	];
+store_mt_results mt_run_fail [
+	("dest_pair 4003",
+	dest_pair,
+	c1,
+	gen_fail_msg "dest_pair" 4003 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_pair 1",
+	is_pair,
+	c1,
+	false),
+	("is_pair 2",
+	is_pair,
+	mk_pair(c1,c2),
+	true)
+	];
+=TEX
+\subsection{(Paired) λ-abstractions}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_λ 1",
+	mk_λ,
+	(v1, c1),
+	mk_simple_λ(v1, c1)),
+	("mk_λ 2",
+	mk_λ,
+	(mk_pair(v1,v2), c1),
+	mk_app(mk_const("Uncurry",mk_→_type(mk_→_type(tv1,mk_→_type(tv2,BOOL)),
+		mk_→_type(mk_×_type(tv1,tv2),BOOL))),
+		list_mk_simple_λ([v1,v2], c1)))
+	];
+store_mt_results mt_run_fail [
+	("mk_λ 4016",
+	mk_λ,
+	(c1,c1),
+	gen_fail_msg "mk_λ" 4016 [pr_term c1])
+	];
+
+store_mt_results (mt_runf (op =**$))[
+	("dest_λ 1",
+	dest_λ,
+	mk_λ(v1, v1),
+	(v1, v1)),
+	("dest_λ 2",
+	dest_λ,
+	mk_λ(mk_pair(v1,v2), v1),
+	(mk_pair(v1,v2), v1)),
+	("dest_λ 3",
+	dest_λ,
+	mk_λ(mk_pair(mk_pair(v1,v2), mk_pair(v2,v3)), v2),
+	(mk_pair(mk_pair(v1,v2), mk_pair(v2,v3)), v2))
+	];
+
+store_mt_results mt_run_fail [
+	("dest_λ 4002",
+	dest_λ,
+	c1,
+	gen_fail_msg "dest_λ" 4002 [pr_term c1])
+	];
+store_mt_results (mt_runf (op =$))[
+	("list_mk_λ",
+	list_mk_λ,
+	([mk_pair(v1,v2),v3],c1),
+	mk_λ (mk_pair(v1,v2),mk_λ(v3,c1)))
+	];
+store_mt_results mt_run_fail [
+	("list_mk_λ 4016",
+	list_mk_λ,
+	([c1],c1),
+	gen_fail_msg "mk_λ" 4016 [pr_term c1])
+	];
+store_mt_results (mt_runf (op =::$))[
+	("strip_λ",
+	strip_λ,
+	list_mk_λ([mk_pair(v1,v2),v3],c1),
+	([mk_pair(v1,v2),v3],c1))
+	];
+store_mt_results mt_run[
+	("is_λ a",
+	is_λ,
+	list_mk_λ([mk_pair(v1,v2),v3],c1),
+	true),
+	("is_λ b",
+	is_λ,
+	mk_simple_λ(v1,v1),
+	true),
+	("is_λ c",
+	is_λ,
+	c1,
+	false)
+	];
+=TEX
+\subsection{Conjunctions}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_∧",
+	mk_∧,
+	(mk_t,mk_f),
+	list_mk_app(mk_const("∧",mk_→_type(BOOL,mk_→_type(BOOL,BOOL))),[mk_t,mk_f]))
+	];
+store_mt_results mt_run_fail [
+	("mk_∧ 3031",
+	mk_∧,
+	(c2,mk_f),
+	gen_fail_msg "mk_∧" 3031 [pr_term c2]),
+	("mk_∧ 3015",
+	mk_∧,
+	(mk_f,c2),
+	gen_fail_msg "mk_∧" 3015 ["",pr_term c2])
+	];
+store_mt_results (mt_runf (op =**$))[
+	("dest_∧",
+	dest_∧,
+	mk_∧(mk_t,mk_f),
+	(mk_t,mk_f))
+	];
+store_mt_results mt_run_fail [
+	("dest_∧ 4032",
+	dest_∧,
+	c1,
+	gen_fail_msg "dest_∧" 4032 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_∧ 1",
+	is_∧,
+	c1,
+	false),
+	("is_∧ 2",
+	is_∧,
+	mk_∧(mk_t,mk_f),
+	true)
+	];
+store_mt_results mt_run_fail [
+	("list_mk_∧ 3017",
+	list_mk_∧,
+	[],
+	gen_fail_msg "list_mk_∧" 3017 []),
+	("list_mk_∧ 3031",
+	list_mk_∧,
+	[c2, mk_t],
+	gen_fail_msg "list_mk_∧" 3031 [pr_term c2])
+	];
+store_mt_results (mt_runf (op =$))[
+	("list_mk_∧",
+	list_mk_∧,
+	[mk_t,mk_f,c1],
+	mk_∧(mk_t,mk_∧(mk_f,c1)))
+	];
+store_mt_results (mt_runf (list_eq (op =$)))[
+	("strip_∧ 1",
+	strip_∧,
+	c2,
+	[c2]),
+	("strip_∧ 2",
+	strip_∧,
+	list_mk_∧[mk_t,mk_f,c1],
+	[mk_t,mk_f,c1])
+	];
+=TEX
+\subsection{Disjunctions}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_∨",
+	mk_∨,
+	(mk_t,mk_f),
+	list_mk_app(mk_const("∨",mk_→_type(BOOL,mk_→_type(BOOL,BOOL))),[mk_t,mk_f]))
+	];
+store_mt_results mt_run_fail [
+	("mk_∨ 3031",
+	mk_∨,
+	(c2,mk_f),
+	gen_fail_msg "mk_∨" 3031 [pr_term c2]),
+	("mk_∨ 3015",
+	mk_∨,
+	(mk_f,c2),
+	gen_fail_msg "mk_∨" 3015 ["",pr_term c2])
+	];
+store_mt_results (mt_runf (op =**$))[
+	("dest_∨",
+	dest_∨,
+	mk_∨(mk_t,mk_f),
+	(mk_t,mk_f))
+	];
+store_mt_results mt_run_fail [
+	("dest_∨ 4027",
+	dest_∨,
+	c1,
+	gen_fail_msg "dest_∨" 4027 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_∨ 1",
+	is_∨,
+	c1,
+	false),
+	("is_∨ 2",
+	is_∨,
+	mk_∨(mk_t,mk_f),
+	true)
+	];
+store_mt_results mt_run_fail [
+	("list_mk_∨ 3017",
+	list_mk_∨,
+	[],
+	gen_fail_msg "list_mk_∨" 3017 []),
+	("list_mk_∨ 3031",
+	list_mk_∨,
+	[c2, mk_t],
+	gen_fail_msg "list_mk_∨" 3031 [pr_term c2])
+	];
+store_mt_results (mt_runf (op =$))[
+	("list_mk_∨",
+	list_mk_∨,
+	[mk_t,mk_f,c1],
+	mk_∨(mk_t,mk_∨(mk_f,c1)))
+	];
+store_mt_results (mt_runf (list_eq (op =$)))[
+	("strip_∨ 1",
+	strip_∨,
+	c2,
+	[c2]),
+	("strip_∨ 2",
+	strip_∨,
+	list_mk_∨[mk_t,mk_f,c1],
+	[mk_t,mk_f,c1])
+	];
+=TEX
+\subsection{Negations}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_¬",
+	mk_¬,
+	mk_t,
+	mk_app(mk_const("¬",mk_→_type(BOOL,BOOL)),mk_t))
+	];
+store_mt_results (mt_runf (op =$))[
+	("mk_multi_¬",
+	mk_multi_¬,
+	(2,mk_t),
+	mk_¬(mk_¬ mk_t))
+	];
+
+store_mt_results (mt_runf (op =*$)) [
+	("dest_multi_¬ a",
+	dest_multi_¬,
+	mk_multi_¬(2,mk_t),
+	(2,mk_t)),
+	("dest_multi_¬ b",
+	dest_multi_¬,
+	(mk_ℕ o integer_of_int) 0,
+	(0,(mk_ℕ o integer_of_int) 0))
+	];
+store_mt_results mt_run_fail [
+	("mk_¬ 3031",
+	mk_¬,
+	c2,
+	gen_fail_msg "mk_¬" 3031 [pr_term c2])
+	];
+store_mt_results mt_run_fail [
+	("mk_multi_¬ 3031",
+	mk_multi_¬,
+	(2,c2),
+	gen_fail_msg "mk_multi_¬" 3031 [pr_term c2]),
+	("mk_multi_¬ 4030",
+	mk_multi_¬,
+	(~2,c2),
+	gen_fail_msg "mk_multi_¬" 4030 ["-2"])
+	];
+store_mt_results (mt_runf (op =$)) [
+	("dest_¬",
+	dest_¬,
+	mk_¬ mk_t,
+	mk_t)
+	];
+store_mt_results mt_run_fail [
+	("dest_¬ 4029",
+	dest_¬,
+	c1,
+	gen_fail_msg "dest_¬" 4029 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_¬ 1",
+	is_¬,
+	mk_t,
+	false),
+	("is_¬ 2",
+	is_¬,
+	mk_¬ mk_t,
+	true)
+	];
+=TEX
+\subsection{Bi-implications}
+(Notice how the constant name is ``='')
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_⇔",
+	mk_⇔,
+	(mk_t,mk_f),
+	list_mk_app(mk_const("=",mk_→_type(BOOL,mk_→_type(BOOL,BOOL))),
+		[mk_t,mk_f]))
+	];
+store_mt_results mt_run_fail [
+	("mk_⇔ 3031",
+	mk_⇔,
+	(c2,mk_f),
+	gen_fail_msg "mk_⇔" 3031 [pr_term c2]),
+	("mk_⇔ 3015",
+	mk_⇔,
+	(mk_f,c2),
+	gen_fail_msg "mk_⇔" 3015 ["",pr_term c2])
+	];
+store_mt_results (mt_runf (op =**$))[
+	("dest_⇔",
+	dest_⇔,
+	mk_⇔(mk_t,mk_f),
+	(mk_t,mk_f))
+	];
+store_mt_results mt_run_fail [
+	("dest_⇔ 4031",
+	dest_⇔,
+	c1,
+	gen_fail_msg "dest_⇔" 4031 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_⇔ 1",
+	is_⇔,
+	c1,
+	false),
+	("is_⇔ 2",
+	is_⇔,
+	mk_⇔(mk_t,mk_f),
+	true)
+	];
+=TEX
+\subsection{Conditionals}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_if",
+	mk_if,
+	(c1,mk_t,mk_f),
+	list_mk_app(mk_const("Cond",mk_→_type(BOOL,mk_→_type(BOOL,
+		mk_→_type(BOOL,BOOL)))),
+		[c1,mk_t,mk_f]))
+	];
+store_mt_results mt_run_fail [
+	("mk_if 3031",
+	mk_if,
+	(c2,mk_t,mk_f),
+	gen_fail_msg "mk_if" 3031 [pr_term c2]),
+	("mk_if 3012",
+	mk_if,
+	(mk_t,mk_t,c2),
+	gen_fail_msg "mk_if" 3012 [pr_term mk_t,pr_term c2])
+	];
+let
+fun aux ((a,b,c),(d,e,f)) = a =$ d andalso b =$ e andalso (c =$ f);
+in
+store_mt_results (mt_runf aux) [
+	("dest_if",
+	dest_if,
+	mk_if(c1,mk_t,mk_f),
+	(c1,mk_t,mk_f))
+	]
+end;
+store_mt_results mt_run_fail [
+	("dest_if 4006",
+	dest_if,
+	c1,
+	gen_fail_msg "dest_if" 4006 [pr_term c1])
+	];
+
+store_mt_results mt_run[
+	("is_if 1",
+	is_if,
+	mk_if(c1,mk_t,mk_f),
+	true),
+	("is_if 2",
+	is_if,
+	c1,
+	false)
+	];
+=TEX
+\subsection{Let-terms}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_let 1",
+	mk_let,
+	([],mk_t),
+	mk_t),
+	("mk_let 2",
+	mk_let,
+	([(v1, cv1)],mk_t),
+	list_mk_app(mk_const("Let",mk_→_type(mk_→_type(tv1,BOOL),
+		mk_→_type(tv1,BOOL))),
+		[mk_λ(v1,mk_t), cv1])),
+	("mk_let 3",
+	mk_let,
+	([(mk_pair(v1, v11), cp1)],mk_t),
+	list_mk_app(mk_const("Let",mk_→_type(
+			mk_→_type(mk_×_type(tv1, BOOL),BOOL),
+			mk_→_type(mk_×_type(tv1, BOOL),BOOL))),
+		[mk_λ(mk_pair(v1, v11),mk_t), cp1])),
+	("mk_let 4",
+	mk_let,
+	([(mk_pair(v1, v11), cp1),(v2,cv2)],mk_t),
+	list_mk_app(mk_const("Let",mk_→_type(mk_→_type(tv2,BOOL),
+		mk_→_type(tv2,BOOL))),
+		[mk_let([(mk_pair(v1, v11), cp1)],mk_λ(v2,mk_t)), cv2])),
+	("mk_let 5",
+	mk_let,
+	([(mk_app(f,v11), mk_t)],mk_f),
+	list_mk_app(mk_const("Let",mk_→_type(
+			mk_→_type(mk_→_type(BOOL,BOOL),BOOL),
+			mk_→_type(mk_→_type(BOOL,BOOL),BOOL))),
+		[mk_λ(f,mk_f), mk_λ(v11,mk_t)]))
+	];
+
+store_mt_results mt_run_fail [
+	("mk_let 4007",
+	mk_let,
+	([(mk_app(f, c1), mk_t)], mk_t),
+	gen_fail_msg "mk_let" 4007 [pr_term(mk_app(f, c1))]),
+	("mk_let 3012",
+	mk_let,
+	([(f, mk_t)], mk_t),
+	gen_fail_msg "mk_let" 3012 [pr_term f,pr_term mk_t])
+	];
+
+let
+fun aux ((a,b),(c,d)) = list_eq (op =**$) (a,c) andalso b =$ d;
+in
+store_mt_results (mt_runf aux)[
+	("dest_let",
+	dest_let o mk_let,
+	([(mk_pair(v1, v11), cp1),(v2,cv2)],mk_t),
+	([(mk_pair(v1, v11), cp1),(v2,cv2)],mk_t))
+	]
+end;
+
+store_mt_results mt_run_fail [
+	("dest_let 4009",
+	dest_let,
+	c1,
+	gen_fail_msg "dest_let" 4009 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_let 1",
+	is_let,
+	c1,
+	false),
+	("is_let 2",
+	is_let,
+	mk_let([(mk_pair(v1, v11), cp1),(v2,cv2)],mk_t),
+	true)
+	];
+store_mt_results (mt_runf (op =$))[
+	("list_mk_let",
+	list_mk_let,
+	([[(v1, cv1)],[(v2, cv2)]], mk_t),
+	mk_let([(v1, cv1)],mk_let([(v2, cv2)],mk_t)))
+	];
+let
+fun aux ((a,b),(c,d)) = list_eq (list_eq (op =**$)) (a,c) andalso b =$ d;
+in
+store_mt_results (mt_runf aux) [
+	("strip_let",
+	strip_let,
+	list_mk_let ([[(v1, cv1)],[(v2, cv2)]], mk_t),
+	([[(v1, cv1)],[(v2, cv2)]], mk_t))
+	]
+end;
+=TEX
+\subsection{Enumerated Sets}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_∅",
+	mk_∅,
+	ℕ,
+	mk_const("Empty",mk_ctype("SET",[ℕ])))
+	];
+store_mt_results (mt_runf (op =:)) [
+	("dest_∅",
+	dest_∅,
+	mk_∅ ℕ,
+	ℕ)
+	];
+store_mt_results mt_run_fail [
+	("dest_∅ 4035",
+	dest_∅,
+	mk_t,
+	gen_fail_msg "dest_∅" 4035 [pr_term mk_t])
+	];
+store_mt_results mt_run[
+	("is_∅ 1",
+	is_∅,
+	mk_∅ ℕ,
+	true),
+	("is_∅ 2",
+	is_∅,
+	mk_t,
+	false)
+	];
+
+store_mt_results (mt_runf (op =$))[
+	("mk_enum_set",
+	mk_enum_set,
+	[mk_t],
+	list_mk_app(mk_const("Insert",mk_→_type(BOOL,mk_→_type(
+			mk_ctype("SET",[BOOL]),mk_ctype("SET",[BOOL])))),
+		[mk_t,mk_∅ BOOL]))
+	];
+store_mt_results mt_run_fail [
+	("mk_enum_set 3017",
+	mk_enum_set,
+	[],
+	gen_fail_msg "mk_enum_set" 3017 []),
+	("mk_enum_set 3012",
+	mk_enum_set,
+	[mk_t,c2],
+	gen_fail_msg "mk_enum_set" 3012 [pr_term mk_t,pr_term c2])
+	];
+store_mt_results (mt_runf (list_eq (op =$)))[
+	("dest_enum_set",
+	dest_enum_set,
+	mk_enum_set [mk_t, mk_f, c1],
+	[mk_t, mk_f, c1])
+	];
+
+let
+	val list_tm = list_mk_app(
+			mk_const(
+				"Insert",
+				mk_→_type(
+					BOOL,
+					mk_→_type(
+						mk_ctype("SET",[BOOL]),
+						mk_ctype("SET",[BOOL])
+			))),
+			[	mk_t,
+				mk_var("v",mk_ctype("SET",[BOOL]))
+		]);
+in
+store_mt_results mt_run_fail [
+	("dest_enum_set 4011 a",
+	dest_enum_set,
+	c1,
+	gen_fail_msg "dest_enum_set" 4011 [pr_term c1]),
+	("dest_enum_set 4011 b",
+	dest_enum_set,
+	list_tm,
+	gen_fail_msg "dest_enum_set" 4011 [pr_term list_tm])
+	]
+end;
+
+store_mt_results mt_run[
+	("is_enum_set 1",
+	is_enum_set,
+	mk_enum_set [mk_t, mk_f, c1],
+	true),
+	("is_enum_set 2",
+	is_enum_set,
+	mk_t,
+	false)
+	];
+=TEX
+\subsection{Set Comprehensions}
+=SML
+open_theory "sets";
+store_mt_results (mt_runf (op =$))[
+	("mk_set_comp 1",
+	mk_set_comp,
+	(v1, mk_t),
+	mk_app(mk_const("SetComp",mk_→_type(mk_→_type(tv1,BOOL),
+		mk_ctype("SET",[tv1]))),
+		mk_λ(v1,mk_t))),
+	("mk_set_comp 2",
+	mk_set_comp,
+	(mk_pair(v1,v2), mk_t),
+	mk_app(mk_const("SetComp",mk_→_type(mk_→_type(
+			mk_×_type(tv1,tv2),BOOL),
+			mk_ctype("SET",[mk_×_type(tv1,tv2)]))),
+		mk_λ(mk_pair(v1,v2),mk_t)))
+	];
+store_mt_results mt_run_fail [
+	("mk_set_comp 3015",
+	mk_set_comp,
+	(v1,v1),
+	gen_fail_msg "mk_set_comp" 3015 ["",pr_term v1]),
+	("mk_set_comp 4016",
+	mk_set_comp,
+	(c2,v1),
+	gen_fail_msg "mk_set_comp" 4016 [pr_term c2])
+	];
+store_mt_results (mt_runf (op =**$)) [
+	("dest_set_comp",
+	dest_set_comp,
+	mk_set_comp(mk_pair(v1,v2), mk_t),
+	(mk_pair(v1,v2), mk_t))
+	];
+
+let
+	val app_setcomp_v =
+		mk_app(mk_const("SetComp",mk_→_type(mk_→_type(
+			mk_×_type(tv1,tv2),BOOL),
+			mk_ctype("SET",[mk_×_type(tv1,tv2)]))),
+		mk_var("v",mk_→_type(mk_×_type(tv1,tv2),BOOL)))
+	;
+in
+store_mt_results mt_run_fail [
+	("dest_set_comp 4013 a",
+	dest_set_comp,
+	c1,
+	gen_fail_msg "dest_set_comp" 4013 [pr_term c1]),
+	("dest_set_comp 4013 b",
+	dest_set_comp,
+	app_setcomp_v,
+	gen_fail_msg "dest_set_comp" 4013 [pr_term app_setcomp_v])
+	]
+end;
+
+store_mt_results mt_run[
+	("is_set_comp 1",
+	is_set_comp,
+	mk_t,
+	false),
+	("is_set_comp 2",
+	is_set_comp,
+	mk_set_comp(mk_pair(v1,v2), mk_t),
+	true)
+	];
+=TEX
+\subsection{List-Terms}
+=SML
+open_theory "basic_hol";
+store_mt_results (mt_runf (op =$))[
+	("mk_empty_list",
+	mk_empty_list,
+	ℕ,
+	mk_const("Nil",mk_ctype("LIST",[ℕ])))
+	];
+store_mt_results (mt_runf (op =:)) [
+	("dest_empty_list",
+	dest_empty_list,
+	mk_empty_list ℕ,
+	ℕ)
+	];
+store_mt_results mt_run_fail [
+	("dest_empty_list 4034",
+	dest_empty_list,
+	mk_t,
+	gen_fail_msg "dest_empty_list" 4034 [pr_term mk_t])
+	];
+store_mt_results mt_run[
+	("is_empty_list 1",
+	is_empty_list,
+	mk_empty_list ℕ,
+	true),
+	("is_empty_list 2",
+	is_empty_list,
+	mk_t,
+	false)
+	];
+
+store_mt_results (mt_runf (op =$))[
+	("mk_list",
+	mk_list,
+	[mk_t],
+	list_mk_app(mk_const("Cons",mk_→_type(BOOL,mk_→_type(
+			mk_ctype("LIST",[BOOL]),mk_ctype("LIST",[BOOL])))),
+		[mk_t,mk_empty_list BOOL]))
+	];
+store_mt_results mt_run_fail [
+	("mk_list 3017",
+	mk_list,
+	[],
+	gen_fail_msg "mk_list" 3017 []),
+	("mk_list 3012",
+	mk_list,
+	[mk_t,c2],
+	gen_fail_msg "mk_list" 3012 [pr_term mk_t,pr_term c2])
+	];
+store_mt_results (mt_runf (list_eq (op =$)))[
+	("dest_list",
+	dest_list,
+	mk_list [mk_t, mk_f, c1],
+	[mk_t, mk_f, c1])
+	];
+
+let
+	val app_cons_T_v =
+		list_mk_app(mk_const("Cons",mk_→_type(BOOL,mk_→_type(
+				mk_ctype("LIST",[BOOL]),mk_ctype("LIST",[BOOL])))),
+			[mk_t,mk_var("v",mk_ctype("LIST",[BOOL]))]);
+in
+store_mt_results mt_run_fail [
+	("dest_list 4015 a",
+	dest_list,
+	c1,
+	gen_fail_msg "dest_list" 4015 [pr_term c1]),
+	("dest_list 4015 b",
+	dest_list,
+	app_cons_T_v,
+	gen_fail_msg "dest_list" 4015 [pr_term app_cons_T_v])
+	]
+end;
+
+store_mt_results mt_run[
+	("is_list 1",
+	is_list,
+	mk_list [mk_t, mk_f, c1],
+	true),
+	("is_list 2",
+	is_list,
+	mk_t,
+	false)
+	];
+=TEX
+\subsection{Full Universals}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_∀ 1",
+	mk_∀,
+	(v1, mk_t),
+	mk_app(mk_const("∀",mk_→_type(mk_→_type(tv1,BOOL),BOOL)),
+		mk_λ(v1,mk_t))),
+	("mk_∀ 2",
+	mk_∀,
+	(mk_pair(v1,v2), mk_t),
+	mk_app(mk_const("∀",mk_→_type(mk_→_type(
+			mk_×_type(tv1,tv2),BOOL),
+			BOOL)),
+		mk_λ(mk_pair(v1,v2),mk_t)))
+	];
+store_mt_results mt_run_fail [
+	("mk_∀ 3015",
+	mk_∀,
+	(v1,v1),
+	gen_fail_msg "mk_∀" 3015 ["",pr_term v1]),
+	("mk_∀ 4016",
+	mk_∀,
+	(c1,v1),
+	gen_fail_msg "mk_∀" 4016 [pr_term c1])
+	];
+store_mt_results (mt_runf (op =**$))[
+	("dest_∀",
+	dest_∀,
+	mk_∀(mk_pair(v1,v2), mk_t),
+	(mk_pair(v1,v2), mk_t))
+	];
+store_mt_results mt_run_fail [
+	("dest_∀ 4017",
+	dest_∀,
+	c1,
+	gen_fail_msg "dest_∀" 4017 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_∀ 1",
+	is_∀,
+	mk_t,
+	false),
+	("is_∀ 2",
+	is_∀,
+	mk_∀(mk_pair(v1,v2), mk_t),
+	true)
+	];
+store_mt_results (mt_runf (op =$))[
+	("list_mk_∀ 1",
+	list_mk_∀,
+	([],mk_t),
+	mk_t),
+	("list_mk_∀ 2",
+	list_mk_∀,
+	([v1,v2],mk_t),
+	mk_∀(v1,mk_∀(v2,mk_t)))
+	];
+store_mt_results mt_run_fail [
+	("list_mk_∀ 3015",
+	list_mk_∀,
+	([v1],c2),
+	gen_fail_msg "mk_∀" 3015 ["",pr_term c2]),
+	("list_mk_∀ 4016",
+	list_mk_∀,
+	([c1],mk_t),
+	gen_fail_msg "mk_∀" 4016 [pr_term c1])
+	];
+store_mt_results (mt_runf =::$)[
+	("strip_∀ 1",
+	strip_∀,
+	mk_t,
+	([],mk_t)),
+	("strip_∀ 2",
+	strip_∀,
+	list_mk_∀([v1,mk_pair(v2,v11)],mk_t),
+	([v1,mk_pair(v2,v11)],mk_t))
+	];
+store_mt_results (mt_runf =::$)[
+	("strip_simple_∀ 1",
+	strip_simple_∀,
+	mk_t,
+	([],mk_t)),
+	("strip_simple_∀ 2",
+	strip_simple_∀,
+	list_mk_∀([v1,mk_pair(v2,v11)],mk_t),
+	([v1],mk_∀(mk_pair(v2,v11),mk_t)))
+	];
+=TEX
+\subsection{Full Existentials}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_∃ 1",
+	mk_∃,
+	(v1, mk_t),
+	mk_app(mk_const("∃",mk_→_type(mk_→_type(tv1,BOOL),BOOL)),
+		mk_λ(v1,mk_t))),
+	("mk_∃ 2",
+	mk_∃,
+	(mk_pair(v1,v2), mk_t),
+	mk_app(mk_const("∃",mk_→_type(mk_→_type(
+			mk_×_type(tv1,tv2),BOOL),
+			BOOL)),
+		mk_λ(mk_pair(v1,v2),mk_t)))
+	];
+store_mt_results mt_run_fail [
+	("mk_∃ 3015",
+	mk_∃,
+	(v1,v1),
+	gen_fail_msg "mk_∃" 3015 ["",pr_term v1]),
+	("mk_∃ 4016",
+	mk_∃,
+	(c1,v1),
+	gen_fail_msg "mk_∃" 4016 [pr_term c1])
+	];
+store_mt_results (mt_runf (op =**$))[
+	("dest_∃",
+	dest_∃,
+	mk_∃(mk_pair(v1,v2), mk_t),
+	(mk_pair(v1,v2), mk_t))
+	];
+store_mt_results mt_run_fail [
+	("dest_∃ 4020",
+	dest_∃,
+	c1,
+	gen_fail_msg "dest_∃" 4020 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_∃ 1",
+	is_∃,
+	mk_t,
+	false),
+	("is_∃ 2",
+	is_∃,
+	mk_∃(mk_pair(v1,v2), mk_t),
+	true)
+	];
+store_mt_results (mt_runf (op =$))[
+	("list_mk_∃ 1",
+	list_mk_∃,
+	([],mk_t),
+	mk_t),
+	("list_mk_∃ 2",
+	list_mk_∃,
+	([v1,v2],mk_t),
+	mk_∃(v1,mk_∃(v2,mk_t)))
+	];
+store_mt_results mt_run_fail [
+	("list_mk_∃ 3015",
+	list_mk_∃,
+	([v1],c2),
+	gen_fail_msg "mk_∃" 3015 ["",pr_term c2]),
+	("list_mk_∃ 4016",
+	list_mk_∃,
+	([c1],c2),
+	gen_fail_msg "mk_∃" 4016 [pr_term c1])
+	];
+store_mt_results (mt_runf =::$)[
+	("strip_∃ 1",
+	strip_∃,
+	mk_t,
+	([],mk_t)),
+	("strip_∃ 2",
+	strip_∃,
+	list_mk_∃([v1,mk_pair(v2,v11)],mk_t),
+	([v1,mk_pair(v2,v11)],mk_t))
+	];
+store_mt_results (mt_runf =::$)[
+	("strip_simple_∃ 1",
+	strip_simple_∃,
+	mk_t,
+	([],mk_t)),
+	("strip_simple_∃ 2",
+	strip_simple_∃,
+	list_mk_∃([v1,mk_pair(v2,v11)],mk_t),
+	([v1],mk_∃(mk_pair(v2,v11),mk_t)))
+	];
+=TEX
+\subsection{Simple Unique Existentials}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_simple_∃⋎1 1",
+	mk_simple_∃⋎1,
+	(v1, mk_t),
+	mk_app(mk_const("∃⋎1",mk_→_type(mk_→_type(tv1,BOOL),BOOL)),
+		mk_λ(v1,mk_t)))
+	];
+store_mt_results mt_run_fail [
+	("mk_simple_∃⋎1 3015",
+	mk_simple_∃⋎1,
+	(v1,v1),
+	gen_fail_msg "mk_simple_∃⋎1" 3015 ["",pr_term v1]),
+	("mk_simple_∃⋎1 3007 a",
+	mk_simple_∃⋎1,
+	(c1,v1),
+	gen_fail_msg "mk_simple_∃⋎1" 3007 [pr_term c1]),
+	("mk_simple_∃⋎1 3007 b",
+	mk_simple_∃⋎1,
+	(mk_pair(v1,v2),mk_t),
+	gen_fail_msg "mk_simple_∃⋎1" 3007 [pr_term (mk_pair(v1,v2))])
+	];
+store_mt_results (mt_runf (op =**$))[
+	("dest_simple_∃⋎1",
+	dest_simple_∃⋎1,
+	mk_simple_∃⋎1(v1, mk_t),
+	(v1, mk_t))
+	];
+store_mt_results mt_run_fail [
+	("dest_simple_∃⋎1 4019",
+	dest_simple_∃⋎1,
+	c1,
+	gen_fail_msg "dest_simple_∃⋎1" 4019 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_simple_∃⋎1 1",
+	is_simple_∃⋎1,
+	mk_t,
+	false),
+	("is_simple_∃⋎1 2",
+	is_simple_∃⋎1,
+	mk_simple_∃⋎1(v1, mk_t),
+	true)
+	];
+=TEX
+\subsection{Full Unique Existentials}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_∃⋎1 1",
+	mk_∃⋎1,
+	(v1, mk_t),
+	mk_app(mk_const("∃⋎1",mk_→_type(mk_→_type(tv1,BOOL),BOOL)),
+		mk_λ(v1,mk_t))),
+	("mk_∃⋎1 2",
+	mk_∃⋎1,
+	(mk_pair(v1,v2), mk_t),
+	mk_app(mk_const("∃⋎1",mk_→_type(mk_→_type(
+			mk_×_type(tv1,tv2),BOOL),
+			BOOL)),
+		mk_λ(mk_pair(v1,v2),mk_t)))
+	];
+store_mt_results mt_run_fail [
+	("mk_∃⋎1 3015",
+	mk_∃⋎1,
+	(v1,v1),
+	gen_fail_msg "mk_∃⋎1" 3015 ["",pr_term v1]),
+	("mk_∃⋎1 4016",
+	mk_∃⋎1,
+	(c1,v1),
+	gen_fail_msg "mk_∃⋎1" 4016 [pr_term c1])
+	];
+store_mt_results (mt_runf (op =**$))[
+	("dest_∃⋎1",
+	dest_∃⋎1,
+	mk_∃⋎1(mk_pair(v1,v2), mk_t),
+	(mk_pair(v1,v2), mk_t))
+	];
+store_mt_results mt_run_fail [
+	("dest_∃⋎1 4021",
+	dest_∃⋎1,
+	c1,
+	gen_fail_msg "dest_∃⋎1" 4021 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_∃⋎1 1",
+	is_∃⋎1,
+	mk_t,
+	false),
+	("is_∃⋎1 2",
+	is_∃⋎1,
+	mk_∃⋎1(mk_pair(v1,v2), mk_t),
+	true)
+	];
+=TEX
+\subsection{Full Choice}
+=SML
+store_mt_results (mt_runf (op =$))[
+	("mk_ε 1",
+	mk_ε,
+	(v1, mk_t),
+	mk_app(mk_const("ε",mk_→_type(mk_→_type(tv1,BOOL),tv1)),
+		mk_λ(v1,mk_t))),
+	("mk_ε 2",
+	mk_ε,
+	(mk_pair(v1,v2), mk_t),
+	mk_app(mk_const("ε",mk_→_type(mk_→_type(
+			mk_×_type(tv1,tv2),BOOL),
+			mk_×_type(tv1,tv2))),
+		mk_λ(mk_pair(v1,v2),mk_t)))
+	];
+store_mt_results mt_run_fail [
+	("mk_ε 3015",
+	mk_ε,
+	(v1,v1),
+	gen_fail_msg "mk_ε" 3015 ["",pr_term v1]),
+	("mk_ε 4016",
+	mk_ε,
+	(c1,v1),
+	gen_fail_msg "mk_ε" 4016 [pr_term c1])
+	];
+store_mt_results (mt_runf (op =**$))[
+	("dest_ε",
+	dest_ε,
+	mk_ε(mk_pair(v1,v2), mk_t),
+	(mk_pair(v1,v2), mk_t))
+	];
+store_mt_results mt_run_fail [
+	("dest_ε 4023",
+	dest_ε,
+	c1,
+	gen_fail_msg "dest_ε" 4023 [pr_term c1])
+	];
+store_mt_results mt_run[
+	("is_ε 1",
+	is_ε,
+	mk_t,
+	false),
+	("is_ε 2",
+	is_ε,
+	mk_ε(mk_pair(v1,v2), mk_t),
+	true)
+	];
+store_mt_results (mt_runf (op =$))[
+	("list_mk_ε 1",
+	list_mk_ε,
+	([],mk_t),
+	mk_t),
+	("list_mk_ε 2",
+	list_mk_ε,
+	([v1,mk_var("v",BOOL)],mk_t),
+	mk_ε(v1,mk_ε(mk_var("v",BOOL),mk_t)))
+	];
+store_mt_results mt_run_fail [
+	("list_mk_ε 3015 a",
+	list_mk_ε,
+	([v1],c2),
+	gen_fail_msg "mk_ε" 3015 ["",pr_term c2]),
+	("list_mk_ε 4016",
+	list_mk_ε,
+	([c1],c1),
+	gen_fail_msg "mk_ε" 4016 [pr_term c1]),
+	("list_mk_ε 3015 b",
+	list_mk_ε,
+	([v1,v2],c1),
+	gen_fail_msg "mk_ε" 3015 ["",pr_term(list_mk_ε([v2],c1))])
+	];
+store_mt_results (mt_runf =::$)[
+	("strip_ε 1",
+	strip_ε,
+	mk_t,
+	([],mk_t)),
+	("strip_ε 2",
+	strip_ε,
+	list_mk_ε([mk_pair(v2,v11),mk_var("v",BOOL)],mk_t),
+	([mk_pair(v2,v11),mk_var("v",BOOL)],mk_t))
+	];
+=TEX
+\subsection{Generic Stripping Functions}
+=SML
+let
+val va = mk_var("a",BOOL);
+val vb = mk_var("b",BOOL);
+val vc = mk_var("c",BOOL);
+val vd = mk_var("d",BOOL);
+
+val abcd = list_mk_∧[mk_∧(va,vb),vc,vd];
+in
+(
+store_mt_results (mt_runf (list_eq (op =$)))[
+	("strip_leaves 1", strip_leaves dest_∧,
+	abcd,
+	[va,vb,vc,vd]),
+	("strip_leaves 2", strip_leaves dest_∧,
+	va,
+	[va])];
+store_mt_results (mt_runf (list_eq (op =$)))[
+	("strip_spine_left 1", strip_spine_left dest_∧,
+	abcd,
+	[va,vb,mk_∧(vc,vd)]),
+	("strip_spine_left 2", strip_spine_left dest_∧,
+	va,
+	[va])];
+store_mt_results (mt_runf (list_eq (op =$)))[
+	("strip_spine_right 1", strip_spine_right dest_∧,
+	abcd,
+	[mk_∧(va,vb),vc,vd]),
+	("strip_spine_right 2", strip_spine_right dest_∧,
+	va,
+	[va])]
+)
+end;
+=TEX
+\subsection{Destroyed Terms}
+It is convenient to do these tests out of sequence with
+the detailed design.
+=SML
+fun dterm_eq (DVar a, DVar b) = a =*: b
+| dterm_eq (DConst a, DConst b) = a =*: b
+| dterm_eq (DApp a, DApp b) = a =**$ b
+| dterm_eq (Dλ a, Dλ b) = a =**$ b
+| dterm_eq (DEq a, DEq b) = a =**$ b
+| dterm_eq (D⇒ a, D⇒ b) = a =**$ b
+| dterm_eq (DT, DT) = true
+| dterm_eq (DF , DF) = true
+| dterm_eq (D¬ a, D¬ b) = a =$ b
+| dterm_eq (DPair a, DPair b) = a =**$ b
+| dterm_eq (D∧ a, D∧ b) = a =**$ b
+| dterm_eq (D∨ a, D∨ b) = a =**$ b
+| dterm_eq (D⇔ a, D⇔ b) = a =**$ b
+| dterm_eq (DLet (a,b), DLet (c,d)) = b =$ d andalso list_eq (op =**$) (a,c)
+| dterm_eq (DEnumSet a, DEnumSet b) = list_eq (op =$) (a,b)
+| dterm_eq (D∅ a, D∅ b) = a =: b
+| dterm_eq (DSetComp a, DSetComp b) = a =**$ b
+| dterm_eq (DList a, DList b) = list_eq (op =$) (a,b)
+| dterm_eq (DEmptyList a, DEmptyList b) = a =: b
+| dterm_eq (D∀ a, D∀ b) = a =**$ b
+| dterm_eq (D∃ a, D∃ b) = a =**$ b
+| dterm_eq (D∃⋎1 a, D∃⋎1 b) = a =**$ b
+| dterm_eq (Dε a, Dε b) = a =**$ b
+| dterm_eq (DIf (a,b,c), DIf (d,e,f)) = a =$ d andalso b =$ e andalso c =$ f
+| dterm_eq (Dℕ n, Dℕ  m) = n = m
+| dterm_eq (DChar c, DChar d) = c = d
+| dterm_eq (DString s, DString t) = s = t
+| dterm_eq _ = false;
+=TEX
+=SML
+store_mt_results (mt_runf dterm_eq) [
+	("dest_term 1",
+	dest_term,
+	mk_var ("v2",BOOL),
+	DVar ("v2",BOOL)),
+	("dest_term 2",
+	dest_term,
+	mk_const ("c2",BOOL),
+	DConst ("c2",BOOL)),
+	("dest_term 3",
+	dest_term,
+	mk_app (f,c1),
+	DApp (f,c1)),
+	("dest_term 4",
+	dest_term,
+	mk_λ (f,c1),
+	Dλ (f,c1)),
+	("dest_term 5",
+	dest_term,
+	mk_λ (mk_pair(v1,v2),c1),
+	Dλ (mk_pair(v1,v2),c1)),
+	("dest_term 6",
+	dest_term,
+	mk_eq ((mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 1),
+	DEq((mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 1)),
+	("dest_term 6.1",
+	dest_term,
+	mk_⇒ (mk_t,mk_f),
+	D⇒(mk_t,mk_f)),
+	("dest_term 6.2",
+	dest_term,
+	mk_¬ mk_t,
+	D¬ mk_t),
+	("dest_term 7",
+	dest_term,
+	mk_pair(v1,v2),
+	DPair(v1,v2)),
+	("dest_term 8",
+	dest_term,
+	mk_∧ (mk_t,c1),
+	D∧(mk_t,c1)),
+	("dest_term 9",
+	dest_term,
+	mk_∨ (mk_t,c1),
+	D∨(mk_t,c1)),
+	("dest_term 10",
+	dest_term,
+	mk_⇔ (mk_t,c1),
+	D⇔(mk_t,c1)),
+	("dest_term 11",
+	dest_term,
+	mk_eq (mk_t,c1),
+	D⇔(mk_t,c1)),
+	("dest_term 12",
+	dest_term,
+	mk_let([(mk_pair(v1, v11), cp1),(v2,cv2)],mk_t),
+	DLet([(mk_pair(v1, v11), cp1),(v2,cv2)],mk_t)),
+	("dest_term 13 a",
+	dest_term,
+	mk_enum_set [mk_t,mk_f,c1],
+	DEnumSet [mk_t,mk_f,c1]),
+	("dest_term 13 b",
+	dest_term,
+	mk_∅ BOOL,
+	D∅ BOOL),
+	("dest_term 14",
+	dest_term,
+	mk_set_comp(mk_pair(v1,v2), mk_t),
+	DSetComp (mk_pair(v1,v2), mk_t)),
+	("dest_term 15",
+	dest_term,
+	mk_list [mk_t,mk_f,c1],
+	DList [mk_t,mk_f,c1]),
+	("dest_term 16 a",
+	dest_term,
+	mk_list [mk_t,mk_f,c1],
+	DList [mk_t,mk_f,c1]),
+	("dest_term 16 b",
+	dest_term,
+	mk_empty_list BOOL,
+	DEmptyList BOOL),
+	("dest_term 17",
+	dest_term,
+	mk_∀ (mk_pair(v1,mk_pair(v2,v11)),mk_t),
+	D∀(mk_pair(v1,mk_pair(v2,v11)),mk_t)),
+	("dest_term 18",
+	dest_term,
+	mk_∃ (mk_pair(v1,mk_pair(v2,v11)),mk_t),
+	D∃(mk_pair(v1,mk_pair(v2,v11)),mk_t)),
+	("dest_term 19",
+	dest_term,
+	mk_ε (mk_pair(v1,mk_pair(v2,v11)),mk_t),
+	Dε(mk_pair(v1,mk_pair(v2,v11)),mk_t)),
+	("dest_term 20",
+	dest_term,
+	mk_if (mk_t,(mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 2),
+	DIf(mk_t,(mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 2)),
+	("dest_term 21",
+	dest_term,
+	list_mk_app (mk_const("g",mk_→_type(BOOL,
+		mk_→_type(ℕ,mk_→_type(ℕ,BOOL)))),
+		[mk_t,(mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 2]),
+	DApp(list_mk_app (mk_const("g",mk_→_type(BOOL,mk_→_type(ℕ,
+		mk_→_type(ℕ,BOOL)))),
+		[mk_t,(mk_ℕ o integer_of_int) 1]),(mk_ℕ o integer_of_int) 2)),
+	("dest_term 22",
+	dest_term,
+	mk_t,
+	DT),
+	("dest_term 23",
+	dest_term,
+	mk_f,
+	DF),
+	("dest_term 25",
+	dest_term,
+	mk_∃⋎1(vb,vb),
+	D∃⋎1(vb,vb)),
+	("dest_term 26",
+	dest_term,
+	mk_string "abc",
+	DString "abc"),
+	("dest_term 27",
+	dest_term,
+	mk_string "",
+	DString ""),
+	("dest_term 28",
+	dest_term,
+	mk_char "a",
+	DChar "a"),
+	("dest_term 29",
+	dest_term,
+	mk_char "∀",
+	DChar "∀"),
+	("dest_term 30",
+	dest_term,
+	(mk_ℕ o integer_of_int) 0,
+	(Dℕ o integer_of_int) 0),
+	("dest_term 31",
+	dest_term,
+	(mk_ℕ o integer_of_int) 123456789,
+	(Dℕ o integer_of_int) 123456789),
+	("dest_term 32",
+	dest_term,
+	(mk_ℕ o @@) "12345678901234567890",
+	(Dℕ o @@) "12345678901234567890")
+	];
+
+store_mt_results (mt_runf (op =$))[
+	("mk_term 1",
+	mk_term o dest_term,
+	mk_var ("v2",BOOL),
+	mk_var ("v2",BOOL)),
+	("mk_term 2",
+	mk_term o dest_term,
+	mk_const ("c2",BOOL),
+	mk_const ("c2",BOOL)),
+	("mk_term 3",
+	mk_term o dest_term,
+	mk_app (f,c1),
+	mk_app (f,c1)),
+	("mk_term 4",
+	mk_term o dest_term,
+	mk_λ (f,c1),
+	mk_λ (f,c1)),
+	("mk_term 5",
+	mk_term o dest_term,
+	mk_λ (mk_pair(v1,v2),c1),
+	mk_λ (mk_pair(v1,v2),c1)),
+	("mk_term 6",
+	mk_term o dest_term,
+	mk_eq ((mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 1),
+	mk_eq((mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 1)),
+	("mk_term 6.1",
+	mk_term o dest_term,
+	mk_⇒ (mk_t,mk_f),
+	mk_⇒ (mk_t,mk_f)),
+	("mk_term 6.2",
+	mk_term o dest_term,
+	mk_¬ mk_t,
+	mk_¬ mk_t),
+	("mk_term 7",
+	mk_term o dest_term,
+	mk_pair(v1,v2),
+	mk_pair(v1,v2)),
+	("mk_term 8",
+	mk_term o dest_term,
+	mk_∧ (mk_t,c1),
+	mk_∧(mk_t,c1)),
+	("mk_term 9",
+	mk_term o dest_term,
+	mk_∨ (mk_t,c1),
+	mk_∨(mk_t,c1)),
+	("mk_term 10",
+	mk_term o dest_term,
+	mk_⇔ (mk_t,c1),
+	mk_⇔(mk_t,c1)),
+	("mk_term 11",
+	mk_term o dest_term,
+	mk_eq (mk_t,c1),
+	mk_⇔(mk_t,c1)),
+	("mk_term 12",
+	mk_term o dest_term,
+	mk_let([(mk_pair(v1, v11), cp1),(v2,cv2)],mk_t),
+	mk_let([(mk_pair(v1, v11), cp1),(v2,cv2)],mk_t)),
+	("mk_term 13 a",
+	mk_term o dest_term,
+	mk_enum_set [mk_t,mk_f,c1],
+	mk_enum_set [mk_t,mk_f,c1]),
+	("mk_term 13 b",
+	mk_term o dest_term,
+	mk_∅ BOOL,
+	mk_∅ BOOL),
+	("mk_term 14",
+	mk_term o dest_term,
+	mk_set_comp(mk_pair(v1,v2), mk_t),
+	mk_set_comp (mk_pair(v1,v2), mk_t)),
+	("mk_term 15",
+	mk_term o dest_term,
+	mk_list [mk_t,mk_f,c1],
+	mk_list [mk_t,mk_f,c1]),
+	("mk_term 16 a",
+	mk_term o dest_term,
+	mk_list [mk_t,mk_f,c1],
+	mk_list [mk_t,mk_f,c1]),
+	("mk_term 16 b",
+	mk_term o dest_term,
+	mk_empty_list BOOL,
+	mk_empty_list BOOL),
+	("mk_term 17",
+	mk_term o dest_term,
+	mk_∀ (mk_pair(v1,mk_pair(v2,v11)),mk_t),
+	mk_∀(mk_pair(v1,mk_pair(v2,v11)),mk_t)),
+	("mk_term 18",
+	mk_term o dest_term,
+	mk_∃ (mk_pair(v1,mk_pair(v2,v11)),mk_t),
+	mk_∃(mk_pair(v1,mk_pair(v2,v11)),mk_t)),
+	("mk_term 19",
+	mk_term o dest_term,
+	mk_ε (mk_pair(v1,mk_pair(v2,v11)),mk_t),
+	mk_ε(mk_pair(v1,mk_pair(v2,v11)),mk_t)),
+	("mk_term 20",
+	mk_term o dest_term,
+	mk_if (mk_t,(mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 2),
+	mk_if(mk_t,(mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 2)),
+	("mk_term 21",
+	mk_term o dest_term,
+	list_mk_app (mk_const("g",mk_→_type(BOOL,mk_→_type(ℕ,mk_→_type(ℕ,BOOL)))),
+		[mk_t,(mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 2]),
+	list_mk_app (mk_const("g",mk_→_type(BOOL,mk_→_type(ℕ,mk_→_type(ℕ,BOOL)))),
+		[mk_t,(mk_ℕ o integer_of_int) 1,(mk_ℕ o integer_of_int) 2])),
+	("mk_term 22",
+	mk_term o dest_term,
+	mk_t,
+	mk_t),
+	("mk_term 23",
+	mk_term o dest_term,
+	mk_f,
+	mk_f),
+	("mk_term 24",
+	mk_term o dest_term,
+	mk_∃⋎1(vb,vb),
+	mk_∃⋎1(vb,vb)),
+	("mk_term 25",
+	mk_term o dest_term,
+	mk_string "abc",
+	mk_string "abc"),
+	("mk_term 26",
+	mk_term o dest_term,
+	mk_char "a",
+	mk_char "a"),
+	("mk_term 27",
+	mk_term o dest_term,
+	(mk_ℕ o integer_of_int) 12345,
+	(mk_ℕ o integer_of_int) 12345)
+	];
+=TEX
+\subsection{End of Tests}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+\section{UNTESTED FUNCTIONS}
+\label{untested}
+The following functions are not tested, on the assumption they are
+each used to implement a function tested in this document,
+which can be checked in \cite{DS/FMU/IED/IMP004}.
+=GFT
+dest_binder
+is_binder
+list_mk_binder
+mk_binder
+strip_binder
+strip_simple_binder
+=TEX
+The following functions are not tested because the testing is much easier when the theory of the reals is available.
+Tests for them are given in \cite{LEMMA1/HOL/MDT116}.
+=GFT
+dest_float
+is_float
+mk_float
+=TEX
+
+\end{document}
+
+
+

@@ -1,0 +1,598 @@
+=IGN
+********************************************************************************
+imp119.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+\documentclass[a4paper,12pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+\makeindex
+
+\def\Title{ Quantifier Elimination Toolkit: Implementation }
+
+\def\Abstract{\begin{center}
+{\bf Abstract}\par\parbox{0.7\hsize}
+{\small This document gives the implementation of some tools that assist in developing quantifier elimination procedures.}
+\end{center}}
+
+\def\Reference{LEMMA1/HOL/IMP119}
+
+\def\Author{R.D. Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 118 958 4409}
+
+\def\Fax{+44 118 956 1920}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+\begin{centering}
+
+
+
+\end{centering}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+%%%%% STANDARD RED-TAPE SECTIONS (MAY WANT TO INTERLEAVE SOME \newpage COMMANDS IN THESE)
+
+%%%%% CONTENTS:
+
+\subsection{Contents}
+
+\tableofcontents
+
+%%%%% REFERENCES:
+
+\newpage
+\subsection{References}
+
+\bibliographystyle{fmu}
+
+%%%%% CHANGE THE FOLLOWING AS NECESSARY (E.G., TO PICK UP daz.bib):
+{\raggedright
+\bibliography{fmu}
+}
+%%%%% CHANGES HISTORY:
+\subsection{Changes History}
+\begin{description}
+\item[Issue 1.1 (2007/08/31)] First draft.
+\item[Issue 1.2 (2007/09/01)] First complete version after module testing.
+\item[Issue 1.3 (2011/07/19)] Added {\em prenex\_clauses}.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+\item[2015/04/15]
+Now uses new date and version macros from doctex
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%%%%%  CHANGES FORECAST:
+
+\subsection{Changes Forecast}
+
+None.
+
+%%%%% DISTRIBUTION LIST
+
+\subsection{Distribution}
+
+Lemma 1 build system.
+
+\newpage
+
+\section{Introduction}
+\subsection{Scope}
+This document gives the implementation of tools that assist in developing quantifier elimination procedures.
+
+\subsection{Purpose and Background}
+See \cite{LEMMA1/HOL/DTD119}.
+
+
+\section{THE STRUCTURE}
+
+
+=TEX
+=SML
+structure ⦏QuantElimTools⦎ : QuantElimTools = struct
+val ⦏orig_cur_theory⦎ = get_current_theory_name();
+val _ = (open_theory "basic_hol"; push_pc "basic_hol");
+(*
+=TEX
+Define a quantifier to be a boolean term obtained by applying a constant to a (possibly paired) λ-abstraction.
+=SML
+*)
+fun ⦏is_quant⦎ (tm : TERM) : bool = (
+	let	val (ifier, lambda) = dest_app tm;
+	in	type_of tm = BOOL andalso
+		is_const ifier andalso
+		is_λ lambda
+	end	handle Fail _ => false
+);
+fun ⦏dest_quant⦎ (tm : TERM) : TERM * TERM * TERM = (
+	let	val (ifier, lambda) = dest_app tm;
+		val (var_s, mtrx) = dest_λ lambda;
+	in	if	type_of tm = BOOL
+		andalso	is_const ifier
+		then	(ifier, var_s, mtrx)
+		else	term_fail "dest_quant" 119001 [tm]
+	end	handle Fail _ => term_fail "dest_quant" 119001 [tm]
+);
+fun ⦏mk_quant⦎ ((ifier, var_s, mtrx) : TERM * TERM * TERM) : TERM = (
+	let	val atm = mk_λ(var_s, mtrx)
+			handle Fail _ => term_fail "mk_quant" 119003 [var_s];
+	in	if	type_of mtrx = BOOL
+		then	mk_app(ifier, atm)
+			handle ex as (Fail _) =>
+			reraise ex "mk_quant"
+		else	term_fail "mk_quant" 119004 [mtrx]
+	end
+);
+(*
+=TEX
+Conversional to apply a conversion to the matrix of a quantifier:
+=SML
+*)
+fun ⦏QUANT_C⦎ (conv : CONV) : CONV = (fn tm =>
+	if	is_quant tm
+	then	RAND_C(λ_C conv) tm
+	else	term_fail "QUANT_C" 119001 [tm]
+);
+(*
+=TEX
+Conversional to apply a conversion to each quantification in a nest of quantifications:
+=SML
+*)
+fun ⦏QUANTS_C⦎ (conv : CONV) : CONV = (fn tm =>
+	let	val (_, _, mtrx) = dest_quant tm;
+	in	if	is_quant mtrx
+		then	RAND_C(λ_C (QUANTS_C conv)) THEN_C conv
+		else	conv
+	end	tm
+);
+(*
+=TEX
+Conversional to map a conversion over the propositional atoms in a term.
+Fails if the conversion applies nowhere.
+=SML
+*)
+fun ⦏PROP_ATOM_C⦎ (conv : CONV) : CONV = (fn tm =>
+	let	val recur_conv = PROP_ATOM_C conv;
+	in	case dest_term tm of
+			D∧ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D∨ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D⇒ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D⇔ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D¬ _ => RAND_C recur_conv
+		|	_ => conv
+	end	tm
+);
+(*
+=TEX
+Conversional to map a conversion over the propositional literals in a term.
+Fails if the conversion applies nowhere.
+=SML
+*)
+fun ⦏PROP_LIT_C⦎ (conv : CONV) : CONV = (fn tm =>
+	let	val recur_conv = PROP_LIT_C conv;
+	in	case dest_term tm of
+			D∧ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D∨ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D⇒ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D⇔ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	_ => conv
+	end	tm
+);
+(*
+=IGN
+PROP_ATOM_C (∃⋎1_conv) ⌜a ⇔ (∃⋎1x⦁ x = y ∧ ∀a⦁a = y) ⇒ ¬ ((∃⋎1x⦁a = x) ∨ e)⌝;
+PROP_ATOM_C (∃_uncurry_conv) ⌜a ⇔ (∃⋎1x⦁ x = y ∧ ∀a⦁a = y) ⇒ ¬ ((∃⋎1x⦁a = x) ∨ e)⌝;
+∃_uncurry_conv ⌜∃ (x, y)⦁ x = y ∧ ∀a⦁a = y⌝;
+∀_uncurry_conv ⌜∃ (x, y)⦁ x = y ∧ ∀a⦁a = y⌝;
+∃⋎1_conv ⌜∃⋎1 (x, y)⦁ x = y ∧ ∀a⦁a = y⌝;
+
+=TEX
+Conversional to map a conversion over the innermost quantifier in a term.
+=SML
+*)
+fun ⦏INNERMOST_QUANT_C⦎ (conv : CONV) : CONV = (fn tm =>
+	let	val recur_conv = INNERMOST_QUANT_C conv;
+		val checked_conv = COND_C is_quant conv (fn _ => fail "INNERMOST_QUANT_C" 119011 []);
+	in	PROP_ATOM_C (QUANT_C recur_conv ORELSE_C checked_conv)
+	end	tm
+);
+(*
+=TEX
+Conversional to map a conversions over all the quantifiers in a term, innermost quantifiers first.
+If the conversion succeeds it is retried, so it should fail if it cannot make any progress.
+=SML
+*)
+fun ⦏QUANT_MAP_C⦎ (conv : CONV) : CONV = (fn tm =>
+	(INNERMOST_QUANT_C conv THEN_TRY_C QUANT_MAP_C conv) tm
+);
+(*
+=TEX
+The identity conversional.
+=SML
+*)
+val ⦏ID_C⦎ : CONV -> CONV = fn conv => conv;
+(*
+=TEX
+The identity conversional.
+=SML
+*)
+val ⦏FAIL_C⦎ : CONV -> CONV = fn _ => fail_conv;
+(*
+=TEX
+Conversional to carry out a sequence of transformation given by conversions.
+The conversions are tried one after the other, and the process only fails if none of the conversions is applicable.
+Associated with each conversion is a conversional which can be used to diver the process into subterms of the result of a transformation.
+For example, one might transform a unique existential quantification into an existential whose matrix contains a universal and then divert attention to the universal.
+=SML
+*)
+fun ⦏FIRST_THEN_C⦎
+	(pairs : (CONV * (CONV -> CONV)) list)
+	: CONV = (
+	let	fun aux changed [] = (fn tm =>
+			if	changed
+			then	id_conv tm
+			else	term_fail "FIRST_THEN_C" 119010 [tm]
+		) | aux changed ((conv, x_c)::more) = (fn tm =>
+			(conv THEN_C x_c (aux true more)) tm
+			handle Fail _ => aux changed more tm
+		);
+	in	aux false pairs
+	end
+);
+(*
+=TEX
+=SML
+*)
+(*
+=TEX
+Conversion to change universal quantifier into negated existential.
+=SML
+*)
+val ⦏simple_∀_¬_∃_¬_conv⦎ : CONV =
+let	val conv1 : CONV = simple_eq_match_conv (taut_rule ⌜∀p⦁p ⇔ ¬(¬ p)⌝);
+in	fn tm =>
+	(dest_simple_∀ tm; (conv1 THEN_C RAND_C ¬_∀_conv) tm)
+	handle Fail _ =>
+	term_fail "simple_∀_¬_∃_¬_conv" 119005 [tm]
+end;
+(*
+=IGN
+=TEX
+Given a nested conjunction,
+=INLINEFT
+a ∧ b ∧ c ∧ d
+=TEX
+, the following conversion finds an operand with a given property, e.g., $c$
+and ripples it up to the top:
+=INLINEFT
+c ∧ a ∧ b ∧ d
+=TEX
+.
+Takes care to fail if nothing to do.
+=SML
+*)
+val ⦏find_in_∧_conv⦎ : (TERM -> bool) -> CONV =
+let	val comm_thm = taut_rule ⌜∀p1 p2⦁ p1 ∧ p2 ⇔ p2 ∧ p1⌝;
+	val bubble_thm = taut_rule ⌜∀p1 p2 p3⦁ p1 ∧ p2 ∧ p3 ⇔ p2 ∧ p1 ∧ p3⌝;
+	val comm_conv = simple_eq_match_conv comm_thm;
+	val bubble_conv = simple_eq_match_conv bubble_thm;
+	fun aux_conv first test tm = (
+		let	val (a, b) = dest_∧ tm;
+		in	if	test a
+			then	if	first
+				then	fail_conv tm
+				else	refl_conv tm
+			else if	test b
+			then	comm_conv tm
+			else	(RIGHT_C (aux_conv false test) THEN_C bubble_conv) tm
+		end
+	);
+in	fn test => fn tm =>
+	aux_conv true test tm
+	handle Fail _ =>
+	term_fail "find_in_∧_conv" 119008 [tm]
+end;
+(*
+=SML
+*)
+(*
+=IGN
+find_in_∧_conv is_eq ⌜a ∧ ¬(b ⇔ c) ∨ d ⇔ ¬(c ∧ d)⌝;
+=TEX
+Given a nested conjunction
+=INLINEFT
+a ∧ b ∧ ...
+=TEX
+\ and some property of terms, the following conversion splits it up in to the form:
+=INLINEFT
+(c ∧ d ∧ ...) ∧ (e ∧ f ∧ ...)
+=TEX
+, where $c, d, \ldots$ satisfy the property and $e, f, \ldots$ do not.
+Takes care to fail if nothing to do.
+=SML
+*)
+fun split_∧_conv (test : (TERM -> bool)) : CONV = (fn tm =>
+let	val shift_thm = taut_rule ⌜∀p1 p2 p3⦁ p1 ∧ (p2 ∧ p3) ⇔ (p2 ∧ p1) ∧ p3⌝;
+	val find_conv = find_in_∧_conv test
+		ORELSE_C
+		COND_C (test o fst o dest_∧) id_conv fail_conv;
+	val step_conv = RIGHT_C find_conv
+		THEN_C simple_eq_match_conv shift_thm;
+	val ts = strip_∧ tm;
+in	if	all ts test
+	then	fail_conv
+	else	find_in_∧_conv test AND_OR_C REPEAT_C1 step_conv
+end tm	handle	Fail _ => term_fail "split_∧_conv" 119002 [tm]
+);
+(*
+=IGN
+split_∧_conv is_eq ⌜x = y ∧ x < 1 ∧ a = b ∧ d > 3⌝;
+split_∧_conv is_eq ⌜x < y ∧ x < 1 ∧ a = b ∧ d > 3⌝;
+split_∧_conv is_eq ⌜x < y ∧ x < 1⌝;
+split_∧_conv is_eq ⌜x = y ∧ x = 1⌝;
+split_∧_conv is_eq ⌜x = y ∧ x = 1 ∧ x = 1⌝;
+
+=SML
+*)
+(*
+=TEX
+Elimination of existential quantifier when the matrix is a boolean constant:
+=SML
+*)
+val ⦏simple_∃_const_elim_conv⦎ : CONV =
+let	val thm = pc_rule1 "predicates" prove_rule[]
+		⌜∀p⦁ (∃x⦁ p) ⇔ p⌝;
+in	fn tm =>
+	simple_eq_match_conv thm tm
+	handle Fail _ =>
+	term_fail "simple_∃_const_elim_conv" 119006 [tm]
+end;
+(*
+=TEX
+The one-point rule as a conversion:
+=INLINEFT
+(∃x⦁x = c ∧ p) ⇔ p[c/x]
+=SML
+*)
+val ⦏simple_one_point_conv⦎ : CONV =
+let	val thm1a = pc_rule1 "predicates" prove_rule[]
+		⌜∀c : 'a; p⦁ (∃x⦁x = c ∧ p x) ⇔ p c⌝;
+	val thm1b = pc_rule1 "predicates" prove_rule[]
+		⌜∀x c : 'a; p⦁ (∃x⦁c = x ∧ p x) ⇔ p c⌝;
+	val ty = ⓣ'a⌝;
+	val thm1c = pc_rule1 "predicates" prove_rule[]
+		⌜∀c⦁ (∃x⦁x = c) ⇔ T⌝;
+	val thm1d = pc_rule1 "predicates" prove_rule[]
+		⌜∀c⦁(∃x⦁c = x) ⇔ T⌝;
+	val thm1e = pc_rule1 "predicates" prove_rule[]
+		⌜(∃x⦁x = x) ⇔ T⌝;
+in	fn tm =>
+	let	val (v, body) = dest_simple_∃ tm;
+		val (p1, p2) = dest_∧ body;
+		val (x, c) = dest_eq p1;
+	in	if	x = v
+		then let
+			val lam = mk_simple_λ(x, p2);
+			val thm2 = inst_type_rule [(type_of v, ty)] thm1a;
+			val thm3 = list_simple_∀_elim [c, lam] thm2;
+			val conv1 = QUANT_C(RIGHT_C β_conv);
+			val conv2 = β_conv;
+			val conv3 = LEFT_C conv1 THEN_C RIGHT_C conv2;
+			val thm4 = conv_rule conv3 thm3;
+		in	thm4
+		end else	if c = v
+		then let
+			val (x, c) = (c, x);
+			val lam = mk_simple_λ(x, p2);
+			val thm2 = inst_type_rule [(type_of v, ty)] thm1b;
+			val thm3 = list_simple_∀_elim [x, c, lam] thm2;
+			val conv1 = QUANT_C(RIGHT_C β_conv);
+			val conv2 = β_conv;
+			val conv3 = LEFT_C conv1 THEN_C RIGHT_C conv2;
+			val thm4 = conv_rule conv3 thm3;
+		in	thm4
+	
+		end else	fail_conv tm
+	end	handle Fail _ =>
+		FIRST_C (map simple_eq_match_conv [thm1c, thm1d, thm1e]) tm
+		handle Fail _ =>
+		term_fail "simple_one_point_conv" 119009 [tm]
+end;
+(*
+=TEX
+The following is like {\em PROP\_ATOM\_C} but it does some propositional simplifications of its own.
+=SML
+*)
+val ⦏¬_simp_conv⦎ = FIRST_C(map (simple_eq_match_conv o taut_rule)[
+	⌜∀p⦁(¬ ¬ p ⇔ p)⌝,
+	⌜¬F ⇔ T⌝,
+	⌜¬T ⇔ F⌝]);
+val ⦏∨_simp_conv⦎ = FIRST_C(map (simple_eq_match_conv o taut_rule)[
+	⌜∀p⦁F ∨ p ⇔ p⌝,
+	⌜∀p⦁p ∨ F ⇔ p⌝,
+	⌜∀p⦁T ∨ p ⇔ T⌝,
+	⌜∀p⦁p ∨ T ⇔ T⌝,
+	⌜∀p⦁p ∨ p ⇔ p⌝,
+	⌜∀p⦁p ∨ ¬p ⇔ T⌝,
+	⌜∀p⦁¬p ∨ p ⇔ T⌝]);
+val ⦏∧_simp_conv⦎ = FIRST_C(map (simple_eq_match_conv o taut_rule)[
+	⌜∀p⦁p ∧ F ⇔ F⌝,
+	⌜∀p⦁F ∧ p ⇔ F⌝,
+	⌜∀p⦁T ∧ p ⇔ p⌝,
+	⌜∀p⦁p ∧ T ⇔ p⌝,
+	⌜∀p⦁p ∧ p ⇔ p⌝,
+	⌜∀p⦁p ∧ ¬p ⇔ F⌝,
+	⌜∀p⦁¬p ∧ p ⇔ F⌝]);
+val ⦏⇒_simp_conv⦎ = FIRST_C(map (simple_eq_match_conv o taut_rule)[
+	⌜∀p⦁p ⇒ T ⇔ T⌝,
+	⌜∀p⦁T ⇒ p ⇔ p⌝,
+	⌜∀p⦁F ⇒ p ⇔ T⌝,
+	⌜∀p⦁p ⇒ F ⇔ ¬p⌝,
+	⌜∀p⦁p ⇒ p ⇔ T⌝,
+	⌜∀p⦁p ⇒ ¬p ⇔ ¬p⌝,
+	⌜∀p⦁¬p ⇒ p ⇔ p⌝]);
+val ⦏⇔_simp_conv⦎ = FIRST_C(map (simple_eq_match_conv o taut_rule)[
+	⌜∀p⦁(p ⇔ T) ⇔ p⌝,
+	⌜∀p⦁(T ⇔ p) ⇔ p⌝,
+	⌜∀p⦁(F ⇔ p) ⇔ ¬p⌝,
+	⌜∀p⦁(p ⇔ F) ⇔ ¬p⌝,
+	⌜∀p⦁(p ⇔ p) ⇔ T⌝,
+	⌜∀p⦁(p ⇔ ¬p) ⇔ F⌝,
+	⌜∀p⦁(¬p ⇔ p) ⇔ F⌝]);
+val rec ⦏prop_simp_conv⦎  : CONV = (fn tm =>
+	((case dest_term tm of
+		D∧ _ =>
+			LEFT_C prop_simp_conv AND_OR_C
+			RIGHT_C prop_simp_conv AND_OR_C
+			∧_simp_conv
+	|	D∨ _ =>
+			LEFT_C prop_simp_conv AND_OR_C
+			RIGHT_C prop_simp_conv AND_OR_C
+			∨_simp_conv
+	|	D⇒ _ =>
+			LEFT_C prop_simp_conv AND_OR_C
+			RIGHT_C prop_simp_conv AND_OR_C
+			⇒_simp_conv
+	|	D⇔ _ => LEFT_C prop_simp_conv AND_OR_C
+			RIGHT_C prop_simp_conv AND_OR_C
+			⇔_simp_conv
+	|	D¬ _ => RAND_C prop_simp_conv AND_OR_C
+			¬_simp_conv
+	|	_ => fail_conv)
+	THEN_TRY_C ¬_simp_conv ) tm
+	handle Fail _ => term_fail "prop_simp_conv" 119012 [tm]
+);
+(*
+=TEX
+Propositional negation normal form conversion.
+
+This needs two preliminaries, first of all a table of conversion-conversional pairs:
+=SML
+*)
+val ⦏nnf_conv_table⦎ : (CONV * (CONV -> CONV)) list =
+	(map ((simple_eq_match_conv o taut_rule) ** Combinators.I) [
+		(⌜∀p1 p2⦁ ¬(p1 ∧ p2) ⇔ ¬p1 ∨ ¬p2⌝,
+			RANDS_C),
+		(⌜∀p1 p2⦁ ¬(p1 ∨ p2) ⇔ ¬p1 ∧ ¬p2⌝,
+			RANDS_C),
+		(⌜∀p1 p2⦁ ¬(p1 ⇒ p2) ⇔ p1 ∧ ¬p2⌝,
+			RANDS_C),
+		(⌜∀p1 p2⦁ ¬(p1 ⇔ p2) ⇔ p1 ∧ ¬p2 ∨ ¬p1 ∧ p2⌝,
+			RANDS_C o RANDS_C),
+		(⌜∀p1 p2⦁ (p1 ⇔ p2) ⇔ p1 ∧ p2 ∨ ¬p1 ∧ ¬p2⌝,
+			RANDS_C o RANDS_C),
+		(⌜∀p⦁ ¬(¬ p) ⇔ p⌝,
+			ID_C)
+]);
+(*
+=TEX
+The second preliminary for negation normal form is a conversional to map a conversion through the propositional connectives other than negation.
+=SML
+*)
+fun ⦏NNF_MAP_C⦎ (conv : CONV) : CONV = (fn tm =>
+	let	val recur_conv = NNF_MAP_C conv;
+	in	case dest_term tm of
+			D∧ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D∨ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D⇒ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	D⇔ _ => LEFT_C recur_conv AND_OR_C RIGHT_C recur_conv
+		|	_ => conv
+	end	tm
+);
+(*
+=TEX
+The negation normal form conversion itself.
+Propositional simplification is attempted before and after the negation normalisation process, giving a more compact result in many cases.
+=SML
+*)
+val rec ⦏nnf_conv⦎ : CONV = (fn tm =>
+	let	fun aux [] t = term_fail "nnf_conv" 119007 [t]
+		|   aux ((conv, C):: more) t = (
+			(conv THEN_TRY_C (C (TRY_C nnf_conv))) t
+			handle Fail _ => aux more t
+		);
+	in	(prop_simp_conv AND_OR_C
+			NNF_MAP_C (aux nnf_conv_table)
+				THEN_TRY_C prop_simp_conv) tm
+	end	handle Fail _ => term_fail "nnf_conv" 119007 [tm]
+);
+(*
+=TEX
+=SML
+*)
+val ⦏prenex_clauses⦎ : THM = save_thm("prenex_clauses",
+	(list_∀_intro [⌜P: 'a → BOOL⌝, ⌜Q: 'a → BOOL⌝, ⌜p: BOOL⌝, ⌜q: BOOL⌝]
+		o list_∧_intro o map (pc_rule1 "predicates" prove_rule[]) o strip_∧ o snd o strip_∀)
+	⌜∀ P Q : 'a → BOOL; p q : BOOL⦁
+		((∀ x⦁ P x) ∧ q ⇔ (∀ x⦁ P x ∧ q))
+	∧	(p ∧ (∀ x⦁ Q x) ⇔ (∀ x⦁ p ∧ Q x))
+	∧	((∃ x⦁ P x) ∧ q ⇔ (∃ x⦁ P x ∧ q))
+	∧	(p ∧ (∃ x⦁ Q x) ⇔ (∃ x⦁ p ∧ Q x))
+	∧	((∀ x⦁ P x) ∨ q ⇔ (∀ x⦁ P x ∨ q))
+	∧	(p ∨ (∀ x⦁ Q x) ⇔ (∀ x⦁ p ∨ Q x))
+	∧	((∃ x⦁ P x) ∨ q ⇔ (∃ x⦁ P x ∨ q))
+	∧	(p ∨ (∃ x⦁ Q x) ⇔ (∃ x⦁ p ∨ Q x))
+	∧	((∀ x⦁ P x) ⇒ q ⇔ (∃ x⦁ P x ⇒ q))
+	∧	(p ⇒ (∀ x⦁ Q x) ⇔ (∀ x⦁ p ⇒ Q x))
+	∧	((∃ x⦁ P x) ⇒ q ⇔ (∀ x⦁ P x ⇒ q))
+	∧	(p ⇒ (∃ x⦁ Q x) ⇔ (∃ x⦁ p ⇒ Q x))
+	∧	(((∀ x⦁ P x) ⇔ q)
+ ⇔ ((∀ x⦁ P x) ⇒ q) ∧ (q ⇒ (∀ x⦁ P x)))
+	∧	((p ⇔ (∀ x⦁ Q x))
+ ⇔ (p ⇒ (∀ x⦁ Q x)) ∧ ((∀ x⦁ Q x) ⇒ p))
+	∧	(((∃ x⦁ P x) ⇔ q)
+ ⇔ ((∃ x⦁ P x) ⇒ q) ∧ (q ⇒ (∃ x⦁ P x)))
+	∧	((p ⇔ (∃ x⦁ Q x))
+ ⇔ (p ⇒ (∃ x⦁ Q x)) ∧ ((∃ x⦁ Q x) ⇒ p))
+	∧	((∃⋎1 x⦁ P x) ⇔ (∃ x⦁ P x ∧ (∀ y⦁ P y ⇒ y = x))) ⌝);
+(*
+=TEX
+=SML
+*)
+val _ = (open_theory orig_cur_theory; pop_pc());
+end (* of structure QuantElimTools *);
+open QuantElimTools;
+=TEX
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
+
+
+
+
+
+
+
+

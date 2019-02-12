@@ -1,0 +1,74 @@
+=IGN
+********************************************************************************
+usr022.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=IGN
+SCCS Info: ℤ $Revision: 2.9 $ $RCSfile: usr022.doc,v $ $Date: 2002/10/17 15:10:58 $
+
+To process this document for printing use the following:
+
+	doctex usr022 usr022_slides
+	slitex usr022
+
+To process the formal script using ProofPower use:
+
+	docsml usr022_slides
+
+and
+
+	hol -i usr022_slides
+
+or
+	hol
+	use_file "usr022_slides"
+
+=TEX
+%\let\footnoterule=\relax
+%\documentstyle[TQa4,hol1]{slides}
+\documentstyle[hol1]{slides}
+
+\makeatletter
+
+\def\ps@LemmaOne{
+	\def\ps@slide{\let\@mkboth\@gobbletwo
+\def\@oddfoot{\@mainsize \hbox to \textwidth{\theslide \hfil {\tiny Copyright
+ \copyright\ : Lemma 1 Ltd. 1992-\number\year}%
+ 	}}
+\def\@oddhead{\hfil {\tiny \theslide}}%
+\let\@evenfoot\@oddfoot\def\@evenhead{\hfil {\tiny \theslide}}}
+	\def\ps@overlay{\def\@oddfoot{\@mainsize
+ \mbox{}\hfil\hbox to
+3em{\theoverlay\hss}}\def\@oddhead{}\def\@evenfoot{\@mainsize
+\mbox{}\hfil\hbox to 3em{\theoverlay\hss}}\def\@evenhead{}}
+	\def\ps@note{\def\@oddfoot{\@mainsize
+\hbox{}\hfil\thenote}\def\@oddhead{}\def\@evenfoot{\@mainsize
+\hbox{}\hfil\thenote}\def\@evenhead{}}}
+
+%\def\ps@ICL{\let\@mkboth\@gobbletwo
+%	\def\@oddhead{}\def\@oddfoot{%
+%    \hbox to \textwidth
+%	{\hbox to 0pt{\bf Page \thepage\hss}\hfil
+%	\Copyright \copyright\ : Lemma 1 Ltd. 1992-1994.%
+%	\hfil\hbox to 0pt{\hss\icllogo ICL}}}%
+%\def\@evenhead{}\let\@evenfoot\@oddfoot}
+
+\makeatother
+
+\pagestyle{LemmaOne}
+%\pagestyle{plain}
+\tabstop=2.2\tabstop
+\advance\voffset by -0.6in
+\advance\hoffset by -0.3in
+\advance\textwidth by 0.7in
+\advance\textheight by 1.3in
+\begin{document}
+%\onlyslides{4-4}
+\blackandwhite{usr022_slides.tex}
+\end{document}
+

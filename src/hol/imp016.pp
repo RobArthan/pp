@@ -1,0 +1,1537 @@
+=IGN
+********************************************************************************
+imp016.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% imp016.doc   ℤ $Date: 2006/12/09 15:37:32 $ $Revision: 2.26 $ $RCSfile: imp016.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation of Type Inference}
+
+\def\AbstractText{This contains the Standard ML implementation of the type inference mechanism.}
+
+\def\Reference{DS/FMU/IED/IMP016}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation of Type Inference}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP016}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 2.26 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/12/09 15:37:32 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This contains the Standard ML implementation of the
+%% LaTeX2e port: type inference mechanism.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library \\ R.D. Arthan\\ D.J. King}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 2.1 (1991/08/20)]
+This is an approved version of issue 1.16.
+
+\item[Issue 2.2 (1991/08/27) 27 August 1991]
+Corrected the commented-out declaration of the
+flag $ti\_verbose$.
+
+\item[Issue 2.3 (1991/09/30) 30 September 1991]
+Fixed a bug in $set\_ti\_context$ which
+causing repeated instances
+of the same free variable in the context.
+
+\item[Issue 2.4 (1991/11/25) 21 November 1991]
+Modified to use the new interface of the unification algorithm.
+Re-coded $ti$ to reduce redundancy in the function call parameters.
+Also improved the performance of
+$fv\_in\_exty$ and $fv\_in\_extm$, and
+as a consequence, removing the need for
+$elim\_repeats$. Finally, renamed $ty\_to\_type$ to $make\_type$.
+
+\item[Issue 2.6 (1992/02/25), \FormatDate{92/01/20} ] Updated to use new fonts.
+
+\item[Issue 2.7 (1992/02/26), \FormatDate{92/02/26} ]
+Added code for handling errors and displaying informative
+diagnostics.
+
+\item[Issue 2.8 (1992/02/26), \FormatDate{92/02/26} ]
+Modified error message printing in $handle\_cond1$.
+
+\item[Issue 2.9 (1992/03/02), \FormatDate{92/03/02} ]
+When $ti\_verbose$ is set, more diagnostic information
+is printed. Also, corrected an error in $is\_varstruct$.
+\item [Issue 2.10 (1992/04/14) (13th April 1992)]
+Changes due to CR0017.
+
+\item[Issue 2.10 (1992/04/14), 2.11 (1992/05/13), 2.12 (1992/05/13) \FormatDate{92/05/13} ]
+Major enhancement to type inference to resolve overloaded aliases properly.
+This has involved te introduction of an intermediate pass over the
+structure, done when overloaded aliases are detected during pass one of
+type inference.
+
+\item[Issues 2.13 (1992/05/15), 2.14 (1992/10/27), 2.15 (1992/11/02)\FormatDate{92/11/02} ] New treatment of nested quotations and some bug fixes.
+
+\item[Issues 2.16 (2001/07/13) \FormatDate{01/07/13} ] Performance experiments.
+
+\item[Issues 2.17 (2001/07/17),2.18 (2001/07/18) \FormatDate{01/07/13} ] Unification now uses dynamic arrays.
+
+\item[Issues 2.19 (2002/03/09)] Now supports intended meaning of {\it undeclare\_alias}.
+\item[Issues 2.20 (2002/10/16)] Fixed {\LaTeX} error.
+
+\item[Issue 2.21 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.22 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 2.23 (2004/06/16)] Type inference contexts are now implemented as efficient dictionaries.
+\item[Issue 2.24 (2005/04/24)] Now uses {\tt app} rather than {\tt map} when appropriate.
+\item[Issues 2.25 (2006/12/02), 2.26 (2006/12/09)] Added support for floating point literals.
+\item[Issue 2.27 (2009/12/19)] Made it treat binders that are not declared as constants properly.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+
+This document contains the Standard ML code for implementing
+the type inference mechanism for the ICL product HOL.
+It corresponds to the
+detailed design of type inference
+as specified in \cite{DS/FMU/IED/DTD016}.
+
+\subsection{Introduction}
+
+The type inference mechanism is a part of the ICL product
+HOL. This document contains the Standard ML code which
+implements the mechanism. Description of the functionality
+is only provided where it is considered that the
+code itself is complex. A description of the functional
+aspects of the mechanism can be found in
+\cite{DS/FMU/IED/DTD016}.
+
+The type inference mechanism should be built as part of the
+release for ICL product HOL. The procedures for building
+HOL are described in \cite{DS/FMU/IED/DTD021}.
+
+The interfaces which are externally available are described
+in the signature for type inference \cite{DS/FMU/IED/DTD016}
+but it is not expected or intended that the end user
+should make use of these interfaces. The structure
+is therefore left unopened.
+
+\subsubsection{Background and Purpose}
+
+The implementation of the type checker has been done
+in response to its detailed design \cite{DS/FMU/IED/DTD016}
+and its purpose is to infer all the types in any given
+HOL term.
+
+\subsubsection{Dependencies}
+
+The Standard ML code in this document depends on the literate script
+contained in \cite{DS/FMU/IED/DTD016} for the signature of
+$TypeInference$,
+and on~\cite{DS/FMU/IED/DTD015} for fixity information.
+
+\subsubsection{Possible Enhancements}
+
+None are envisaged at present.
+
+\subsubsection{Deficiencies}
+
+At present, there are no known deficiencies in this document.
+
+\section{THE STANDARD ML CODE FOR TYPE INFERENCE}
+
+This code is largely believed to be self-documenting. Where
+this is not considered to be the case, additional description
+has been provided.
+The code is organised in to sections of the document
+which correspond to sections of the same name in
+the parent document \cite{DS/FMU/IED/DTD016}. A overview of
+the features of the code in each section can be found in
+\cite{DS/FMU/IED/DTD016}.
+=SML
+structure ⦏TypeInference⦎ : TypeInference = struct
+=TEX
+
+=SML
+open Parser Unification DynamicArray;
+
+val ⦏ti_verbose⦎ = ref false;
+val ⦏array_size⦎ = 100;
+
+val _ = if contains (map fst (get_flags()))
+			"ti_verbose"
+	then	()
+	else	new_flag{name = "ti_verbose",
+			control = ti_verbose,
+			default = fun_true,
+			check = fun_true
+	};
+=IGN
+val _ =
+new_flag {name = "ti_verbose", control=ti_verbose, check=fun_true, default = fun_true};
+=SML
+type ⦏ENV⦎ = string -> (EXTYPE*bool);
+type ⦏INF_TUPLE⦎ = EXTYPE TM * EXTYPE;
+
+val ⦏ti_subs⦎ = new_subs array_size;
+
+val ⦏contains_overloaded_aliases⦎ = ref false;
+val ⦏tmp_subs⦎ = new_subs array_size;
+=TEX
+
+\subsection{General Utilities}
+
+=SML
+fun ⦏type_of_const⦎ (s : string) : TYPE OPT = (
+	case get_const_info s of
+		Value (t, _::_) => Value t
+	|	_ => Nil
+);
+=TEX
+
+=SML
+fun ⦏eval_type_cons⦎ (s : string, tyl : TYPE list) : TYPE = (
+	if is_type_abbrev s
+	then
+		expand_type_abbrev (s, tyl)
+	else
+		mk_ctype (s, tyl)
+);
+=TEX
+
+=SML
+fun ⦏make_type⦎ ((TyAtom s) : TY) : TYPE  = (
+	if (hd o explode) s = "'"
+	then
+		if is_type_abbrev s
+		then
+			expand_type_abbrev (s, [])
+		else
+			mk_vartype s
+	else
+		case get_type_info s of
+			Value (0, _) => eval_type_cons (s, [])
+		|	Nil => fail "HOL-Parser" 16060 [fn() => s]
+		|	Value (x, _) => fail "HOL-Parser" 16030
+			[fn() => s,
+			 fn() => string_of_int x,
+			 fn() => if x = 1 then "" else "s",
+			 fn() => "0",
+			 fn() => "s"]
+)
+  |  make_type (TyCompound (tyl, s, _)) = (
+	case get_type_info s of
+	   Value (x, _) =>
+		let
+			val ltyl = length tyl
+		in
+		   if x = ltyl
+		   then
+			eval_type_cons (s, map make_type tyl)
+		   else
+			fail "HOL-Parser" 16030
+			[fn() => s,
+			 fn() => string_of_int x,
+			 fn() => if x = 1 then "" else "s",
+			 fn() => string_of_int ltyl,
+			 fn() => if ltyl = 1 then "" else "s"
+			]
+		end
+
+	|  Nil => fail "HOL-Parser" 16060 [fn() => s]
+)
+  |  make_type (TyAq ty) = ty;
+=TEX
+
+The following are used to determine whether or not a term is of the type
+which can be a variable (i.e., a simple variable, a tuple etc.).
+First we give a function to implement this test on object language terms
+(as in nested quotations).
+=SML
+fun ol_is_varstruct (tm : TERM) : bool = (
+	case dest_term tm of
+		DPair (tm1, tm2) => ol_is_varstruct tm1 andalso ol_is_varstruct tm2
+	|	DVar (s, _) => is_Nil(type_of_const s)
+	|	_ => false
+);
+=TEX
+And now the test for $TM$s:
+=SML
+fun ⦏is_varstruct⦎ (tm : 'a TM) : bool = (
+	case tm of
+		Id x => is_Nil(type_of_const x)
+	|	TmTyped (t, _) => is_varstruct t
+	|	App (App (Id ",", a, _), b, _) =>
+			is_varstruct a andalso is_varstruct b
+	|	TmAq tm => ol_is_varstruct tm
+	|	Other => false
+);
+=TEX
+Test whether support for floating point literals is available:
+=SML
+local
+	val nat_ty = mk_ctype("ℕ", []);
+	val int_ty = mk_ctype("ℤ", []);
+	val real_ty = mk_ctype("ℝ", []);
+	val float_type = list_mk_→_type[nat_ty, int_ty, int_ty, real_ty];
+in
+fun ⦏check_float⦎ (() : unit) : bool = (
+	case get_const_type "Float" of
+		Value ty => ty = float_type
+	|	Nil => false
+);
+end;
+=TEX
+
+=SML
+fun ⦏sub_ty⦎ (env : ENV) : ENV = (
+	fn s =>
+		let val (ty, flag) = env s;
+		in	((sub_type ti_subs) ty, flag)
+		end
+);
+=TEX
+
+=SML
+val ⦏ℝ⦎ = mk_ctype("ℝ", []);
+=TEX
+\subsection{Environment Management}
+
+The variable reference $ti\_context\_info$ is used to store the context.
+
+=SML
+val ⦏ti_context_info⦎ : TYPE E_DICT ref = ref initial_e_dict;
+=TEX
+=SML
+fun ⦏e_set_ti_context⦎ (dict : TYPE E_DICT) : unit = (
+	ti_context_info := dict
+);
+=TEX
+In the following, the only possible failure is for the flattened list of free variables to contain two variables with the same name but different types (which will be flagged by the $list\_e\_merge$ call).
+=SML
+fun ⦏set_ti_context⦎ (tml : TERM list) : unit = (
+	let	val all_terms = list_term_union (map frees tml);
+		val names_types = map dest_var all_terms;
+		val dict = list_e_merge initial_e_dict names_types;
+	in	e_set_ti_context dict
+	end	handle Fail _ => fail "HOL-Parser" 16040 []
+);
+=TEX
+=SML
+fun ⦏e_get_ti_context⦎ (() : unit) : TYPE E_DICT = !ti_context_info;
+=TEX
+=SML
+fun ⦏get_ti_context⦎ (() : unit) : TERM list = map mk_var (e_flatten (e_get_ti_context()));
+=TEX
+=SML
+fun ⦏fv_set⦎ ((Binder ("λ", a, b)) : 'a TM) : string list = (fv_set b diff fv_set a)
+  | fv_set ((Binder (s, a, b))) = fv_set (Id s) cup (fv_set b diff fv_set a)
+  | fv_set (Let (tl, a)) = (
+	let	val (lx, ly) = split tl;
+		val aux = list_cup o map fv_set;
+	in
+		((fv_set a diff aux lx) cup aux ly)
+	end)
+  | fv_set (Cond (c, a, b)) = fv_set c cup fv_set a cup fv_set b
+  | fv_set (App (f, a, _)) = fv_set f cup fv_set a
+  | fv_set (TmTyped (a,_)) = fv_set a
+  | fv_set (TmAq tm) = map (fst o dest_var) (frees tm)
+  | fv_set (SetDisplay tl) = list_cup (map fv_set tl)
+  | fv_set (SetComprehension (a,b)) = fv_set a cup fv_set b
+  | fv_set (ListDisplay tl) =  list_cup (map fv_set tl)
+  | fv_set (Id s) = (
+	case type_of_const s of
+		Value _ => []
+		|   Nil => [s]
+	)
+  | fv_set (CharLit _) = []
+  | fv_set (StringLit _) = []
+  | fv_set (NatLit _) = []
+  | fv_set (Float _) = [];
+=TEX
+
+=SML
+fun ⦏init_env⦎ (tm : 'a TM) : ENV = (
+	let 	val freevars = fv_set tm;
+		val freemap = new_name freevars;
+	in
+	   (fn s =>
+		case get_const_info s of
+			Value (t, [idty]) => (
+				(replaced t, false)
+			)| Value (t, _::_) => (
+				contains_overloaded_aliases := true;
+				(replaced t, false)
+			)| _ => (
+				(type_to_extype (
+					force_value(e_lookup
+					  s (!ti_context_info))), true)
+				handle (Fail msg) =>
+				(ExVartype(Unknown(lassoc3 freemap s)), false)
+			)
+	handle (Fail msg) =>
+		error "init_env" 16101 [fn() => s]
+	    )
+	end);
+=TEX
+=SML
+fun ⦏grow_env⦎ (env : ENV) (tm : 'a TM) : ENV = (
+	let 	val freevars = fv_set tm;
+		val freemap = new_name freevars;
+	in
+	   (fn s =>
+		case get_const_info s of
+			Value (t, [idty]) => (
+				(replaced t, false)
+			)| Value (t, _::_) => (
+				contains_overloaded_aliases := true;
+				(replaced t, false)
+			)| _ => (
+				if s mem freevars
+				then
+					(ExVartype(Unknown(lassoc3 freemap s)), false)
+				else
+					env s
+			)
+	handle (Fail msg) =>
+		error "grow_env" 16101 [fn() => s]
+	    )
+	end);
+=TEX
+
+\subsection{Identification of Free Variables}
+The following function extract type variable occurrences from extended
+types and terms
+=SML
+fun ⦏fv_in_exty⦎ (ty : EXTYPE) : string list * int list = (
+let	fun aux1 ty =
+	case ty of
+		ExVartype (Known x) => ([x],nil)
+	|	ExVartype (Unknown tvn) => (nil, [tvn])
+	|	ExType (_, tyl) => (
+		let	fun aux2 (x::xs) = (
+			  let	val (xk, xu) = aux1 x;
+		 	 	val (ak, au) = aux2 xs
+			  in
+				(xk cup ak, xu cup au)
+			  end)
+			  | aux2 nil = (nil,nil);
+
+		in
+			aux2 tyl
+		end)
+in
+	aux1 (sub_type ti_subs ty)
+end);
+=TEX
+=SML
+fun ⦏fv_in_extm⦎ ((Binder ("λ", a, b)) : EXTYPE TM) : string list * int list = (
+	let	val (ak, au) = fv_in_extm a;
+		val (bk, bu) = fv_in_extm b;
+	in
+		(ak cup bk, au cup bu)
+	end
+  )|fv_in_extm (Binder (_, _, _)) =
+	error "fv_in_extm" 16101 [fn()=>"Invalid Binder Construct"]
+  | fv_in_extm (Let (tl, a)) = (
+	let	val (lx, ly) = split tl;
+		fun aux (x::xs) = (
+		  let	val (xk, xu) = fv_in_extm x;
+		  	val (ak, au) = aux xs
+		  in
+			(xk cup ak, xu cup au)
+		  end)
+		  | aux nil = (nil,nil);
+		val (lxk, lxu) = aux lx;
+		val (lyk, lyu) = aux ly;
+		val (ak, au) = fv_in_extm a ;
+	in
+		(lxk cup lyk cup ak, lxu cup lyu cup au)
+	end)
+  | fv_in_extm (Cond (c, a, b)) = (
+	let	val (ck, cu) = fv_in_extm c;
+		val (ak, au) = fv_in_extm a;
+		val (bk, bu) = fv_in_extm b;
+	in
+		(ck cup ak cup bk, cu cup au cup bu)
+	end)
+  | fv_in_extm (App (f, a, _)) = (
+	let	val (fk, fu) = fv_in_extm f;
+		val (ak, au) = fv_in_extm a;
+	in
+		(fk cup ak, fu cup au)
+	end)
+  | fv_in_extm (TmTyped (Id s, ty)) =
+	fv_in_exty ty
+  | fv_in_extm (TmTyped (SetDisplay tl, ty)) = (
+	let	val (lfvs, rfvs) = split (map fv_in_extm tl);
+		val fk = flat lfvs;
+		val fu = flat rfvs;
+		val (tk, tu) = fv_in_exty ty;
+	in
+		(fk cup tk, fu cup tu)
+	end)
+  | fv_in_extm (TmTyped (ListDisplay tl, ty)) = (
+	let	val (lfvs, rfvs) = split (map fv_in_extm tl);
+		val fk = flat lfvs;
+		val fu = flat rfvs;
+		val (tk, tu) = fv_in_exty ty;
+	in
+		(fk cup tk, fu cup tu)
+	end)
+  | fv_in_extm (TmTyped (TmAq _, ty)) = fv_in_exty ty
+  | fv_in_extm (TmTyped (_, _)) =
+	error "fv_in_extm" 16101 [fn() => "Invalid TmTyped Construct"]
+  | fv_in_extm (TmAq tm) =
+	error "fv_in_extm" 16101 [fn() => "Invalid Nested Quotation Construct"]
+  | fv_in_extm (SetDisplay _ ) =
+	error "fv_in_extm" 16101 [fn() => "Invalid SetDisplay Construct"]
+  | fv_in_extm (SetComprehension (a,b)) =
+	let	val (ak, au) = fv_in_extm a;
+		val (bk, bu) = fv_in_extm b;
+	in
+		(ak cup bk, au cup bu)
+	end
+  | fv_in_extm (ListDisplay _ ) =
+	error "fv_in_extm" 16101 [fn() => "Invalid ListDisplay Construct"]
+  | fv_in_extm (Id s) =
+	error "fv_in_extm" 16101 [fn() => "Invalid Id Construct"]
+  | fv_in_extm (CharLit _) = ([], [])
+  | fv_in_extm (StringLit _) = ([], [])
+  | fv_in_extm (NatLit _) = ([], [])
+  | fv_in_extm (Float _) = ([], []);
+
+=TEX
+=SML
+local
+	val ⦏tyvar_name⦎ : int ref = ref 1;
+in
+	fun ⦏start_tyvar_name⦎ ((): unit) : unit = tyvar_name := 1;
+	fun ⦏next_tyvar_name⦎ (() : unit) : string = (
+		let	val x = !tyvar_name
+		in
+			(tyvar_name := x+1;
+			"'"^(	if x > 26
+				then
+					string_of_int x
+				else
+					chr (x+(ord "a")-1))
+			)
+		end
+	);
+end;
+=TEX
+=SML
+fun ⦏get_tyvar_names⦎ ((ty_names, (unk::rest)) : string list * 'a list) : ('a * string) list = (
+	let	fun aux() = (
+		let
+			val tvn = next_tyvar_name()
+		in
+			if tvn mem ty_names
+			then
+				aux()
+			else
+				tvn
+		end);
+	in
+		(unk, aux())::get_tyvar_names (ty_names, rest)
+	end)
+  | get_tyvar_names (tynames, nil) = nil;
+
+=TEX
+=SML
+fun ⦏get_tyvar_info⦎ (tm : EXTYPE TM) : (int * string) list = (
+	let
+		val side_effect = start_tyvar_name();
+		val (known, unk) = fv_in_extm tm
+	in
+		get_tyvar_names (known, unk)
+	end
+);
+=TEX
+
+=SML
+fun ⦏get_tyvar_info_ty⦎ (ty : EXTYPE) : (int * string) list = (
+	let	val side_effect = start_tyvar_name();
+		val (known, unk) = fv_in_exty ty;
+	in
+		get_tyvar_names (known, unk)
+	end
+);
+=TEX
+
+=SML
+fun ⦏vars_in_term⦎ (term : TY TM) (env : ENV) : (string*EXTYPE) list = (
+let	val freevars = fv_set term;
+	fun aux (var::rest) =
+		(var, (fst o env) var)::(aux rest)
+	  | aux _ = nil;
+in
+	aux freevars
+end
+);
+=TEX
+
+\subsection{Handling and Displaying Errors}
+
+=SML
+fun ⦏brkt⦎ (s : string) : string = (
+	if size s = 0
+	then
+		s
+	else
+		"(" ^ s ^ ")"
+);
+=TEX
+
+=SML
+fun ⦏format_extype⦎ (namemap : (int * string) list) (t : EXTYPE) : string = (
+	case t of	
+		ExVartype (Known s) => s
+	|	ExVartype (Unknown x) =>
+			(case sub_opt (ti_subs, x) of
+			  Nil => ((lassoc3 namemap x)
+				handle Fail msg =>
+				  error "format_extype" 16101 [fn()=>get_message_text msg])
+			| Value y => format_extype namemap y)
+	|	ExType (s, tys as [tya, tyb]) => (
+		case get_fixity s of
+		Lex.Infix _ =>
+			brkt(format_extype namemap tya^s^format_extype
+					namemap tyb)
+		|_	=>
+			brkt(format_list (format_extype namemap) tys ", ") ^ s)
+	|	ExType (s, tys) => (
+			brkt(format_list (format_extype namemap) tys ", ") ^ s)
+);
+=TEX
+
+=SML
+fun ⦏format_extype1⦎ (ty : EXTYPE) : string = (
+	let	val namemap = get_tyvar_info_ty ty;
+	in
+		 format_extype namemap ty
+	end
+);
+
+fun ⦏ti_errline⦎ (msg : int) (inserts : string list) : unit = (
+	diag_string (get_error_message msg inserts)
+);
+=TEX
+
+=SML
+fun ⦏ti_errcontext⦎ (tml : (string*EXTYPE) list): unit = (
+let	val thing = map fv_in_exty (map snd tml);
+	val knowns = flat (map fst thing);
+	val unknowns = flat (map snd thing);
+	val side_effect = start_tyvar_name();
+
+	val namemap = get_tyvar_names (knowns, unknowns);
+	fun aux (((var,exty)::tml) : (string*EXTYPE) list) =
+		(ti_errline 16562 [var, (format_extype namemap exty)];
+		aux tml)
+	  | aux _ = ();
+	val cxtlen = length tml;
+in
+	case cxtlen of
+	0 => ()
+	|1 => (ti_errline 16050 [];
+			aux  tml; ())
+	|Several => (ti_errline 16051 [];
+			aux  tml; ())
+end);
+=TEX
+The data type $TIERROR$ is used to communicate
+type inference context information to the error
+handlers, so that they can produce intelligible
+diagnostics.
+=SML
+datatype ⦏TIERROR⦎ =
+	⦏ErrLet⦎ of (TY TM*TY TM*EXTYPE*EXTYPE)
+	| ⦏ErrCond1⦎ of (TY TM*EXTYPE)
+	| ⦏ErrCond2⦎ of (TY TM*TY TM*EXTYPE*EXTYPE)
+	| ⦏ErrApp⦎ of (TY TM*TY TM*EXTYPE*EXTYPE)
+	| ⦏ErrAqTm1⦎ of (TERM*string*EXTYPE*EXTYPE)
+	| ⦏ErrAqTm2⦎ of (TERM*(string*TYPE) list)
+	| ⦏ErrTmTyped⦎ of (TY TM*EXTYPE*EXTYPE)
+	| ⦏ErrDisplay⦎ of (TY TM list*EXTYPE list*int)
+	| ⦏ErrSetComp⦎ of (TY TM*EXTYPE)
+	| ⦏ErrVarstruct⦎ of TY TM
+	| ⦏ErrFloat⦎;
+
+=TEX
+$plu$ is used to pluralize nouns in error messages
+dependent on the number of items in a list.
+=SML
+fun ⦏plu⦎ (x1::x2::rest) = "s"
+  | plu [x1] = ""
+  | plu nil = error "plu" 16100 [];
+=TEX
+The error handlers for printing diagnostics are
+introduced below.
+
+=SML
+fun ⦏handle_app⦎ (tm1 :TY TM) (tm2 : TY TM) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
+let	fun aux (ty as ExVartype (Unknown x)) = (
+		case sub_opt (ti_subs, x) of
+		Nil => ty
+		| Value ty' => ty'
+	 ) | aux ty = ty;
+	val sty1 = aux ty1;
+in
+	case tm1 of
+
+	App(Id "=", tm1', _) => (
+	   case sty1 of
+		ExType (_,[ty1', _]) => (
+			ti_errline 16560 [];
+			ti_errline 16561 [];
+			ti_errline 16562 [format_tm format_ty tm1',
+				format_extype1 ty1'];
+			ti_errline 16562 [format_tm format_ty tm2,
+				format_extype1 ty2]
+		) | Other =>  (
+			error "handle_app" 16101 [fn()=>format_extype1 ty1]
+		)
+
+	) | Other => (
+		case sty1 of
+			ExType ("→", _) => (
+				ti_errline 16542 []
+			) | Other' => (
+				ti_errline 16541 []
+		);
+		ti_errline 16545 [format_tm format_ty tm1,
+ 			format_extype1 ty1];
+		ti_errline 16546 [format_tm format_ty tm2,
+ 			format_extype1 ty2]
+	)
+end);
+=TEX
+=SML
+fun ⦏handle_display⦎ (tml : TY TM list) (types : EXTYPE list) (ierr: int) : unit = (
+let	
+	fun sort1 (i1 : int, (tm1:string, ty1:string)) (i2, (tm2, ty2)) =
+		if ty1 = ty2 then
+			if tm1 = tm2 then 0
+			else i1 - i2
+		else	Sort.string_order ty1 ty2;
+	fun grpaux ((ty1, tmlist1)::rest1) ((tm2, ty2)::rest2) =
+		if ty1 = ty2
+		then grpaux ((ty1, tmlist1@[[tm2]])::rest1) rest2
+		else grpaux ((ty2, [[tm2]])::(ty1,tmlist1)::rest1) rest2
+	  | grpaux res _ = res;	
+
+	fun grp ((tm, ty)::rest) = grpaux [(ty, [[tm]])] rest
+	  | grp _ = error "ti_error_handler" 16100 [];
+	fun do_errmsgs ((ty, tmlist)::rest) = (
+		ti_errline 16505 [ty, plu tmlist];
+		map (ti_errline 16506) tmlist;
+		do_errmsgs rest
+	) | do_errmsgs nil = nil;
+	val stml = map (format_tm format_ty) tml;
+	val styl = map format_extype1 types;
+	val tmty = (combine stml styl);
+	val itmty = combine (interval 1 (length styl)) tmty;
+	val stmty = (map snd) (Sort.sort sort1 (rev itmty));
+in
+	(ti_errline ierr [];
+	do_errmsgs (grp stmty);()
+	)
+end);
+=TEX
+=SML
+fun ⦏handle_let⦎ (tm1 : TY TM) (tm2 : TY TM) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
+	ti_errline 16560 [];
+	ti_errline 16561 [];
+	ti_errline 16562 [format_tm format_ty tm1,
+		format_extype1 ty1];
+	ti_errline 16562 [format_tm format_ty tm2,
+		format_extype1 ty2]
+);
+=TEX
+=SML
+fun ⦏handle_setcomp⦎ (tm : TY TM) (ty : EXTYPE) : unit = (
+	ti_errline 16520 [];
+	ti_errline 16521 [];
+	ti_errline 16562 [format_tm format_ty tm,
+		format_extype1 ty]
+);
+=TEX
+=SML
+fun ⦏handle_cond1⦎ (tm : TY TM) (ty : EXTYPE) : unit = (
+	ti_errline 16550 [];
+	ti_errline 16521 [];
+	ti_errline 16562 [format_tm format_ty tm,
+		format_extype1 ty]
+);
+=TEX
+=SML
+fun ⦏handle_cond2⦎ (tm1 : TY TM) (tm2 : TY TM) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
+	ti_errline 16551 [];
+	ti_errline 16561 [];
+	ti_errline 16562 [format_tm format_ty tm1,
+		format_extype1 ty1];
+	ti_errline 16562 [format_tm format_ty tm2,
+		format_extype1 ty2]
+);
+=TEX
+=SML
+fun ⦏handle_aqtm1⦎ (aqtm : TERM) (n : string) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
+	ti_errline 16590 [];
+	ti_errline 16591 [string_of_term aqtm];
+	ti_errline 16592 [n, format_extype1 ty1];
+	ti_errline 16593 [format_extype1 ty2]
+);
+=TEX
+=SML
+fun ⦏handle_aqtm2⦎ (aqtm : TERM) (fvs : (string * TYPE) list) : unit = (
+	let	fun order (s1, ty1) (s2, ty2) = (
+			case Sort.string_order s1 s2 of
+				0 => ~1
+			|	other => other
+		);
+		val newfvs = Sort.sort order fvs;
+		fun do1_fv (s, ty) = (
+			ti_errline 16596 [s, format_extype1 (type_to_extype ty)]
+		);
+	in	ti_errline 16594 [];
+		ti_errline 16595 [string_of_term aqtm];
+		app do1_fv newfvs
+	end
+);
+=TEX
+=SML
+fun ⦏handle_tmtyped⦎ (tm1 : TY TM) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
+	ti_errline 16530 [];
+	ti_errline 16531 [format_tm format_ty tm1,
+				format_extype1 ty1];
+	ti_errline 16532 [format_extype1 ty2]
+);
+=TEX
+=SML
+fun ⦏handle_varstruct⦎ (a : TY TM) : unit  = (
+	ti_errline 16010 [format_tm format_ty a]
+);
+=TEX
+=SML
+fun ⦏handle_float⦎ (():unit) : unit  = (
+	ti_errline 16011 []
+);
+=TEX
+The general error handler follows. It never
+returns, and always calls fail which raises the
+exception, $Fail$.
+=SML
+fun ⦏ti_error_handler⦎ (term : TY TM) (info : TIERROR) (env : ENV) : 'a = (
+	(
+	ti_errline 16001 [format_tm format_ty term];
+	case info of
+	ErrLet (tm1, tm2, ty1, ty2) => (
+		handle_let tm1 tm2 ty1 ty2
+	) | ErrCond1 (tm, ty) => (
+		handle_cond1 tm ty
+	) | ErrCond2 (tm1, tm2, ty1, ty2) => (
+		handle_cond2 tm1 tm2 ty1 ty2
+	) | ErrApp (tm1, tm2, ty1, ty2) => (
+		handle_app tm1 tm2 ty1 ty2
+	) | ErrAqTm1 (tm, s, ty, exty) => (
+		handle_aqtm1 tm s ty exty
+	) | ErrAqTm2 (tm, fvs) => (
+		handle_aqtm2 tm fvs
+	) | ErrTmTyped (tm1, ty1, ty2) => (
+		handle_tmtyped tm1 ty1 ty2
+	) | ErrDisplay (tml, tyl, ierr) => (
+		handle_display tml tyl ierr
+	) | ErrSetComp (tm, ty) => (
+		handle_setcomp tm ty
+	) | ErrVarstruct tm => (
+		handle_varstruct tm
+	) | ErrFloat => (
+		handle_float ()
+	); (* end case ... of *)
+	if get_flag "ti_verbose"
+	then
+		ti_errcontext (vars_in_term term env)
+	else	();
+	fail "HOL-Parser" 16000 []
+));
+=TEX
+The following function catches errors which might
+be raised in $extype\_to\_type$.
+=SML
+fun ⦏extype_to_type1⦎ (namemap : (int * string) list) (ty : EXTYPE) : TYPE = (
+	extype_to_type ti_subs namemap ty
+	handle Fail msg => error "extype_to_type" 16101
+		[fn() => get_message_text msg]
+);
+=TEX
+
+\subsection{Production of a Term with Extended Types}
+
+The function $ti$ and its related functions introduced
+below implement the inference rules of \cite{DS/FMU/IED/DTD016}.
+
+=SML
+fun ⦏ti⦎ (env : ENV) ((term as (Binder ("λ", a, b))) : TY TM) : INF_TUPLE = (
+
+	if is_varstruct a
+	then
+		let	val newenv = grow_env env a;
+			val (atm, aty) = ti newenv a;
+			val newenv' = sub_ty newenv;
+			val (btm, bty) = ti newenv' b;
+			val tty = ExType("→",[aty, bty]);
+		in
+			((Binder ("λ", atm, btm)), tty)
+		end
+	else
+		ti_error_handler term (ErrVarstruct a) env)
+=TEX
+=SML
+  | ti env (term as (Binder (s, a, b))) = (
+	ti env (App (Id s, Binder("λ", a, b), Lex.Nonfix)))
+=TEX
+=SML
+  | ti env (term as Let (tmlist, a)) = (
+
+	let	fun list_is_varstruct nil = true
+		  | list_is_varstruct (x::xs) = (
+			if is_varstruct x
+			then
+				list_is_varstruct xs
+			else
+				ti_error_handler term (ErrVarstruct x) env);
+		val (left, right) = split tmlist;
+		val side_effect = list_is_varstruct left;
+		fun rep_unify ((ty1, ty2)::tyl) ((tm1, tm2)::tml) = (
+		let	val sd = unify ti_subs (ty1, ty2)
+			handle Fail msg =>
+			ti_error_handler term (ErrLet(tm1, tm2, ty1, ty2)) env;
+
+		in	rep_unify tyl tml
+		end)
+		  | rep_unify _ _ = ();
+
+		fun ti_components env (t::tml) = (
+			let	val newenv = grow_env env t;
+				val (n1,n2) = ti_components newenv tml;
+
+			in
+				(n1, (ti newenv t)::n2)
+			end)
+		  | ti_components env nil = (env, nil);
+
+		val x_right = list_ti env right;
+		val (tm_right, ty_right) = split x_right;
+		val env' = sub_ty env;
+		val (newenv, x_left) = ti_components env' left;
+		val (tm_left, ty_left) = split x_left;
+
+		val newenv' = sub_ty newenv;
+
+		val tm_list = combine tm_left tm_right;
+		val ty_list = combine ty_left ty_right;
+		val sd = rep_unify ty_list tmlist;
+		val newenv'' = sub_ty newenv';
+		val (atm, aty) = ti newenv'' a;
+	in
+		(Let (tm_list, atm), aty)
+	end)
+=TEX
+=SML
+  | ti env (term as (Cond (c, a, b))) = (
+
+	case list_ti env [c, a, b] of
+
+	[(ctm, cty), (atm, aty), (btm, bty)] => (
+		let	val sd = unify ti_subs (cty, type_to_extype BOOL)
+			   handle Fail msg => ti_error_handler
+				term (ErrCond1(c, cty)) env;
+			val sd = unify ti_subs (aty, bty)
+			   handle Fail msg => ti_error_handler
+				term (ErrCond2(a, b, aty, bty)) env;
+		in
+			(Cond (ctm, atm, btm), bty)
+		end
+
+	) | Other => (
+		error "ti_cond" 16100 []
+	)
+)
+=TEX
+=SML
+  | ti env (term as (App (f, a, fix))) = (
+
+	let	val (atm, aty) = ti env a;
+		val newenv = sub_ty env;
+		val (ftm, fty) = ti newenv f;
+		val ty = ExVartype(Unknown(next_name()));
+		val nty = ExType ("→",[aty, ty]);
+		val sd = unify ti_subs (fty, nty)
+			handle Fail msg =>
+			ti_error_handler term (ErrApp(f, a, fty, aty)) env;
+	in
+		(App (ftm, atm, fix), ty)
+	end)
+=TEX
+
+=SML
+  | ti env (term as (TmTyped (a,ty))) = (
+	let	val (atm, aty) = ti env a;
+		val exty = (type_to_extype o make_type) ty;
+		val sd = unify ti_subs (aty, exty)
+			handle Fail msg =>
+			ti_error_handler term (ErrTmTyped(a, aty, exty)) env;
+	in
+		(atm, aty)
+	end)
+=TEX
+Note that the following uses a trick. The type constraint placed on the
+nested quotation is not the type of the term; it is actually a compound
+type with a dummy type constructor and an argument list comprising
+first the type of the term and then the types of the free variables of
+the quoted term (in the order given by $frees$). The trick is required
+to communicate to the next phase the assignment of extended types
+to free variables chosen by $replaced$.
+=SML
+  | ti env (term as (TmAq tm)) = (
+	let	val nltyl = (map dest_var (frees tm))
+			drop (fn (n, _) => not(is_Nil(type_of_const n)));
+		val (nl, tyl) = split nltyl;
+		val ty = mk_ctype("", type_of tm :: tyl);
+		val chk = (
+			if	all_different  nl
+			then	()
+			else	ti_error_handler
+				term (ErrAqTm2(tm, combine nl tyl)) env);
+		val exty = replaced ty;
+		val (tmty, netyl) = (
+			case exty of
+				ExType(_, t::tl) => (t, combine nl tl)
+			|	_	=> error "make_term" 16101
+				[fn()=> "Unexpected result from replaced"]
+		);
+		fun do1_var (n, vty) = (
+			let	val ety = (fst o env) n;
+			in	(unify ti_subs (ety, vty))
+				handle Fail msg =>
+				ti_error_handler
+				term (ErrAqTm1(tm, n, vty, ety)) env
+			end
+		);
+		val sd = (map do1_var netyl);
+	in	(TmTyped (TmAq tm, exty), tmty)
+	end)
+=TEX
+=SML
+  | ti env (term as (SetDisplay tl)) = (
+	let	val tmlist = list_ti env tl;
+		val (timl, tiyl) = split tmlist;
+		val sd = list_unify ti_subs tiyl
+			handle Fail msg =>
+			ti_error_handler term (ErrDisplay(tl, tiyl, 16504)) env;
+		val ty =
+			(case tiyl of
+			  nil => ExVartype(Unknown(next_name()))
+			  | _ => hd tiyl
+			);
+	in
+		(TmTyped (SetDisplay timl, ty),
+			ExType ("SET",[ty]))
+	end)
+=TEX
+=SML
+  | ti env (term as (SetComprehension (a, b))) = (
+
+	if is_varstruct a
+	then
+		let	val newenv = grow_env env a;
+			val (atm, aty) = ti newenv a;
+			val newenv' = sub_ty newenv;
+			val (btm, bty) = ti newenv' b;
+			val boolty = type_to_extype BOOL;
+			val sd = unify ti_subs (bty, boolty)
+				handle Fail msg =>
+				ti_error_handler term (ErrSetComp(b, bty)) env;
+
+		in
+			(SetComprehension (atm, btm),
+				ExType ("SET", [aty]))
+		end
+	else
+		ti_error_handler term (ErrVarstruct a) env)
+=TEX
+=SML
+  | ti env (term as (ListDisplay tl)) = (
+	let	val tmlist = list_ti env tl;
+		val (timl, tiyl) = split tmlist;
+		val sd = list_unify ti_subs tiyl
+			handle Fail msg =>
+			ti_error_handler term (ErrDisplay(tl, tiyl, 16510)) env;
+		val ty =
+			(case tiyl of
+			  nil => ExVartype(Unknown(next_name()))
+			  | _ => hd tiyl
+			);
+	in
+		(TmTyped (ListDisplay timl, ty),
+			ExType ("LIST",[ty]))
+	end)
+=TEX
+=SML
+  | ti env (Id s) = (
+	let	val ty = (fst o env) s;
+	in
+		(TmTyped(Id s, ty), ty)
+	end)
+=TEX
+=SML
+  | ti env (CharLit c) = (
+	CharLit c, type_to_extype CHAR)
+=TEX
+=SML
+  | ti env (StringLit s) = (
+	StringLit s, type_to_extype STRING)
+=TEX
+=SML
+  | ti env (NatLit i) = (
+	NatLit i, type_to_extype ℕ)
+=TEX
+=SML
+  | ti env (term as (Float xpe)) = (
+	if	check_float ()
+	then
+		(Float xpe, type_to_extype ℝ)
+	else
+		ti_error_handler term ErrFloat env)
+=TEX
+=SML
+and
+⦏list_ti⦎ (env : ENV) (tml : TY TM list) : INF_TUPLE list = (
+	let	fun list_ti_aux env nil = nil
+		  | list_ti_aux env (term::tml) = (
+		let	val (titerm as (tm, ty)) = ti env term;
+			val newenv = sub_ty env;
+			val next = list_ti_aux newenv tml;
+		in
+			(titerm::next)
+		end);
+	in
+		list_ti_aux env tml
+	end
+)
+=TEX
+=SML
+; (* End of definition of function ti and its friends *)
+=TEX
+
+\subsection{Checking Overloading}
+
+=SML
+fun ⦏handle_res_ovl1⦎ (tm : EXTYPE TM) (idtyl : (string * EXTYPE) list) : 'a = (
+	ti_errline 16001 [format_tm format_extype1 tm];
+	ti_errline 16070 [];
+	ti_errline 16071 [format_tm format_extype1 tm];
+	map (fn (id, ty) => ti_errline 16073 [id, format_extype1 ty]) idtyl;
+	fail "HOL-Parser" 16000 []
+);
+
+=TEX
+
+=SML
+fun ⦏handle_res_ovl2⦎ (tm : EXTYPE TM) (idtyl : (string * EXTYPE) list) : 'a  = (
+	ti_errline 16001 [format_tm format_extype1 tm];
+	ti_errline 16070 [];
+	ti_errline 16072 [format_tm format_extype1 tm];
+	map (fn (id, ty) => ti_errline 16073 [id, format_extype1 ty]) idtyl;
+	fail "HOL-Parser" 16000 []
+);
+
+=TEX
+
+=SML
+fun ⦏match_unique⦎ (ty : EXTYPE)  (idtyl : (string * EXTYPE) list)
+					: (string * EXTYPE) list = (
+let	val ty' = sub_type ti_subs ty;
+	fun unify_opt ty1 (s, ty2) = (
+	let	val side = init_subs tmp_subs
+	in
+				(unify tmp_subs (ty1, ty2);
+					Value (s, ty2))
+				handle Fail _ => Nil
+	end);
+	fun aux ty idtyl = map (fn x => unify_opt ty x) idtyl;
+	fun strip (Nil::rest) = strip rest
+	  | strip (Value x :: rest) = x :: strip rest
+	  | strip [] = [];
+in
+	strip (aux ty' idtyl)
+end);
+=TEX
+Note that the only binder left is λ when we get to resolve overloading so
+only the $Id: imp016.doc,v 2.26 2006/12/09 15:37:32 rda Exp rda $ case is interesting below (see how $ti$ handles binders above).
+=SML
+fun ⦏resolve_overloading⦎ (term : EXTYPE TM) : EXTYPE TM = (
+let	fun ⦏res_ovl⦎ (term as (TmTyped (Id s, ty))) = (
+		case get_const_info s of
+			Value (_, idtyl as (_::_)) => (
+			let	val idtyl' = map (fn (id, ty) => (id, replaced ty)) idtyl;
+			in
+				case match_unique ty idtyl' of
+				[] => handle_res_ovl1 term idtyl'
+				|[(s', ty')] => (
+					let	val side = unify ti_subs (ty, ty')
+							handle Fail msg =>
+							error "res_ovl" 16101
+								[fn()=>get_message msg];
+					in
+						TmTyped (Id s', sub_type ti_subs ty')
+					end)
+				|idtyl'' => handle_res_ovl2 term idtyl''
+			end
+		) |	_ => TmTyped (Id s, ty)
+	) | res_ovl (Binder (s, a, b)) = Binder (s, res_ovl a, res_ovl b)
+	  | res_ovl (Let (tl, a)) = (
+		let	val (lx, ly) = split tl;
+			val tl' = combine (map res_ovl lx) (map res_ovl ly);
+		in
+			Let (tl', res_ovl a)
+		end
+	) | res_ovl (Cond (c, a, b)) = Cond (res_ovl c, res_ovl a, res_ovl b)
+	  | res_ovl (App (f, a, fix)) = (
+		let	val a' = res_ovl a;
+		in
+			 App (res_ovl f, a', fix)
+		end
+	) | res_ovl (TmTyped (a,ty)) = TmTyped (res_ovl a, ty)
+	  | res_ovl (TmAq tm) = TmAq tm
+	  | res_ovl (SetDisplay tl) = SetDisplay (map res_ovl tl)
+	  | res_ovl (SetComprehension (a,b)) = SetComprehension (res_ovl a, res_ovl b)
+	  | res_ovl (ListDisplay tl) =  ListDisplay (map res_ovl tl)
+	  | res_ovl (Id s) = error "res_ovl" 16101 [fn() => "Invalid Id Construct"]
+	  | res_ovl (CharLit c) = CharLit c
+	  | res_ovl (StringLit s) = StringLit s
+	  | res_ovl (NatLit i) = NatLit i
+	  | res_ovl (Float xpe) = Float xpe;
+in
+	if (!contains_overloaded_aliases)
+	then
+		res_ovl term
+	else
+		term
+end);
+=TEX
+
+\subsection{Conversion of a Term to a ``HOL Term''}
+Note that modifiers of the code below should look carefully to ensure that
+they understand the trick used by $ti$ for nested quotations.
+=SML
+fun ⦏extm_to_term⦎ (namemap : (int * string) list) ((Binder ("λ", a, b))
+	: EXTYPE TM) : TERM = (
+
+	let	val ta = extm_to_term namemap a;
+		val tb = extm_to_term namemap b;
+	in
+		mk_λ (ta, tb)
+		handle Fail msg =>
+			error "extm_to_term" 16101 [fn() => get_message_text msg]
+	end
+  )|extm_to_term namemap (Binder (_, _, _)) =
+	error "extm_to_term" 16101 [fn()=>"Invalid Binder Construct"]
+  | extm_to_term namemap (Let (tl, a)) = (
+	let	val (lx, ly) = split tl;
+		val tlx = map (extm_to_term namemap) lx;
+		val tly = map (extm_to_term namemap) ly;
+		val til = combine tlx tly;
+		val ta = extm_to_term namemap a;
+	in
+		mk_let (til, ta)
+		handle Fail msg =>
+			error "extm_to_term" 16101 [fn() => get_message_text msg]
+	end)
+  | extm_to_term namemap (Cond (c, a, b)) = (
+	let	val tc = extm_to_term namemap c;
+		val ta = extm_to_term namemap a;
+		val tb = extm_to_term namemap b;
+	in
+		mk_if (tc, ta, tb)
+		handle Fail msg =>
+			error "extm_to_term" 16101 [fn() => get_message_text msg]
+	end)
+  | extm_to_term namemap (App (f, a, _)) = (
+	let	val tf = extm_to_term namemap f;
+		val ta = extm_to_term namemap a;
+	in
+		mk_app (tf, ta)
+		handle Fail msg =>
+			error "extm_to_term" 16101 [fn() => get_message_text msg]
+	end)
+  | extm_to_term namemap (TmTyped (Id s, ty)) = ((
+	(case type_of_const s of
+		Value _ => resolve_alias
+	|	Nil => mk_var)
+			(s, extype_to_type1 namemap ty)
+	)
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
+	)
+  | extm_to_term namemap (TmTyped (SetDisplay tl, ty)) = (
+	(case tl of
+		nil =>	mk_∅ (extype_to_type1 namemap ty)
+		| _ =>	(let val til = map (extm_to_term namemap) tl
+			in
+				mk_enum_set til
+			end))
+
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
+	)
+  | extm_to_term namemap (TmTyped (ListDisplay tl, ty)) = (
+	(case tl of
+		nil =>	mk_empty_list (extype_to_type1 namemap ty)
+		| _ =>	(let val til = map (extm_to_term namemap) tl
+			in
+				mk_list til
+			end))
+
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
+
+	)
+  | extm_to_term namemap (TmTyped (TmAq tm, exty)) = (
+		let	val nltyl = (map dest_var (frees tm))
+			drop (fn (n, _) => not(is_Nil(type_of_const n)));
+			val ty' = extype_to_type1 namemap exty;
+			val tyl = map snd nltyl;
+			val ty = mk_ctype("", type_of tm :: tyl);
+			val tm' = inst [] (type_match ty' ty) tm
+				handle Fail msg =>
+				error "make_term" 16101
+				[fn()=> "Unexpected failure in type_match or inst"];
+		in	tm'
+		end)
+  | extm_to_term namemap (TmTyped (a, ty)) = extm_to_term namemap a
+  | extm_to_term namemap (SetDisplay _ ) =
+	error "extm_to_term" 16101 [fn() => "Invalid SetDisplay Construct"]
+  | extm_to_term namemap (SetComprehension (a,b)) = (
+	let	val ta = extm_to_term namemap a;
+		val tb = extm_to_term namemap b;
+	in
+		mk_set_comp (ta, tb)
+		handle Fail msg =>
+			error "extm_to_term" 16101 [fn() => get_message_text msg]
+	end)
+  | extm_to_term namemap (ListDisplay _ ) =
+	error "extm_to_term" 16101 [fn() => "Invalid ListDisplay Construct"]
+  | extm_to_term namemap (TmAq _ ) =
+	error "extm_to_term" 16101 [fn() => "Invalid Nested Quotation Construct"]
+  | extm_to_term namemap (Id s) =
+	error "extm_to_term" 16101 [fn() => "Invalid Id Construct"]
+  | extm_to_term namemap (CharLit c) = (
+	mk_char c
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
+	)
+  | extm_to_term namemap (StringLit s) = (
+	mk_string s
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
+	)
+  | extm_to_term namemap (NatLit s) = (
+	mk_ℕ s
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
+	)
+  | extm_to_term namemap (Float xpe) = (
+	mk_float xpe
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
+	);
+=TEX
+
+\subsection{The Type Inference Mechanism Glue}
+
+=SML
+fun ⦏make_term⦎ (tm : TY TM) : TERM = (
+	let	val side = (start_again(); init_subs ti_subs;
+				contains_overloaded_aliases := false);
+		val env = init_env tm;
+		val tm' = resolve_overloading (fst (ti env tm));
+		val namemap = get_tyvar_info tm';
+		val res = extm_to_term namemap tm';
+		val _ = init_subs ti_subs;
+	in	res
+	end
+);
+=TEX
+
+=SML
+end; (* of structure TypeInference *)
+=TEX
+
+This concludes the Standard ML code for type inference.
+
+\twocolumn[\section{INDEX OF DEFINED TERMS}]
+\printindex
+\end{document}
+
+=IGN
+⌜1=`a`⌝;
+⌜let (x:ℕ)=`a` in c⌝;
+⌜let (x,y)=1 in T⌝;
+
+⌜{7;4;`x`;8;7;"FRED"}⌝;
+⌜{x; Snd (x=42,`A`); x}⌝;
+⌜{x | 0}⌝;
+⌜`A` : ℕ⌝;
+⌜let (X,y)=4 in T⌝;
+⌜∀ T ⦁ T⌝;
+⌜Hd {}⌝;
+⌜if 3 then 4 else 5⌝;
+⌜if T then 4 else `A`⌝;
+⌜let (x,y)=6 in T⌝;
+
+
+
+⌜1 ∨ 2⌝;
+
+⌜T ∧ `a`⌝;
+
+
+⌜(a,b) c⌝;
+
+⌜1 == 2⌝;
+
+
+declare_type_abbrev("TRIPLE", ["'a", "'b", "'c"], ⓣ 'a × 'b × 'c⌝);
+declare_type_abbrev("TRIO", ["'a", "'b"], ⓣ 'a × 'b × 'c⌝);
+
+
+
+⌜(1,`a`,"abc"):('a,'b,'c)TRIPLE⌝;(* Remark 2 *)
+
+
+⌜f a b c 1 = f a b c `a`⌝;
+
+
+⌜∀ z s⦁ ∃⋎1 f⦁ f 0 = z ∧ (∀ n⦁ f s (n + 1) = s (f n) n)⌝;
+
+⌜let 12 = 12 in 12⌝; (* Remark 3 *)
+
+⌜if 1 then `a` else `b`⌝;	(* Remark 4 *)
+⌜if x=y then `a` else "b"⌝;	(* Remark 4 *)
+⌜if x=y then [1+2+3,1] else [1+2+3;2]⌝;
+
+
+⌜¬(x + 1)⌝;
+
+⌜{a;h;i;`a`} = {} ∧ a = b ∧ b = c ∧ c = d ∧ h = c ∧ i = h ∧ b = "b"⌝;
+
+
+⌜a = b ∧ b = c ∧ c = d ∧ h = c ∧ i = h ∧ b = "b" ∧ {a;h;i;`a`} = {}⌝;
+
+
+⌜[1;2;`a`]⌝;
+
+
+⌜∀x⦁f + 2⌝;
+
+
+

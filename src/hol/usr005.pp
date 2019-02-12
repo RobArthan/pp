@@ -1,0 +1,614 @@
+=IGN
+********************************************************************************
+usr005.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% usr005.doc  ℤ $Date: 2008/07/24 16:09:41 $ $Revision: 1.22 $ $RCSfile: usr005.doc,v $
+=IGNORE
+           % U s e f u l C o m m a n d s
+
+make -f docs.mkf usr005.dvi1
+make -f docs.mkf usr005.dvi
+
+=TEX
+
+\documentstyle[hol1,11pt,fleqn,USR]{book}
+
+\def\SCCSversion{$Revision: 1.22 $%
+}
+\def\SCCSdate{\FormatDate{$Date: 2008/07/24 16:09:41 $
+}}
+
+\USRmanual{Description}
+\USRref{USR005}
+%\USRdate{\SCCSdate}
+\USRisbns{1514277441}
+\USRisbnl{978-1514277447}
+
+\raggedbottom
+\ftlinepenalty=9999
+\makeindex
+
+\title{\Product}
+\author{ }
+
+\underscoreoff
+\begin{document}
+
+\makeUSRfrontpage
+
+\pagebreak
+
+\chapter*{CONTENTS}
+
+\tableofcontents
+\listoftables
+
+\setcounter{chapter}{-1}
+
+\chapter{ABOUT THIS PUBLICATION} \label{intro}
+\section{Purpose}
+
+This document will eventually provide a full narrative description of {\Product} to complement the catalogue of detail provided by the {\REFERENCE}.
+It is at present incomplete, containing only those parts of its intended content which are least well covered by other {\Product} user documentation.
+Specifically, this version of the manual describes the concrete syntax of the specification languages supported by {\Product}.
+
+\section{Readership}
+
+Users of {\Product}.
+
+\section{Related Publications}
+
+A bibliography is given at the end of this document.
+
+Publications relating specifically to \Product\ include:
+
+\begin{enumerate}
+\item {\em \ {\TUTORIAL}}, tutorial covering the basic \Product{} system.
+\item {\em \ {\ZTUTORIAL}}, tutorial covering \Product{} Z support option.
+\item {\em \ {\HTUTORIAL}};
+\item {\em \ {\REFERENCE}};
+\item {\em \ {\INSTALLATION}};
+\item {\em \ {\TYPESETTING}}.
+\end{enumerate}
+
+\section{Assumptions}
+
+Though it is not strictly prerequisite, the user may find this volume easier to read after attending a course on {\Product}, or after consulting the \TUTORIAL.
+
+\section{Acknowledgements}
+
+ICL gratefully acknowledges its debt to the many researchers (both academic and industrial) who have provided intellectual capital on which ICL has drawn in the development of \Product.
+
+We are particularly indebted to Mike Gordon of The University of Cambridge, for his leading role in some of the research on which the development of \Product\ has built, and for his positive attitude towards industrial exploitation of his work.
+
+The \Product\ system is a proof tool for Higher Order Logic which builds upon ideas arising from research carried out at the Universities of Cambridge and Edinburgh, and elsewhere.
+
+In particular the logic supported by the system is (at an abstract level) identical to that implemented in the Cambridge HOL system \cite{gordon93}, and the paradigm adopted for implementation of proof support for the language follows that adopted by Cambridge HOL, originating with the LCF system developed at Edinburgh \cite{gordon79}.
+The functional language ``standard ML'' used both for the implementation and as a interactive metalanguage for proof development, originates in work at Edinburgh, and has been developed to its present state by an international group of academic and industrial researchers.
+The implementation of Standard ML on which \Product\ is based was itself originally implemented by David Matthews at the University of Cambridge, and is now commercially marketed by Abstract Hardware Limited.
+
+The \Product{} system also supports specification and proof in the Z language, developed at the University of Oxford.
+We are therefore also indebted to the research at Oxford (and elsewhere) which has contributed to the development of the Z language.
+
+Standard ML of New Jersey is an implementation of the Standard ML language
+developed by Lucent.
+It is copyright {\copyright} 1989--1998 by Lucent Technologies.
+The following licence terms apply to Standard ML of New Jersey:
+
+\begin{quotation}
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose and without fee is hereby granted,
+provided that the above copyright notice appear in all copies and that
+both the copyright notice and this permission notice and warranty
+disclaimer appear in supporting documentation, and that the name of
+Lucent Technologies, Bell Labs or any Lucent entity not be used in
+advertising or publicity pertaining to distribution of the software
+without specific, written prior permission.
+
+Lucent disclaims all warranties with regard to this software,
+including all implied warranties of merchantability and fitness. In no
+event shall Lucent be liable for any special, indirect or
+consequential damages or any damages whatsoever resulting from loss of
+use, data or profits, whether in an action of contract, negligence or
+other tortious action, arising out of or in connection with the use
+or performance of this software.
+\end{quotation}
+
+=IGN
+\chapter{USER INTERFACE}
+
+The contents of this section will be as indicated below.
+
+\begin{itemize}
+\item Services provided at the interface to the host operating system.
+\item \begin{enumerate}
+\item Standard ML.  What is documented here is what the user needs to
+	know to get into {\SML} in order subsequently to run the proof
+	development system, as opposed to what the user needs to know
+	to get into {\SML} in general.   This might be nothing.
+\item customization of screen and keyboard  to handle extended character sets.  What is documented here is how to switch on the facility, and what is the extended character set  and keyboard layout.
+\item preparation of literate scripts using standard text-editors, with
+	or without extended character sets.  What is documented here is
+	the use of the extended characters which are special delimiters
+	to mark off fragments, boxes etc. and all the \LaTeX macros
+	which are provided to represent pretty characters or for other
+	purposes.
+\item printing of literate scripts. What is documented here is how to get the fonts set up and how to use the preprocessors.
+\end{enumerate}
+\item Services provided at the interface to \SML.
+\item \begin{enumerate}
+\item The proof development system, as constituted by all the defined {\SML} objects  documented in the body of the
+ Reference Manual.  What might be documented here is the naming-conventions of \Cyte{DEF003}.
+\item input of HOL terms via the parser.  What is documented here is the use of  special quotes to invoke the parser and the BNF of the grammar of HOL terms, as in \Cyte{DEF001}.
+\item Use of the Z-like specification features, e.g. for $new\_specification$, for input of certain {\SML} expressions  and the automatically-performed proofs.   See  \Cyte{HLD010}.
+\item customization of the parser for user-defined lexis. See \Cyte{DEF001}
+\item output of HOL terms (via the pretty-printer).  What is to be documented here is what are the options for outputting a term. (Pretty-printed or not, with or without explicit types, etc, and how the pretty-printing may be customized ).
+\item input of  \SML text stripped out of a literate script. What is documented here is how to invoke the process, and what are the conditions on the literate script for it to be successful.
+\end{enumerate}
+\end{itemize}
+\pagebreak
+=TEX
+
+\pagebreak
+
+\part{The ProofPower System}\label{PP-SYS}
+
+\chapter{THE METALANGUAGE}
+
+{\Product} has been implemented using Standard ML of New Jersey (SML-NJ), an implementation of Standard ML \cite{milner97} developed by Lucent Technologies.
+
+SML-NJ provides some extensions to the standard which have been used in the implementation of {\Product}.
+
+These include:
+
+\begin{itemize}
+\item
+A means for storing the state of an ML session in a `heap image'.
+\item
+Programmable control over the compiler's input and output streams.
+\end{itemize}
+
+These extensions have been used in the development of {\Product} to achieve the following effects:
+
+\begin{itemize}
+\item
+The theory hierarchy is held securely in what is called in the {\Product} documentation
+a `theory database'.
+\item
+The character set accepted in the metalanguage (ML) has been extended by including appropriate logical and mathematical symbols.
+These extensions to the character set are mainly treated as new alphabetic characters and may therefore appear in ML variable names.
+\item
+Facilities have been provided for quotation of object language expressions and for automatic pretty-printing of values which represent such expressions.
+\end{itemize}
+
+To ensure that the {\Product} theory hierarchy is properly maintained, some of the effects normally obtained by commands supplied with SML-NJ should be obtained using alternative commands supplied with {\Product}.
+Users of ProofPower should only use the supplied {\Product} function instead of the corresponding SML-NJ function whenever they are operating on a {\Product} database.
+
+{\Product} users should use the UNIX command $⦏pp\_make\_database⦎$ instead of
+the SML-NJ commands $⦏exportML⦎$ or $⦏exportFN⦎$ to make a new database.
+
+Some {\Product} ML commands supersede SML-NJ ones and we recommend you
+do not use the SML-NJ versions when working with {\Product}.
+
+\begin{centering}
+
+\begin{tabular}{l | l}
+Use ProofPower Command & Instead of	SML-NJ command\\\hline
+$⦏save\_and\_quit⦎$ & $⦏exportML⦎$ \\
+$⦏quit⦎$ & $⦏OS.Process.exit⦎$ \\
+$⦏use\_file⦎$ & $⦏use⦎$
+\end{tabular}
+
+\end{centering}
+
+Full details of the {\Product} versions of these commands may be found in the {\REFERENCE}.
+
+{\Product} was originally developed for the 1990 version of Standard ML.
+SML-NJ implements the 1997 revision to the standard. For backwards compatibility,
+{\Product} provides many of the 1990 basis library functions in addition to the new standard
+basis library functions.
+
+\chapter{ProofPower CONTROLS}
+
+Some aspects of the behaviour of {\Product} are determined by the settings of various {\it controls} which the user of {\Product} may change.
+
+There are three types of control, according to the type of the Standard ML value which exercises the control.
+The value may have type {\tt bool}, {\tt int} or {\tt string}.
+Boolean controls are often referred to as ``flags''.
+
+The procedures available for manipulating controls are shown in table~\ref{ProceduresManipulatingControls}.
+
+\hfill
+
+\begin{table}
+
+\begin{centering}
+
+\begin{tabular}{|| l | l ||} \hline
+{\bf name} & {\bf purpose} \\ \hline \hline
+get_controls & return all control values \\
+get_flag & return value of a flag \\
+get_flags & return all flag values \\
+get_int_control & return an integer control value \\
+get_int_controls & return all integer control values \\
+get_string_control & return string control value \\
+get_string_controls & return all string control values \\
+new_int_control & create a new integer control \\
+new_flag & create a new flag \\
+new_string_control & create a new string control \\
+reset_int_control & set an int control to its default value \\
+reset_flag & set a flag to its default value \\
+reset_string_control & set a string control to its default value\\
+set_int_control & set an int control value\\
+set_flag & set a flag\\
+set_flags & set all flags\\
+set_string_control & set a string control value \\
+set_string_controls & set all string control values \\
+reset_controls & set all control values to their defaults \\
+reset_int_controls & set all int control values to their defaults\\
+reset_flags & reset all flags to their default values\\
+reset_string_controls & set all string control values to their defaults \\
+set_controls & set all control values \\
+set_int_controls & set all int control values \\
+set_string_controls & set all string control values \\ \hline
+\end{tabular}
+
+\end{centering}
+
+\caption{ML Procedures for Manipulating Control Values}
+\label{ProceduresManipulatingControls}
+
+\end{table}
+
+\hfill
+
+=IGN
+\begin{table}
+
+\begin{centering}
+
+\begin{tabular}{|| l | p{2.7in} | p{2in} ||} \hline
+{\bf name} & {\bf type} & {\bf purpose} \\ \hline \hline
+get_controls & {\tt fn : unit -> (string * bool) list * (string * int) list * (string * string) list} & return all control values \\
+get_flag & {\tt fn : string -> bool } & return value of a flag \\
+get_flags & {\tt fn : unit -> (string * bool) list } & return all flag values \\
+get_int_control & {\tt fn : string -> int } & return an integer control values \\
+get_int_controls & {\tt fn : unit -> (string * int) list } & return all integer control values \\
+get_string_control & {\tt fn : string -> string} & return string control value \\
+get_string_controls & {\tt fn : unit -> (string * string) list} & return string control value \\
+new_int_control & {\tt fn : {name: string, check: int -> bool, control: int ref,
+  default: unit -> int} -> unit } & create a new integer control value \\
+new_flag & {\tt fn : {name: string, check: bool -> bool, control: bool ref,
+  default: unit -> bool} -> unit } & create a new flag \\
+new_string_control & {\tt fn : {name: string, check: string -> bool, control: string ref,
+  default: unit -> string} -> unit } & create a new string control value \\
+reset_int_control & {\tt fn : string -> int } & set an int control to its default value \\
+reset_flag & {\tt fn : string -> bool } & set an int control to its default value \\
+reset_string_control & {\tt fn : string -> string } & set a string control to its default value\\
+set_int_control & {\tt fn : string * int -> int } & set an int control value\\
+set_flag & {\tt fn : string * bool -> bool } & set a flag\\
+set_flags & {\tt fn : (string * bool) list -> unit } & set all flags\\
+set_string_control & {\tt fn : string * string -> string } & set a string control value \\
+get_string_controls & {\tt fn : unit -> (string * string) list } & get the string control values \\
+reset_controls & {\tt fn : unit -> unit } & reset all control values to their defaults \\
+reset_int_controls & {\tt fn : unit -> unit } & reset all int control values to their default\\
+reset_flags & {\tt fn : unit -> unit } & reset all int control values to their default\\
+reset_string_controls & {\tt fn : unit -> unit } & reset all string control values to their default \\
+set_controls & {\tt fn : (string * bool) list * (string * int) list *
+(string * string) list -> unit } & set all control values \\
+set_int_controls & {\tt fn : (string * int) list -> unit } & set all int control values \\
+set_string_controls & {\tt fn : (string * string) list -> unit } & set all string control values \\
+\\ \hline
+\end{tabular}
+\caption{ML Procedures for Manipulating Control Values}
+\label{ProceduresManipulatingControls}
+\end{table}
+
+\end{centering}
+
+=TEX
+
+\begin{table}
+\begin{centering}
+
+\begin{tabular}{|| l | l | p{3.4in} ||} \hline
+{\bf name} & {\bf default} & {\bf purpose} \\ \hline \hline
+⦏ignore_warnings⦎ & false & Causes warnings to be ignored.\\ \hline
+⦏illformed_rewrite_warning⦎ & false & Causes output of a diagnostic when rewriting is inhibited due to bound variable capture.\\ \hline
+⦏input_in_utf8⦎ & false & Causes {\it use_file} and {\it use_terminal} to treat their input as UTF-8 encoded.\\ \hline
+⦏output_in_utf8⦎ & false & Causes the Writer to translate output into UTF-8.\\ \hline
+⦏pp_add_brackets⦎ & false & When set the pretty printer uses more brackets.\\ \hline
+⦏pp_let_as_lambda⦎ & false & If set $let$-expressions are not pretty printed as such.\\ \hline
+⦏pp_prefer_current_language⦎ & false & If this flag is false, then subterms are printed without changing language whenever possible.
+If the flag is true, then subterms are printed using the language of the current theory whenever possible. \\ \hline
+⦏pp_print_assumptions⦎ & true & If this flag is set then assumptions of theorems are printed in full.
+Otherwise a single dot is printed to indicate the presence of assumptions, but the assumptions themselves are not printed. \\ \hline
+⦏pp_show_HOL_types⦎ & false & Causes extensive inclusion of type information in the output if the pretty printer.\\ \hline
+⦏pp_show_index⦎ & false & When set, the pretty printer puts indexing brackets round the identifier occuring first in any term (used by the theory listers). \\ \hline
+⦏pp_types_on_binders⦎ & false & Causes the pretty printer to display type information on binding occurrences of variables.\\ \hline
+⦏pp_use_alias⦎ & true & When set the pretty printer will print terms using aliases for the constants occuring in the terms where appropriate.\\ \hline
+⦏pp_use_type_abbrev⦎ & true & When set the pretty printer will print types using type abbreviations where appropriate.\\ \hline
+⦏profiling⦎ & false & Turns on the {\Product} profiling facilities. \\ \hline
+⦏resolution_diagnostics⦎ & false & Controls the output of diagnostics from the resolution package.\\ \hline
+⦏sorted_listings⦎ & false & Causes theory listings to be sorted according to keys\\ \hline
+⦏subgoal_package_quiet⦎ & false & This flag may be used to suppress all output from the subgoal package when running proofs.\\ \hline
+⦏subgoal_package_ti_context⦎ & true & Determines whether the type inference context is set by the subgoal package, causing type-checking of terms to be influenced by the types of free variables in the current subgoal.\\ \hline
+⦏ti_verbose⦎ & true & When set, diagnostics printed by the HOL type inferrer include the types of the variables in the failing term. \\ \hline
+⦏use_file_non_stop_mode⦎ & false & When set errors arising while processing a file using `use_file' do not cause processing to be aborted.\\ \hline
+⦏use_extended_chars⦎ & true &
+When true extended characters are output while pretty printing, when false ascii keywords are output.
+Does not affect input or {\LaTeX} output. \\ \hline
+⦏gc_messages⦎ & false &
+When true this turns on production of garbage collection progress messages
+by the Standard ML compilation system.\\ \hline
+\end{tabular}
+
+\end{centering}
+\caption{Boolean Controls (Flags) for HOL and Z}
+\label{BooleanControlsHOLandZ}
+\end{table}
+\begin{table}
+\begin{centering}
+
+\begin{tabular}{|| l | l | p{3.35in} ||} \hline
+{\bf name} & {\bf default} & {\bf purpose} \\ \hline \hline
+⦏check_is_z⦎ & false & Controls the checking of theorems by Z inference facilities.\\ \hline
+⦏standard_z_terms⦎ & false & Influences the checking of terms by the Z parser and type checker. \\ \hline
+⦏standard_z_paras⦎ & true & Influences the checking of paragraphs by Z parser and type checker. \\ \hline
+⦏z_allow_free_vars_in_axioms⦎ & false & When this and $z_use_axioms$ are set, Z axiomatic descriptions are allowed to contain free variables. This is not standard Z behaviour,
+and is advised only for type-check only mode. \\ \hline
+⦏z_type_check_only⦎ & true & When set, certain aspects of the processing of Z are inhibited, giving a faster response for type-checking only.\\ \hline
+⦏z_use_axioms⦎ & true & When set, Z `axiomatic descriptions' are entered as axioms (otherwise they are definitions with consistency caveats).\\ \hline
+⦏compactify_z_terms⦎ & true & When set, the type inferrer optimises the space occupied by the HOL types in the translation of Z terms into HOL. This space optimisation will typically reduce garbage-collection overheads, so it should normally be turned on. \\ \hline
+⦏subscript_z_schema_ops⦎ & false &
+When set, the schema operators that overload logical operators in standard Z must be distinguished with a subscript `s' (i.e.,
+=INLINEFT
+∀⋎s, ∃⋎s, ∧⋎s
+=TEX
+\ etc. \ are used for the schema operators, and
+=INLINEFT
+∀, ∃, ∧
+=TEX
+\ etc. are reserved for the logical operators).
+In terms of the grammar in section~\ref{Schema} below, this means that the second alternative in the production for $Schema2$ is disallowed as is the last alternative in the production for $SQuant$.
+\\\hline
+⦏pp_quote_z_strings⦎ & false &
+When set, the Z pretty printer inserts Z quotation symbols around
+object language strings. This is for use in implementing
+object languages that include Z but with variant conventions for
+strings.
+\\\hline
+\end{tabular}
+
+\end{centering}
+\caption{Additional Boolean Controls (Flags) for Z}
+\label{BooleanControlsZ}
+\end{table}
+
+\begin{table}
+\begin{centering}
+
+\begin{tabular}{|| l | l | p{3.35in} ||} \hline
+{\bf name} & {\bf default} & {\bf purpose} \\ \hline \hline
+⦏compactification_mask⦎ & 0 & Controls the compactification algorithms. \\ \hline
+⦏line_length⦎ & - & The number of characters per line to be used by the pretty printer. The default is the number of characters per line in the controlling terminal at the start of the session.\\ \hline
+⦏listing_indent⦎ & 2 & Used to control the formatting of theory listings.\\ \hline
+⦏pp_format_depth⦎ & \verb!~!1 & Influences the formatting produced by the pretty printer.\\ \hline
+⦏pp_top_level_depth⦎ & \verb!~!1 & Influences the formatting produced by the pretty printer.\\ \hline
+⦏RW_diagnostics⦎ & 0 & controls tracing from the Reader/Writer\\ \hline
+⦏thl_char_width⦎ & 8 & Used to control the formatting of theory listings.\\ \hline
+⦏thl_chars_per_tab⦎ & 5 & Used to control the formatting of theory listings.\\ \hline
+⦏thl_line_width⦎ & 13 & Used to control the formatting of theory listings.\\ \hline
+⦏thl_tab_width⦎ & 50 & Used to control the formatting of theory listings.\\ \hline
+⦏tactic_subgoal_warning⦎ & 20 & When the number of subgoals arising from a tactic application exceeds this value the subgoal package gives a warning before displaying the subgoals.
+\\ \hline
+⦏undo_buffer_length⦎ & 12 & Determines how many steps of a proof can be undone by the subgoal package (using `undo').\\ \hline
+\end{tabular}
+
+\end{centering}
+\caption{Integer Controls for HOL and Z}
+\label{IntegerControls}
+\end{table}
+
+\begin{table}
+\begin{centering}
+
+\begin{tabular}{|| l | l | p{3.35in} ||} \hline
+{\bf name} & {\bf default} & {\bf purpose} \\ \hline \hline
+⦏prompt1⦎ & \verb!":) "! &
+This is the prompt used by ProofPower to invite you to type some input. \\ \hline
+⦏variant_suffix⦎ & \verb!"'"! &
+This is the character used to decorate a variable name when alpha conversion takes place. \\ \hline
+\end{tabular}
+
+\end{centering}
+\caption{String Controls for HOL and Z}
+\label{StringControls}
+\end{table}
+
+\chapter{FORMAT OF ProofPower DIAGNOSTICS}
+
+The \Product\ specification and proof tools (i.e., the program
+\verb"pp", and its language-specific variants \verb"hol" and
+\verb"zed") report errors via the ML exception mechanism.
+The error messages have the following general format:
+
+=GFT
+<<Optional Explanatory Text>>
+Exception- <<Error Type>> * <<Text>> [<<Function>>.<<Number>>] * raised
+=TEX
+
+Some recoverable error conditions are treated as warnings. Depending
+on the value of the system control flag $ignore\_warnings$ and on whether
+you are running interactively, functions detecting such
+conditions give you the option to ask them to recover from
+the error. The format of a warning message has the general form.
+
+=GFT
+<<Optional Explanatory Text>>
+*** WARNING <<Number>> raised by <<Function>>: <<Text>>
+Do you wish to continue (y/n)?
+=TEX
+
+For example, the following input, which contains a syntax error:
+
+=GFT ProofPower Input
+:> ⌜(if a then b else )c⌝;
+=TEX
+\ produces the error message:
+
+=GFT ProofPower Output
+Syntax error in: ⌜ ( if a then b else <?> )
+) is not expected after ⌜ ( if ... then ... else
+Exception- Fail * Syntax error [HOL-Parser.19000] * raised
+=TEX
+Most of the functions for manipulating syntax, and carrying out proofs,
+do not produce any optional explanatory text. For example, the following
+input, in which an inference rule is applied to a term with the wrong type:
+
+=GFT ProofPower Input
+:> asm_rule⌜1 + 2⌝;
+=TEX
+\ produces the following error report:
+
+=GFT ProofPower Output
+Exception- Fail * ⌜1 + 2⌝ is not of type ⓣBOOL⌝ [asm_rule.3031] * raised
+=TEX
+
+As a final example, the most commonly seen warning condition is when you
+ask to delete an object from the current theory; for example, in a theory
+in which a number of constants and types have been defined, the input:
+
+=GFT ProofPower Input
+:> delete_type"REAL";
+=TEX
+\ might produce the warning message:
+
+=GFT ProofPower Output
+*** WARNING 12012 raised by delete_type: Deletion of REAL would require the
+ deletion of Constants:π, e; Type:REAL
+Do you wish to continue (y/n)?
+=TEX
+
+\ if you answer \verb"y", then $delete\_type$ will continue and delete
+the objects listed in the error message. If you answer \verb"n", it will
+raise an exception:
+
+=GFT ProofPower Output
+...
+Do you wish to continue (y/n)? n
+Exception- Fail * execution of delete_type abandoned [warn.10003] * raised
+=TEX
+
+
+In more detail, the various components of an error message are as follows:
+
+\begin{description}
+\item[Optional Explanatory Text]
+If present, this gives an extended description of the problem
+encountered. It is typically used by subsystems such as the parser or type
+inferrer, which use a custom layout for their error messages.
+If it is present then the $Text$ part of the message is normally a very
+brief summary.
+\item[Error Type]
+This may either be:
+$Fail$ indicating an error which the detecting function cannot recover
+form but which may, in some circumstances, sensibly be handled by the
+calling function.
+$Error$ indicating an unrecoverable error condition which should not be
+handled. Either the input is so seriously flawed that the condition should
+be reported to the user immediately, or an unexpected failure has occurred
+(and should be reported to ICL).
+\item[Text]
+In the absence of the optional explanatory text,
+this is the main description of the error condition.
+The text of the message is generated from an entry in an error message database,
+together with any details specific to the
+current failure - for instance, the input causing the failure.
+The reference manual entry for the function raising the error
+may contain further details of the cause of the error.
+\item[Function]
+This is the name of the function or subsystem raising the error.
+\item[Number]
+This is the error number, which is an index into the error
+message database (c.f. $get\-\_error\-\_message$).
+The reference manual entry of the function raising the exception
+will usually contain the original text of the message, and
+sometimes a description of the causes of that particular error.
+\end{description}
+
+It is intended that errors raised following the above format
+will either give the user a pointer to the solution of the
+problem, or, if necessary, assist support staff understanding
+the problem.
+If you contact ICL concerning a problem with \Product{},
+it will be helpful to have available the text of any
+relevant error messages. At least the function name and the
+error number should be noted.
+
+If an exception is raised with a format other than the above
+then it usually indicates a Standard ML programming error.
+For example, trying to evaluate $1\ div\ 0$
+will raise the Standard ML exception $Div$:
+
+=GFT ProofPower Output
+Exception- Div raised
+=TEX
+
+If problems arise with files, such as warnings of missing files or unexpectedly being denied read permission, you
+should first contact your system administrator to
+see whether the problem is due to the local installation.
+
+\chapter{CONCRETE SYNTAX NOTATION}\label{def001A}
+\include{def001A}
+
+\part{ProofPower-HOL}\label{PP-HOL}
+
+%\chapter{ProofPower-HOL IN THE METALANGUAGE}\label{usr005B}
+%\include{usr005B}
+
+\pagebreak
+\chapter{ProofPower-HOL CONCRETE SYNTAX}\label{usr005A}
+\include{usr005A}
+
+%\pagebreak
+%\chapter{THE ProofPower-HOL LOGIC}\label{usr005C}
+%\include{usr005C}
+
+%\part{Theorem Proving with ProofPower}
+%\chapter{THEOREM PROVING IN ProofPower-HOL}\label{usr005D}
+%\include{usr005D}
+
+%\include{usr005.drules}
+%\include{usr005.conv}
+%\include{usr005.tactics}
+%\include{usr005.see}
+
+\part{ProofPower-Z}
+\chapter{ProofPower-Z CONCRETE SYNTAX}\label{def007A}
+\include{def007A}
+
+\pagebreak
+\chapter*{REFERENCES}
+\addcontentsline{toc}{chapter}{REFERENCES}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\pagebreak
+\twocolumn
+\chapter*{INDEX}
+\addcontentsline{toc}{chapter}{INDEX}
+\small
+
+\printindex
+
+\end{document}
+
+

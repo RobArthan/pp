@@ -1,0 +1,70 @@
+=IGN
+********************************************************************************
+def001A.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% $RCSfile: def001A.doc,v $ $Date: 2002/10/17 15:10:58 $ $Revision: 1.4 $
+% def001A: to be included in def001, def007, usr005 etc.
+%
+=TEX
+The notation used for grammars in this document is BNF following the relevant British
+Standard~\cite{BS6154}.  The productions in a grammar are usually presented
+interleaved with narrative text and distinguished by
+a vertical bar in the left margin headed with the letters BNF.
+Comments within rules are bracketed with `$(*$' and `$*)$'.
+Defining occurrences of identifiers in grammars are usually shown
+in {\bf bold type} and have an entry in the index to this document.
+The subset of BNF used may be summarised as follows:
+
+A {\em grammar} consists of a non-empty list of what are referred to
+as productions. Each {\em production} in
+the grammar consists of: an identifier, referred to as the
+{\em non-terminal symbol} of the production, an equals sign, and a list
+of one or more alternatives followed by a semicolon. The production
+introduces (some of the) alternatives for the sentences of a {\em language}
+corresponding to the non-terminal symbol and determined by the grammar as a whole.
+Lists of alternatives are separated by vertical bars.
+The vertical bar denotes alternation (i.e. union of languages).
+An {\em alternative} is a comma-separated list of items. The comma denotes
+concatenation.
+=GFT BNF
+⦏Grammar⦎	= Identifier, `=`, Alternatives, `;`, {Identifier, `=`, Alternatives, `;`};
+⦏Alternatives⦎	= Alternative, {`|`, Alternative};
+⦏Alternative⦎	= Item, {`,`, Item};
+=TEX
+An {\em item} is a primary optionally followed by a subtraction sign and another
+item. The subtraction sign denotes set-theoretic difference of languages.
+A {\em primary} is either a list of alternatives enclosed in one
+of square brackets or braces, or it is an atom. Square brackets denote
+optional omission. Braces denote repetition (zero or more occurrences).
+=GFT BNF
+⦏Item⦎		= Primary, [`-`, Item];
+⦏Primary⦎	= `[`, Alternatives, `]`  |  `{`, Alternatives, `}`  |  Atom;
+=TEX
+An {\em atom} is a list of (one or more)
+alternatives enclosed in round brackets, or it is a special symbol or a simple symbol. The round brackets are used for grouping: either for
+clarity or to allow a list of alternatives or an item to be used as a primary.
+A {\em special symbol} is some arbitrary text enclosed in question marks.
+It is used where it is not desired to give a more detailed formal
+description of a construct.
+A {\em simple symbol} is an identifier or a string.
+The identifier is said to be a {\em terminal symbol} if it does not appear on the left-hand side of any production in the grammar (and so denotes a language specified by other means, e.g. another grammar).
+A string denote the language comprising just that string.
+
+=GFT BNF
+⦏Atom⦎		= `(`, Alternatives, `)`  |  Special  |  Simple;
+⦏Special⦎	= `?`, Text, `?`;
+⦏Simple⦎	= Identifier  |  String;
+=TEX
+The terminal symbols of this grammar are informally defined as follows:
+=GFT BNF
+⦏Text⦎		= ? Any string of characters not containing a question mark ?;
+⦏Identifier⦎	= ? An alphanumeric identifier ?;
+⦏String⦎		= ? A string of characters enclosed in quotation marks ?;
+=TEX
+

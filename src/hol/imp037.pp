@@ -1,0 +1,707 @@
+=IGN
+********************************************************************************
+imp037.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation for the Theory of Pairs}
+
+\def\AbstractText{The theory of pairs for ICL HOL is implemented.}
+
+\def\Reference{DS/FMU/IED/IMP037}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation for the Theory of Pairs}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP037}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Date: 2014/04/14 11:42:39 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2014/04/14 11:42:39 $
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthorisation{R.B.~Jones & FMU Manager}
+%% LaTeX2e port: \TPPabstract{The theory of pairs for ICL HOL is implemented.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.2 (1991/08/21) (21st August 1991)]
+First draft.
+\item [Issue 1.3 (1991/09/25) (21st September 1991)]
+Added some theorems, and structure wrapping.
+\item [Issue 1.4 (1991/10/02) (2nd October 1991)]
+Tidying up.
+\item [Issue 1.5 (1991/10/17) (17th October 1991)]
+Gained $fun\_rel\_thm$ from \cite{DS/FMU/IED/IMP038}.
+
+\item[Issue 1.6 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.7 (1992/01/27) (23rd January 1992)]
+$new\_axiom$, $simple\_new\_type\_defn$, $new\_type\_defn$
+all changed to take lists of keys, rather than single ones.
+\item [Issue 1.8 (1992/01/27) (27th January 1992)]
+Fixed a typo.
+\item [Issue 1.9 (1992/03/18) (18th March 1992)]
+Using $simple\_taut\_tac$ rather than $taut\_tac$.
+\item [Issue 1.10 (1992/04/14) (13th April 1992)]
+Changes due to CR0017.
+\item [Issue 1.12 (1992/05/26) (26th May 1992)]
+Renamings from version 1.5 of DS/FMU/IED/WRK038.
+\item[Issue 1.13 (1992/06/24) (24th June 1992)]
+Renamings from issue 1.6 of \cite{DS/FMU/IED/WRK038},
+mostly proof context name changes.
+\item[Issue 1.14 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.15 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.16 (2012/03/27)] Added the function {\em Pair}.
+\item[Issue 1.17 (2014/04/13)] Now uses
+=INLINEFT
+gen_new_spec
+=TEX
+\ rather than
+=INLINEFT
+new_spec
+=TEX
+.
+\item[Issue 1.18 (2014/04/14)] Added implementation of
+=INLINEFT
+new_spec1
+=TEX
+.
+\item[Issue 1.19 (2014/04/14)] Allowed for the normalisations that the higher-order matching conversions apply.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains an implementation of the theory of pairs.
+This is called for in \cite{DS/FMU/IED/HLD011}.
+The design is in \cite{DS/FMU/IED/DTD037}.
+
+\subsection{Deficiences}
+None known.
+\subsection{Introduction}
+\section{ABSTRACTION AND REPRESENTATION FUNCTIONS}
+When we use $new\_type\_definition$ a new definitional
+axiom is introduced of the following form.
+=GFT
+⊢ (∃ f.TYPE_DEFINITION Pred f)
+=TEX
+Here $Pred$ is the predicate which defines a subset of
+existing type which is equinumerous with the new type.
+The axiom asserts the existence of a 1-1 correspondence
+between the new type and that subset.
+To put the axiom to work it is usually convenient
+to use explicit abstraction and representation functions
+to enable facts about the predicate to be interpreted as
+facts about the new type.
+
+In this section we supply a theorem supporting a utility which, given a theorem
+of the above form, automatically defines abstraction
+and representation functions as constants with appropriate
+properties. In the Cambridge HOL system these properties
+comprised a list of half a dozen or more facts. We
+prefer to work with rather less.
+
+
+Our first objective is to prove the following theorem.
+We can then instantiate this to match a given new type axiom
+and so derive a theorem which can be used as an argument
+to $new\_spec$ to define abstraction and
+representation functions, say $abs$ and $rep$ with the
+relevant properties, viz. that $abs$ is a left inverse
+of $rep$, and that $rep$ is a left inverse of the
+restriction of $abs$ to the subset determined by $Pred$.
+Note that these properties imply that $abs$ is onto and
+that $rep$ is one-to-one.
+=GFT
+⊢ ∀ Pred.(∃ f.TYPE_DEFINITION Pred f) ⇒
+	(∃ abs rep⦁
+		(∀ a.abs (rep a) = a) ∧
+		 (∀ r⦁Pred r = (rep (abs r) = r)))
+=TEX
+=TEX
+To prove the above theorem it is convenient first to
+prove the following triviality:
+=GFT
+⊢ ∀f:'a→'b; x y⦁(f x = f y ⇒ x = y) ⇔ (f x = f y ⇔ x = y)
+=TEX
+The following structure adds material to theory ``misc''
+and creates a new theory ``pair''.
+=SML
+structure ⦏PairTheory⦎ : PairTheory = struct
+=TEX
+Before we prove this we make sure we are in the right
+theory.
+=SML
+val _ = open_theory "misc";
+val _ = push_merge_pcs ["'propositions",
+	"'simple_abstractions"];
+=TEX
+=SML
+val ⦏one_one_thm⦎ = save_thm("one_one_thm",(
+push_goal([], ⌜∀f:'a→'b⦁OneOne f ⇔ ∀x y⦁(f x = f y ⇔ x = y)⌝);
+a(lemma_tac ⌜∀f:'a→'b; x y⦁(f x = f y ⇒ x = y) ⇔ (f x = f y ⇔ x = y)⌝);
+a(REPEAT strip_tac THEN POP_ASM_T rewrite_thm_tac);
+a(asm_rewrite_tac[one_one_def]);
+pop_thm()));
+=TEX
+=SML
+val ⦏ext_thm⦎ = save_thm("ext_thm",(
+push_goal([], ⌜∀f g:'a→'b⦁f = g ⇔ (∀x ⦁ f x = g x)⌝);
+a(REPEAT strip_tac THEN TRY_T (asm_rewrite_tac[]));
+a(once_rewrite_tac(map eq_sym_rule[simple_∀_elim ⌜f:'a→'b⌝ η_axiom,
+				simple_∀_elim ⌜g:'a→'b⌝ η_axiom]));
+a(asm_rewrite_tac[]);
+pop_thm()));
+=TEX
+Our main theorem in this section may now be proved.
+=SML
+val ⦏type_lemmas_thm⦎ = save_thm ("type_lemmas_thm", (
+push_goal([], ⌜
+	∀pred ⦁ (∃f:'a→'b⦁TypeDefn pred f) ⇒
+	∃abs:'b→'a⦁∃rep:'a→'b⦁(∀a⦁abs(rep a) = a) ∧
+		 ∀r⦁pred r ⇔ rep(abs r) = r⌝);
+(* Expand some definitions and split goal up: *)
+	a (rewrite_tac[type_defn_def, one_one_thm, onto_def] THEN REPEAT strip_tac);
+(* Give witnesses for abstraction and representation functions: *)
+	a(simple_∃_tac(⌜λy:'b⦁εx:'a⦁ y = f x⌝) THEN simple_∃_tac (⌜f:'a→'b⌝));
+(* Split it up some more *)
+	a(rewrite_tac[] THEN REPEAT strip_tac);
+(* We get three subgoals. 1: *)
+	a(asm_rewrite_tac[]);
+	a(LEMMA_T ⌜∃x⦁a = x⌝ (accept_tac o eq_sym_rule o simple_∃_ε_rule));
+(* The lemma proves the goal, so only one subgoal *)
+	a(simple_∃_tac⌜a:'a⌝ THEN rewrite_tac[]);
+(* That completes 1. 2: *)
+	a(GET_NTH_ASM_T 1 (asm_ante_tac o concl) THEN asm_rewrite_tac[]);
+	a(⇒_T (accept_tac o eq_sym_rule o simple_∃_ε_rule));
+(* That completes 2. 3: *)
+	a(asm_rewrite_tac[] THEN REPEAT strip_tac);
+(* Only one subgoal *)
+	a(simple_∃_tac(⌜ε x⦁r = (f:'a→'b) x⌝));
+	a(asm_rewrite_tac[]);
+pop_thm()));
+=TEX
+\subsection{On Functional Relations}
+A set-theoretic proof relies on the identification of functions with
+single valued relations in set theory. To adapt it to HOL we need
+a theorem to justify this line of argument.
+The following theorem does just that by allowing
+us to rewrite problems about function
+existence in terms of two-place relations and so facilitates the use
+of standard set-theoretic means of constructing functions.
+=SML
+val ⦏fun_rel_thm⦎ = save_thm("fun_rel_thm",(
+push_goal([], ⌜∀r:'a→'b→BOOL⦁
+	(∃f⦁∀x y⦁f x = y ⇔ r x y) ⇔ (∀x⦁∃y⦁r x y ∧ ∀z⦁r x z ⇒ z = y)
+⌝);
+(*
+=TEX
+=SML
+*)
+a(REPEAT strip_tac);
+(* 2 subgoals 1: *)
+a(simple_∃_tac⌜(f:'a→'b)x⌝);
+a(conv_tac (ONCE_MAP_C eq_sym_conv) THEN
+	LEMMA_T ⌜r x ((f:'a→'b)x):BOOL⌝ (fn th => asm_rewrite_tac[th]));
+(* Above leaves only the lemma to do: *)
+a(POP_ASM_T (rewrite_thm_tac o conv_rule (ONCE_MAP_C eq_sym_conv)));
+(* Completes 1. 2: *)
+a(simple_∃_tac ⌜λx:'a⦁εy:'b⦁r x y⌝ THEN conv_tac all_simple_β_conv);
+a(REPEAT strip_tac);
+(* 2 subgoals: 2.1: *)
+a(LEMMA_T ⌜∃y:'b⦁r (x:'a)y⌝ (ante_tac o simple_∃_ε_rule)
+	THEN GET_NTH_ASM_T 2 (strip_asm_tac o simple_∀_elim⌜x:'a⌝));
+(* 2 subgoals. 2.1.1: *)
+a(simple_∃_tac⌜y':'b⌝ THEN asm_rewrite_tac[]);
+(* Completes 2.1.1. 2.1.2: *)
+a(asm_rewrite_tac[]);
+(* Completes 2.1. 2.2: *)
+a(LEMMA_T ⌜∃y':'b⦁r (x:'a)y'⌝ (asm_tac o simple_∃_ε_rule));
+(* 2 subgoals. 2.2.1: *)
+a(simple_∃_tac⌜y:'b⌝ THEN asm_rewrite_tac[]);
+(* Completes 2.2.1. 2.2.2: *)
+a(GET_NTH_ASM_T 3 (strip_asm_tac o simple_∀_elim⌜x:'a⌝));
+a(TOP_ASM_T (strip_asm_tac o simple_∀_elim⌜εy:'b⦁ r (x:'a) y⌝));
+a(GET_NTH_ASM_T 2 (strip_asm_tac o simple_∀_elim⌜y:'b⌝));
+a(asm_rewrite_tac[]);
+(*
+=TEX
+=SML
+*)
+pop_thm()
+));
+=TEX
+\section{THE THEORY $PAIR$}
+We can now use the functions of the earlier sections
+to help use define the theory of pairs.
+
+The basic idea is to represent the product type $A × B$
+as the singleton subsets in the power set $(A × B) → bool$,
+which we can represent as $A → B → bool$.
+=SML
+val _ = new_theory "pair";
+val _ = declare_infix(200, "comma");
+=TEX
+=SML
+val ⦏is_pair_rep_def⦎ = gen_new_spec(["⦏IsPairRep⦎","is_pair_rep_def"], (
+push_goal([⌜	IsPairRep:('a → 'b → BOOL) → BOOL =
+		(λp:'a→'b→BOOL ⦁ ∃a b ⦁ ∀x y ⦁ p x y ⇔ x = a ∧ y = b)⌝
+], ⌜	∃ ($comma):'a → 'b → ('a → 'b → BOOL); fst; snd⦁
+		(∀x y⦁	IsPairRep (x comma y)
+		 ∧	fst(x comma y) = x
+		 ∧	snd(x comma y) = y)
+	∧	(∀x y a b⦁ (a comma b) = (x comma y) ⇔ a = x ∧ b = y)
+	∧	(∀p⦁ IsPairRep p ⇒ (fst p comma snd p) = p)
+⌝);
+a (asm_rewrite_tac[] THEN POP_ASM_T discard_tac);
+a (simple_∃_tac ⌜λa:'a; b:'b ⦁ λx y ⦁ x = a ∧ y = b⌝);
+a (simple_∃_tac ⌜λp:'a→'b→BOOL ⦁ εx ⦁ ∃ y ⦁ p x y⌝);
+a (simple_∃_tac ⌜λp:'a→'b→BOOL ⦁ εy ⦁ ∃ x ⦁ p x y⌝);
+a (conv_tac (all_simple_β_conv) THEN REPEAT strip_tac);
+(* 7 subgoals: 1: *)
+a (simple_∃_tac ⌜x:'a⌝ THEN simple_∃_tac ⌜y:'b⌝ THEN rewrite_tac[]);
+(* 2: *)
+a(LEMMA_T ⌜∃x':'a; y':'b ⦁ x' = x ∧ y' = y⌝ (strip_asm_tac o simple_∃_ε_rule));
+a (simple_∃_tac ⌜x:'a⌝ THEN simple_∃_tac ⌜y:'b⌝ THEN rewrite_tac[]);
+(* 3 is very similar to 2: *)
+a(LEMMA_T ⌜∃y':'b; x':'a ⦁ x' = x ∧ y' = y⌝ (strip_asm_tac o simple_∃_ε_rule));
+a (simple_∃_tac ⌜y:'b⌝ THEN simple_∃_tac ⌜x:'a⌝ THEN rewrite_tac[]);
+(* 4: *)
+a (conv_tac eq_sym_conv);
+a (POP_ASM_T (strip_asm_tac o rewrite_rule[] o all_simple_β_rule o
+		app_arg_rule ⌜y:'b⌝ o app_arg_rule ⌜x:'a⌝));
+(* 5 is very similar to 4: *)
+a(conv_tac eq_sym_conv);
+a (POP_ASM_T (strip_asm_tac o rewrite_rule[] o all_simple_β_rule o
+		app_arg_rule ⌜y:'b⌝ o app_arg_rule ⌜x:'a⌝));
+(* 6: *)
+a (DROP_ASMS_T (rewrite_tac o map eq_sym_rule));
+(* 7: *)
+a (asm_rewrite_tac[ext_thm]);
+a(LEMMA_T ⌜∃x':'a; y':'b ⦁ x' = a ∧ y' = b⌝
+			(STRIP_THM_THEN rewrite_thm_tac o simple_∃_ε_rule));
+(* Two subgoals. 7/1: *)
+a (simple_∃_tac ⌜a:'a⌝ THEN simple_∃_tac ⌜b:'b⌝ THEN rewrite_tac[]);
+(* 7/2: *)
+a(LEMMA_T ⌜∃y':'b;  x':'a⦁ x' = a ∧ y' = b⌝
+			(STRIP_THM_THEN rewrite_thm_tac o simple_∃_ε_rule));
+(* The rewriting proves the goal, leaving only the lemma: *)
+a (simple_∃_tac ⌜b:'b⌝ THEN simple_∃_tac ⌜a:'a⌝ THEN rewrite_tac[]);
+pop_thm()));
+=TEX
+We can now declare the type of pairs:
+=SML
+val _ = declare_infix(150, "×");
+val _ = declare_terminator"×";
+=TEX
+=SML
+val ⦏×_def⦎ = new_type_defn(["×", "×_def"], "×", ["'a", "'b"], (
+push_goal([], ⌜∃p:('a → 'b → BOOL)⦁ IsPairRep p⌝);
+a(strip_asm_tac is_pair_rep_def);
+a(simple_∃_tac ⌜(a:'a comma b:'b):'a → 'b → BOOL⌝ THEN asm_rewrite_tac[]);
+pop_thm()));
+=TEX
+=SML
+val _ = declare_infix(150, ",");
+=TEX
+$gen\_new\_spec$ may now be used to introduce the basic operations
+on pairs.
+This is slightly more complicated than with $new\_spec$, since we cannot
+define the constructor and destructors in one step.
+First we prove that the constructor and destructors exist.
+=TEX
+=SML
+val ⦏pair_ops_exist_lemma⦎ = (
+push_goal([], ⌜
+	∃ ($,):'a → 'b → ('a × 'b); fst; snd ⦁
+		(∀x y ⦁ fst(x, y) = x ∧ snd(x, y) = y)
+	∧	(∀x y a b ⦁ (a, b) = (x, y) ⇔ a = x ∧ b = y)
+	∧	(∀p ⦁ (fst p, snd p) = p)
+⌝);
+(* We use the type lemmas to bring abstraction and representation functions *)
+(* for the new type into the assumptions: *)
+a (strip_asm_tac (simple_⇒_match_mp_rule type_lemmas_thm ×_def));
+(* Now we use the definition of IsPairRep to bring representations *)
+(* of the three operations into the assumptions: *)
+a (strip_asm_tac is_pair_rep_def);
+(* Now we can introduce the witnesses: *)
+a (simple_∃_tac ⌜(λx y⦁ abs((x comma y):'a→'b→BOOL)) : 'a → 'b → 'a×'b⌝);
+a (simple_∃_tac ⌜(λp⦁ (fst:('a→'b→BOOL)→'a) (rep p)) : 'a × 'b → 'a⌝);
+a (simple_∃_tac ⌜(λp⦁ (snd:('a→'b→BOOL)→'b) (rep p)) : 'a × 'b → 'b⌝);
+(* It is convenient to rewrite one of the assumptions with another: *)
+a (GET_NTH_ASM_T 4 (fn th => DROP_NTH_ASM_T 3 (asm_tac o rewrite_rule[th])));
+(* Now simplify strip the problem up *)
+a (asm_rewrite_tac[] THEN REPEAT strip_tac);
+(* 4 subgoals. 1: *)
+a (lemma_tac ⌜
+	(rep:'a×'b→'a→'b→BOOL) ((abs:('a→'b→BOOL)→'a×'b) ((a:'a) comma (b:'b)))
+	= rep(abs(x comma y))⌝);
+(* 1.1: *)
+a(POP_ASM_T rewrite_thm_tac);
+(* 1.2: *)
+a (TOP_ASM_T (asm_ante_tac o concl) THEN POP_ASM_T(fn _ => asm_rewrite_tac[]
+	THEN simple_taut_tac));
+(* 2 is very similar to 1: *)
+a (lemma_tac ⌜
+	(rep:'a×'b→'a→'b→BOOL) ((abs:('a→'b→BOOL)→'a×'b) ((a:'a) comma (b:'b)))
+	= rep(abs(x comma y))⌝);
+a(POP_ASM_T rewrite_thm_tac);
+(* Does lemma *)
+a (TOP_ASM_T (asm_ante_tac o concl) THEN
+		POP_ASM_T(fn _ => asm_rewrite_tac[] THEN simple_taut_tac));
+(* 3: *)
+a (GET_NTH_ASM_T 5 (asm_ante_tac o concl) THEN asm_rewrite_tac[]);
+(* 4: *)
+a (lemma_tac ⌜IsPairRep ((rep:'a×'b→'a→'b→BOOL) p)⌝);
+(* 4.1: *)
+a(asm_rewrite_tac[]);
+(* Does 4.1. 4.2: *)
+a (lemma_tac ⌜
+	((fst (rep p):'a) comma (snd (rep p):'b))
+	= (rep:'a×'b→'a→'b→BOOL) p⌝);
+(* 4.2.1: *)
+a (GET_NTH_ASM_T 3 (strip_asm_tac o simple_∀_elim⌜(rep:'a×'b→'a→'b→BOOL) p⌝));
+(* 4.2.2: *)
+a (asm_rewrite_tac[]);
+pop_thm());
+=TEX
+We now set up function that simulatues $new\_spec$ with $gen\_new\_spec$
+in the special of defining a single constant.
+This uses the following template theorem.
+=SML
+val ⦏new_spec_lemma⦎ = (
+push_goal([], ⌜	∀p : 'a → BOOL⦁ $∃ p ⇒ ∀x⦁ x = $ε p ⇒ p x⌝);
+a(rewrite_tac[∃_def] THEN REPEAT strip_tac THEN once_asm_rewrite_tac[] THEN strip_tac);
+pop_thm());
+=TEX
+=SML
+fun ⦏simple_new_spec⦎  (keys : string list, cname : string, thm : THM) : THM = (
+	let	val thm1 = simple_⇒_match_mp_rule1 new_spec_lemma thm;
+		val ty = (type_of o fst o dest_simple_∀ o concl) thm1;
+		val thm2 = simple_∀_elim (mk_var(cname, ty)) thm1;
+		val thm3 = (conv_rule simple_β_conv o undisch_rule) thm2;
+	in	gen_new_spec(keys, thm3)
+	end
+);
+=TEX
+We choose the keys for the definitions so that $get\_spec$ will behave as it did
+when $new\_spec$ was used to define the constructor and destructors simultaneously.
+=SML
+val ⦏comma_def⦎ : THM = simple_new_spec (["comma_def"], ",", pair_ops_exist_lemma);
+val ⦏fst_def⦎ : THM = simple_new_spec (["fst_def"], "Fst", comma_def);
+val ⦏snd_def⦎ : THM = simple_new_spec ([",", "Fst", "Snd", "pair_ops_def", "snd_def"], "Snd", fst_def);
+val ⦏pair_ops_def⦎ : THM = snd_def;
+=TEX
+\subsection{$Curry$ and $Uncurry$}
+=SML
+val ⦏uncurry_def⦎ = simple_new_spec(["Uncurry","uncurry_def"], "Uncurry", (
+push_goal([], ⌜
+	∃ Uncurry : ('a → 'b → 'c) → ('a × 'b → 'c)⦁ ∀ f x y⦁
+	Uncurry f (x, y) = f x y
+⌝);
+a(simple_∃_tac ⌜λf:'a → 'b → 'c; p⦁f (Fst p) (Snd p)⌝);
+a(rewrite_tac[pair_ops_def]);
+pop_thm()));
+=TEX
+=SML
+val ⦏curry_def⦎ = simple_new_spec(["Curry","curry_def"], "Curry", (
+push_goal([], ⌜
+	∃ Curry : ('a × 'b → 'c) → ('a → 'b → 'c)⦁ ∀ f x y⦁
+	Curry f x y = f (x, y)
+⌝);
+a(simple_∃_tac ⌜λf:'a × 'b → 'c; x y⦁f (x, y)⌝);
+a(rewrite_tac[pair_ops_def]);
+pop_thm()));
+=TEX
+=SML
+val ⦏pair_def⦎ = simple_new_spec(["Pair","pair_def"], "Pair", (
+push_goal([], ⌜
+	∃ Pair : ('a → 'b) × ('a → 'c) → 'a → 'b × 'c⦁ ∀ f g⦁
+	Pair(f, g) = (λx⦁ (f x, g x))
+⌝);
+a(simple_∃_tac ⌜λ(f:'a → 'b, g : 'a → 'c)⦁ (λx⦁ (f x, g x))⌝);
+a(rewrite_tac[uncurry_def]);
+pop_thm()));
+=TEX
+\subsection{A Portmanteau Theorem}
+In implementing the following, due to historical reasons,
+it happens to be convenient to nest invocations
+of the subgoal package.
+=SML
+val ⦏pair_clauses⦎ = save_thm("pair_clauses",(
+push_goal([],⌜∀ (x: 'a) (y: 'b) (a:'a) (b:'b)
+	(p:'a × 'b)
+	(fu : 'a → 'b → 'c)
+	(fc : ('a × 'b) → 'c)
+	(fg : ('a → 'b) × ('a → 'c)) ⦁
+	Fst (x, y) = x ∧
+	Snd (x, y) = y ∧
+	((a, b) = (x, y) ⇔ a = x ∧ b = y) ∧
+	(Fst p, Snd p) = p ∧
+	Curry fc x y = fc (x, y) ∧
+	Uncurry fu (x, y) = fu x y ∧
+	Uncurry fu p = fu (Fst p) (Snd p) ∧	
+	((a,b) = p ⇔ (a = Fst p ∧ b = Snd p)) ∧
+	(p = (a,b)  ⇔ (Fst p = a ∧ Snd p = b)) ∧
+	Pair fg x = (Fst fg x, Snd fg x)⌝);
+a(rewrite_tac [
+	pair_ops_def,
+	curry_def,
+	uncurry_def,
+(*
+=TEX
+An alternative form for the rewriting $uncurry$, that
+will only be rewritten with if $uncurry\_def$ doesn't match:
+=SML
+*)
+(push_goal([],⌜∀ (f:'a → 'b → 'c) (x:'a × 'b) ⦁
+	Uncurry f x = f (Fst x) (Snd x)⌝);
+a(REPEAT strip_tac);
+a(once_rewrite_tac[eq_sym_rule(simple_∀_elim ⌜x:'a × 'b⌝
+	(hd(rev(strip_∧_rule (get_defn "pair" "Fst")))))]);
+a(rewrite_tac[uncurry_def, pair_ops_def]);
+pop_thm()),
+(*
+=TEX
+An alternative form for the rewriting of equalities on pairs, that
+will only be rewritten with if the relevant clause of $pair\_ops\_def$ doesn't match:
+=SML
+*)
+(push_goal([],⌜∀ (a:'a) (b:'b) z ⦁
+	((a,b) = z ⇔ (a = Fst z ∧ b = Snd z)) ∧
+	(z = (a,b)  ⇔ (Fst z = a ∧ Snd z = b))⌝);
+a(REPEAT simple_∀_tac THEN once_rewrite_tac
+	[eq_sym_rule(simple_∀_elim ⌜z:'a × 'b⌝
+	(hd(rev(strip_∧_rule (get_defn "pair" "Fst")))))]);
+a(rewrite_tac[pair_ops_def]);
+pop_thm()),
+(*
+=TEX
+=SML
+*)
+(push_goal([],⌜∀ fg : ('a → 'b) × ('a → 'c); x:'a ⦁
+	Pair fg x = (Fst fg x, Snd fg x)⌝);
+a(REPEAT strip_tac);
+a(once_rewrite_tac[eq_sym_rule(simple_∀_elim ⌜fg:('a → 'b) × ('a → 'c)⌝
+	(inst_type_rule[(ⓣ('a → 'b)⌝, ⓣ'a⌝), (ⓣ('a → 'c)⌝, ⓣ'b⌝)]
+		(hd(rev(strip_∧_rule (get_defn "pair" "Fst"))))))]);
+a(rewrite_tac[pair_def, pair_ops_def]);
+pop_thm())
+]);
+(*
+=TEX
+Round this lot off:
+=SML
+*)
+pop_thm())); (* end of proof of theorem pair_clauses *)
+=TEX
+\subsection{Tidying Up}
+We don't want to see certain things on the theory listing
+after the creation of the theory of pairs.
+Thus the following:
+=SML
+val _ = declare_nonfix "comma";
+=TEX
+\subsection{End of Structure}
+=SML
+val _ = pop_pc();
+end; (* of structure PairTheory *)
+open PairTheory;
+=TEX
+\section{COMPLETION OF KERNEL INTERFACE}
+We can now implement a working
+=INLINEFT
+new_spec1
+=TEX
+\ completing the functionality of the kernel interface.
+=SML
+structure ⦏KernelInterface⦎ : KernelInterface = struct
+	open KernelInterface;
+=TEX
+=SML
+val ⦏new_spec1_lemma⦎ : THM = (
+set_goal([], ⌜∀p⦁ (∃x y⦁ p x y) ⇔ (∃z⦁ p (Fst z) (Snd z))⌝);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(simple_∃_tac⌜(x, y)⌝ THEN asm_rewrite_tac[pair_ops_def]);
+(* *** Goal "2" *** *)
+a(MAP_EVERY simple_∃_tac [⌜Fst z⌝, ⌜Snd z⌝] THEN asm_rewrite_tac[]);
+pop_thm()
+);
+=TEX
+=SML
+fun ⦏mk_fst⦎ (t : TERM) : TERM = (
+	let	val tys = (snd o dest_ctype o type_of) t;
+		val ty_a = hd tys;
+		val ty_b = hd(tl tys);
+		val fst_ty = mk_→_type(mk_ctype("×", [ty_a, ty_b]), ty_a)
+		val f = mk_const("Fst", fst_ty);
+	in	mk_app(f, t)
+	end
+);
+=TEX
+=SML
+fun ⦏mk_snd⦎ (t : TERM) : TERM = (
+	let	val tys = (snd o dest_ctype o type_of) t;
+		val ty_a = hd tys;
+		val ty_b = hd(tl tys);
+		val snd_ty = mk_→_type(mk_ctype("×", [ty_a, ty_b]), ty_b)
+		val f = mk_const("Snd", snd_ty);
+	in	mk_app(f, t)
+	end
+);
+=TEX
+The following is needed to restore $\alpha$-redexes that have removed by
+the normalisations carried out after higher order matching.
+=SML
+val ⦏η_redex_thm⦎ = conv_rule (ONCE_MAP_C eq_sym_conv) η_axiom;
+fun ⦏η_redex_conv⦎ (pat : TERM) : CONV = (fn tm =>
+	(case (dest_simple_term pat, dest_simple_term tm) of
+		(App (f, x), _) => RATOR_C (η_redex_conv f) THEN_C RAND_C (η_redex_conv x)
+	|	(Simpleλ(_, b), Simpleλ _) => SIMPLE_λ_C (η_redex_conv b)
+	|	(Simpleλ(v, b), _) =>
+			let	val (f, _) = dest_app b;
+			in	η_redex_conv f THEN_C simple_eq_match_conv η_redex_thm THEN_C
+					simple_α_conv (fst(dest_var v))
+			end
+	|	_ => id_conv) tm
+);
+=TEX
+=SML
+fun ⦏new_spec1⦎ (keys : string list, cnames : string list, thm : THM) : THM = (
+	let	val n = length cnames;
+		val (bvs, p) = (strip_∃ o concl) thm;
+		val _ = if n = 0 then fail "new_spec1" 12041 [] else ();
+		val _ =	if	length bvs < n orelse any bvs (not o is_var)
+			then	fail "new_spec1" 6060 [fn () => string_of_thm thm,
+					fn () => string_of_int n]
+			else if	(not o all_distinct (op =)) cnames
+			then	fail "new_spec1" 12042 []
+			else	();
+		fun conv n = (fn tm =>
+			(if	n <= 1
+			then	id_conv
+			else	(RAND_C o SIMPLE_λ_C) (conv (n - 1)) THEN_C
+					simple_ho_eq_match_conv new_spec1_lemma) tm
+		);
+		val pattern = list_mk_∃(bvs from n, p);
+		val thm1 = conv_rule (conv n THEN_C
+			(RAND_C o SIMPLE_λ_C) (η_redex_conv pattern)) thm;
+		val (z, p_sigma) = (dest_∃ o concl) thm1;
+		val ch_p_sigma = mk_ε(z, p_sigma);
+		fun mk_projs n tm = (
+			if	n <= 1
+			then	[tm]
+			else	mk_fst tm :: mk_projs (n-1) (mk_snd tm)
+		);
+		val cn_ts = combine cnames (mk_projs n ch_p_sigma);
+		fun mk_param_thm (cn, t) = (
+			let	val v = mk_var(cn, type_of t);
+				val v_eq_t = mk_eq(v, t);
+				val thm = (eq_sym_rule o asm_rule) v_eq_t;
+			in	(thm, v)
+			end
+		);
+		val param_thms = map mk_param_thm cn_ts;
+		val thm2 = simple_∃_ε_rule thm1;
+		val subs = map (fn (cn, v) => (mk_var(cn, type_of v), v))
+					(combine cnames (bvs to (n-1)));
+		val template = subst subs pattern;
+		val thm3 = subst_rule param_thms template thm2;
+		val thm4 = gen_new_spec(keys, thm3);
+	in	thm4
+	end
+);
+=TEX
+=SML
+end (* of structure KernelInterface *);
+open KernelInterface;
+=TEX
+\newpage
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+

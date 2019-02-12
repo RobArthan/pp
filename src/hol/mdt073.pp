@@ -1,0 +1,284 @@
+=IGN
+********************************************************************************
+mdt073.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  $Id: mdt073.doc,v 1.8 2003/09/30 13:18:06 rda Exp rda $ ℤ
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for the Theory of Finite Sets}
+
+\def\AbstractText{A set of module tests are given for the tactics associated with the theory of finite sets. It also checks that the theory design has been met by the theory implementation.}
+
+\def\Reference{DS/FMU/IED/MDT073}
+
+\def\Author{R.B.Jones}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: \TPPtitle{Module Tests for the Theory of Finite Sets}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Module Tests for the Theory \cr
+%% LaTeX2e port: of Finite Sets}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT073}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.8 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSdate{\FormatDate{$Date: 2003/09/30 13:18:06 $ %
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPdate{\SCCSdate}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{ML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{R.B.Jones & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{K.Blackburn & WIN01\\D.J.~King & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & Project Manager}
+%% LaTeX2e port: \TPPabstract{A set of module tests are given for the
+%% LaTeX2e port: tactics associated with the
+%% LaTeX2e port: theory of finite sets.
+%% LaTeX2e port: It also checks that the theory design has been met by the theory implementation.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. 1992
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{Document Control}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item[Issue 1.5 (1993/02/22) (22nd February 1993)]
+
+This is the setissue draft of the document.
+
+\item[Issue 1.6 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.7 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.8 (2003/09/30)] Added tests for the induction tactic.
+\item[Issue 1.9 (2004/01/16)] Added test for bug fix.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+Tests fleshed out to a full coverage.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the functions (conversions ,etc) associated with the theory of finite sets, required by \cite{DS/FMU/IED/DTD073}.
+The design is in \cite{DS/FMU/IED/DTD073} and it is implemented in \cite{DS/FMU/IED/IMP073}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module testing of the function material given a design in \cite{DS/FMU/IED/DTD072}, following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+
+The testing uses material from \cite{DS/FMU/IED/DTD013}.
+
+\subsubsection{Dependencies}
+This document is derived from the detailed design in \cite{DS/FMU/IED/DTD072}, and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP072}.
+It also requires a theory check file, ``dtd073.tch'', created by \[doctch\ dtd073\]
+\subsubsection{Deficiencies}
+Only definitions are included at this point.
+\section{INITIALISATION}
+Initialise the test package:
+=SML
+use_file "dtd013";
+use_file "imp013";
+init_mt_results();
+open_theory "fin_set";
+repeat drop_main_goal;
+=TEX
+=SML
+fun list_eq (eq:'a * 'a -> bool) ((a :: x), (b :: y)) : bool = (
+	eq(a,b) andalso list_eq eq (x, y)
+) | list_eq eq ([], []) = true
+| list_eq _ _ = false;
+=TEX
+\section{TESTING FUNCTIONS OF THE DESIGN}
+\section{CHECK THE THEORY DESIGN}
+=SML
+use_file "dtd073.tch";
+store_mt_results mt_run [
+("theory design of fin_set",
+	theory_check_success,
+	(),
+	true)];
+=TEX
+\section{CHECK THE PROOF CONTEXTS}
+=GFT
+local
+fun map_tactic t = map (fn x => (
+		let	val a = push_pc "finset_ext";
+			val res = tac_proof(([],x),t);
+			val b = pop_pc()
+		in (snd o dest_thm) res
+		end))
+in
+local
+val terms1 =
+	[
+		
+	];
+in
+val it =
+store_mt_results (mt_runf (list_eq(op =$)))[
+("proof context finset_ext_epc 1",
+	map_tactic contr_tac,
+	terms1,
+	terms1)];
+val it =
+store_mt_results (mt_runf (list_eq(op =$)))[
+("proof context finset_ext_epc 2",
+	map_tactic (REPEAT strip_tac),
+	terms1,
+	terms1)]
+end;
+local
+val terms2 =
+	[	
+	];
+in
+val it =
+store_mt_results (mt_runf (list_eq(op =$))) [
+("proof context finset_ext_epc 3",
+	map_tactic contr_tac,
+	terms2,
+	terms2)];
+val it =
+store_mt_results (mt_runf (list_eq(op =$))) [
+("proof context finset_ext_epc 4",
+	map_tactic (REPEAT strip_tac),
+	terms2,
+	terms2)]
+end;
+end;
+=TEX
+Check the induction tactic. It's already been used several times in the implementation document.
+We just make sure it's doing the type instantiation right \ldots
+=SML
+set_goal([], ⌜∀x : ℕ SET⦁ x ∈ Finite ⇒ ∃l⦁x = Elems l⌝);
+a(REPEAT strip_tac THEN finite_induction_tac⌜x : ℕ SET⌝);
+(* *** Goal "1" *** *)
+a(∃_tac⌜[]⌝ THEN rewrite_tac[elems_def]);
+(* *** Goal "2" *** *)
+a(∃_tac⌜Cons x'  l ⌝ THEN asm_rewrite_tac[elems_def]);
+val thm = pop_thm();
+set_goal([], ⌜∀x : ℕ SET⦁ x ∈ Finite ⇒ ∃l⦁x = Elems l⌝);
+store_mt_results
+mt_run [
+ ("73.1.1", a, (accept_tac thm), ())
+];
+=TEX
+=SML
+set_goal([], ⌜∀a b⦁ a ∈ Finite ∧ b ⊆ a ⇒ b ∈ Finite⌝);
+a(REPEAT strip_tac);
+store_mt_results
+mt_run_fail [
+ ("73.2.1", a, finite_induction_tac  ⌜a⌝,  gen_fail_msg "finite_induction_tac" 73003 [string_of_term ⌜a⌝ ])
+];
+a(TOP_ASM_T ante_tac);
+store_mt_results
+mt_run_fail [
+ ("73.2.2", a, finite_induction_tac  ⌜a⌝,  gen_fail_msg "finite_induction_tac" 73004 [string_of_term ⌜a⌝ ])
+];
+a(STRIP_T discard_tac THEN DROP_NTH_ASM_T 2 ante_tac);
+store_mt_results
+mt_run_fail [
+ ("73.2.3", a, finite_induction_tac  ⌜a⌝,  gen_fail_msg "finite_induction_tac" 73002 [ ])
+];
+store_mt_results
+mt_run_fail [
+ ("73.2.4", finite_induction_tac,  ⌜1⌝,  gen_fail_msg "finite_induction_tac" 73001 [ string_of_term⌜1⌝])
+];
+drop_main_goal();
+=TEX
+\ldots and that the bug it once had  in its processing of the assumptions is fixed:
+
+=SML
+set_goal([], ⌜∀x : ℕ SET⦁ x ∈ Finite ⇒ y ∈ Finite ⇒ ∃l⦁x = Elems l⌝);
+a(REPEAT strip_tac);
+a(finite_induction_tac⌜x : ℕ SET⌝);
+(* *** Goal "1" *** *)
+a(∃_tac⌜[]⌝ THEN rewrite_tac[elems_def]);
+(* *** Goal "2" *** *)
+a(∃_tac⌜Cons x'  l ⌝ THEN asm_rewrite_tac[elems_def]);
+val thm = pop_thm();
+set_goal([], ⌜∀x : ℕ SET⦁ x ∈ Finite ⇒ y ∈ Finite ⇒ ∃l⦁x = Elems l⌝);
+store_mt_results
+mt_run [
+ ("73.3.1", a, (accept_tac thm), ())
+];
+=TEX
+\section{END OF TESTS}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+\end{document}
+
+
+

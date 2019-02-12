@@ -1,0 +1,28 @@
+=IGN
+********************************************************************************
+def001E.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+To be included as the section `TYPE ABBREVIATIONS'
+=IGN
+ ℤ $Revision: 1.6 $ $RCSfile: def001E.doc,v $ $Date: 2002/10/17 16:20:01 $
+=TEX
+To ease the use of complicated types, a name (with a possibly empty
+list of {\em type parameters})
+may be declared as a {\em type abbreviation}.
+A name which has been declared
+as a type abbreviation may be used either
+as a {\em Name} in the production for $Ty$ in section~\ref{Types}
+above, or, if an infix declaration for the name is in force, as an
+$InTyOp$.
+
+For example, if the name $auto$, with the single parameter
+$'a$ had been declared as an abbreviation for the function
+type $'a → 'a$. Then $(bool)auto$ would denote the same type
+as $bool→bool$.
+

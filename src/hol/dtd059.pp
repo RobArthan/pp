@@ -1,0 +1,466 @@
+=IGN
+********************************************************************************
+dtd059.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  dtd059.doc  ℤ $Revision: 1.20 $ $RCSfile: dtd059.doc,v $ $Date: 2005/12/16 10:34:27 $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of Product Types}
+
+\def\AbstractText{This document contains the detailed design of the tools providing product types, both labelled and unlabelled.}
+
+\def\Reference{DS/FMU/IED/DTD059}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design of Product Types}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD059}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.20 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D. Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design
+%% LaTeX2e port: of the tools providing product types, both labelled and unlabelled.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item[Issue 1.1 (1991/12/13)]
+First version.
+\item[Issue 1.2 (1991/12/20)]
+Changes after RDA comments.
+\item [Issue 1.3 (1992/01/15)]
+Changes during testing.
+\item[Issue 1.4 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.5 (1992/02/11), \FormatDate{92/02/11} ] Added
+the HOL labelled product recogniser.
+\item[Issues 1.6 (1992/02/13), 1.7 (1992/02/13), \FormatDate{92/02/12}]
+Reaction to comments.
+\item [Issue 1.8 (1992/03/26) (26th March 1992)]
+Changed to use proof context material of issue 1.13 of \cite{DS/FMU/IED/DTD051}.
+\item[Issue 1.9 (1992/05/14) (14 May 1992)] Use correct quotation symbols.
+\item[Issue 1.10 (1992/05/20) (20th May 1992)]
+Improved checks of theory caching.
+Changed $∧$ structure in results.
+\item [Issue 1.11 (1992/06/04) (3rd June 1992)]
+Corrected message 59017.
+\item [Issue 1.12 (1992/07/07) (6th July 1992)]
+Added message 59018.
+\item [Issue 1.13 (1992/11/20) (20th November 1992)]
+Make cache mechanisms more robust.
+\item [Issue 1.14 (1992/12/18) (18th December 1992)] Added $get\_valid\_cache\_theories$.
+\item [Issues 1.15 (2002/01/29), 1.16 (2002/03/08)] Improved error messages.
+\item[Issue 1.18 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.19 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.20 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.21 (2006/06/13)] {\em force\_get\_cache\_theory} now creates a new cache theory rather than using the current theory if existing cache theories are all unusable.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None known.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+Tools for introducing HOL product types are
+called for to support introduction of Z schemas, etc, called for in \cite{DS/FMU/IED/HLD016}.
+The tools are directly called for in \cite{DS/FMU/IED/HLD010}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains a detailed design for the
+tools to introduce HOL product types.
+Unlike constant specification (See $const\_spec$)
+there is no requirement for an ``axiom'' mode, where instead
+of proof required theorems are introduced by axiom.
+This is because all the proof work can always be completed,
+and if the relevant cached theorem is present, it can be
+completed fast.
+\subsubsection{Dependencies}
+This document depends upon \cite{DS/FMU/IED/IMP027}.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+\section{PREAMBLE}
+=DOC
+signature ⦏ProductTypes⦎  = sig
+=DESCRIBE
+This is the signature of a structure supporting the introduction of HOL product types.
+=ENDDOC
+\section{THE DESIGN}
+=DOC
+val ⦏HOL_lab_prod_recogniser⦎ : string * string * string * Lex.INPUT list * string
+	-> THM;
+=DESCRIBE
+This function is called by the reader writer and should
+not be called by a user directly. The first and second arguments
+are the start symbol for the recogniser and the language name. The
+third argument is the name of the type, which appears as the argument.
+to ⓈHOLLABPROD. The fourth argument is the HOL term represented in
+a form understood by the lexical analyser. The last argument is the
+terminating symbol, and should always be a ``■''.
+The name of the type and the parsed input is passed to
+$labelled\_product\_spec$ (q.v.)
+which will attempt the requested specification.
+The keys under which the result will be saved are just the names
+of the variables concerned.
+
+This may also save a theorem concerning tuples to the current cache theory (see $get\_cache\_theory$).
+=USES
+As an interface between the HOL reader/writer and $labelled\-\_product\-\_spec$ - it is not intended for
+direct use.
+It is used to process text of the form, e.g.,
+=GFTXQ Example Labelled Product Specification
+ ⓈHOLLABPROD TYNAME
+	decl decl;
+	decl decl; decl
+ ■
+=FAILURE
+59000	Input not of right form
+=FAILUREC
+Errors from $labelled\_product\_spec$ may also occur: the messages area of origin will not be changed.
+=ENDDOC
+
+
+=DOC
+val ⦏labelled_product_spec⦎:{tyname:string, tykey:string, conname:string,
+	constkeys:string list, labels:(string*TYPE)list, tyvars:(TYPE list)OPT} -> THM;
+=DESCRIBE
+This function
+introduces a labelled product type, and its constructor and projection functions.
+Its argument's fields are:
+\begin{description}
+\item [tyname]
+The name of the new type.
+\item [tykey]
+The key under which the defining theorem for the type will be saved.
+\item [conname]
+The name of the single constructor of the new type.
+It will be a curried function, from each of the label types, in turn, to the new type.
+\item [constkeys]
+The keys under which the defining theorem for the
+constructor $conname$ and projection functions will be saved.
+\item [labels]
+The list of the names and types of the labelled fields in the new type.
+A projection function will be defined for each label,
+a single defining theorem for all will be saved under the keys $constkeys$.
+It is this defining theorem that is the result of the function call.
+\item [tyvars]
+If this field is $Nil$ then the type variables in the new type will be ordered as their occurrence in $labels$, otherwise as stated by this parameter.
+\end{description}
+If the appropriate tuple theorem is not already in scope a call of $cached\-\_labelled\-\_product\-\_rule$ $(length$ $labels)$ will also be made as a side effect.
+=EXAMPLE
+:> labelled_product_spec {tyname="PAIR", tykey="PAIR", conname="Comma",
+	constkeys=["Comma","First","Second","pair_ops_def"],
+		labels=[("First",ⓣ'f⌝),("Second",ⓣ's⌝)], tyvars=Value[ⓣ's⌝,ⓣ'f⌝]};
+will cause	⊢ ∃ f : ('s, 'f) PAIR → ('f × 's) ⦁ TypeDefn (λ x ⦁ T) f
+to be saved under the key "PAIR", and the following
+		⊢ ∀ t ⦁ ∀ (x1:'f) (x2:'s)⦁
+		First(Comma x1 x2) = x1 ∧
+		Second(Comma x1 x2) = x2) ∧
+		Comma(First t) (Second t) = t
+under keys "Comma", "First", "Second" and "pair_ops_def", and returned as the result
+=FAILURE
+59010	Must be at least one label in list
+59014	Failed to introduce type and operators for ?0
+59015	Some labels are given types containing type variables not found in
+	supplied list of type variables, being: ?0
+59018	May not use key ?0 for both type and constructor definition
+=FAILUREC
+Also as the appropriate errors of $cached\-\_labelled\-\_product\-\_rule$, $new\-\_type\-\_defn$ and $new\-\_speci\-fication$.
+Error 59014 suggests a corrupted cache theorem.
+=ENDDOC
+
+Interestingly, the result of the above is in the right form for the theorem used as an argument for $set\_∃\_vs\_thms$.
+=DOC
+val ⦏unlabelled_product_spec⦎ : {tyname:string, tykey:string, conname:string,
+	conkeys:string list, tyi:TYPE list, tyvars:(TYPE list)OPT} -> THM;
+=DESCRIBE
+This function introduces an unlabelled product type
+Its argument's fields are:
+\begin{description}
+\item [tyname]
+The name of the new type.
+\item [tykey]
+The key under which the defining theorem for the type will be saved.
+\item [conname]
+The name of the single constructor of the new type.
+It will be a curried function, from each of the types $tyi$, in turn, to the new type.
+\item [conkeys]
+The keys under which the defining theorem for the
+constructor $conname$ will be saved.
+\item [tyi]
+The list of the types of the fields in the new type.
+\item [tyvars]
+If this field is $Nil$ then the type variables in the new type will be ordered as their occurrence in $labels$, otherwise as stated by this parameter.
+\end{description}
+
+If the appropriate tuple theorem is not already in scope a call of $cached\-\_unlabelled\-\_product\-\_rule$ $(length$ $tyi)$ will also be made as a side effect.
+This is as part of the speeding up of introducing the new type.
+=EXAMPLE
+:> unlabelled_product_spec {tyname="UPAIR", tykey="UPAIR", conname="UComma",
+	conkeys=["UComma","ucomma_def"], tyi=[ⓣ'f⌝, ⓣ's⌝], tyvars=Nil};
+will cause
+⊢ ∃ f : ('f, 's) UPAIR → ('f × 's) ⦁ TypeDefn (λ x ⦁ T) f
+to be saved under the key "UPAIR", and
+⊢ 	(∀ (x1:'f) (x2:'s)⦁ ∀ y1 y2⦁
+	(UComma x1 x2 = UComma y1 y2) ⇔ (x1 = y1) ∧ (x2 = y2))
+	∧ (∀ t ⦁ ∃ x1 x2 ⦁ t = UComma x1 x2)
+
+to be saved under the keys "UComma" and "ucomma_def", and returned as the result
+=SEEALSO
+$labelled\_product\_spec$
+=FAILURE
+59011	There must be at least one type in list
+59014	Failed to introduce type and operators for ?0
+59016	The supplied types contain type variables not in the
+	supplied list of type variables, being: ?0
+59018	May not use key ?0 for both type and constructor definition
+=FAILUREC
+Also as the appropriate errors of $cached\-\_unlabelled\-\_product\-\_rule$ and $new\-\_type\-\_defn$.
+Error 59014 suggests a corrupted cache theory.
+=ENDDOC
+Note that the right associative $∧$ structure in the resulting theorems
+is quite deliberate, and necessary for fast processing.
+=DOC
+val ⦏cached_labelled_product_rule⦎ : int -> THM;
+=DESCRIBE
+$cached\-\_labelled\_product\-\_rule$ $n$ proves a theorem about an n-tuple,
+where $n$ is some positive integer.
+This states that if some type is isomorphic to an n-tuple
+(an iterated binary product)
+then a constructor, and projection functions exist for this type.
+The theorem will be stored in the current cache theory (see $get\-\_cache\-\_theories$)
+under the key ``nCachedLabelledProduct'',
+unless $n\ =\ 1$, when it is ``built-it''.
+However, if the theorem desired is already in a cache theory in scope, then it
+just returns the stored existence theorem.
+
+For storing the theorem current cache theory will be found by $force\-\_get\-\_cache\-\_theory$.
+If no writable cache theory is in scope this will attempt
+to
+use $new_parent$ to bring one in scope, and failing that will declare the current theory to be a cache theory.
+=EXAMPLE
+> cached_labelled_product_rule 2;
+
+⊢  (∃ abs rep ⦁ (∀ a ⦁ abs(rep a) = a) ∧ (∀ r ⦁ rep(abs r) = r))
+   ⇒
+   ∃ 2Tuple ⦁
+   ∃ Lab2_1 Lab2_2 ⦁
+  	∀ t ⦁ ∀ (x1:'1) (x2:'2)⦁
+	(Lab2_1(2Tuple x1 x2) = x1 ∧
+	Lab2_2(2Tuple x1 x2) = x2) ∧
+	(2Tuple(Lab2_1 t) (Lab2_2 t) = t)
+=TEX
+=SEEALSO
+$cached\_unlabelled\_product\_rule$
+=FAILURE
+59001	Argument ?0 should have been positive
+59002	There is no in scope, writable, cache theory (current theory is ?0)
+59003	Failed to prove ?0th labelled cached theorem
+59008	Unable to bring a writable cache theory into scope
+	or create a new cache theory (current theory is ?0)
+59017	Current theory (?0) does not have theory basic_hol as an ancestor
+=FAILUREC
+Also as the appropriate failures of $save\_thm$.
+Failure 59003 suggests a corrupted cached theorem.
+=ENDDOC
+Error 59017 suggests that $basic\_hol$ has not been sealed
+(which it should be in all proper builds).
+
+Note that the right associative $∧$ structure in the resulting theorems
+is quite deliberate, and necessary for fast processing.
+=DOC
+val ⦏cached_unlabelled_product_rule⦎ : int -> THM;
+=DESCRIBE
+$cached\-\_unlabelled\-\_product\-\_rule$ $n$ proves a theorem about an n-tuple,
+where $n$ is some positive integer.
+This states that if some type is isomorphic to an n-tuple
+(an iterated binary product)
+then a constructor with appropriate properties exists for this type.
+The theorem will be stored in the current cache theory (see $get\-\_cache\-\_theories$)
+under the key ``nCachedUnlabelledProduct'',
+unless $n\ =\ 1$, when it is ``built-it''.
+.
+However, if the theorem desired is already in a cache theory in scope, then it
+just returns the stored existence theorem.
+
+For storing the theorem the current cache theory will be found by $force\-\_get\-\_cache\-\_theory$.
+If no writable cache theory is in scope this will attempt
+to
+use $new_parent$ to bring one in scope, and failing that will declare the current theory to be a cache theory.
+=EXAMPLE
+> cached_unlabelled_product_rule 2;
+
+⊢  (∃ abs rep ⦁ (∀ a ⦁ abs(rep a) = a) ∧ (∀ r ⦁ rep(abs r) = r))
+   ⇒
+   ∃ 2Tuple ⦁
+   	(∀ x1 x2⦁ ∀ y1 y2⦁
+	(2Tuple x1 x2 = 2Tuple y1 y2) ⇔ (x1 = y1) ∧ (x2 = y2))
+	∧
+	(∀ t⦁ ∃ x1 x2⦁ t = 2Tuple x1 x2)
+=TEX
+=FAILURE
+59001	Argument ?0 should have been positive
+59002	There is no in scope, writable, cache theory (current theory is ?0)
+59004	Failed to prove ?0th unlabelled cached theorem
+59008	Unable to bring a writable cache theory into scope
+	or create a new cache theory (current theory is ?0)
+59017	Current theory (?0) does not have theory basic_hol as an ancestor
+=SEEALSO
+$cached\_labelled\_product\_rule$
+=FAILUREC
+Also as the appropriate failures of $save\_thm$.
+Failure 59004 suggests a corrupted cached theorem, but only for certain indicates an otherwise uncaught error.
+=ENDDOC
+Error 59017 suggests that $basic\_hol$ has not been sealed
+(which it should be in all proper builds).
+
+=FAILURE
+59009	DESIGN ERROR: force_get_cache_theory returned unusable theory
+=TEX
+
+=DOC
+val ⦏set_cache_theories⦎ : string list -> string list;
+val ⦏get_cache_theory⦎ : unit -> string;
+val ⦏force_get_cache_theory⦎ : unit -> string;
+val ⦏get_cache_theories⦎ : unit -> string list;
+val ⦏get_valid_cache_theories⦎ : unit -> string list;
+=DESCRIBE
+These functions provide the interface to
+the list of cache theories.
+$set\-\_cache\-\_theories$ stores an uninterpreted
+list of strings, that are intended to be theory names,
+returning the previous setting.
+
+The current cache theory is the first string of the cache theory list
+which is a theory name that is in scope and writable
+(not locked, an ancestor, or below sealing by $pp'seal\-\_hierarchy$).
+This is the cache theory that should be {\bf written} to
+as a cache.
+This is accessed by $get\-\_cache\-\_theory$ which will fail if there is no such theory.
+
+$force\-\_get\-\_cache\-\_theory$ will search for the current cache theory as $get\-\_cache\-\_theory$.
+If that fails, then it will attempt to create one by
+trying $new\_parent$ on each of the writable cache theories that are out of scope.
+If that fails, then it will attempt to create a new cache theory named $cache'N$ (where $N$ is a sequence number).
+If a new theory is created, its parent will be the theory named at the head of the list of cache theories and it will become a parent of the current theory.
+
+$get\_cache\_theories$ returns the uninterpreted list of strings
+last set as the cache theories by $set\-\_cache\-\_theories$.
+
+The current cache theories are the names in the cache theory list of in-scope theories (that need not be writable):
+this function may return the empty list.
+This list is accessed by $get\_valid\_cache\_theories$
+
+The scope and existence of the cache theories is determined at the point of applying the
+function names to $()$.
+
+These functions support a method of working using cache theories, where
+only a subset of the ancestors of the current theory are searched
+for particular portions of contents,
+and these things are only stored in the current cache theory.
+This will speed the search for these items by such functions as
+$cached\-\_labelled\-\_product\-\_rule$.
+=FAILURE
+59002	There is no in scope, writable, cache theory (current theory is ?0)
+59008	Unable to bring a writable cache theory into scope
+	or create a new cache theory (current theory is ?0)
+59020	A new cache theory ?0 has been created
+=ENDDOC
+
+At some later date we may wish to add in an auxiliary function that indicates
+how much further work is required in producing cached theorems,
+so as to allow some indication of the expected delay to be passed onto the user in a manner chosen by the calling function.
+\section{EPILOGUE}
+=SML
+end; (* of signature ProductTypes *)
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+

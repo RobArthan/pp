@@ -1,0 +1,500 @@
+=IGN
+********************************************************************************
+dtd039.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  dtd039.doc  ℤ $Date: 2002/10/17 15:10:58 $ $Revision: 1.11 $ $RCSfile: dtd039.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design for the Theory of Lists}
+
+\def\AbstractText{This document gives a detailed design for the theory ``list''.}
+
+\def\Reference{DS/FMU/IED/DTD039}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST Project}  %% Mandatory field
+%% LaTeX2e port: \TPPtitle{Detailed Design for the Theory of Lists}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Detailed Design for the \cr
+%% LaTeX2e port: Theory of Lists}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD039}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.11 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+%% LaTeX2e port: }}  %% Mandatory field
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{D.J. King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{R.D. Arthan & WIN01\\K. Blackburn & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D. Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document gives a detailed design for the
+%% LaTeX2e port: theory ``list''.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/10/01) - 1.3 (1991/10/08)]
+Initial drafts.
+\item[Issue 1.4 (1991/11/25), 22 November 1991]
+Draft for review.
+
+\item[Issue 1.5 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.6 (1992/01/27) (23rd January 1992)]
+$new\_axiom$, $simple\_new\_type\_defn$ and $new\_type\_defn$
+are
+all changed to take lists of keys, rather than single ones.
+
+\item[Issue 1.7 (1992/05/14) (14 May 1992)] Use correct quotation symbols.
+\item[Issue 1.8 (1992/07/14)]
+	Fixed {\LaTeX} errors.
+\item[Issues 1.9, 1.10 (1992/08/24)]
+	Add indexing characters.
+\item[Issue 1.11 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.12 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains a detailed design
+for the theory ``list'',
+called for in \cite{DS/FMU/IED/HLD011}.
+The design is implemented in \cite{DS/FMU/IED/IMP039}.
+
+\subsection{Introduction}
+
+This document introduces design for the aggregation of
+information into a sequence. The type $LIST$ is
+introduced. The concrete representation of a list
+is a pair, the first element denoting a function which
+given a number will return the nth item in the list; the
+second element is a number denoting the length of the
+list. The defining properties of a list are that there
+is a list which has length zero, namely $Nil$, and that
+there is a function $Cons$ which is the list constructor with
+the defining properties that:
+\begin{itemize}
+\item
+a constructed list will never be empty and
+\item
+the constructor function is one to one and
+\item
+recursion can be applied to all lists.
+\end{itemize}
+The concrete representation of lists is used for introducing
+the new type. No further use is made of it in this document
+or is likely to be used in subsequent documents.
+\subsubsection{Purpose and Background}
+This document contains the detailed design for the theory ``list''.
+This defines the type $LIST$, and the operators upon it.
+\subsubsection{Dependencies}
+This document depends on \cite{DS/FMU/IED/IMP038},
+and the theory design tools of \cite{DS/FMU/IED/DTD035}.
+\subsubsection{Deficiencies}
+None.
+\subsubsection{Possible Enhancements}
+None known.
+\section{THE THEORY CONTENTS}
+\subsection{Theory Name}
+
+The theory name is that specified in \cite{DS/FMU/IED/HLD011}
+for the theory of lists.
+=THDOC
+req_name "list" (Value "ℕ");
+=DESCRIBE
+The theory ``⦏list⦎'' defines a type of lists,
+operations on lists,
+and some associated theories and tactics.
+=ENDDOC
+\subsection{Basic Definitions}
+=THDOC
+req_const(⦏"IsListRep"⦎,ⓣ((ℕ→'a)×ℕ)→BOOL⌝);
+req_defn(["IsListRep","is_list_rep_def"], ([], ⌜
+	∃ nil:(ℕ→'a)×ℕ⦁∃ cons:'a→((ℕ→'a)×ℕ)→((ℕ→'a)×ℕ) ⦁
+	(IsListRep nil) ∧
+	(∀x⦁IsListRep x
+		⇒ (∀h:'a⦁¬cons h x = nil)) ∧
+	(∀x y⦁IsListRep x ∧ IsListRep y
+		⇒ (∀a b⦁ cons a x = cons b y
+			⇔ (a=b ∧ x=y))) ∧
+	(∀x⦁IsListRep x
+		⇒ (∀h:'a⦁IsListRep (cons h x))) ∧
+
+	(∀p:((ℕ→'a)×ℕ)→BOOL ⦁ p nil ∧
+		(∀m⦁ p m ⇒ (∀h⦁ p (cons h m)))
+			⇒ (∀n⦁ IsListRep n ⇒ p n))
+⌝));
+=DESCRIBE
+The representation type of lists, as given by
+$⦏IsListRep⦎$ is a function from the concrete type for
+lists onto BOOL.
+The representation type for lists is a pair: the first
+element is a function which given a number, $n$ yields
+the ``nth'' element of the list; the second is the length of
+the list. The defining properties of lists are encapsulated
+in the predicate of the definition. This concrete
+representation is only useful for introducing the type
+of lists, and no use of it is envisaged elsewhere.
+=ENDDOC
+
+=THDOC
+req_type(⦏"LIST"⦎,1);
+req_defn(["LIST",⦏"list_def"⦎],([],⌜∃ f:'a LIST→((ℕ→'a)×ℕ)⦁ TypeDefn IsListRep f⌝));
+=DESCRIBE
+The type of lists, $⦏'a LIST⦎$ is given by the representation
+function $IsListRep$, and is useful for representing
+sequences of objects with some arbitrary type.
+=ENDDOC
+
+=THDOC
+req_const(⦏"Nil"⦎,ⓣ'a LIST⌝);
+req_const(⦏"Cons"⦎,ⓣ'a → 'a LIST → 'a LIST⌝);
+req_defn(["Nil","Cons","nil_cons_def"], ([],
+⌜	(∀ x : 'a; list:'a LIST ⦁ ¬Cons x list = Nil) ∧
+	(∀ x1 x2 : 'a; list1 list2 : 'a LIST ⦁
+		Cons x1 list1 = Cons x2 list2
+			⇔ (x1=x2 ∧ list1=list2)) ∧
+	(∀p:'a LIST→BOOL ⦁ p Nil ∧
+		(∀list:'a LIST⦁ p list ⇒ (∀x⦁ p (Cons x list)))
+			⇒ (∀list⦁ p list))
+⌝));
+=DESCRIBE
+The HOL constant $⦏Nil⦎$ is the empty list.
+The HOL constant $⦏Cons⦎$ is the list contructor, taking
+an element and attaching it to the front of a list.
+=ENDDOC
+
+\subsection{Definitions of Operations on Lists}
+=THDOC
+req_const(⦏"Length"⦎,ⓣ'a LIST→ℕ⌝);
+req_defn(["Length","length_def"], ([], ⌜
+	Length (Nil:'a LIST) = 0 ∧
+	∀ h:'a; list:'a LIST⦁
+		Length (Cons h list) = Length list + 1⌝));
+=DESCRIBE
+$Length$ returns the length of a list.
+=ENDDOC
+
+=THDOC
+req_const(⦏"Hd"⦎,ⓣ'a LIST→'a⌝);
+req_defn(["Hd","hd_def"], ([], ⌜
+	∀h:'a; list:'a LIST⦁ Hd (Cons h list) = h⌝));
+=DESCRIBE
+The loosely defined function
+$Hd$ returns the first element of a list.
+=ENDDOC
+
+=THDOC
+req_const(⦏"Tl"⦎,ⓣ'a LIST→'a LIST⌝);
+req_defn(["Tl","tl_def"], ([], ⌜
+	∀h:'a; list:'a LIST⦁ Tl (Cons h list) = list⌝));
+=DESCRIBE
+$Tl$ returns the list after the first element has
+been removed.
+=ENDDOC
+
+=THDOC
+req_const(⦏"Append"⦎,ⓣ'a LIST→'a LIST→'a LIST⌝);
+req_defn(["Append","append_def"], ([], ⌜
+	(∀list:'a LIST⦁ Append Nil list = list) ∧
+	(∀h:'a; list:'a LIST; list':'a LIST⦁
+	  Append (Cons h list) list' = Cons h (Append list list'))⌝));
+req_alias (⦏"@"⦎, ⌜Append⌝);
+req_infix (300, "@");
+=DESCRIBE
+$Append$ joins one list to another. The infix form is
+the ``@'' symbol, similar to the Standard ML list
+conjunction.
+=ENDDOC
+
+=THDOC
+req_const(⦏"Rev"⦎,ⓣ'a LIST→'a LIST⌝);
+req_defn(["Rev","rev_def"], ([], ⌜
+	Rev (Nil:'a LIST) = Nil ∧
+	∀ h:'a; list:'a LIST⦁
+		Rev (Cons h list) = Append (Rev list) [h]⌝));
+=DESCRIBE
+$Rev$ reverses the order of elements in a list.
+=ENDDOC
+
+=THDOC
+req_const(⦏"Map"⦎,ⓣ('a→'b)→'a LIST→'b LIST⌝);
+req_defn(["Map","map_def"], ([], ⌜
+	(∀g:'a→'b⦁ Map g Nil = Nil) ∧
+	(∀h:'a; g:'a→'b; list:'a LIST⦁
+	  Map g (Cons h list) = Cons (g h) (Map g list))⌝));
+=DESCRIBE
+$Map(f,\  list)$ applies $f$ to each of the elements
+of $list$ producing a list of results.
+=ENDDOC
+
+=THDOC
+req_const(⦏"Fold"⦎,ⓣ('a→'b→'b)→'a LIST→'b→'b⌝);
+req_defn(["Fold","fold_def"], ([], ⌜
+	(∀g:'a→'b→'b; x:'b⦁ Fold g Nil x = x) ∧
+	(∀h:'a; g:'a→'b→'b; x:'b; list:'a LIST⦁
+		Fold g (Cons h list) x = g h (Fold g list x))⌝));
+=DESCRIBE
+$Fold(f,\  list, x)$ applies the function f to each of the
+elements of $list$ folding in the result.
+=ENDDOC
+
+=THDOC
+req_const(⦏"Split"⦎,ⓣ('a×'b)LIST→('a LIST×'b LIST)⌝);
+req_defn(["Split", "split_def"], ([], ⌜
+	Split (Nil:('a×'b)LIST) = (Nil,Nil) ∧
+	(∀ list:('a×'b) LIST; h1:'a; h2:'b⦁
+	 Split (Cons (h1,h2) list) =
+		(Cons h1 (Fst(Split list)),
+			Cons h2 (Snd(Split list))))⌝));
+=DESCRIBE
+$Split$ splits a list of pairs into a pair of lists
+(of equal length).
+=ENDDOC
+
+=THDOC
+req_const(⦏"Combine"⦎,ⓣ'a LIST→'b LIST→('a×'b)LIST⌝);
+req_defn(["Combine","combine_def"], ([], ⌜
+	Combine (Nil:'a LIST) (Nil:'b LIST) = Nil ∧
+	(∀ h1:'a; h2:'b; list1:'a LIST; list2:'b LIST⦁
+		Combine (Cons h1 list1) (Cons h2 list2) =
+		Cons (h1,h2) (Combine list1 list2))⌝));
+=DESCRIBE
+The loosely defined function $Combine$ takes a pair
+of equal length lists and yields a list of pairs -- the
+opposite of $Split$.
+=ENDDOC
+
+\subsection{Theorems}
+=THDOC
+req_thm("list_induction_thm", ([], ⌜
+	∀p:'a LIST→BOOL ⦁ p Nil ∧
+		(∀list:'a LIST⦁ p list ⇒ (∀x⦁ p (Cons x list)))
+			⇒ (∀list⦁ p list)⌝));
+=DESCRIBE
+This defines induction for lists. If $p$ is true for
+an empty list, and if $p$ being true for $list$ implies
+that it is true for $list$ prefixed with some element, then
+$p$ is true for any list.
+=ENDDOC
+=THDOC
+req_thm("list_prim_rec_thm", ([], ⌜
+	∀n:'b⦁∀c:'a→'b→'a LIST→'b⦁ ∃⋎1f:'a LIST→'b⦁
+		f Nil = n
+	∧	∀list:'a LIST⦁∀a:'a⦁
+			f(Cons a list) = c a (f list) list⌝));
+=DESCRIBE
+This is the principle of primitive recursion for lists.
+=ENDDOC
+=THDOC
+req_thm("list_clauses", ([], ⌜
+	∀ x1 x2 list1 list2⦁
+	¬ Cons x1 list1 = [] ∧
+	¬ [] = Cons x1 list1 ∧
+	(Cons x1 list1 = Cons x2 list2
+		⇔ x1 = x2 ∧ list1 = list2) ∧
+	Hd (Cons x1 list1) = x1 ∧
+	Tl (Cons x1 list1) = list1
+⌝));
+=DESCRIBE
+This theorem gives rules for simplifying lists, expressed
+as rewrite rules.
+=ENDDOC
+=THDOC
+req_thm("list_cases_thm", ([], ⌜
+	∀ list1⦁ list1 = [] ∨
+	∃ x list2⦁ list1 = Cons x list2⌝));
+=DESCRIBE
+Any list is either empty, or can be expressed as
+a construction of an element to some list.
+=ENDDOC
+
+
+\section{THE SIGNATURE}
+=DOC
+signature ⦏List⦎ = sig
+=DESCRIBE
+This is the signature in which the theory ``list'' is declared.
+=ENDDOC
+
+\subsection{Definitions}
+=DOC
+	val ⦏is_list_rep_def⦎ : THM
+	val ⦏nil_cons_def⦎ : THM
+	val ⦏length_def⦎ : THM
+	val ⦏hd_def⦎ : THM
+	val ⦏tl_def⦎  : THM
+	val ⦏append_def⦎ : THM
+	val ⦏map_def⦎ : THM
+	val ⦏fold_def⦎ : THM
+	val ⦏split_def⦎ : THM
+	val ⦏combine_def⦎ : THM
+	val ⦏rev_def⦎ : THM
+=DESCRIBE
+These Standard ML variables are bound to the definitions
+in the theory ``list''.
+=ENDDOC
+
+\subsection{Theorems}
+=DOC
+	val ⦏list_clauses⦎ : THM
+	val ⦏list_cases_thm⦎ : THM
+	val ⦏list_induction_thm⦎ : THM
+	val ⦏list_prim_rec_thm⦎ : THM
+=DESCRIBE
+These Standard ML variables are bound to the theorems
+in the theory ``list''.
+=ENDDOC
+
+\subsection{Tactics}
+=DOC
+	val ⦏list_induction_tac⦎ : TERM -> TACTIC
+=DESCRIBE
+This tactic implements induction over lists :
+to prove $t[x]$ it suffices to prove $t[Nil]$ and to prove $t[Cons\  h\  x]$ on the
+assumption that $t[x]$. The term argument must
+appear free in the conclusion of the
+goal but not in its assumptions.
+=FRULE 2 Tactic
+list_induction_tac ⌜x⌝
+├
+{ Γ } t[x]
+├
+{ Γ } t[Nil] ; strip{t[x], Γ} t[Cons h x]
+=TEX
+=SEEALSO
+$LIST\_INDUCTION\_T$
+=FAILURE
+39001	?0 is not a term variable
+39002	?0 does not appear free in the conclusion of the goal
+39003	?0 appears free in the assumptions of the goal
+=ENDDOC
+=DOC
+val ⦏LIST_INDUCTION_T⦎ : TERM -> (THM -> TACTIC) -> TACTIC;
+=DESCRIBE
+This implements induction over lists as
+a tactical. The term argument must appear free in the conclusion of the
+goal but not in its assumptions.
+The inductive hypothesis is passed to the tactic generating function
+given by the second argument.
+=FRULE 2 Tactic
+LIST_INDUCTION_T ⌜x⌝ ttac
+├
+{ Γ } t[x]
+├
+{ Γ } t[Nil] ; ttac(t[x] ⊢ t[x])
+             ({ Γ } t[Cons h x])
+=TEX
+=USES
+Most commonly used with $asm\_tac$ to avoid the stripping up of
+the inductive hypothesis which occurs with $list\_induction\_tac$.
+=SEEALSO
+$list\_induction\_tac$
+=FAILURE
+39001	?0 is not a term variable
+39002	?0 does not appear free in the conclusion of the goal
+39003	?0 appears free in the assumptions of the goal
+=ENDDOC
+
+=SML
+end (* of signature List *);
+=TEX
+
+\section{TEST POLICY}
+The functions in this document should be tested according to the
+general criteria list out in \cite{DS/FMU/IED/PLN008}, using the
+tests in \cite{DS/FMU/IED/MDT039}.
+The theories produced should be checked by the theory design tools
+of \cite{DS/FMU/IED/DTD035}, against the theory design provided.
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+
