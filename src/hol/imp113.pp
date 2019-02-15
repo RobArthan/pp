@@ -1,6 +1,6 @@
 =IGN
 ********************************************************************************
-imp113.doc: this file is part of the PPHol system
+imp113.pp: this file is part of the PPHol system
 
 Copyright (c) 2002 Lemma 1 Ltd.
 
@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp113.doc  $Id: imp113.doc,v 1.12 2013/08/02 10:47:51 rda Exp rda $
+% imp113.pp  $Id: imp113.pp v 1.12 2013/08/02 10:47:51 rda Exp rda $
 
 =TEX
 \documentclass[a4paper,11pt]{article}
@@ -447,11 +447,11 @@ by file {\tt 0.as1} above.
 =VDUMP 0.fgrep
 ⦏
 =TEX
-\subsection{0idx_begin.doc and 0idx_end.doc}
+\subsection{0idx_begin.pp and 0idx_end.pp}
 
 Wrap around to convert the index list {\tt 0_idx_all} into something tex readable.
 
-=VDUMP 0idx_begin.doc
+=VDUMP 0idx_begin.pp
 \documentstyle[hol1,ifthen]{article}
 \makeindex
 \def\UL@begin{\underline{(}}
@@ -460,7 +460,7 @@ Wrap around to convert the index list {\tt 0_idx_all} into something tex readabl
 \ftlinepenalty=999
 =TEX
 
-=VDUMP 0idx_end.doc
+=VDUMP 0idx_end.pp
 \end{document}
 =TEX
 
