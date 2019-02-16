@@ -183,9 +183,10 @@ Added tests for Unicode and UTF-8.
 Fixed corrupted UTF-8 tests
 \item[2015/04/15]
 Fixed {\LaTeX} errors.
-
 \item[2015/04/17]
 Ported to Lemma 1 document template.
+\item[2018/08/22]
+Remove distributed concatenation (character no longer supported).
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -356,7 +357,7 @@ store_mt_results_show mt_run[
 	\↗↘≡↕⁀↿\
 	\↦ℕ↠ℙⓩ◁ℚ\
 	\⊢⨽⨼├﹣↾ℤ⟦─⟧⤔┌ ",
-		" " ^ (implode(map chr (interval 128 255)) ^ " "))
+		" " ^ (implode(map chr (interval 128 138))) ^ (implode(map chr (interval 140 255))) ^ " ")
 ];
 =TEX
 }

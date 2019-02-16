@@ -23,6 +23,7 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include <Xm/DialogS.h>
 #include <Xm/MainW.h>
@@ -47,15 +48,17 @@ static void focus_cb(CALLBACK_ARGS);
 enum {MAX_ROWS = 100, MAX_COLS = 100};
 typedef struct {
 	int 	num_rows, num_cols, fraction_base, x_units, y_units;
-	char	pretty_chars[MAX_ROWS][MAX_COLS+1];
+	wchar_t	labels[MAX_ROWS][MAX_COLS+1];
 }	PaletteConfig;
 
 typedef struct {
 	Widget text_w, palette_w;
 } PaletteData;
 
-static char *no_config_msg =
-	"Unable to set up the palette";
+char *too_many_rows_msg = "too many rows in the palette (maximum is %d)";
+char *too_many_cols_msg = "too many columns in the palette (maximum is %d)";
+char *binary_data_msg = "Binary data in palette resource at row %d column %d";
+static char *no_config_msg = "Unable to set up the palette";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data:
@@ -87,12 +90,12 @@ static Boolean check_limits(int row, int col)
 {
 	if(row >= MAX_ROWS || col >= MAX_COLS) {
 		char buf[100];
-		sprintf(buf, "too many rows in the palette (maximum is %d)", MAX_ROWS);
+		sprintf(buf, too_many_rows_msg, MAX_ROWS);
 		ok_dialog(root, buf);
 		return False;
 	} else if(col >= MAX_COLS) {
 		char buf[100];
-		sprintf(buf, "too many columns in the palette (maximum is %d)", MAX_COLS);
+		sprintf(buf, too_many_cols_msg, MAX_COLS);
 		ok_dialog(root, buf);
 		return False;
 	} else {
@@ -100,17 +103,28 @@ static Boolean check_limits(int row, int col)
 	}
 }
 
-static void get_pretty_chars(PaletteConfig *palette_config)
+static void get_labels(PaletteConfig *palette_config)
 {
-	char ch;
-	int i = 0, col = 0;
-	do {
-		ch = xpp_resources.palette[i];
-		switch(ch) {
-			case '\n':
-				palette_config->pretty_chars
+	wchar_t wc;
+	int col = 0;
+	char *p = xpp_resources.palette;
+	int r, l = strlen(p);
+	palette_config->num_rows = 0;
+	palette_config->num_cols = 0;
+	while(l) {
+		r = mbtowc(&wc, p, l);
+		if(r == -1) {
+			char buf[100];
+			sprintf(buf, binary_data_msg,
+				palette_config->num_rows + 1, col + 1);
+			ok_dialog(root, buf);
+			break;
+		}
+		switch(wc) {
+			case L'\n': /* end of row */
+				palette_config->labels
 					[palette_config->num_rows]
-						[col] = '\0';
+						[col] = L'\0';
 				if(col > 0) {
 					palette_config->num_rows += 1;
 				}
@@ -118,19 +132,7 @@ static void get_pretty_chars(PaletteConfig *palette_config)
 					palette_config->num_cols = col;
 				}
 				col = 0;
-				break;
-			case '\0':
-				palette_config->pretty_chars
-					[palette_config->num_rows]
-						[col] = '\0';
-				if(col > 0) {
-					palette_config->num_rows += 1;
-				}
-				if(palette_config->num_cols < col) {
-					palette_config->num_cols = col;
-				}
-				return;
-				break;
+				break; /* just for form's sake */
 			case ' ':
 			case '\t':
 				break;
@@ -138,14 +140,20 @@ static void get_pretty_chars(PaletteConfig *palette_config)
 				if(!check_limits(palette_config->num_rows, col)) {
 					return;
 				}
-				palette_config->pretty_chars
+				palette_config->labels
 					[palette_config->num_rows]
-						[col] = ch;
+						[col] = wc;
 				col += 1;
 				break;
 		}
-		i += 1; /* N.b. don't get here if last ch was '\0' */
-	} while(1);
+		p += r;
+		l -= r;
+	}
+	if(palette_config->num_rows == 0 && col > 0) {
+/* Single row with no terminating new-line */
+		palette_config->num_rows = 1;
+		palette_config->num_cols = col;
+	}
 }
 
 static PaletteConfig *get_palette_config(void)
@@ -155,11 +163,10 @@ static PaletteConfig *get_palette_config(void)
 	if(palette_config == 0) { /* out of memory */
 		return 0;
 	} /* else */
-	palette_config->num_rows = 0;
-	palette_config->num_cols = 0;
-	get_pretty_chars(palette_config);
+	get_labels(palette_config);
 	if(	palette_config->num_rows == 0
 	|| 	palette_config->num_cols == 0) {
+		XtFree((char*)palette_config);
 		return 0;
 	}
 	palette_config->fraction_base =
@@ -170,6 +177,7 @@ static PaletteConfig *get_palette_config(void)
 		palette_config->fraction_base / palette_config->num_rows;
 	return palette_config;
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * popup_palette: pop up the palette widget (creating it if
  * necessary). The widget argument is the text widget to
@@ -180,12 +188,12 @@ static PaletteConfig *get_palette_config(void)
 void popup_palette(Widget w)
 {
 	XmString lab;
-	char label_buf[2], name_buf[sizeof "charXX"];
+	char *label_buf, name_buf[sizeof "glyphXXXXXXXX"];
 	int i, j, x, y;
-	int cbdata;
-	Widget shell, paned, top_form, bottom_form, button, dismiss_btn, help_btn;
+	Widget shell, paned, palette_form, bottom_form,
+			button, dismiss_btn, help_btn;
 	PaletteConfig *palette_config;
-	char pretty_char;
+	wchar_t wc, cbdata;
 	
 	palette_info.text_w = w;
 	if((paned = palette_info.palette_w) != NULL) {
@@ -214,36 +222,36 @@ void popup_palette(Widget w)
 
 	if(palette_config == 0) {
 		lab = XmStringCreateSimple(no_config_msg);
-		top_form = XtVaCreateWidget("message",
+		palette_form = XtVaCreateWidget("message",
 			xmLabelWidgetClass, paned,
 			XmNlabelString, lab,
 			NULL);
 		XmStringFree(lab);
 	} else {
 
-		top_form = XtVaCreateWidget("top-form",
+		palette_form = XtVaCreateWidget("palette-buttons",
 			xmFormWidgetClass, paned,
 			XmNfractionBase, 	palette_config->fraction_base,
 			NULL);
 
-		label_buf[1] = '\0';
+		label_buf = XtMalloc(MB_CUR_MAX + 1);
 
 		for(i = 0; i < palette_config->num_rows; i += 1) {
 			for(	j = 0;
-					palette_config->pretty_chars[i][j] != 0
+					palette_config->labels[i][j] != 0
 				&&	j < palette_config->num_cols;
 				j += 1) {
-				pretty_char = palette_config->pretty_chars[i][j];
-				if(pretty_char == '.') {
+				wc = palette_config->labels[i][j];
+				if(wc == '.') {
 					continue;
 				} /* else */
-				label_buf[0] = pretty_char;
-				sprintf(name_buf, "char%02X", pretty_char & 0xff);
+				(void) wctomb(label_buf, wc);
+				sprintf(name_buf, "glyph%08X", wc);
 				lab = XmStringCreateSimple(label_buf);
 				x = (palette_config->x_units)*j;
 				y = (palette_config->y_units)*i;
 				button = XtVaCreateManagedWidget(name_buf,
-					xmPushButtonGadgetClass, top_form,
+					xmPushButtonGadgetClass, palette_form,
 					XmNlabelString, lab,
 					XmNleftAttachment,	XmATTACH_POSITION,
 					XmNleftPosition,	x,
@@ -254,14 +262,14 @@ void popup_palette(Widget w)
 					XmNbottomAttachment,	XmATTACH_POSITION,
 					XmNbottomPosition,	y + palette_config->y_units,
 					NULL);
-				copy_font_list(button, w);
 				XmStringFree(lab);
-				cbdata = pretty_char;
+				cbdata = wc;
 				XtAddCallback(button, XmNactivateCallback, type_char_cb,
 					(XtPointer) (uintptr_t) cbdata);
 			}
 		}
 		XtFree((void*)palette_config);
+		XtFree(label_buf);
 	}
 
 	bottom_form = XtVaCreateWidget("bottom-form",
@@ -305,7 +313,7 @@ void popup_palette(Widget w)
 	XtAddCallback(dismiss_btn, XmNactivateCallback, popdown_cb, shell);
 	XtAddCallback(help_btn, XmNactivateCallback,help_cb, (XtPointer) Help_Palette_Tool);
 
-	XtManageChild(top_form);
+	XtManageChild(palette_form);
 	XtManageChild(bottom_form);
 	XtManageChild(paned);
 	XtPopup(shell, XtGrabNone);
@@ -346,8 +354,7 @@ static void type_char_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	Cardinal cbdata = (uintptr_t) cbd;
-	char buf[2];
+	wchar_t cbdata = (wchar_t) cbd, buf[2];
 	XmTextPosition start, end;
 	Widget text_w = palette_info.text_w;
 	Boolean editable;
@@ -369,15 +376,15 @@ static void type_char_cb(
 	} /* else ... */
 
 	buf[0] = cbdata;
-	buf[1] = '\0';
+	buf[1] = L'\0';
 
 	if(	XmTextGetSelectionPosition(text_w, &start, &end)
 	&&	start < end) {
-		XmTextReplace(text_w, start, end, buf);
+		XmTextReplaceWcs(text_w, start, end, buf);
 		XmTextClearSelection(text_w, CurrentTime);
 	} else {
 		start = XmTextGetInsertionPosition(text_w);
-		XmTextInsert(text_w, start, buf);
+		XmTextInsertWcs(text_w, start, buf);
 	}
 
 	XmTextSetInsertionPosition(text_w, start + 1);

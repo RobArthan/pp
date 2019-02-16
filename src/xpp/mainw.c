@@ -269,7 +269,10 @@ static MenuItem file_menu_items[] = {
 
 #define EDIT_MENU_UNDO  4
 #define EDIT_MENU_REDO  5
-
+/*
+ * Identify Unicode must come last (so we can easily remove it
+ * when using the ext encodint.
+ */
 static MenuItem edit_menu_items[] = {
     { "Cut", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         edit_cut_cb, (XtPointer)0, (MenuItem *)NULL, False },
@@ -287,6 +290,9 @@ static MenuItem edit_menu_items[] = {
         popup_search_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Goto Line ...", &xmPushButtonGadgetClass, 'G', NULL, NULL,
         popup_line_no_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
+    { "Identify Unicode ...", &xmPushButtonGadgetClass, 'I', NULL, NULL,
+        identify_unicode_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -447,12 +453,9 @@ static XtActionsRec actions[] = {
  * the earlier complexity was that XmTextShowPosition didn't work
  * properly on some ancient implementations of Motif).
  *
- * Note that the first parameter of scroll_out is not a const char *.
- * and has to be big enough for scroll_out to temporarily null-terminate
- * the string. It restores the overwritten character when the text has been written
- * to the journal window. Moreover, it will overwrite the text itself if
- * it contains control characters or carriage returns - these overwrites are not
- * restored.
+ * The buffer is interpreted as a multibyte string and may be incomplete;
+ * we detect this case and carry any bytes at the end of the buffer
+ * that can't be converted over to the next call.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static Boolean scroll_pending = False;
@@ -465,46 +468,78 @@ static void scroll_out_timeout_proc (XtPointer unused1, XtIntervalId *unused2)
 
 void scroll_out(char *buf, Cardinal ct, Boolean ignored)
 {
-
 	XmTextPosition ins_pos, last_pos;
 	Position dontcare;
-	char overwritten;
+	static char *pending = 0;
+	static wchar_t *wtext = 0;
+	static int num_pending = 0;
+	wchar_t  wc;
 	Boolean visible;
-	int i, j;
+	int i, j, r;
 	static Boolean last_was_cr = False;
+	if(pending == 0) {
+		pending = XtMalloc(ct);
+		wtext = (wchar_t*)XtMalloc((ct + 1)*sizeof(wchar_t));
+	} else {
+		pending = XtRealloc(pending, ct + num_pending);
+		wtext = (wchar_t*)XtRealloc((char*)wtext,
+				(ct + num_pending + 1)*sizeof(wchar_t));
+	}
+	memmove(pending + num_pending, buf, ct);
+/* Convert multibyte string in pending to wide characters in wtext
+   checking for oddities as we go */
+	i = j = 0;
+	while(j < ct + num_pending) {
+		r = mbtowc(&wc, pending + j, ct + num_pending - j);
+		if(r == -1 && ct + num_pending - j >= MB_CUR_MAX) {
+/* conversion failed, more input won't help  */
+			wtext[i] = '?';
+			i += 1;
+			j += 1;
+			continue;
+		} else if (r == -1) {
+/* conversion failed, but may succeed when we have more input */
+			num_pending = ct + num_pending - j;
+			memmove(pending, pending + j, num_pending);
+			break;
+		}
+/* if we get here the conversion succeeded; we have no pending characters */
+		num_pending = 0;
+		if(r == 0) {
+/* conversion produced a null byte */
+			wtext[i] = L'?';
+			i += 1;
+		} else if(wc == L'\r') {
+/* conversion produced a CR */
+			last_was_cr = True;
+			wtext[i] = L'\n';
+			i += 1;
+		} else if(last_was_cr && wc == L'\n') {
+/* the LF in a CRLF; ignore it */
+			last_was_cr = False;
+		} else if(0 <= wc && wc <= 0xff && control_chars[wc]) {
+/* control character */
+			last_was_cr = False;
+			wtext[i] = L'?';
+			i += 1;
+		} else {
+			last_was_cr = False;
+			wtext[i] = wc;
+			i += 1;
+		}
+/* move to next byte allowing for case when conversion produced a null byte */
+		j += r ? r : 1;
+	}
+/* null-terminate: */
+	wtext[i] = L'\0';
+/* test whether insertion position is visible */
 	ins_pos = XmTextGetLastPosition(journal);
 	visible = XmTextPosToXY(journal, (ins_pos ? ins_pos - 1 : 0),
 			&dontcare, &dontcare);
-/* scan the buffer for oddities and convert them to UNIX text: */
-	for(i = 0, j = 0; j < ct; ++i, ++j) {
-		if(buf[j] == '\r') {
-			last_was_cr = True;
-			buf[i] = '\n';
-		} else  if(last_was_cr && buf[j] == '\n') {
-			last_was_cr = False;
-			j += 1;
-			if(j < ct) {
-				buf[i] = buf[j];
-			} else {
-				break;
-			}
-		} else if(control_chars[buf[j] & 0xff]) {
-			last_was_cr = False;
-			buf[i] = '?';
-		} else {
-			last_was_cr = False;
-			buf[i] = buf[j];
-		}	
-	}
-/* temporarily null-terminate: */
-	overwritten = buf[i];
-	buf[i] = '\0';
 /* write it to the journal */
 	updating_journal = True;
-	XmTextInsert(journal, ins_pos, buf);
+	XmTextInsertWcs(journal, ins_pos, wtext);
 	updating_journal = False;
-/* undo null-termination */
-	buf[i] = overwritten;
 /* see where we are: */
 	last_pos = XmTextGetLastPosition(journal);
 /* set up time-out to scroll if insertion position was visible and not already set-up */
@@ -516,7 +551,6 @@ void scroll_out(char *buf, Cardinal ct, Boolean ignored)
 	XmTextSetInsertionPosition(journal, last_pos);
 /* check size of contents & done: */
 	check_text_window_limit(journal,  global_options.journal_max);
-
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -853,6 +887,13 @@ static Boolean setup_main_window(
 
 	line_number_cb(script, NULL, NULL);
 
+	XtInsertEventHandler(script,
+		ButtonPressMask | ButtonReleaseMask,
+		False,
+		defer_scroll,
+		NULL,
+		XtListHead);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -918,6 +959,14 @@ static Boolean setup_main_window(
 			}
 		}
 
+
+		XtInsertEventHandler(journal,
+			ButtonPressMask | ButtonReleaseMask,
+			False,
+			defer_scroll,
+			NULL,
+			XtListHead);
+
 		XtInsertEventHandler(journal,
 			StructureNotifyMask,
 			False,
@@ -977,9 +1026,11 @@ static Boolean setup_main_window(
  * edit_menu_items gets changed here and later on so be careful if moving this
  * code
  */
-	for(	i = 0;
-		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]);
-		i += 1 ) {
+	if(using_ext_char_set) {
+/* Don't want Identify Unicode item */
+		edit_menu_items[XtNumber(edit_menu_items)-2].label = NULL;
+	}
+	for(	i = 0; i < XtNumber(edit_menu_items); i += 1 ) {
 		edit_menu_items[i].callback_data = script;
 	}
 
@@ -1048,9 +1099,7 @@ static Boolean setup_main_window(
  * The pop-up edit menu looks a bit neater if we get rid of the accelerator
  * reminder in the pull-down one.
  */
-	for(	i = 0;
-		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]);
-		i += 1 ) {
+	for(	i = 0; i < XtNumber(edit_menu_items); i += 1 ) {
 		edit_menu_items[i].accelerator = NULL;
 	}
 
@@ -1066,7 +1115,7 @@ static Boolean setup_main_window(
 	undo_ptr = add_undo(script, wp, EDIT_MENU_UNDO, EDIT_MENU_REDO);
 
 	XtAddCallback(script,
-		XmNmodifyVerifyCallback, undo_modify_cb, undo_ptr);
+		XmNmodifyVerifyCallbackWcs, undo_modify_cb, undo_ptr);
 
 	XtAddCallback(script,
 		XmNmotionVerifyCallback, line_number_cb, NULL);
@@ -2077,7 +2126,6 @@ static void defer_resize(
 		*continue_dispatch = False; /* keep Motif out */
 	} /* else, let Motif in */
 }
-
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * See if the user wants to save the text and if so do so.

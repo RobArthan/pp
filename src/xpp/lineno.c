@@ -178,7 +178,7 @@ Boolean add_line_no_tool(Widget text_w)
 	XmStringFree(s);
 
 	line_no_text = XtVaCreateManagedWidget("line-number",
-		xmTextWidgetClass,	top_form,
+		xmTextFieldWidgetClass,	top_form,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,	XmATTACH_POSITION,
 		XmNleftPosition,		12,
@@ -252,7 +252,7 @@ Boolean add_line_no_tool(Widget text_w)
 	XtAddCallback(goto_line_no_btn, XmNactivateCallback,
 		goto_line_no_cb, (XtPointer)(&line_no_data));
 
-	XtAddCallback(line_no_text, XmNmodifyVerifyCallback,
+	XtAddCallback(line_no_text, XmNmodifyVerifyCallbackWcs,
 		(XtCallbackProc)number_verify_cb, (XtPointer)NULL);
 
 	XtAddCallback(line_no_text, XmNactivateCallback,
@@ -348,14 +348,14 @@ static void goto_line_no_cb(
 	long int line_no = 0;
 	short nrows;
 	int scroll;
-	char *line_no_string;
+	wchar_t *line_no_string;
 	CHECK_MAP_STATE(cbdata)
 
-	line_no_string = XmTextGetString(cbdata->line_no_w);
+	line_no_string = XmTextGetStringWcs(cbdata->line_no_w);
 
-	sscanf(line_no_string, "%ld", &line_no);
+	line_no = wcstol(line_no_string, NULL, 10);
 
-	XtFree(line_no_string);
+	XtFree((char*)line_no_string);
 
 	if(line_no <= 0) {
 		ok_dialog(cbdata->shell_w, no_line_no);
@@ -397,16 +397,18 @@ static void goto_line_no_cb(
 long int get_line_no(Widget text_w)
 {
 	XmTextPosition ins_pos, cur_pos;
-	char data[BUFSIZ+1], *p;
+	wchar_t data[MBSBUFSIZ+1], *p;
 	long int line_ct;
 	ins_pos = XmTextGetInsertionPosition(text_w);
-	for(cur_pos = 0, line_ct = 1; cur_pos <= ins_pos; cur_pos += BUFSIZ) {
-		if(XmTextGetSubstring(text_w, cur_pos, BUFSIZ, BUFSIZ + 1, data)
+	for(cur_pos = 0, line_ct = 1; cur_pos <= ins_pos;
+							cur_pos += MBSBUFSIZ) {
+		if(XmTextGetSubstringWcs(text_w, cur_pos, MBSBUFSIZ,
+							MBSBUFSIZ + 1, data)
 				== XmCOPY_FAILED ) {
 			return -1;
 		}
 		for(p = data; p - data + cur_pos < ins_pos && *p; ++p) {
-			if(*p == '\n') {
+			if(*p == L'\n') {
 				++line_ct;
 			}
 		}
@@ -428,15 +430,15 @@ static void line_no_to_offset(
 	long int	*first,
 	long int	*last)
 {
-	char *data, *p;
+	wchar_t *data, *p;
 	long int line_ct;
 
-	if((data = XmTextGetString(text_w)) == NULL) {
+	if((data = XmTextGetStringWcs(text_w)) == NULL) {
 		*first = NO_MEMORY;
 		return;
 	}
 	for(p = data, line_ct = line_no - 1; *p && line_ct; ++p) {
-		if(*p == '\n' && *(p + 1)) {
+		if(*p == L'\n' && *(p + 1)) {
 			--line_ct;
 		}
 	}
@@ -450,7 +452,7 @@ static void line_no_to_offset(
 	} else {
 		*first = -(line_no - line_ct + 1);
 	}
-	XtFree(data);
+	XtFree((char*)data);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

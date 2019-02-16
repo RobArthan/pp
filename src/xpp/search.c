@@ -26,18 +26,21 @@ enum {FORWARDS, BACKWARDS};
 	{if (get_map_state((SDP)->text_w) != IsViewable) { beep(); return; }}
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include <sys/types.h>
 #include <regex.h>
+#include <wctype.h>
 
 #include "xpp.h"
 
-#ifdef SLOWREGEXEC
-#define INITCHUNK 1000
-#define REGEXEC fast_regexec
-#else
-#define REGEXEC regexec
+#define INITCHUNK 4
+#define REGEXEC my_regwexec
+/* If we don't have REG_INVARG use the glibc non-standard error code instead */
+#ifndef REG_INVARG
+#define REG_INVARG REG_EEND
 #endif
+
 /*
  * The number of submatches that we record when we do RE matching.
  * Includes the overall match \0 and 9 proper submatches \1 .. \9
@@ -65,11 +68,11 @@ typedef struct {
 			search_w,
 			replace_w;
 	Boolean 	ignore_case, use_wildcards;
-	char 		*submatches[NSUBMATCHES];
+	wchar_t		*submatches[NSUBMATCHES];
 	SubmatchStatus	submatch_status;
 } SearchData;
 /*
- * The following represents a substring of a C string, e.g.,
+ * The following represents a substring of a wide character string, e.g.,
  * for use in representing the result of a search operation.
  * Use offset = -1 to represent "no such substring".
  */
@@ -79,14 +82,13 @@ typedef struct {
 } Substring;
 /*
  * The following type represents the results of "compiling" a search pattern
- * for use in the Boyer-Moore string search algorithm used when regular
- * expression matching is turned off.
+ * for use in the simple wide character string search algorithm used
+ * when regular expression matching is turned off.
  */
 typedef struct {
-	long int	index[256];
-	long int	length; /* of the search pattern */
-	char	pattern[0];
-} bm_search_t;
+	int	length;
+	wchar_t	pattern[0];
+} simple_search_t;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * messages
@@ -478,8 +480,9 @@ Boolean add_search_tool(Widget text_w)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	for(i = 0; i < NSUBMATCHES; i += 1) {
-		search_data.submatches[i] = XtMalloc(1);
-		search_data.submatches[i][0] = '\0';
+		search_data.submatches[i] =
+				(wchar_t*)XtMalloc(sizeof(wchar_t));
+		search_data.submatches[i][0] = L'\0';
 	}
 	search_data.submatch_status = SM_UNITIALISED;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -499,9 +502,11 @@ Boolean add_search_tool(Widget text_w)
  * add callbacks
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtAddCallback(search_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
+	XtAddCallback(search_text, XmNmodifyVerifyCallbackWcs,
+						text_verify_cb, NULL);
 
-	XtAddCallback(replace_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
+	XtAddCallback(replace_text, XmNmodifyVerifyCallbackWcs,
+						text_verify_cb, NULL);
 
 	XtAddCallback(ignore_case_toggle, XmNvalueChangedCallback,
 		toggle_button_cb, (XtPointer)(&search_data.ignore_case));
@@ -659,9 +664,124 @@ static void search_backwards_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Support for regular expression searches in wide character strings.
+ * In their wisdom, the POSIX people only defined the regex facilities
+ * for multi-byte strings. Free BSD has the obvious extensions 
+ * regwcomp and regwexec, but the GNU implementation is pedantically
+ * POSIX compliant. At the expense of some memory, we simulate
+ * the wide character interface,
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+int my_regwcomp(regex_t *preg, const wchar_t *widepat, int cflags)
+{
+	char *pattern;
+	size_t cr;
+	int len, rcr;
+	len = wcslen(widepat) * MB_CUR_MAX;
+	pattern = XtMalloc(len + 1);
+	if(pattern == 0) return REG_ESPACE;
+	cr = wcstombs(pattern, widepat, len + 1);
+	if(cr == (size_t)-1) return REG_INVARG;
+	rcr = regcomp(preg, pattern, cflags);
+	XtFree(pattern);
+	return rcr;
+}
+/*
+ * Some implementations of regexec call strlen on the text: if the
+ * text has length N, say, this introduces an O(N) overhead that can
+ * make replace-all operations into an N^2*K operation (where K is some
+ * factor dependent on the average length of the matches and on the
+ * complexity of the regular expression. Moreover as we have to
+ * convert the wide character string into a multi-byte string 
+ * the conversion would involve a similar O(N) overhead. To avoid
+ * this, we use a "double-and-conquer" approach that makes the cost N*K.
+ *
+ * An earlier version of this just did two XtMalloc calls for enough
+ * memory to accommodate all of widestr before the the main loop.
+ * On big files this resulted in very poor  performance on replace_all
+ * operations. The approach that allocates just enough for the
+ * current chunk is 3 or 4 orders of magnitude faster on a 10Mb file.
+ * 
+ */
+int my_regwexec(const regex_t *preg, const wchar_t *widestr,
+	size_t nmatch, regmatch_t pmatch[], int eflags)
+{
+	char *str;
+	const wchar_t *pwc;
+	int *offset_to_woffset, i, str_i, curr_chunk, len, cr, rer;
+	len = INITCHUNK  * MB_CUR_MAX;
+	str = XtMalloc(len + 1);
+	if(str == 0) return REG_ESPACE;
+	offset_to_woffset = (int*)XtMalloc(sizeof(int)*(len + 1));
+	if(offset_to_woffset == 0) { XtFree(str); return REG_ESPACE; }
+	for(	curr_chunk = INITCHUNK,
+		pwc = widestr,
+		str_i = 0,
+		rer = REG_NOMATCH;
+		*pwc != 0;
+		curr_chunk *= 2) {
+/* convert up to curr_chunk elements from widestr into str */
+		len = curr_chunk * MB_CUR_MAX;
+		str = XtRealloc(str, len + 1);
+		if(str == 0) return REG_ESPACE;
+		offset_to_woffset = (int*)XtRealloc((char*)offset_to_woffset,
+							sizeof(int)*(len + 1));
+		if(offset_to_woffset == 0) { XtFree(str); return REG_ESPACE; }
+		while(pwc - widestr < curr_chunk && *pwc !=0) {
+			cr = wctomb(str + str_i, *pwc);
+			if(cr == -1) {
+				XtFree(str);
+				XtFree((char*)offset_to_woffset);
+				return REG_INVARG;
+			}
+/* record offset of current element of widestr against this index in str */
+			offset_to_woffset[str_i] = pwc - widestr;
+/* mark remaining chars in this multi-byte char as invalid offsets */
+			for(i = 1; i < cr; i += 1) {
+				offset_to_woffset[str_i + i] = -1;
+			}
+			str_i += cr;
+			pwc += 1;
+		}
+		str[str_i] = 0;
+		offset_to_woffset[str_i] = pwc - widestr;
+/* try to match */
+		rer = regexec(preg, str, nmatch, pmatch, eflags);
+		if(rer == 0 && (pmatch[0].rm_eo < str_i || *pwc == L'\0')) {
+			/* match */
+			break;
+		} else if (rer != 0 && rer != REG_NOMATCH) {
+			/* error */
+			break;
+		} /* else not matched yet; go round for more */
+	}
+	if(rer != 0) {
+		XtFree(str);
+		XtFree((char*)offset_to_woffset);
+		return rer;
+	}
+	for(i = 0; i < nmatch; i += 1) {
+		if(0 <= pmatch[i].rm_so && pmatch[i].rm_so < len + 1 && offset_to_woffset[pmatch[i].rm_so] >= 0) {
+			pmatch[i].rm_so = offset_to_woffset[pmatch[i].rm_so];
+		}
+		if(0 <= pmatch[i].rm_eo && pmatch[i].rm_eo < len + 1 && offset_to_woffset[pmatch[i].rm_eo] >= 0) {
+			pmatch[i].rm_eo = offset_to_woffset[pmatch[i].rm_eo];
+		}
+		if((pmatch[i].rm_so < 0) != (pmatch[i].rm_eo < 0)) {
+			XtFree(str);
+			XtFree((char*)offset_to_woffset);
+			return REG_INVARG;
+		}
+	}
+	XtFree(str);
+	XtFree((char*)offset_to_woffset);
+	return 0;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Support for search callbacks.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Substring search_cyclic(char*, char*, long int, Cardinal, SearchData*);
+static Substring search_cyclic(wchar_t*, wchar_t*, long int,
+						Cardinal, SearchData*);
 static Boolean report_re_error(Widget);
 static void search_and_show(
 	Widget				w,
@@ -670,10 +790,10 @@ static void search_and_show(
 {
 	Substring ss;
 	Cardinal start_point;
-	char *pattern, *text_buf;
+	wchar_t *pattern, *text_buf;
 	XmTextPosition pl, pr;
-	pattern = XmTextGetString(search_data.search_w);
-	text_buf = XmTextGetString(search_data.text_w);
+	pattern = XmTextGetStringWcs(search_data.search_w);
+	text_buf = XmTextGetStringWcs(search_data.text_w);
 	if(	XmTextGetSelectionPosition(search_data.text_w, &pl, &pr)
 	&&	pl < pr) {
 		start_point = (dir == FORWARDS ? pr : pl);
@@ -700,8 +820,8 @@ static void search_and_show(
 	} else if(!report_re_error(search_data.shell_w)) {
 		ok_dialog(search_data.shell_w, not_found);
 	}
-	XtFree(pattern);
-	XtFree(text_buf);
+	XtFree((char*)pattern);
+	XtFree((char*)text_buf);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -721,27 +841,30 @@ static void replace_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * support for replace callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static long int re_replacement_text(char*, char*, Substring*, char*, SearchData*);
+static long int re_replacement_text(wchar_t*, wchar_t*,
+					Substring*, wchar_t*, SearchData*);
 static Boolean replace_selection(
 	Widget				w,
 	SearchData			*cbdata)
 {
 	XmTextPosition left, right;
-	char *replacement, *rep_pattern;
+	wchar_t *replacement, *rep_pattern;
 	if(	XmTextGetSelectionPosition(cbdata->text_w, &left, &right)
 	&&	left < right ) {
-		rep_pattern  = XmTextGetString(cbdata->replace_w);
+		rep_pattern  = XmTextGetStringWcs(cbdata->replace_w);
 		if(cbdata->use_wildcards) {
 			long int text_len =right - left, rep_len;
-			char *text_buf = XtMalloc(text_len+1), *rep_buf;
+			wchar_t *text_buf, *rep_buf;
+			text_buf = (wchar_t*)
+					XtMalloc((text_len+1)*sizeof(wchar_t));
 			Substring ss;
 			if(	text_buf == 0
-			||	XmTextGetSubstring(cbdata->text_w, left, text_len,
-					text_len + 1, text_buf)
+			||	XmTextGetSubstringWcs(cbdata->text_w,
+					left, text_len, text_len + 1, text_buf)
 					== XmCOPY_FAILED ) {
-				XtFree(rep_pattern);
+				XtFree((char*)rep_pattern);
 				if(text_buf != 0) {
-					XtFree(text_buf);
+					XtFree((char*)text_buf);
 				}
 				ok_dialog( cbdata->shell_w,
 					no_room_for_search_op);
@@ -752,17 +875,18 @@ static Boolean replace_selection(
 			rep_len = re_replacement_text(rep_pattern,
 					text_buf, &ss, 0, cbdata);
 			if(rep_len == -1) { /* user cancelled */
-				XtFree(rep_pattern);
+				XtFree((char*)rep_pattern);
 				if(text_buf != 0) {
-					XtFree(text_buf);
+					XtFree((char*)text_buf);
 				}
 				return False;
 			}
-			rep_buf = XtMalloc(rep_len + 1);
+			rep_buf = (wchar_t*)
+					XtMalloc((rep_len + 1)*sizeof(wchar_t));
 			if(rep_buf == 0) {
-				XtFree(rep_pattern);
+				XtFree((char*)rep_pattern);
 				if(text_buf != 0) {
-					XtFree(text_buf);
+					XtFree((char*)text_buf);
 				}
 				ok_dialog( cbdata->shell_w,
 					no_room_for_search_op);
@@ -770,15 +894,15 @@ static Boolean replace_selection(
 			}
 			(void) re_replacement_text(rep_pattern, text_buf,
 						   &ss, rep_buf, cbdata);
-			rep_buf[rep_len] = '\0';
-			XtFree(rep_pattern);
-			XtFree(text_buf);
+			rep_buf[rep_len] = L'\0';
+			XtFree((char*)rep_pattern);
+			XtFree((char*)text_buf);
 			replacement  = rep_buf;
 		} else {
 			replacement = rep_pattern;
 		}
 		text_show_position(cbdata->text_w, left);
-		XmTextReplace(
+		XmTextReplaceWcs(
 			cbdata->text_w,
  			left,
 			right,
@@ -786,9 +910,9 @@ static Boolean replace_selection(
 		XmTextSetSelection(
 			cbdata->text_w,
 			left,
-			left + strlen(replacement),
+			left + wcslen(replacement),
 			CurrentTime);
-		XtFree(replacement);
+		XtFree((char*)replacement);
 		return True;
 	} else {
 		ok_dialog(cbdata->shell_w, no_selection_to_replace);
@@ -799,7 +923,8 @@ static Boolean replace_selection(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * replace all callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void replace_all(char*, char*, char*, char**, Cardinal*, SearchData*);
+static void replace_all(wchar_t*, wchar_t*, wchar_t*, wchar_t**,
+						Cardinal*, SearchData*);
 static void replace_all_cb(
 	Widget		w,
 	XtPointer	cbd,
@@ -808,10 +933,10 @@ static void replace_all_cb(
 	SearchData *cbdata = cbd;
 	Substring ss;
 	Cardinal start_point;
-	char *pattern, *text_buf, *replacement, *all_replaced;
+	wchar_t *pattern, *text_buf, *replacement, *all_replaced;
 	CHECK_MAP_STATE(cbdata)
-	pattern = XmTextGetString(cbdata->search_w);
-	text_buf = XmTextGetString(cbdata->text_w);
+	pattern = XmTextGetStringWcs(cbdata->search_w);
+	text_buf = XmTextGetStringWcs(cbdata->text_w);
 	start_point = XmTextGetInsertionPosition(cbdata->text_w);
 	if(*pattern) {
 		ss = search_cyclic(pattern, text_buf, start_point, FORWARDS, cbdata);
@@ -819,7 +944,7 @@ static void replace_all_cb(
 		ss.offset = -1;
 	}
 	if(ss.offset >= 0) {
-		replacement = XmTextGetString(
+		replacement = XmTextGetStringWcs(
 				cbdata->replace_w);
 		replace_all(
 			pattern,
@@ -832,14 +957,9 @@ static void replace_all_cb(
 			ok_dialog(
 				cbdata->shell_w,
 				no_room_for_search_op);
-			XtFree(replacement);
+			XtFree((char*)replacement);
 		} else {
-			XmTextReplace(
-				cbdata->text_w,
-				0,
-				XmTextGetLastPosition(
-					cbdata->text_w),
-				all_replaced);
+			XmTextSetStringWcs(cbdata->text_w, all_replaced);
 			XmTextSetTopCharacter(cbdata->text_w, 0);
 			text_show_position(
 				cbdata->text_w,
@@ -847,16 +967,16 @@ static void replace_all_cb(
 			XmTextSetInsertionPosition(
 				cbdata->text_w,
 				start_point);
-			XtFree(replacement);
-			XtFree(all_replaced);
+			XtFree((char*)replacement);
+			XtFree((char*)all_replaced);
 		}
 	} else if (!(*pattern)){
 		ok_dialog(cbdata->shell_w, no_search_string);
 	} else if (!report_re_error(search_data.shell_w)) {
 		ok_dialog(cbdata->shell_w, not_found);
 	}
-	XtFree(pattern);
-	XtFree(text_buf);
+	XtFree((char*)pattern);
+	XtFree((char*)text_buf);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -973,85 +1093,74 @@ static void submatch_status_cb(
  * Pre-processing for the Boyer-Moore search algorithm.
  */
 
-static bm_search_t *bm_search_comp(char *pattern)
+static simple_search_t *simple_search_comp(wchar_t *pattern)
 {
-	long int len = strlen(pattern);
+	long int len = wcslen(pattern);
 	int i;
-	bm_search_t *bm;
-	bm = (bm_search_t *) XtMalloc(sizeof(bm_search_t) + len + 1);
-	if(bm == 0) { /* malloc failed */
-		return bm;
+	simple_search_t *ss;
+	ss = (simple_search_t *) XtMalloc(sizeof(simple_search_t) +
+						(len + 1)*sizeof(wchar_t));
+	if(ss == 0) { /* malloc failed */
+		return ss;
 	}
-	strcpy(&(bm->pattern)[0], pattern);
+	wcscpy(&(ss->pattern)[0], pattern);
 	if(search_data.ignore_case) {
 		for(i = 0; i < len; ++i) {
-			(bm->pattern)[i] = toupper((bm->pattern)[i]);
+			(ss->pattern)[i] = towupper((ss->pattern)[i]);
 		}
 	}
-	for(i = 0; i < 256; ++i) {
-		(bm->index)[i] = -1;
-	}
-	for(i = len - 1; i >= 0; --i) {
-		if( (bm->index)[(bm->pattern)[i] & 0xff] == -1 ) {
-			(bm->index)[(bm->pattern)[i] & 0xff] = i;
-		}
-	}
-	bm->length = len;
-	return bm;
+	ss->length = len;
+	return ss;
 }
 /*
- * The Boyer-Moore search algorithm:
+ * The simple search algorithm:
  * If offset_limit is positive, then a match that starts at text+offset_limit
  * or greater is rejected (used to do backwards search by binary chop).
  */
-static Substring bm_search_exec(
-	bm_search_t *bm,
-	char *text,
+static Substring simple_search_exec(
+	simple_search_t *ss,
+	wchar_t *text,
 	long int offset_limit,
 	SearchData *cbdata)
 {
-	int cursor, i, next;
+	int cursor, i;
+	Boolean matched;
 	Substring result;
 	result.offset = -1; /* no match yet */
-	if(bm->length == 0) {
+	if(ss->length == 0) {
 		return result;
 	}
-	cursor = 0;
-	for(i = 0; i < bm->length - 1; i += 1) {
-		if(text[i] == 0) {
-			return result; /* text is shorter than pattern */
-		}
-	}
-	while(i >= 0 && text[cursor]) {
-		char ch = search_data.ignore_case
-			? toupper(text[cursor+i])
-			: text[cursor+i];
-		if(ch == (bm->pattern)[i]) { /* possible match at cursor */
-			i -= 1;
-		} else { /* no match at cursor; slide up according to index value: */
-			next = cursor + i - (bm->index)[ch & 0xff];
-			cursor += 1;
-			while(text[cursor] && cursor < next) {
-				cursor += 1;
+	matched = False;
+	for(cursor = 0; text[cursor] != L'\0'; cursor += 1) {
+		for(i = 0; i < ss->length &&
+				text[cursor + i] != L'\0'; i += 1) {
+			wchar_t w = search_data.ignore_case ?
+					towupper(text[cursor + i]) :
+					text[cursor + i];
+			if(w != ss->pattern[i]) {
+				break;
 			}
-			i = bm->length - 1;
+		}
+		if(i == ss->length) {
+			matched = True;
+			break;
 		}
 	}
-	if(i < 0 && (offset_limit < 0 || cursor < offset_limit)) {
+	if(matched && (offset_limit < 0 || cursor < offset_limit)) {
 		/* match at cursor */
 		int j;
 		cbdata->submatch_status = SM_GOOD;
-		char **sm = &cbdata->submatches[0];
+		wchar_t **sm = &cbdata->submatches[0];
 		result.offset = cursor;
-		result.length = bm->length;
-		*sm = XtRealloc(*sm, bm->length + 1);
-		strncpy(*sm, &text[cursor], bm->length);
-		(*sm)[bm->length] = '\0';
+		result.length = ss->length;
+		*sm = (wchar_t*)XtRealloc((char*)*sm,
+				(ss->length + 1)*sizeof(wchar_t));
+		wcscpy(*sm, ss->pattern);
 		for(j = 1; j < NSUBMATCHES; j += 1) {
 			sm = &cbdata->submatches[j];
 			if(**sm) {
-				*sm = XtRealloc(*sm, 1);
-				(*sm)[0] = '\0';
+				*sm = (wchar_t*)XtRealloc((char*)*sm, 1);
+				(*sm)[0] = L'\0';
 			}
 		}
 	}
@@ -1067,7 +1176,7 @@ static Substring bm_search_exec(
  * this and report the error (and free re_error_text).
  */
 static char *re_error_text = 0;
-static regex_t *re_search_comp(char *pattern)
+static regex_t *re_search_comp(wchar_t *pattern)
 {
 	static regex_t preg;
 	int cflags = REG_EXTENDED | REG_NEWLINE;
@@ -1075,7 +1184,7 @@ static regex_t *re_search_comp(char *pattern)
 	if(search_data.ignore_case) {
 		cflags |= REG_ICASE;
 	}
-	error_code = regcomp(&preg, pattern, cflags);
+	error_code = my_regwcomp(&preg, pattern, cflags);
 	if(error_code == 0) {
 		return &preg;
 	} else {
@@ -1091,48 +1200,7 @@ static regex_t *re_search_comp(char *pattern)
 		return 0;
 	}
 }
-#ifdef SLOWREGEXEC
-/*
- * Some implementations of regexec call strlen on the text: if the
- * text has length N, say, this introduces an O(N) overhead that can
- * make replace-all operations into an N^2*K operation (where K is some
- * factor dependent on the average length of the matches and on the
- * complexity of the regular expression. To workaround this, we use
- * a "double-and-conquer" approach that makes the cost N*K.
- */
-int fast_regexec(
-	const regex_t *preg,
-	char *string,
-	size_t nmatch,
-	regmatch_t pmatch[],
-	int eflags)
-{
-	char *q, overwritten;
-	int curr_chunk, error_code;
-	Boolean matched;
-	q = string;
-	overwritten = *q;
-	matched = False;
-	for(	curr_chunk = INITCHUNK;
-		!matched && overwritten != '\0';
-		curr_chunk *= 2) {
-		*q = overwritten;
-		while(*q && q - string < curr_chunk) {
-			q += 1;
-		}
-		overwritten = *q;
-		*q = '\0';
-		error_code = regexec(preg, string, nmatch, pmatch, eflags);
-		if(error_code == 0) {
-			matched = pmatch[0].rm_eo < q - string;
-		} else {
-			matched = False;
-		}
-	}
-	*q = overwritten;
-	return error_code;
-}
-#endif
+
 /*
  * The regular expression search algorithm.
  * If offset_limit is positive, then a match that starts at text+offset_limit
@@ -1140,7 +1208,7 @@ int fast_regexec(
  */
 static Substring re_search_exec(
 		regex_t *preg,
-		char *text,
+		wchar_t *text,
 		long int offset_limit,
 		Boolean bol,
 		SearchData *cbdata)
@@ -1150,7 +1218,7 @@ static Substring re_search_exec(
 	int eflags = bol ? 0 : REG_NOTBOL;
 	int error_code;
 	long int len, offset;
-	char *p;
+	wchar_t *p;
 	len = 0; /* assume no match until we get one */
 	p = text; /* start at the beginning */
 	while(*p) { /* look for a non-empty match */
@@ -1180,15 +1248,16 @@ static Substring re_search_exec(
 		result.offset = offset;
 		cbdata->submatch_status = SM_GOOD;
 		for(j = 0; j < NSUBMATCHES; j += 1) {
-			char **sm = &cbdata->submatches[j];
+			wchar_t **sm = &cbdata->submatches[j];
 			if(pmatch[j].rm_so >= 0) {/* got a submatch */
 				int smlen = pmatch[j].rm_eo - pmatch[j].rm_so;
-				*sm = XtRealloc(*sm, smlen + 1);
-				strncpy(*sm, p + pmatch[j].rm_so, smlen);
+				*sm = (wchar_t*)XtRealloc((char*)*sm, 
+					(smlen + 1)*sizeof(wchar_t));
+				wcsncpy(*sm, p + pmatch[j].rm_so, smlen);
 				(*sm)[smlen] = '\0';
 			} else if (**sm) { /* no submatch now; had one before */
-				*sm = XtRealloc(*sm, 1);
-				(*sm)[0] = '\0';
+				*sm = (wchar_t*)XtRealloc((char*)*sm, 1);
+				(*sm)[0] = L'\0';
 			} /* else no submatch before or now */
 		}
 	} else {
@@ -1224,26 +1293,26 @@ static Boolean report_re_error(Widget shell_w)
  * when buf == 0 and when control has left this module since the last search).
  */
 static long int re_replacement_text(
-	char		*rep_pattern,
-	char		*text,
+	wchar_t		*rep_pattern,
+	wchar_t		*text,
 	Substring	*match,
-	char		*buf,
+	wchar_t		*buf,
 	SearchData	*cbdata)
 {
-	char	*p, *q;
+	wchar_t	*p, *q;
 	Boolean	escaped = False;
 	long int result;
 	Boolean confirmed = buf != 0;
 	for(p = rep_pattern, q = buf, result = 0; *p; p += 1) {
 		if(!escaped) {
-			if(*p == '\\') {
+			if(*p == L'\\') {
 				/* backslash - escape */
 				escaped = True;
-			} else if (*p == '&') {
+			} else if (*p == L'&') {
 				/*ampersand - insert copy of matching substring */
 				result += match->length;
 				if(buf) {
-					strncpy(q, text + match->offset, match->length);
+					wcsncpy(q, text + match->offset, match->length);
 					q += match->length;
 				}
 			} else {
@@ -1253,7 +1322,7 @@ static long int re_replacement_text(
 					*q++ = *p;
 				}
 			}
-		} else if ('0' <= *p && *p <= '9') {
+		} else if (L'0' <= *p && *p <= L'9') {
 			/* \0 .. \9 submatch replacement */
 			if(	!confirmed
 			&&	cbdata->submatch_status != SM_GOOD
@@ -1266,11 +1335,11 @@ static long int re_replacement_text(
 			} else {
 				confirmed = True;
 			}
-			char *repl = cbdata->submatches[*p - '0'];
-			int len = strlen(repl);
+			wchar_t *repl = cbdata->submatches[*p - L'0'];
+			int len = wcslen(repl);
 			result += len;
 			if(buf) {
-				strcpy(q, repl);
+				wcscpy(q, repl);
 				q += len;
 			}
 			escaped = False;
@@ -1303,8 +1372,8 @@ static long int re_replacement_text(
  * change the value of use_wildcards or ignore_case.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Substring search_forwards(
-	char		*pattern,
-	char		*text,
+	wchar_t		*pattern,
+	wchar_t		*text,
 	long int	offset,
 	long int	limit,
 	SearchData	*cbdata)
@@ -1325,7 +1394,7 @@ static Substring search_forwards(
 		if (cbdata->use_wildcards) {
 			comp = re_search_comp(pattern);
 		} else {
-			comp = bm_search_comp(pattern);
+			comp = simple_search_comp(pattern);
 		}
 		last_comp = comp;
 	}
@@ -1345,10 +1414,10 @@ static Substring search_forwards(
 	} else {
 		if(cbdata->use_wildcards) {
 			result = re_search_exec(comp, text + offset, limit,
-				offset == 0 || text[offset-1] == '\n',
+				offset == 0 || text[offset-1] == L'\n',
 				cbdata);
 		} else {
-			result = bm_search_exec(comp, text + offset, limit, cbdata);
+			result = simple_search_exec(comp, text + offset, limit, cbdata);
 		}
 	}
 	return result;
@@ -1359,8 +1428,8 @@ static Substring search_forwards(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static Substring search_cyclic(
-	char		*pattern,
-	char		*text_buf,
+	wchar_t		*pattern,
+	wchar_t		*text_buf,
 	long int 	start_point,
 	Cardinal	direction,
 	SearchData	*cbdata)
@@ -1381,7 +1450,7 @@ static Substring search_cyclic(
 			if(ss.offset < start_point) {
 				upb = start_point;
 			} else {
-				upb = strlen(text_buf);
+				upb = wcslen(text_buf);
 			}
 			for(i = (upb - ss.offset) / 2; i > 0; i = (upb - ss.offset) / 2) {
 				t = search_forwards(0, text_buf, ss.offset + i, upb - (ss.offset + i), cbdata);
@@ -1404,18 +1473,18 @@ static Substring search_cyclic(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void replace_all(
-	char		*pattern,
-	char		*text_buf,
-	char		*rep_pattern,
-	char		**result,
+	wchar_t		*pattern,
+	wchar_t		*text_buf,
+	wchar_t		*rep_pattern,
+	wchar_t		**result,
 	Cardinal	*start_point,
 	SearchData 	*cbdata)
 {
 	long int text_buf_len, rep_pattern_len, rep_len, extra;
 	Substring ss;
-	char	*p, *q, *next_p, *sp;
-	text_buf_len = strlen(text_buf);
-	rep_pattern_len = strlen(rep_pattern);
+	wchar_t	*p, *q, *next_p, *sp;
+	text_buf_len = wcslen(text_buf);
+	rep_pattern_len = wcslen(rep_pattern);
 
 	p = text_buf;
 	extra = 0;
@@ -1435,7 +1504,9 @@ static void replace_all(
 			break;
 		}
 	}
-	if((*result = XtMalloc(text_buf_len + extra + 1)) == NULL) {
+	if((*result = (wchar_t*)XtMalloc(
+			(text_buf_len + extra + 1)*sizeof(wchar_t)))
+		== NULL) {
 		search_forwards(0, 0, 0, -1, cbdata); /* it _might_ help! */
 		return;
 	}
@@ -1445,12 +1516,12 @@ static void replace_all(
 	while(*p) {
 		ss = search_forwards(0, text_buf, p - text_buf, -1, cbdata);
 		if(ss.offset >= 0) {
-			strncpy(q, p, ss.offset);
+			wcsncpy(q, p, ss.offset);
 			if(cbdata->use_wildcards) {
 				rep_len = re_replacement_text(rep_pattern, p,
 						&ss, q+ss.offset, cbdata);
 			} else {
-				strncpy(q + ss.offset, rep_pattern, rep_pattern_len);
+				wcsncpy(q + ss.offset, rep_pattern, rep_pattern_len);
 				rep_len = rep_pattern_len;
 			}
 			next_p = p + ss.offset + ss.length;
@@ -1462,12 +1533,12 @@ static void replace_all(
 			p = next_p;
 			q += ss.offset + rep_len;
 		} else {
-			strcpy(q, p);
-			q += strlen(p);
+			wcscpy(q, p);
+			q += wcslen(p);
 			break;
 		}
 	}
-	*q = '\0'; /* in case last match reached to end of text_buf */
+	*q = L'\0'; /* in case last match reached to end of text_buf */
 	*start_point = sp - *result;
 	search_forwards(0, 0, 0, -1, cbdata);
 }

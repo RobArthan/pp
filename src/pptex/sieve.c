@@ -494,7 +494,7 @@ get_options(options_available *opts, char *filt)
 		if(opts[ikw].name != NULL) {
 			ans |= opts[ikw].flag;
 		} else {
-			grumble("unexpected keyword '%s'", wrkstr, &view_F, true);
+			grumble("unexpected keyword '%s'", wrkstr, &view_F, True);
 			return(0);						/* RETURN */
 		}
 
@@ -515,29 +515,29 @@ void
 check_cat_options(int flags)
 {
 	if(flags & OPT_VERBATIM && flags & OPT_ML_CHAR)
-		grumble1("conflicting options: 'verbatim' and 'mlchar'", &view_F, true);
+		grumble1("conflicting options: 'verbatim' and 'mlchar'", &view_F, True);
 
 	if(flags & OPT_LATEX && flags & OPT_ML_CHAR)
-		grumble1("conflicting options: 'latex' and 'mlchar'", &view_F, true);
+		grumble1("conflicting options: 'latex' and 'mlchar'", &view_F, True);
 
 	if(flags & OPT_CONV_EXT && flags & OPT_ML_CHAR)
-		grumble1("conflicting options: 'convext' and 'mlchar'", &view_F, true);
+		grumble1("conflicting options: 'convext' and 'mlchar'", &view_F, True);
 
 	if(flags & OPT_VERBATIM && flags & OPT_CONV_EXT)
-		grumble1("conflicting options: 'verbatim' and 'convext'", &view_F, true);
+		grumble1("conflicting options: 'verbatim' and 'convext'", &view_F, True);
 
 	if(flags & OPT_LATEX && flags & OPT_CONV_EXT)
-		grumble1("conflicting options: 'latex' and 'convext'", &view_F, true);
+		grumble1("conflicting options: 'latex' and 'convext'", &view_F, True);
 
 	if(flags & OPT_VERBATIM && flags & OPT_CONV_KW)
-		grumble1("conflicting options: 'verbatim' and 'convkw'", &view_F, true);
+		grumble1("conflicting options: 'verbatim' and 'convkw'", &view_F, True);
 
 	/* Need both OPT_VERBATIM and OPT_KW for OPT_FLAG_KW */
 	if(flags & OPT_FLAG_KW && !(flags & OPT_VERBATIM && flags & OPT_KW))
-		grumble1("ignored option: 'kwflag'", &view_F, true);
+		grumble1("ignored option: 'kwflag'", &view_F, True);
 
 	if(flags & OPT_VERB_ALONE && !(flags & OPT_VERBATIM))
-		grumble1("ignored option: 'verbalone'", &view_F, true);
+		grumble1("ignored option: 'verbalone'", &view_F, True);
 }
 /*
 
@@ -1301,7 +1301,7 @@ conclude_steerfile(void)
 
 		if(tab->num_actions > 0 && ! tab->has_copy_action) {
 			grumble("no copy action for category %s in current view",
-				tab->cat, &view_F, false);
+				tab->cat, &view_F, False);
 		}
 	}
 
@@ -1401,12 +1401,12 @@ insert(char *cat, int using_view, char *filt)
 
 	if(!IS_DIRECTIVE_CHAR(first_char) || first_char == '%') {
 		grumble("category name '%s' does not start with a directive character",
-			cat, &view_F, true);
+			cat, &view_F, True);
 	}
 
 	if(len_cat > 1 && kwi.char_code[first_char] != NULL
 			&& kwi.char_code[first_char]->act_kind == KW_DIRECTIVE) {
-		grumble("badly formed category name '%s'", cat,  &view_F, true);
+		grumble("badly formed category name '%s'", cat,  &view_F, True);
 		FPRINTF(stderr, "\tcharacter '%c' is a category name on its own\n",
 			first_char);
 	}
@@ -1442,7 +1442,7 @@ arguments_decode(int tab_ent, char *filt)
 	int scan_ans, chars_used;
 
 	if(table[tab_ent].num_actions > 0) {
-		grumble1("arguments entry must come first", &view_F, true);
+		grumble1("arguments entry must come first", &view_F, True);
 		return;								/* RETURN */
 	}
 
@@ -1466,13 +1466,13 @@ arguments_decode(int tab_ent, char *filt)
 	}
 
 	if(decoded == 0) {
-		grumble1("cannot decode min-max on arguments", &view_F, true);
+		grumble1("cannot decode min-max on arguments", &view_F, True);
 		l_max = l_min = 0;
 	}
 
 	if(l_max < 0 || l_max > MAX_DIR_ARGS
 	|| l_min < 0 || l_min > MAX_DIR_ARGS)
-		grumble1("min or max arguments outside range", &view_F, true);
+		grumble1("min or max arguments outside range", &view_F, True);
 	else {
 		if(l_min > l_max) {
 			int temp = l_min; l_min = l_max; l_max = temp;
@@ -1481,7 +1481,7 @@ arguments_decode(int tab_ent, char *filt)
 		if((table[tab_ent].min_args >=0 && table[tab_ent].min_args != l_min)
 		|| (table[tab_ent].max_args >=0 && table[tab_ent].max_args != l_max)) {
 			grumble1("conflict with earlier min or max arguments",
-				&view_F, true);
+				&view_F, True);
 		} else {
 			table[tab_ent].min_args = l_min;
 			table[tab_ent].max_args = l_max;
@@ -1528,7 +1528,7 @@ verify_macro_calls(int max_args, char *filt)
 					if(argnum != 0 && argnum > max_args) {
 						fail_text[1] = ch;
 						grumble("macro '%s' digit out of range",
-							fail_text, &view_F, true);
+							fail_text, &view_F, True);
 					}
 				}
 				break;
@@ -1541,7 +1541,7 @@ verify_macro_calls(int max_args, char *filt)
 
 			default:
 				fail_text[1] = ch;
-				grumble("unknown macro '%s'", fail_text, &view_F, true);
+				grumble("unknown macro '%s'", fail_text, &view_F, True);
 				break;
 			}
 		}
@@ -1579,12 +1579,12 @@ decode_action_line(
 	unsigned len_filt;
 
 	if(depth > 1) {
-		grumble1("too many output options", &view_F, true);
+		grumble1("too many output options", &view_F, True);
 		return(0);							/* RETURN */
 	}
 
 	if(tab->is_one_liner && using_view) {
-		grumble1("unexpected action line", &view_F, true);
+		grumble1("unexpected action line", &view_F, True);
 		return(0);							/* RETURN */
 	}
 
@@ -1596,20 +1596,20 @@ decode_action_line(
 
 	act_idx = find_action(action_name);
 	if(act_idx == NOT_FOUND) {
-		grumble1("action type not recognized", &view_F, true);
+		grumble1("action type not recognized", &view_F, True);
 		return(0);							/* RETURN */
 	}
 
 	switch(actions_available[act_idx].arg_type) {
 	case ARGS_YES:
 		if(len_filt == 0) {
-			grumble1("no argument provided for action", &view_F, true);
+			grumble1("no argument provided for action", &view_F, True);
 			return(0);						/* RETURN */
 		}
 		break;								/* BREAK */
 	case ARGS_NO:
 		if(len_filt != 0) {
-			grumble1("unexpected argument with action", &view_F, true);
+			grumble1("unexpected argument with action", &view_F, True);
 			return(0);						/* RETURN */
 		}
 		break;								/* BREAK */
@@ -1623,7 +1623,7 @@ decode_action_line(
 		} else if(actions_available[act_idx].code == ARG_ACTIONS) {
 			if(tab->extra_flags != 0) {
 				grumble1("duplicate action options",
-					&view_F, true);
+					&view_F, True);
 			}
 			tab->extra_flags = get_options(
 				actions_available[act_idx].options, filt);
@@ -1650,7 +1650,7 @@ decode_action_line(
 				if(cf->action_type == FILTER_ACT ||
 						cf->action_type == IGNORE_ACT) {
 					grumble1("output redirect not compatible with filter",
-						&view_F, true);
+						&view_F, True);
 					return(0);				/* RETURN */
 				}
 			} else {
@@ -1662,14 +1662,14 @@ decode_action_line(
 			if(actions_available[act_idx].copy_action) {
 				if(tab->has_copy_action) {
 					grumble1("multiple copy actions",
-						&view_F, true);
+						&view_F, True);
 					return(0);				/* RETURN */
 				}
 				tab->has_copy_action = 1;
 			}
 
 			if(act_num >= MAX_ACTION) {
-				grumble1("Too many actions", &view_F, true);
+				grumble1("Too many actions", &view_F, True);
 				return(0);					/* RETURN */
 			}
 
@@ -2110,7 +2110,7 @@ main_convert(
 
 		if(c_va == 0) all_alone = 0;
 		else if(found_white_space) {
-			grumble1("white space characters found on verbalone line", file_F, true);
+			grumble1("white space characters found on verbalone line", file_F, True);
 		}
 		opt_do_line_verbatim = ! all_alone;
 	}
@@ -2374,12 +2374,12 @@ main_convert(
 				}
 			}
 		} else if (tex_arg != NULL) {
-			grumble1("TeX argument stack overflow", file_F, true);
+			grumble1("TeX argument stack overflow", file_F, True);
 		}
 	}
 
 	if(outp >= lenout_line) {
-		grumble1("output line too large after macro expansion etc", file_F, true);
+		grumble1("output line too large after macro expansion etc", file_F, True);
 		EXIT(34);
 	}
 
@@ -2580,7 +2580,7 @@ set_up_new_category(dir_info *di)
 	di->table_index = look_up(di->cat);
 	if(di->table_index < 0) {
 		/* Unknown category */
-		grumble("skipping unknown category %s", di->cat, &main_F, true);
+		grumble("skipping unknown category %s", di->cat, &main_F, True);
 		di->tab = &table[0];
 		di->current_action = IGNORE_ACT;
 	} else {
@@ -2596,7 +2596,7 @@ set_up_new_category(dir_info *di)
 			grumble("%s arguments, ignoring category",
 				di->num_dl_args < di->tab->min_args
 					? "insufficient" : "too many",
-				&main_F, true);
+				&main_F, True);
 			if(di->tab->min_args == 0 && di->tab->max_args == 0) {
 				FPRINTF(stderr, "\tas %d,  but 0 argument allowed\n",
 					di->num_dl_args);
@@ -3036,7 +3036,7 @@ read_view_file(char *name)
 			if(tab_ent == NOT_FOUND) {
 				/* ... but there is no previous entry! */
 				grumble1("no category prior to action line",
-					&view_F, true);
+					&view_F, True);
 				continue;					/* CONTINUE */
 			}
 
@@ -3061,11 +3061,11 @@ read_view_file(char *name)
 			*(view + (q - p)) = '\0';
 
 			if(strlen(cat) == 0) {
-				grumble1("no category found", &view_F, true);
+				grumble1("no category found", &view_F, True);
 			}
 
 			if(strlen(view) == 0) {
-				grumble1("no view found", &view_F, true);
+				grumble1("no view found", &view_F, True);
 			}
 
 			/* Check the test variable, if any */
@@ -3105,7 +3105,7 @@ read_view_file(char *name)
 			} else if(using_view) {
 				if(table[tab_ent].num_actions >= 0) {
 					grumble1(
-"steering file line conflicts with an earlier entry", &view_F, true);
+"steering file line conflicts with an earlier entry", &view_F, True);
 					continue;				/* CONTINUE */
 				} else {
 					overwrite(tab_ent, using_view, filt);

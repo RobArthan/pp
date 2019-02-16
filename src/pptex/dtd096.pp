@@ -145,13 +145,14 @@ Assumption: the distribution concatenation symbol can be removed and everywhere 
 by its two character equivalent. 
 The conversions from extended character set files will continue to accept the distributed concatenation code, but the conversion to the extended character set will not make use of the character, and the \Product{} Reader/Writer will expand it on input, but not compress on output.
 
-At Phil Clayton's (nice) suggestion, the ProofPower mapping currently maps the greek
+At Phil Clayton's (nice) suggestion, the ProofPower mapping previously mapped the greek
 letters to the corresponding code points for Mathematical Alphanumeric Symbols in the range
-1D400-1D7FF. The MathML entities use the code points for Greek in the range 0370-03FF.
+1D400-1D7FF.
+However, the MathML entities use the code points for Greek in the range 0370-03FF.
 The Mathematical Greek Symbols do look nice, but to gain compatibility with MathML,
-we would like to revert to using the code points for Greek in the range 0370-03FF.
-This will also allow you to enter Greek by switching to a  standard Greek keyboard mapping.
-In passing we will also use the right symbol for $\phi$ (the current mapping uses what LaTeX
+we have reverted to using the code points for Greek in the range 0370-03FF.
+This also allows you to enter Greek by switching to a  standard Greek keyboard mapping.
+We also use the right symbol for $\phi$ (the previous mapping used what LaTeX
 calls ``\verb!\!varphi'' rather than ``\verb!\!phi'').
 
 For the record, these are the small greek letters in the current set of mathml entities:

@@ -173,7 +173,8 @@ void add_command_line_tool(Widget text_w)
 		xmTextWidgetClass,			paned,
 		NULL);
 
-	XtAddCallback(cmd_text, XmNmodifyVerifyCallback, text_field_verify_cb, NULL);
+	XtAddCallback(cmd_text, XmNmodifyVerifyCallbackWcs,
+						text_field_verify_cb, NULL);
 	register_selection_source(cmd_text);
 	register_palette_client(cmd_text);
 
@@ -249,13 +250,11 @@ void add_command_line_tool(Widget text_w)
 	cmd_line_data.previous = 0;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * set up text widget translations and font
+ * set up text widget translations
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	XtOverrideTranslations(cmd_text,
 		xpp_resources.text_translations);
-
-	copy_font_list(list_w, cmd_text);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Make return in the text widget activate it

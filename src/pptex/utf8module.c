@@ -23,15 +23,6 @@
 #define SLASH_ETC "/etc"
 
 /*
-typedef char bool;
-enum {False = 0, True = 1};
-*/
-
-#define bool short
-#define true 1
-#define false 0
-
-/*
 ================
 String Utilities
 ================
@@ -531,7 +522,7 @@ int debug = 0;
 #define NOT_FOUND (-1)
 #define U_NOT_FOUND 0xFFFFFF
 
-struct file_data dummy_F = {"dummy file", NULL, 0, 0, NULL, 0, 0, 0};
+struct file_data dummy_F = {"dummy file", NULL, 0, 0, NULL, {0, 0, 0}};
 
 /*
 ========================
@@ -841,7 +832,7 @@ add_new_keyword(
 	}
 
 	if(len > MAX_KW_LEN) {
-		grumble1("keyword too long", &keyword_F, true);
+		grumble1("keyword too long", &keyword_F, True);
 	}
 
 	if(len > kwi.max_kw_len) kwi.max_kw_len = len;
@@ -853,7 +844,7 @@ add_new_keyword(
 	  orig_kind = KW_SAMEAS;
 	  
 	  if(len2 > MAX_KW_LEN) {
-	    grumble1("sameas keyword too long", &keyword_F, true);
+	    grumble1("sameas keyword too long", &keyword_F, True);
 	  }
 	  if(len2 > kwi.max_kw_len) kwi.max_kw_len = len2;
 	};
@@ -874,7 +865,7 @@ add_new_keyword(
 	
 	if(kwi.num_keywords>1 && strcmp(kwi.keyword[kwi.num_keywords-1].name,
 				name) < 0) {
-		grumble1("keywords unsorted", &keyword_F, true);
+		grumble1("keywords unsorted", &keyword_F, True);
 	}
 }
 
@@ -1089,7 +1080,9 @@ void initialise_keyword_information(void) {
 	for(i=0; i<256; i++)
 		kwi.char_code[i] = NULL;
 
+	/*	add_new_keyword("%%", NOT_FOUND, 37, KW_SIMPLE, "\\%", NULL, 0); */
 	add_new_keyword("%%", NOT_FOUND, U_NOT_FOUND, KW_SIMPLE, "\\%", NULL, 0);
+
 };
 
 /*
@@ -1170,14 +1163,14 @@ void
 get_tex_arg(char *macro, regex_t **tex_arg, char *tex_arg_sense)
 {
 	char *p = macro;
-	char escaped = false;
+	char escaped = False;
 	int error_code;
 	int cflags = REG_EXTENDED;
 	while(*p) {
 		if(escaped) {
-			escaped = false;
+			escaped = False;
 		} else if (*p == '\\') {
-			escaped = true;
+			escaped = True;
 		} else if (*p == '#') {
 			break;
 		}
@@ -1200,7 +1193,7 @@ get_tex_arg(char *macro, regex_t **tex_arg, char *tex_arg_sense)
 			errbuf = malloc_and_check(errbufsize, 109);
 			(void) regerror(error_code, *tex_arg, errbuf, errbufsize);
 			grumble(" error in regular expression: %s", errbuf,
-				&keyword_F, true);
+				&keyword_F, True);
 			free(errbuf);
 			free(*tex_arg);
 			*tex_arg = 0;
@@ -1379,7 +1372,7 @@ read_keyword_file(char *name)
 	while( (!feof(keyword_F.fp)) && (!ferror(keyword_F.fp)) ) {
 		char * def_kw;
 		char * kind_str;
-		int kind, icode, kwindex;
+		int kind, icode /* , kwindex */;
 		char * code_kw_str;
 		unicode code;
 		int ech;
@@ -1409,20 +1402,20 @@ read_keyword_file(char *name)
 			if(def_kw[len_m_1] == '"') def_kw[len_m_1] = '%';
 
 			if(def_kw[0] != '%' || def_kw[len_m_1] != '%') {
-				grumble1("missing '%%' on keyword", &keyword_F, true);
+				grumble1("missing '%%' on keyword", &keyword_F, True);
 				continue;					/* CONTINUE */
 			}
 		}
 
 		if(kind_str == NULL) {
-			grumble1("no keyword kind", &keyword_F, true);
+			grumble1("no keyword kind", &keyword_F, True);
 			continue;						/* CONTINUE */
 		}
 
 		code_kw_str = split_at_space(kind_str);
 
 		if(code_kw_str == NULL) {
-			grumble1("no code or second keyword", &keyword_F, true);
+			grumble1("no code or second keyword", &keyword_F, True);
 			continue;						/* CONTINUE */
 		}
 
@@ -1437,7 +1430,7 @@ read_keyword_file(char *name)
 		else if	(strcmp(kind_str, "white") == 0) kind = KW_WHITE;
 		else {
 			grumble("unknown keyword kind: %s",
-				kind_str, &keyword_F, true);
+				kind_str, &keyword_F, True);
 			continue;						/* CONTINUE */
 		}
 
@@ -1446,7 +1439,7 @@ read_keyword_file(char *name)
 				/* OK */
 			} else {
 				grumble("unexpected text \"%s\" with sameas keyword", macro,
-					&keyword_F, true);
+					&keyword_F, True);
 				continue;					/* CONTINUE */
 			}
 
@@ -1456,7 +1449,7 @@ read_keyword_file(char *name)
 	
 				if(code_kw_str[0] != '%' || code_kw_str[len_m_1] !='%') {
 					grumble1("missing '%%' on sameas keyword",
-						&keyword_F, true);
+						&keyword_F, True);
 					continue;				/* CONTINUE */
 				}
 			}
@@ -1467,7 +1460,7 @@ read_keyword_file(char *name)
 
 			if(!get_char_unicode(code_kw_str, &icode)) {
 				grumble1("unreadable or out of range char code",
-					&keyword_F, true);
+					&keyword_F, True);
 				continue;					/* CONTINUE */
 			}
 
@@ -1491,19 +1484,19 @@ read_keyword_file(char *name)
 				ki->ech = ech;
 			      } else {
 				if (ki->uni != code)
-				  grumble1("clashing keyword definitions", &keyword_F, true);
+				  grumble1("clashing keyword definitions", &keyword_F, True);
 			      };
 			    } else {
-			    grumble1("duplicate keyword", &keyword_F, true);
+			    grumble1("duplicate keyword", &keyword_F, True);
 			    }
-			  } else grumble1("duplicate keyword", &keyword_F, true);
+			  } else grumble1("duplicate keyword", &keyword_F, True);
 			  continue;
 			}
 			*/
 			
 			if((kind == KW_DIRECTIVE || kind == KW_START_DIR)
 					&& ech == -1) {
-				grumble1("ascii/ext code for directive is '-1'", &keyword_F, true);
+				grumble1("ascii/ext code for directive is '-1'", &keyword_F, True);
 				continue;					/* CONTINUE */
 			}
 
@@ -1575,11 +1568,13 @@ conclude_keywordfile(void)
 	sizeof(struct keyword_information),
 	compare_keyword_information);
   
-  /* Then scan keyword table combining multiple entries for a keyword into a single entry,
-     where possible.
-     There are two pairs being tracked here.
-     i and j are positrions of source and destination as the keyword file
-     is transcribed into itself compressing multiple entries for single keyword into ine entry.
+  /* Then scan keyword table combining multiple entries for a keyword into
+     a single entry, where possible.
+
+     There are two positions being tracked here.
+     i and j are positions of source and destination during the copy.
+     The keyword file is transcribed into itself compressing multiple entries
+     for a single keyword into one entry.
   */
   
   j=0;
@@ -1590,12 +1585,12 @@ conclude_keywordfile(void)
       /* if (debug & D_UTF8) FPRINTF(stderr, "%s\tsimple\t0x%06x\n", cur_ki->name, cur_ki->uni); */
       if (prev_ki->orig_kind != KW_SIMPLE || cur_ki->orig_kind != KW_SIMPLE)
 	grumble("Multiple keyword file entries for keyword %s, not all SIMPLE\n",
-		prev_ki->name, &keyword_F, false);
+		prev_ki->name, &keyword_F, False);
       else {
 	if (prev_ki->ech != NOT_FOUND && cur_ki->uni != U_NOT_FOUND
 	    && cur_ki->uni != prev_ki->uni)
 	  grumble("Second keyword file entry for keyword %s, not permitted to change unicode for ext char\n",
-		  prev_ki->name, &keyword_F, false);
+		  prev_ki->name, &keyword_F, False);
 	else {
 	  if (cur_ki->uni != U_NOT_FOUND) {
 	    prev_ki->uni = cur_ki->uni;
@@ -1633,7 +1628,7 @@ conclude_keywordfile(void)
       
       if(copy_from_index == NOT_FOUND) {
 	grumble("undeclared keyword '%s' referred to by sameas",
-		cur_ki->macro, &keyword_F, false);
+		cur_ki->macro, &keyword_F, False);
 	dump_keywords = 1;
       } else {
 	struct keyword_information *copy_from
@@ -1651,7 +1646,7 @@ conclude_keywordfile(void)
 	   cur_ki->act_kind ==
 	   KW_SAMEAS_UNKNOWN) {
 	  grumble("unresolved 'sameas' for keyword '%s' (keyword referred to is also 'sameas')",
-		  cur_ki->name, &keyword_F, false);
+		  cur_ki->name, &keyword_F, False);
 	  dump_keywords = 1;
 	}
       }
@@ -1684,7 +1679,7 @@ conclude_keywordfile(void)
 	  kwi.char_code[cur_ki->ech] = cur_ki;
 	else {
 	  grumble("conflicting unicode codes for keyword '%s'",
-		  cur_ki->name, &keyword_F, false);
+		  cur_ki->name, &keyword_F, False);
 	  FPRINTF(stderr,
 		  "\tchar code %d already has keyword '%s'\n",
 		  cur_ki->ech,
@@ -1704,7 +1699,7 @@ conclude_keywordfile(void)
     }
     
     if(cur_ki->ech == -1 && cur_ki->uni == -1 && cur_ki->macro == NULL) {
-      grumble1("macro required when char code is -1", &keyword_F, false);
+      grumble1("macro required when char code is -1", &keyword_F, False);
       dump_keywords = 1;
     }
   }
@@ -1719,7 +1714,7 @@ conclude_keywordfile(void)
 	SET_DIRECTIVE_CHAR(cur_ki->ech);
       else
 	grumble("no extended char with directive keyword '%s'",
-		cur_ki->name, &keyword_F, false);
+		cur_ki->name, &keyword_F, False);
       
       if(cur_ki->name[1] != '\0' && cur_ki->name[1] != '%')
 	SET_SND_CHAR_DIR_KW(cur_ki->name[1]);
@@ -1730,7 +1725,7 @@ conclude_keywordfile(void)
 	SET_VERB_ALONE_CH(cur_ki->ech);
       else
 	grumble("no extended char with directive keyword '%s'",
-		cur_ki->name, &keyword_F, false);
+		cur_ki->name, &keyword_F, False);
       break;
       
     default:
@@ -1769,7 +1764,7 @@ conclude_keywordfile(void)
 	sizeof(&kwi),
 	compare_keyword_unicode2);
 
-  /* Remove duplicate entries (keeping the first keyword with each unicode code */
+  /* Remove duplicate entries (keeping the first keyword with each unicode code) */
 
   j = 0;
   for(i=1; i<kwi.num_unicodes; i++) {  
@@ -1800,11 +1795,24 @@ conclude_keywordfile(void)
     
   if(stop_prog) EXIT(22);	
 }
-/*
 
+/*
 ------------------
 read_keyword_files
 ------------------
+Before making use of any procedures which translate to or from
+named percent keywords it is necessary to construct a keyword file.
+This is done by reading one or more keyword files.
+The names of these files are determined by the -k and -K command
+parameters in existing applications.
+
+If the content of these parameters is compiled into an array
+of string references then this array may be passed to
+the following procedure, which will read the files and construct
+the keyword table.
+
+Examples of how to compile the array may be found in the sieve
+and pp_file_conv applications.
 */
 
 void
@@ -1864,7 +1872,7 @@ get_hol_kw(char *str,
 		kw[MAX_KW_LEN / 4] = '\0';
 
 		if(warn) {
-			grumble("mal-formed keyword starting with %s", kw, file_F, true);
+			grumble("mal-formed keyword starting with %s", kw, file_F, True);
 		}
 	} else {
 		kw[kwlen++] = '%';
@@ -1880,7 +1888,7 @@ get_hol_kw(char *str,
 		}
 
 		if(ans<0 && warn) {
-grumble("unknown keyword: %s", kw, file_F, true);
+grumble("unknown keyword: %s", kw, file_F, True);
 		}
 	}
 
@@ -1906,7 +1914,7 @@ Convert a unicode code point to a 6-digit hexadecimal in percents */
 
 char *unicode_to_hex(unicode code_point)
 {
-	static char buf[10];
+	static char buf[11];
 	sprintf(buf, "%%#x%06X%%", code_point);
 	return buf;
 }
@@ -2006,7 +2014,7 @@ struct keyword_information *unicode_to_kwi(unicode cp)
 {	
   struct keyword_information key, *keyr;
   struct keyword_information **search_result;
-  int i;
+  /*  int i; */
   key.uni = cp;
   keyr = &key;
   /*  if(debug & D_UTF8) {
@@ -2034,7 +2042,7 @@ char *unicode_to_kw(unicode code_point)
 {
   struct keyword_information *kwi = unicode_to_kwi(code_point);
   if(debug & D_UTF8) {
-    PRINTF("unicode_to_kw: code_point = 0x%6X, kwi = 0x%8X\n", code_point, (unsigned int)kwi);
+    PRINTF("unicode_to_kw: code_point = 0x%6X, kwi = %p\n", code_point, (void *)kwi);
     fflush(NULL);}
   ;
   return (kwi == NULL) ? unicode_to_hex(code_point) : kwi->name;
@@ -2063,7 +2071,7 @@ char *unicode_to_aekw(unicode code_point){
   };
   kwi = unicode_to_kwi(code_point);
   if(debug & D_UTF8) {
-    PRINTF("unicode_to_aekw: code_point = 0x%6X, kwi = 0x%8X\n", code_point, (unsigned int)kwi);
+    PRINTF("unicode_to_aekw: code_point = 0x%6X, kwi = %p\n", code_point, (void *)kwi);
     fflush(NULL);
   };
   if (kwi == NULL) return unicode_to_hex(code_point);
@@ -2273,7 +2281,7 @@ int read_utf8_as_unicode(struct file_data *file_F){
 read_line_as_ext
 ----------------
 Reads a line into a the file cur_line buffer, and then,
-if the file is flagged as utf8, convert from utf8 to
+if the file is flagged as utf8, converts from utf8 to
 the ProofPower extended character encoding.
 
 If the utf8 flag is set in the file_data, the line is read first as
@@ -2413,7 +2421,10 @@ unicode ext_to_unicode(unsigned char ch){
     message1("unknown ext code in input file");
     return NOT_FOUND;
   }
-  else return ki->uni;
+  else {
+    if (ki->uni == ch) (void)fputs("Warning: use of unassigned ext character code.\n", stderr);
+    return ki->uni;
+  };
 };
 
 /*
@@ -2488,7 +2499,7 @@ void ext_seq_to_unicode(char *line, unicode codes[]){
 ext_kw_seq_to_unicode
 --------------------------
 Takes a null terminated string of characters which are either asscii,
-or ProofPower extended characters, or perent enclosed keyword names
+or ProofPower extended characters, or percent enclosed keyword names
 (declared in the current keyword files) or percent enclosed ascii
 hexadecimal unicode code points and converst them to a null terminated
 array of unicode code points. 
@@ -2578,9 +2589,9 @@ void output_ext_kw_as_utf8(char *line, FILE *file_F){
 };
 
 /*
------------------------
-transcribe_file_to_utf8
------------------------
+---------------------------
+transcribe_file_nkw_to_utf8
+---------------------------
 This procedure transcribes data from an input stream which is taken
 to be in the ProofPower extended ascii character set to an output
 stream which is unicode as utf8.
@@ -2593,13 +2604,14 @@ This version will only translate ext codes, not keywords or literal code points.
 
 void
 transcribe_file_nkw_to_utf8(struct file_data *input_F, FILE *output_F){
+  int r;
   if(debug & D_UTF8) message1("transcribe_file_to_utf8 1");
   while (!feof(input_F->fp)) {
-  if(debug & D_UTF8) message1("transcribe_file_to_utf8 2");
-    read_line_as_ext(input_F);
-    if(debug & D_UTF8)
-      message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
-    output_ext_as_utf8(input_F->cur_line, output_F);
+    if(debug & D_UTF8) message1("transcribe_file_to_utf8 2");
+    r=read_line_as_ext(input_F);
+    if(debug & D_UTF8) message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
+    if(!(feof(input_F->fp) && r==0))
+      output_ext_as_utf8(input_F->cur_line, output_F);
   };
   return;
 }
@@ -2618,13 +2630,15 @@ which will be transformed.
 
 void
 transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F){
+  int r;
   if(debug & D_UTF8) message1("transcribe_file_to_utf8 1");
   while (!feof(input_F->fp)) {
   if(debug & D_UTF8) message1("transcribe_file_to_utf8 2");
-    read_line_as_ext(input_F);
+    r=read_line_as_ext(input_F);
     if(debug & D_UTF8)
       message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
-    output_ext_kw_as_utf8(input_F->cur_line, output_F);
+    if(!(feof(input_F->fp) && r==0)){
+      output_ext_kw_as_utf8(input_F->cur_line, output_F);};
   };
   return;
 }
@@ -2633,9 +2647,8 @@ transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F){
 ----------------------
 transcribe_file_to_ext
 ----------------------
-This procedure transscribes data from an input stream which is taken
-to be in the ProofPower extended ascii character set to an output
-stream which is unicode using the ProofPower extended character set.
+This procedure transcribes data from a utf8 encoded unicoden input stream,
+ to an output stream using the ProofPower extended character set.
 
 The input stream is to be supplied as a "file_data*", but the output
 stream as FILE*.
@@ -2643,10 +2656,12 @@ stream as FILE*.
 
 void
 transcribe_file_to_ext(struct file_data *input_F, FILE *output_F){
+  int r;
   if (debug) fflush(NULL);
   while (!feof(input_F->fp)) {
-    read_line_as_ext(input_F);
-    FPRINTF(output_F, "%s\n", input_F->cur_line);
+    r=read_line_as_ext(input_F);
+    if(!(feof(input_F->fp) && r==0)){
+      FPRINTF(output_F, "%s\n", input_F->cur_line);};
     if (debug) fflush(NULL);
   };
   return;
@@ -2665,9 +2680,11 @@ be either utf8 or ascii/ext but the output stream as FILE* and will be ascii.
 
 void
 transcribe_file_to_ascii(struct file_data *input_F, FILE *output_F){
+  int r;
   while (!feof(input_F->fp)) {
-    read_line_as_ascii(input_F);
-    FPRINTF(output_F, "%s\n", input_F->cur_line);
+    r=read_line_as_ascii(input_F);
+    if(!(feof(input_F->fp) && r==0)){
+      FPRINTF(output_F, "%s\n", input_F->cur_line);};
   };
   return;
 }

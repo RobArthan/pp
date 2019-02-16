@@ -168,7 +168,6 @@ Tests for the symbols supported by the style file hol1.sty.}
 	coprod:	∐
 	dagger:	†
 	dashv:	⊣
-	dcat:	
 	ddagger:	‡
 	def:	≜
 	delta:	δ

@@ -30,7 +30,7 @@
 #include "xpp.h"
 
 #define MSG_LINE_LEN 40
-#define HELP_LINE_LEN 60
+#define HELP_LINE_LEN 72
 #define HELP_SCREEN_HEIGHT 24
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -132,6 +132,12 @@ void help_dialog(Widget w, char *str)
 		XtVaGetValues(widget, XmNheight, &h, NULL);
 		XtVaSetValues(form, XmNpaneMaximum, h, XmNpaneMinimum, h, NULL);
 		attach_ro_edit_popup(help_text);
+		XtInsertEventHandler(help_text,
+			ButtonPressMask | ButtonReleaseMask,
+			False,
+			defer_scroll,
+			NULL,
+			XtListHead);
 		register_selection_source(help_text);
 		register_palette_client(help_text);
 	}

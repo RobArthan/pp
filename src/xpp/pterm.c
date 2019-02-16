@@ -243,7 +243,7 @@ macros before using them.
 	#undef  USE_STREAMS
 	#define USE_POSIX_TERMIO
 	#define SET_ATTRS_IN_PARENT
-	#define USE_CFMAKERAW /* again historical: we probably could now */
+	#define USE_CFMAKERAW
  	#undef  USE_TIOCEXCL
 #endif
 
@@ -638,8 +638,9 @@ void get_pty(void)
  /******************************************************************/
 		char	buf;
 		char **arglist;
+#ifdef TIOCNOTTY
 		int tty_fd;
-
+#endif
 		default_sigs();
 		close(control_fd);
 		dup2(slave_fd, STDIN);
@@ -833,7 +834,7 @@ static void get_from_application(
 	XtInputId	*unused_id)
 {
 	int ct;
-	char buf[XFER_SIZE + 1]; /* allow for null-termination in scroll_out */
+	char buf[XFER_SIZE];
 	if((ct = read(control_fd, buf, XFER_SIZE)) > 0) {
 		scroll_out(buf, ct, False);
 	}
@@ -1302,7 +1303,7 @@ static void default_sigs(void)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * new_session: run a program. either synchronously
- * or asynchronously as determined by Bollean parameter.
+ * or asynchronously as determined by Boolean parameter.
  *
  * If asynchronous, we actually fork a child which then forks again and
  * the grand-child becomes the new xpp process. The

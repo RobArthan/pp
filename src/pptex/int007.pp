@@ -170,7 +170,6 @@
 	coprod:	∐
 	dagger:	†
 	dashv:	⊣
-	dcat:	
 	ddagger:	‡
 	def:	≜
 	delta:	δ

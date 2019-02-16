@@ -22,6 +22,7 @@
  * MACROS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+#include <wchar.h>
 #include <X11/Intrinsic.h>
 #include <Xm/XmAll.h>
 
@@ -42,6 +43,7 @@
 #define ACTION_PROC_ARGS Widget,XEvent*,String*,Cardinal*
 
 #define APP_CLASS "Xpp"
+#define APP_CLASS_EXT "XppExt"
 
 /* See the typedef for MenuItem for the following */
 
@@ -52,6 +54,8 @@
 #ifdef LISTWIDGETS
 #define EDITRES
 #endif
+
+#define MBSBUFSIZ 4000
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * TYPE DEFS
@@ -295,6 +299,8 @@ typedef enum {
 	extern Boolean init_templates_tool(
 		Widget	w);
 	extern void add_templates_tool(Widget w);
+/* Module: ucdnames */
+	extern void identify_unicode_cb(CALLBACK_ARGS);
 /* Module: undo */
 	extern void clear_undo(
 		XtPointer undo_ptr);
@@ -364,6 +370,7 @@ typedef enum {
 		Widget w);
 	extern void attach_popup_menu(Widget work_w, Widget menu_w);
 	extern char *get_selection(Widget w, char *err_msg);
+	extern void defer_scroll (EVENT_HANDLER_ARGS);
 #ifdef EDITRES
 	extern void add_edit_res_handler(Widget shell);
 #endif
@@ -378,20 +385,21 @@ typedef enum {
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 typedef struct {
-	XtTranslations text_translations;
-	char *templates;
-	char *palette;
-	char *command_line_list;
 	int  add_new_line_mode;
-	char *default_command;
 	char *argument_checker;
-	char *option_string;
-	float journal_ratio;
-	unsigned char orientation;
-	int total_rows;
-	int total_columns;
-	int edit_only_rows;
+	char *command_line_list;
+	char *default_command;
 	int edit_only_columns;
+	int edit_only_rows;
+	float journal_ratio;
+	char *locale;
+	char *option_string;
+	unsigned char orientation;
+	char *palette;
+	char *templates;
+	XtTranslations text_translations;
+	int total_columns;
+	int total_rows;
 } XppResources;
 
 #ifdef _xpp
@@ -404,6 +412,7 @@ typedef struct {
 	extern char *pp_home;
 	extern Boolean pp_env_debug;
 	extern Boolean updating_journal;
+	extern Boolean using_ext_char_set;
 	extern const char *const file_type_names[]
 #ifdef _xpp
 	= {"Unix", "MS-DOS", "Macintosh" };

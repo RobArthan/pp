@@ -227,7 +227,7 @@ if(!global_options.edit_only) {
 	XmStringFree(s);
 
 	command_text = XtVaCreateManagedWidget("command-line",
-		xmTextWidgetClass,		command_form,
+		xmTextFieldWidgetClass,		command_form,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
@@ -258,7 +258,7 @@ if(!global_options.edit_only) {
 	XmStringFree(s);
 
 	journal_max_text = XtVaCreateManagedWidget("journal-max",
-		xmTextWidgetClass,		journal_max_form,
+		xmTextFieldWidgetClass,		journal_max_form,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
@@ -308,7 +308,7 @@ if(!global_options.edit_only) {
  * add callbacks to restrict journal_max_text to numbers
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtAddCallback(journal_max_text, XmNmodifyVerifyCallback,
+	XtAddCallback(journal_max_text, XmNmodifyVerifyCallbackWcs,
 		(XtCallbackProc)number_verify_cb, (XtPointer)NULL);
 } /* now stuff common to edit-only and command sessions */
 	button_frame = XtVaCreateManagedWidget("button-frame",

@@ -23,6 +23,7 @@
  * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+
 #include <string.h>
 #include <stdio.h>
 #include "xpp.h"
@@ -42,8 +43,9 @@ typedef struct undo_node {
 	Boolean change_complete; /* true if the change is complete */
 	Cardinal first,          /* position in text of chars to */
 	         last;           /* be replaced by an undo */
-	char *old_text;          /* deleted characters to put in */
-	Cardinal old_text_size;  /* current amount of space in the old_text buffer */
+	wchar_t *old_text;       /* deleted characters to put in */
+	Cardinal old_text_size;  /* current number of wide characters
+				    available in the old_text buffer */
     Boolean was_null;
 	struct undo_node *next,
 	                 *prev;
@@ -125,13 +127,13 @@ static char *lXtRealloc(char *ptr, size_t size, UndoBuffer *ub, Boolean *answer)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Accessor functions to the undo structures
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char *old_text(UndoBuffer *ub)
+static wchar_t *old_text(UndoBuffer *ub)
 {
-	static char emptyString[] = "";
+	static wchar_t emptyString[] = L"";
 	if(ub->active == (UndoNode *) NULL) {
 		return emptyString;
 	}
-	if(ub->active->old_text == (char *) NULL) {
+	if(ub->active->old_text == (wchar_t *) NULL) {
 		return emptyString;
 	}
 	return ub->active->old_text;
@@ -143,10 +145,10 @@ static void clear_old_text(UndoBuffer *ub)
 	if(ub->active == (UndoNode *) NULL) {
 		return;
 	}
-	if(ub->active->old_text == (char *) NULL) {
+	if(ub->active->old_text == (wchar_t *) NULL) {
 		return;
 	}
-	*(ub->active->old_text) = '\0';
+	*(ub->active->old_text) = L'\0';
 	/* Don't free anything now, it's possible the next thing done will *
 	 * be a realloc.  If it isn't the old value will be freed then.    */
 }
@@ -154,7 +156,7 @@ static void clear_old_text(UndoBuffer *ub)
 static Boolean grow_old_text_to(UndoBuffer *ub, Cardinal len, Boolean *answer)
 {
 	/* Make the old_text buffer (at least) len+1 big */
-	char *ptr;
+	wchar_t *ptr;
 
 	if(ub->active == (UndoNode *) NULL) {
 		return False;
@@ -165,14 +167,15 @@ static Boolean grow_old_text_to(UndoBuffer *ub, Cardinal len, Boolean *answer)
 		return True;
 	}
 
-	if(ub->active->old_text_size == 0 || ub->active->old_text == (char *) NULL) {
-		ptr = lXtMalloc(len+1, ub, answer);
+	if(ub->active->old_text_size == 0 || ub->active->old_text == (wchar_t *) NULL) {
+		ptr = (wchar_t*)lXtMalloc((len+1)*sizeof(wchar_t), ub, answer);
 		if(ptr) {
 			*ptr = '\0';
 		}
 	} else {
 		ptr = ub->active->old_text;
-		ptr = lXtRealloc(ptr, len+1, ub, answer);
+		ptr = (wchar_t*)lXtRealloc((char*)ptr,
+					(len+1)*sizeof(wchar_t), ub, answer);
 	}
 	if(!ptr) {
 		return False;
@@ -183,14 +186,16 @@ static Boolean grow_old_text_to(UndoBuffer *ub, Cardinal len, Boolean *answer)
 	return True;
 }
 
+/*
+ The units for MIN_OT_SIZE are wide characters, not bytes.
+ */
 #define MIN_OT_SIZE 128
 #define OT_GROWTH_FACTOR 0.25
 static Boolean grow_old_text(UndoBuffer *ub, Boolean *answer)
 {
 	/* Make the old_text buffer (at least) one character bigger */
-	Cardinal len,
-	    new_size;
-	char *ptr;
+	Cardinal len, new_size;
+	wchar_t *ptr;
 
 	/* There's a fair chance that the next thing that will happen *
 	 * after causing the oldText string to grow is that it will   *
@@ -201,8 +206,9 @@ static Boolean grow_old_text(UndoBuffer *ub, Boolean *answer)
 	}
 
 	len = 0;
-	if(ub->active->old_text_size != 0 && ub->active->old_text != (char *) NULL) {
-		len = strlen(ub->active->old_text);
+	if(ub->active->old_text_size != 0 &&
+				ub->active->old_text != (wchar_t*) NULL) {
+		len = wcslen(ub->active->old_text);
 	}
 	if(len+1 < ub->active->old_text_size) {
 		/* There's already enough space */
@@ -218,12 +224,14 @@ static Boolean grow_old_text(UndoBuffer *ub, Boolean *answer)
 			new_size += MIN_OT_SIZE;
 		}
 	}
-	if(ub->active->old_text_size == 0 || ub->active->old_text == (char *) NULL) {
-		ptr = lXtMalloc(new_size, ub, answer);
+	if(ub->active->old_text_size == 0 ||
+				ub->active->old_text == (wchar_t*) NULL) {
+		ptr = (wchar_t*)lXtMalloc(new_size*sizeof(wchar_t), ub, answer);
 		if(!ptr) {
 			/* we're in real trouble, but try to be helpful */
 			new_size = len+2;
-			ptr = lXtMalloc(new_size, ub, answer);
+			ptr = (wchar_t*)lXtMalloc(new_size*sizeof(wchar_t), ub,
+									answer);
 			if(ptr) {
 				low_memory_warning(ub);
 			}
@@ -233,12 +241,14 @@ static Boolean grow_old_text(UndoBuffer *ub, Boolean *answer)
 		}
 	} else {
 		ptr = ub->active->old_text;
-		ptr = lXtRealloc(ptr, new_size, ub, answer);
+		ptr = (wchar_t*)lXtRealloc((char*)ptr,
+				new_size*sizeof(wchar_t), ub, answer);
 		if(!ptr) {
 			/* as above, we're really in trouble, but try to be helpful */
 			new_size = len+2;
 			ptr = ub->active->old_text;
-			ptr = lXtRealloc(ptr, new_size, ub, answer);
+			ptr = (wchar_t*)lXtRealloc((char*)ptr,
+					new_size*sizeof(wchar_t), ub, answer);
 			if(ptr) {
 				low_memory_warning(ub);
 			}
@@ -252,9 +262,9 @@ static Boolean grow_old_text(UndoBuffer *ub, Boolean *answer)
 
 	return True;
 }
-static Boolean prefix_old_text(UndoBuffer *ub, char ch, Boolean *answer)
+static Boolean prefix_old_text(UndoBuffer *ub, wchar_t ch, Boolean *answer)
 {
-	char *p,
+	wchar_t *p,
 	     this,
 	     prev;
 
@@ -270,13 +280,13 @@ static Boolean prefix_old_text(UndoBuffer *ub, char ch, Boolean *answer)
 		*p = prev;
 		prev = this;
 	}
-	*p = '\0';
+	*p = L'\0';
 
 	return True;
 }
-static Boolean affix_old_text(UndoBuffer *ub, char ch, Boolean *answer)
+static Boolean affix_old_text(UndoBuffer *ub, wchar_t ch, Boolean *answer)
 {
-	char *p;
+	wchar_t *p;
 
 	if(ub->active == (UndoNode *) NULL) {
 		return False;
@@ -444,9 +454,9 @@ static Boolean freeUndoNodesInner(UndoBuffer *ub, UndoNode *nd)
 	(void) freeUndoNodesInner(ub, nd->next);
 	nd->next = (UndoNode *) NULL;
 	nd->prev = (UndoNode *) NULL;
-	if(nd->old_text != (char *) NULL) {
-		lXtFree(nd->old_text);
-		nd->old_text     = (char *) NULL;
+	if(nd->old_text != (wchar_t *) NULL) {
+		lXtFree((char*)nd->old_text);
+		nd->old_text     = (wchar_t *) NULL;
 		nd->old_text_size = 0;
 	}
 	lXtFree((char *) nd);
@@ -479,7 +489,7 @@ static Boolean newUndoNode(UndoBuffer *ub, Boolean *answer)
 	new->first              = 0;
 	new->last               = 0;
 	new->changes_saved      = False;
-	new->old_text           = (char *) NULL;
+	new->old_text           = (wchar_t *) NULL;
 	new->old_text_size      = 0;
 	new->was_null           = False;
 	new->next               = (UndoNode *) NULL;
@@ -699,7 +709,7 @@ XtPointer add_undo(
  * **** **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean reinit_undo_buffer (
 	UndoBuffer	*ub,
-	XmTextVerifyCallbackStruct *cbs,
+	XmTextVerifyCallbackStructWcs *cbs,
 	Boolean cu,
 	Boolean *answer)
 {
@@ -743,7 +753,7 @@ static Boolean reinit_undo_buffer (
 static Boolean monitor_typing(
 	Widget		text_w,
 	UndoBuffer *ub,
-	XmTextVerifyCallbackStruct	*cbs,
+	XmTextVerifyCallbackStructWcs	*cbs,
 	Boolean    *noMA)
 {
 	Cardinal len, lst = last(ub);
@@ -753,18 +763,18 @@ static Boolean monitor_typing(
 	   cbs->endPos == cbs->startPos + 1 &&
 	   (cbs->endPos == lst || cbs->startPos == lst)) {
 		/* the user is deleting single character adjacent to the end of the current thread */
-		char buf[2];
+		wchar_t buf[2];
 		if(lst > first(ub)) {
 			/* start a new thread if there are any typed characters to remember */
 			if(!reinit_undo_buffer(ub, cbs, True, noMA)) {
 				return False;
 			}
 		}
-		if(XmTextGetSubstring(ub->text_w,
-		                      cbs->startPos,
-		                      1,
-		                      2,
-		                      buf) != XmCOPY_SUCCEEDED) {
+		if(XmTextGetSubstringWcs(ub->text_w,
+		                         cbs->startPos,
+		                         1,
+		                         2,
+		                         buf) != XmCOPY_SUCCEEDED) {
 			/* Motif must have run out of memory */
 			*noMA = noMemory(ub);
 			return False;
@@ -795,17 +805,17 @@ static Boolean monitor_typing(
 		if(!grow_old_text_to(ub, len, noMA)) {
 			return False;
 		}
-		if(XmTextGetSubstring(ub->text_w,
+		if(XmTextGetSubstringWcs(ub->text_w,
                               cbs->startPos,
                               len,
                               len+1,
                               old_text(ub)) == XmCOPY_SUCCEEDED) {
-			char *ptr = old_text(ub)+len;
-			*ptr = '\0';
+			wchar_t *ptr = old_text(ub)+len;
+			*ptr = L'\0';
 
 			set_change_complete(ub, False);
-			set_first(ub,      cbs->startPos);
-			set_last(ub,       cbs->startPos + cbs->text->length);	
+			set_first(ub, cbs->startPos);
+			set_last(ub, cbs->startPos + cbs->text->length);	
 		} else {
 			/* Our buffer was big enough, so Motif must have run out of memory */
 			*noMA = noMemory(ub);
@@ -816,8 +826,8 @@ static Boolean monitor_typing(
 			return False;
 		}
 		set_change_complete(ub, False);
-		set_first(ub,      cbs->startPos);
-		set_last(ub,       cbs->startPos + cbs->text->length);	
+		set_first(ub, cbs->startPos);
+		set_last(ub, cbs->startPos + cbs->text->length);	
 		clear_old_text(ub);
 	} else if(
 		(cbs->text->length != 0 && *old_text(ub) != 0)
@@ -892,7 +902,7 @@ void undo_modify_cb(
 	XtPointer	xtp_cbs)
 {
 	UndoBuffer *ub = cbd;
-	XmTextVerifyCallbackStruct *cbs = xtp_cbs;
+	XmTextVerifyCallbackStructWcs *cbs = xtp_cbs;
 	Boolean noMemoryAnswer = False;
 	Position ignored_x, ignored_y;
 	if(!ub->enabled) {
@@ -952,14 +962,14 @@ static Boolean undo_redo(
 	}
 	ub->undoing = True;
 	set_change_complete(ub, True);
-	len = strlen(old_text(ub));
+	len = wcslen(old_text(ub));
 	if(amUndoing) {
 		set_was_null(ub, len == 0);
 	}
 	fst = first(ub);
 	lst = last(ub);
 	text_show_position(ub->text_w, fst);
-	XmTextReplace(ub->text_w, fst, lst, old_text(ub));
+	XmTextReplaceWcs(ub->text_w, fst, lst, old_text(ub));
 
 	if(len) {
 		XmTextSetSelection(ub->text_w, fst, fst+len, CurrentTime);

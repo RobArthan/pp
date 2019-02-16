@@ -34,7 +34,9 @@
 #include "xpp.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
+#include <wctype.h>
 #include <X11/Xatom.h>
 #include <X11/Intrinsic.h>
 #include <X11/Shell.h>
@@ -152,12 +154,12 @@ void set_menu_item_label(Widget w, Cardinal i, char *lab)
 void check_text_window_limit(Widget w, Cardinal max)
 {
 	XmTextPosition siz;
-	Cardinal bytes_to_go;
+	Cardinal glyphs_to_go;
 
-	char *text, *p;
-	const char *fmt =
-	"**** Text lost when buffer exceeded %ld bytes ****\n";
-	char msg[80]; /* enough for fmt with %ld expanded */
+	wchar_t *text, *p;
+	const wchar_t *fmt =
+		L"**** Text lost when buffer exceeded %ld characters ****\n";
+	wchar_t msg[80]; /* enough for fmt with %ld expanded */
 
 	if(max < 1000) {
 		return;
@@ -169,41 +171,27 @@ void check_text_window_limit(Widget w, Cardinal max)
 		return;
 	}
 
-	bytes_to_go = siz / 20;
+	glyphs_to_go = siz / 20;
 
-	text = XmTextGetString(w);
+	text = XmTextGetStringWcs(w);
 
-	for(p = text + bytes_to_go; p - text < 2*bytes_to_go; ++p) {
-		if(*p == '\n') {
+	for(p = text + glyphs_to_go; p - text < 2*glyphs_to_go; ++p) {
+		if(*p == L'\n') {
 			break;
 		}
 	}
 
-	if(*p == '\n') {
-		bytes_to_go = p - text + 1;
+	if(*p == L'\n') {
+		glyphs_to_go = p - text + 1;
 	}
 
-	sprintf(msg, fmt, max);
+	XtFree((char*)text);
+
+	swprintf(msg, 79, fmt, max);
 
 	updating_journal = True;
-	XmTextReplace(w, 0, bytes_to_go, msg);
+	XmTextReplaceWcs(w, 0, glyphs_to_go, msg);
 	updating_journal = False;
-}
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * copy_font_list: copy the font list resource from one text
- * widget to another.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-void copy_font_list (
-	Widget	to_w,
-	Widget from_w)
-{
-	XmFontList fontlist;
-
-	XtVaGetValues(from_w, XmNfontList, &fontlist, NULL);
-	if(fontlist != NULL) {
-		XtVaSetValues(to_w,
-		XmNfontList, fontlist, NULL);
-	}
 }
 
 /* **** ** **** **** **** **** **** **** **** **** **** ****
@@ -284,15 +272,11 @@ void number_verify_cb(
 	XtPointer		unused2,
 	XtPointer		xtp)
 {
-	XmTextVerifyCallbackStruct *cbs = xtp;
+	XmTextVerifyCallbackStructWcs *cbs = xtp;
 	int i;
-	char *p = cbs->text->ptr;
-	if(cbs->text->format != XmFMT_8_BIT) {
-		cbs -> doit = False;
-		return;
-	}
+	wchar_t *p = cbs->text->wcsptr;
 	for(i = 0; i < cbs->text->length; ++i) {
-		if((p[i] & 0x80) || !isdigit(p[i] & 0x7f)) {
+		if(!iswdigit(p[i])) {
 			cbs->doit = False;
 			return;
 		}
@@ -310,26 +294,22 @@ void text_verify_cb(
 	XtPointer		unused2,
 	XtPointer		xtp)
 {
-	XmTextVerifyCallbackStruct *cbs = xtp;
+	XmTextVerifyCallbackStructWcs *cbs = xtp;
 	int i, j;
-	char *p = cbs->text->ptr;
+	wchar_t *p = cbs->text->wcsptr;
 	Boolean has_crs = False, has_controls = False;
-	if(cbs->text->format != XmFMT_8_BIT) {
-		cbs -> doit = False;
-		return;
-	}
 	for(i = 0; i < cbs->text->length; ++i) {
-		if(p[i] == '\r') {
+		if((p[i] & 0xff) == '\r') {
 			has_crs = True;
-		} else if(control_chars[p[i] & 0xff]) {
+		} else if(0 <= p[i] && p[i] <= 0xff && control_chars[p[i]]) {
 			has_controls = True;
 			p[i] = '?';
 		}
 	}
 	if(has_crs) {
 		for(i = 0, j = 0; j < cbs->text->length; ++i, ++j) {
-			if(p[j] == '\r') {
-				if(j + 1 < cbs->text->length && p[j+1] == '\n') {
+			if((p[j] & 0xff) == '\r') {
+				if(j + 1 < cbs->text->length && p[j+1] == L'\n') {
 					j += 1;
 				} else {
 					p[j] = '\n';
@@ -355,25 +335,19 @@ void text_field_verify_cb(
 	XtPointer		unused2,
 	XtPointer		xtp)
 {
-	XmTextVerifyCallbackStruct *cbs = xtp;
+	XmTextVerifyCallbackStructWcs *cbs = xtp;
 	int i, j;
-	char *p = cbs->text->ptr;
-	Boolean has_crs = False, has_controls = False;
-	if(cbs->text->format != XmFMT_8_BIT) {
-		cbs -> doit = False;
-		return;
-	}
+	wchar_t *p = cbs->text->wcsptr;
+	Boolean has_controls = False;
 	for(i = 0; i < cbs->text->length; ++i) {
-		if(p[i] == '\r') {
-			has_crs = True;
-		} else if(control_chars[p[i] & 0xff]) {
+		if(0 <= p[i] && p[i] <= 0xff && control_chars[p[i]]) {
 			has_controls = True;
 			p[i] = '?';
 		}
 	}
 	for(i = 0, j = 0; j < cbs->text->length; ++i, ++j) {
-		if(p[j] == '\r') {
-			if(j + 1 < cbs->text->length && p[j+1] == '\n') {
+		if((p[j] & 0xff) == '\r') {
+			if(j + 1 < cbs->text->length && p[j+1] == L'\n') {
 				j += 1;
 			} else {
 				p[j] = ' ';
@@ -403,34 +377,37 @@ extern char *text_get_line(
 {
 	XmTextPosition ins_pos, left, right, prev_pos, cur_pos, last_pos;
 	int len;
-	char data[BUFSIZ + 1], *res;
+	wchar_t data[MBSBUFSIZ + 1], *wres;
+	char *res;
 	ins_pos = XmTextGetInsertionPosition(text_w);
 	last_pos = XmTextGetLastPosition(text_w);
 	right = last_pos;
 	for(	cur_pos = ins_pos; cur_pos <= last_pos; cur_pos += BUFSIZ) {
-		char *p;
-		if(XmTextGetSubstring(text_w, cur_pos, BUFSIZ, BUFSIZ + 1, data)
+		wchar_t *p;
+		if(XmTextGetSubstringWcs(text_w, cur_pos,
+						MBSBUFSIZ, MBSBUFSIZ + 1, data)
 					== XmCOPY_FAILED ) {
 			return NULL;
 		}
-		for(p = data; *p && *p != '\n'; p += 1) {
+		for(p = data; *p && *p != L'\n'; p += 1) {
 			;
 		}
-		if(*p == '\n') {
+		if(*p == L'\n') {
 			right = cur_pos + (p - data);
 			break;
 		}
 	}
 	left = 0;
 	for(	prev_pos = ins_pos; prev_pos > 0; prev_pos = cur_pos) {
-		char *p, *q;
-		cur_pos = prev_pos > BUFSIZ ? prev_pos - BUFSIZ : 0;
-		if(XmTextGetSubstring(text_w, cur_pos, prev_pos - cur_pos, BUFSIZ + 1, data)
+		wchar_t *p, *q;
+		cur_pos = prev_pos > MBSBUFSIZ ? prev_pos - MBSBUFSIZ : 0;
+		if(XmTextGetSubstringWcs(text_w, cur_pos,
+					prev_pos - cur_pos, MBSBUFSIZ + 1, data)
 					== XmCOPY_FAILED ) {
 			return NULL;
 		}
 		for(p = data, q = 0; *p; p += 1) {
-			if(*p == '\n') {
+			if(*p == L'\n') {
 				q = p;
 			}
 		}
@@ -443,13 +420,16 @@ extern char *text_get_line(
 	if(len <= 0) { /* e.g., there is no text */
 		return NULL;
 	}
-	res = XtMalloc(len + 1);
-	if(XmTextGetSubstring(text_w, left, len, len + 1, res) == XmCOPY_FAILED ) {
+	wres = (wchar_t*)XtMalloc(len*sizeof(wchar_t) + 1);
+	if(XmTextGetSubstringWcs(text_w, left, len, len + 1, wres) == XmCOPY_FAILED ) {
 		return NULL;
 	}
 	if(eoln) {
 		*eoln = right;
 	}
+	res = XtMalloc(len*MB_CUR_MAX + 1);
+	(void) wcstombs(res, wres, len*MB_CUR_MAX + 1);
+	XtFree((char*)wres);
 	return res;
 }
 
@@ -887,11 +867,15 @@ static void selection_cb (
 }
 static char *get_remote_selection(Boolean *timed_out)
 {
+	Atom target; 
+	target = using_ext_char_set ?
+			XA_STRING :
+			XInternAtom(XtDisplay(root), "UTF8_STRING", False);
 	sel_req_info.data = NULL;
 	sel_req_info.failed = False;
 	XtGetSelectionValue(root,
 		XA_PRIMARY,
-		XA_STRING,
+		target,
 		selection_cb,
 		0,
 		XtLastTimestampProcessed(XtDisplay(root)));
@@ -909,11 +893,98 @@ static char *get_remote_selection(Boolean *timed_out)
 	return sel_req_info.data;
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Deferring scrolling in text widgets. Mice with wheel and 
+ * mice and trackpads that support swipe gestures can swamp a
+ * text widget with scrolling events. The function defer_scroll
+ * records the most recent scrolling event and (if necessary)
+ * registers a timeout proc to dispatch the most recent recorded event.
+ * This means that most scrolling events are effectively ignored.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+typedef struct {
+	Boolean press_pending, release_pending;
+	XEvent press, release;
+	Widget w;
+} button_events;
+
+/* Allow for script, journal and help text widgets and one for luck */
+enum {MAX_DEFERRED_SCROLL = 4};
+
+/* We rely on the iniitalisation of static data to zero below */
+static button_events deferred_button_events [MAX_DEFERRED_SCROLL];
+
+static Boolean defer_scroll_timeout_registered = False;
+
+static Boolean deferring_scroll = True;
+
+static void defer_scroll_timeout_proc(XtPointer xtp, XtIntervalId *ignored)
+{
+	button_events *pbe = xtp;
+	deferring_scroll = False;
+	if(pbe->press_pending) {
+			XtDispatchEvent(&pbe->press);
+	}
+	if(pbe->release_pending) {
+			XtDispatchEvent(&pbe->release);
+	}
+	pbe->press_pending = pbe->release_pending = False;
+	deferring_scroll = True;
+	defer_scroll_timeout_registered = False;
+}
+
+void defer_scroll(
+	Widget		w,
+	XtPointer	x,
+	XEvent		*evp,
+	Boolean		*continue_dispatch)
+{
+	if(	deferring_scroll
+	&&	(evp->type == ButtonPress || evp->type == ButtonRelease)) {
+		XButtonEvent *be = &evp->xbutton;
+		button_events *pbe;
+		for(	pbe = deferred_button_events;
+			pbe - deferred_button_events < MAX_DEFERRED_SCROLL
+		&&	pbe->w != w;
+			pbe += 1) {
+			if(pbe->w == 0) {
+				pbe->w = w;
+				break;
+			};
+		}
+		if(pbe - deferred_button_events == MAX_DEFERRED_SCROLL) {
+			*continue_dispatch = True;
+			return;
+		}
+		if(	pbe - deferred_button_events < MAX_DEFERRED_SCROLL
+		&&	(be->button == Button4 || be->button == Button5)) {
+			if(be->type == ButtonPress) {
+				pbe->press_pending = True;
+				pbe->press = *evp;
+			} else {
+				pbe->release_pending = True;
+				pbe->release = *evp;
+			}
+			if(!defer_scroll_timeout_registered) {
+				(void)XtAppAddTimeOut(app, 40,
+					defer_scroll_timeout_proc,
+					(XtPointer)pbe);
+				defer_scroll_timeout_registered = True;
+			}
+			*continue_dispatch = False;
+		} else {
+			*continue_dispatch = True;
+		}
+	} else {
+		*continue_dispatch = True;
+	}
+}
 
 #ifdef LISTWIDGETS
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * register_shell: register the shell ancestor of a widget for inclusion in the hierarchy listing
- * list_widget_hierarchy: output listing of widget hierarchy to standard error.
+ * register_shell: register the shell ancestor of a widget for
+ * inclusion in the hierarchy listing
+ * list_widget_hierarchy: output listing of widget hierarchy to
+ * standard error.
  * **** **** **** **** **** **** **** **** **** **** **** ****/
 #include <X11/IntrinsicP.h> /* to let us look at widget class names */
 typedef struct _path

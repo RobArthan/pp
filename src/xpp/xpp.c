@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.47 2011/09/04 14:08:31 rda Exp rda $§
+ * $Id: xpp.c,v 2.47 2011/09/04 14:08:31 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -22,32 +22,34 @@
 #define LIMIT_RANGE(VAR,LOW,HIGH) \
 	(VAR) = (VAR) < (LOW) ? (LOW) : (VAR) > (HIGH) ? (HIGH) : (VAR);
 
-#define XtNtextTranslations	"textTranslations"
-#define XtCTextTranslations	"TextTranslations"
-#define XtNtemplates		"templates"
-#define XtCTemplates		"Templates"
 #define XtNaddNewlineMode	"addNewlineMode"
 #define XtCAddNewlineMode	"AddNewlineMode"
+#define XtNargumentChecker	"argumentChecker"
+#define XtCArgumentChecker	"ArgumentChecker"
 #define XtNcommandLineList	"commandLineList"
 #define XtCCommandLineList	"CommandLineList"
 #define XtNdefaultCommand	"defaultCommand"
 #define XtCDefaultCommand	"DefaultCommand"
-#define XtNargumentChecker	"argumentChecker"
-#define XtCArgumentChecker	"ArgumentChecker"
+#define XtNeditOnlyColumns	"editOnlyColumns"
+#define XtCEditOnlyColumns	"EditOnlyColumns"
+#define XtNeditOnlyRows		"editOnlyRows"
+#define XtCEditOnlyRows		"EditOnlyRows"
+#define XtNjournalRatio		"journalRatio"
+#define XtCJournalRatio		"JournalRatio"
+#define XtNlocale		"locale"
+#define XtCLocale		"Locale"
 #define XtNoptionString		"optionString"
 #define XtCOptionString		"OptionString"
 #define XtNpalette		"palette"
 #define XtCPalette		"Palette"
-#define XtNtotalRows		"totalRows"
-#define XtCTotalRows		"TotalRows"
+#define XtNtemplates		"templates"
+#define XtCTemplates		"Templates"
+#define XtNtextTranslations	"textTranslations"
+#define XtCTextTranslations	"TextTranslations"
 #define XtNtotalColumns		"totalColumns"
 #define XtCTotalColumns		"TotalColumns"
-#define XtNjournalRatio		"journalRatio"
-#define XtCJournalRatio		"JournalRatio"
-#define XtNeditOnlyRows		"editOnlyRows"
-#define XtCEditOnlyRows		"EditOnlyRows"
-#define XtNeditOnlyColumns	"editOnlyColumns"
-#define XtCEditOnlyColumns	"EditOnlyColumns"
+#define XtNtotalRows		"totalRows"
+#define XtCTotalRows		"TotalRows"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files:
@@ -59,13 +61,19 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <locale.h>
 #include "xpp.h"
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * externs for getopt(3):
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+/*
+* The following are not needed on Linux and Mac OS X and cause a warning on
+*  Cygwin.
+
 extern int optind, opterr, optopt;
 extern char *optarg;
+*/
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Static and global data
@@ -137,138 +145,139 @@ static XrmOptionDescRec options [] = {
 
 static XtResource resources[] = {
 	{
-		XtNtextTranslations,
-		XtCTextTranslations,
-		XtRTranslationTable,
-		sizeof(char *),
-		XtOffsetOf(XppResources, text_translations),
-		XtRString,
-		""
+		 XtNaddNewlineMode,
+		 XtCAddNewlineMode,
+		 XtRInt,
+		 sizeof(int),
+		 XtOffsetOf(XppResources, add_new_line_mode),
+		 XtRImmediate,
+		 (XtPointer) 0
 	},
 	{
-		XtNtemplates,
-		XtCTemplates,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, templates),
-		XtRString,
-		""
+		 XtNargumentChecker,
+		 XtCArgumentChecker,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, argument_checker),
+		 XtRString,
+		 "pp -V"
 	},
 	{
-		XtNpalette,
-		XtCPalette,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, palette),
-		XtRString,
-		"\261\262\263\264\244\265\266\267\343\012\215\216\232\200\240\241"
-		"\300\245\336\345\344\012\252\270\355\362\222\341\201\273\250\251"
-		"\253\012\337\255\376\340\317\357\217\237\236\012\247\242\353\213"
-		"\371\373\375\202\012\274\276\275\246\272\364\342\243\012\301\302"
-		"\307\304\305\332\310\312\311\313\314\315\012\316\330\056\320\322"
-		"\323\324\325\306\321\331\327\012\207\204\212\214\230\220\223\225"
-		"\206\231\227\012\346\356\360\257\203\372\012\271\377\235\334\367"
-		"\210\374\234\260\303\351\012\254\224\221\361\256\012\333\335\211"
-		"\233\347\350\352\012\277\326\354\363\365\366\370\134\156\012"
+		 XtNcommandLineList,
+		 XtCCommandLineList,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, command_line_list),
+		 XtRString,
+		 ""
 	},
 	{
-		XtNcommandLineList,
-		XtCCommandLineList,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, command_line_list),
-		XtRString,
-		""
+		 XtNdefaultCommand,
+		 XtCDefaultCommand,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, default_command),
+		 XtRString,
+		 "pp"
 	},
 	{
-		XtNaddNewlineMode,
-		XtCAddNewlineMode,
-		XtRInt,
-		sizeof(int),
-		XtOffsetOf(XppResources, add_new_line_mode),
-		XtRImmediate,
-		(XtPointer) 0
+		 XtNeditOnlyColumns,
+		 XtCEditOnlyColumns,
+		 XtRInt,
+		 sizeof(int),
+		 XtOffsetOf(XppResources, edit_only_columns),
+		 XtRImmediate,
+		 (XtPointer)80
 	},
 	{
-		XtNdefaultCommand,
-		XtCDefaultCommand,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, default_command),
-		XtRString,
-		"pp"
+		 XtNeditOnlyRows,
+		 XtCEditOnlyRows,
+		 XtRInt,
+		 sizeof(int),
+		 XtOffsetOf(XppResources, edit_only_rows),
+		 XtRImmediate,
+		 (XtPointer) 24
 	},
 	{
-		XtNargumentChecker,
-		XtCArgumentChecker,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, argument_checker),
-		XtRString,
-		"pp -V"
+		 XtNjournalRatio,
+		 XtCJournalRatio,
+		 XtRFloat,
+		 sizeof(float),
+		 XtOffsetOf(XppResources, journal_ratio),
+		 XtRString,
+		 "0.5"
 	},
 	{
-		XtNoptionString,
-		XtCOptionString,
-		XtRString,
-		sizeof(char *),
-		XtOffsetOf(XppResources, option_string),
-		XtRString,
-		"bchrf:d:i:F:nsve"
+		 XtNlocale,
+		 XtCLocale,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, locale),
+		 XtRString,
+		 ""
 	},
 	{
-		XtNjournalRatio,
-		XtCJournalRatio,
-		XtRFloat,
-		sizeof(float),
-		XtOffsetOf(XppResources, journal_ratio),
-		XtRString,
-		"0.5"
+		 XtNoptionString,
+		 XtCOptionString,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, option_string),
+		 XtRString,
+		 "bchrf:d:i:F:nsve"
 	},
 	{
-		XtNorientation,
-		XtCOrientation,
-		XtROrientation,
-		sizeof(unsigned char),
-		XtOffsetOf(XppResources, orientation),
-		XtRString,
-		"VERTICAL"
+		 XtNorientation,
+		 XtCOrientation,
+		 XtROrientation,
+		 sizeof(unsigned char),
+		 XtOffsetOf(XppResources, orientation),
+		 XtRString,
+		 "VERTICAL"
 	},
 	{
-		XtNtotalRows,
-		XtCTotalRows,
-		XtRInt,
-		sizeof(int),
-		XtOffsetOf(XppResources, total_rows),
-		XtRImmediate,
-		(XtPointer) 32
+		 XtNpalette,
+		 XtCPalette,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, palette),
+		 XtRString,
+		 "no-palette-resource"
 	},
 	{
-		XtNtotalColumns,
-		XtCTotalColumns,
-		XtRInt,
-		sizeof(int),
-		XtOffsetOf(XppResources, total_columns),
-		XtRImmediate,
-		(XtPointer)80
+		 XtNtemplates,
+		 XtCTemplates,
+		 XtRString,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, templates),
+		 XtRString,
+		 ""
 	},
 	{
-		XtNeditOnlyRows,
-		XtCEditOnlyRows,
-		XtRInt,
-		sizeof(int),
-		XtOffsetOf(XppResources, edit_only_rows),
-		XtRImmediate,
-		(XtPointer) 24
+		 XtNtextTranslations,
+		 XtCTextTranslations,
+		 XtRTranslationTable,
+		 sizeof(char *),
+		 XtOffsetOf(XppResources, text_translations),
+		 XtRString,
+		 ""
 	},
 	{
-		XtNeditOnlyColumns,
-		XtCEditOnlyColumns,
-		XtRInt,
-		sizeof(int),
-		XtOffsetOf(XppResources, edit_only_columns),
-		XtRImmediate,
-		(XtPointer)80
+		 XtNtotalColumns,
+		 XtCTotalColumns,
+		 XtRInt,
+		 sizeof(int),
+		 XtOffsetOf(XppResources, total_columns),
+		 XtRImmediate,
+		 (XtPointer)80
+	},
+	{
+		 XtNtotalRows,
+		 XtCTotalRows,
+		 XtRInt,
+		 sizeof(int),
+		 XtOffsetOf(XppResources, total_rows),
+		 XtRImmediate,
+		 (XtPointer) 32
 	}
 };
 
@@ -606,6 +615,44 @@ char *default_command_line(char *cmd_line)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * choose_app_class: choose app_class and set using_ext_char_set based
+ * on the name used to inoked the program.
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+char *choose_app_class(char *argv0)
+{
+	int len = strlen(argv0);
+	using_ext_char_set = len > 3 && strcmp(argv0 + len - 3, "ext") == 0;
+	return using_ext_char_set ? APP_CLASS_EXT : APP_CLASS;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * choose_locale: choose locale based on value of using_ext_char_set
+ * and/or the resources.
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+void choose_locale(void)
+{
+	char *r;
+	r = setlocale(LC_ALL, using_ext_char_set ? "C" : xpp_resources.locale);
+	if(r == NULL) {
+		msg("initialisation warning: could not set locale:",
+			xpp_resources.locale);
+	}
+	if(!using_ext_char_set) {
+		char *mb = "\xe2\x84\x9a";
+		wchar_t wc;
+		mbtowc(&wc, mb, 3);
+		if(wc != 0x211a) {
+			msg("initialisation warning: locale set to",
+	xpp_resources.locale);
+			msg("initialisation warning",
+	"this locale does not use UTF-8 encoding");
+			msg("initialisation warning",
+	"xpp is unlikely to work well with the encoding used by this locale");
+		}
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * main:
  * Apart from starting up Xt, there are several complications here:
  *
@@ -633,7 +680,7 @@ char *default_command_line(char *cmd_line)
 
 int main(int argc, char **argv)
 {
-	char **retry_argv;
+	char **retry_argv, *app_class;
 	int orig_argc, num_x_args;
 	Boolean use_default_command;
 	char *cmd_line;
@@ -650,8 +697,10 @@ int main(int argc, char **argv)
 
 	set_pp_home();
 
+	app_class = choose_app_class(argv0),
+
 	root = XtOpenApplication(&app,
-		APP_CLASS,
+		app_class,
 		options,
 		XtNumber(options),
 		&argc,
@@ -713,11 +762,15 @@ int main(int argc, char **argv)
 	?	EXECUTE_ADD_NEW_LINES
 	:	xpp_resources.add_new_line_mode;
 
+	choose_locale();
+
+	XtSetLanguageProc(app, NULL, NULL);
+
 	command_line_list = xpp_resources.command_line_list;
 
 	(void) fcntl(x_fd, F_SETFD, 0);
 
-	if (!havefonts && get_pp_fonts())  {
+	if (using_ext_char_set && !havefonts && get_pp_fonts())  {
 		/* Need to restart to pick up the fonts added to the path by get_pp_fonts */
 		/* don't need X any more: */
 		XtDestroyApplicationContext(app);
