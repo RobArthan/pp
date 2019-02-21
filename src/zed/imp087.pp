@@ -1,0 +1,201 @@
+=IGN
+********************************************************************************
+imp087.doc: this file is part of the PPZed system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% imp087.doc   ℤ $Date: 2005/12/06 17:13:32 $ $Revision: 1.6 $ $RCSfile: imp087.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation of the Z Library Sequences}
+
+\def\AbstractText{This document contains the implementation of the Z Library Sequences and their proof support.}
+
+\def\Reference{DS/FMU/IED/IMP087}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation of the Z Library Sequences}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP087}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.6 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2005/12/06 17:13:32 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the implementation of
+%% LaTeX2e port: the Z Library Sequences and their proof support.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.1 (1992/10/28)] Initial Draft.
+\item[Issue 1.2 (1992/12/11) (11th December 1992)]
+Global rename from wrk038.doc issue 1.9.
+
+\item[Issue 1.3 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.4 (2002/10/17)] PPZed-specific updates for open source release
+\item[Issue 1.5 (2004/01/19)] The Z universal set is now called 𝕌.
+\item[Issue 1.6 (2005/12/06)] Brought in line with \cite{ISO02} (aded squash and extraction).
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported PPZed to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation
+of the Z Library sequences meeting the detailed design
+given in \cite{DS/FMU/IED/DTD087}.
+\subsection{Introduction}
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD087}.
+\subsection{Dependencies}
+The mathematical toolkit for the Z Library sequences is introduced within the structure
+$ZSequences$ which is constrained by the signature of the same name, specified
+in \cite{DS/FMU/IED/DTD087}.
+
+\subsection{Interface}
+The interface for the structure is defined by the signature $ZSequences$
+(see\cite{DS/FMU/IED/DTD087}).
+
+\subsection{Possible Enhancements}
+None known.
+
+\subsection{Deficiencies}
+None known.
+
+\section{THE STRUCTURE $ZSequences$}
+
+=SML
+structure ⦏ZSequences⦎ : ZSequences = struct
+=TEX
+=SML
+	val dummy = open_theory "z_sequences";
+=TEX
+Get definitions:
+=SML
+	val z_seq_def = get_spec ⓩ(seq _)⌝;
+	val z_seq⋎1_def = get_spec ⓩ(seq⋎1 _)⌝;
+	val z_iseq_def = get_spec ⓩ(iseq _)⌝;
+	val z_⁀_def = get_spec ⓩ(_ ⁀ _)⌝;
+	val z_head_def = get_spec ⓩ(head)⌝;
+	val z_last_def = get_spec ⓩ(last)⌝;
+	val z_tail_def = get_spec ⓩ(tail)⌝;
+	val z_front_def = get_spec ⓩ(front)⌝;
+	val z_rev_def = get_spec ⓩ(rev)⌝;
+	val z_squash_def = get_spec ⓩsquash⌝;
+	val z_↿_def = get_spec ⓩ(_ ↿ _)⌝;
+	val z_↾_def = get_spec ⓩ(_ ↾ _)⌝;
+	val z_⁀_slash_def = get_spec ⓩ(⁀/)⌝;
+	val z_disjoint_def = get_spec ⓩ(disjoint _)⌝;
+	val z_partition_def = get_spec ⓩ(_ partition _)⌝;
+=TEX
+\section{EPILOG}
+=SML
+end (* of structure ZSequences *);
+open ZSequences;
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}

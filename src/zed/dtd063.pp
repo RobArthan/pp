@@ -1,0 +1,244 @@
+=IGN
+********************************************************************************
+dtd063.doc: this file is part of the PPZed system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  dtd063.doc  ℤ $Date: 2002/10/17 16:26:32 $ $Revision: 1.13 $ $RCSfile: dtd063.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of the Z Term Generator}
+
+\def\AbstractText{This document contains the detailed design of the term generator for HOL/Z.}
+
+\def\Reference{DS/FMU/IED/DTD063}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design of the Z Term Generator}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD063}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.13 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:26:32 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design of
+%% LaTeX2e port: the term generator for HOL/Z.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.1 (1992/06/19)-1.5 (1992/07/30), \FormatDate{92/02/06} ] Initial Drafts.
+\item[Issue 1.6 (1992/07/31), \FormatDate{92/07/31} ] First Issue.
+\item[Issue 1.8 (1992/10/28), \FormatDate{92/10/28} ] Amended treatment of nested quotation.
+\item[Issue 1.9 (1992/11/20), \FormatDate{92/11/20} ]
+\item[Issue 1.10 (1999/02/16), (16th February 1999)] Update for SML'97.
+Changes in cache theory handling.
+\item[Issue 1.11 (2001/12/12)] Removed local declarations for Poly/ML port.
+\item[Issue 1.12 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.13 (2002/10/17)] PPZed-specific updates for open source release
+\item[Issue 1.14 (2004/01/19)] The Z universal set is now called 𝕌.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported PPZed to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+The function $do\_in\_theory$ will be removed in due course
+and the function will be provided by the underlying HOL system.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the detailed design
+of the term generator for HOL/Z.
+The high level design for this material is given in \cite{DS/FMU/IED/HLD018}.
+\subsection{Introduction}
+
+\subsection{Purpose and Background}
+The purpose of the Z term generator is to convert a Z term
+(or a declaration or a schema text) represented as an
+abstract syntax tree (of type $Z\_TM$ or $Z\_DEC$ or $Z\_SCH\_TEXT$)
+into a HOL term according to the mapping specified in documents
+\cite{DS/FMU/IED/ZED002} and \cite{DS/FMU/IED/ZED003}.
+
+\subsection{Dependencies}
+
+The signature $ZTermGenerator$ depends on the structure
+$ZUserInterfaceSupport$ for the definition of the datatypes for
+the abstract syntax of Z.
+
+\subsection{Algorithms}
+
+The point made in \cite{DS/FMU/IED/DTD062} concerning the communication
+between the type inferrer and the term generator and its impact on
+the permissible calling sequences should be stressed: when a type inference
+has been performed, the resulting value should be passed to the term generator
+before any further execution of the type inferrer. Chaos will ensue if this
+protocol is not obeyed.
+\subsection{Possible Enhancements}
+None.
+\subsection{Deficiencies}
+None known.
+\section{THE SIGNATURE $ZTermGenerator$}
+
+=DOC
+signature ⦏ZTermGenerator⦎ = sig
+=DESCRIBE
+This is the signature of the structure which contains the term generator
+for HOL/Z.
+=USES
+For use by the Z paragraph processor.
+=ENDDOC
+
+\subsection{Term Generation Functions}
+
+=DOC
+val ⦏term_of_z_dec⦎ : ZUserInterfaceSupport.Z_DEC -> TERM;
+val ⦏list_term_of_z_dec⦎ : ZUserInterfaceSupport.Z_DEC list -> TERM;
+val ⦏term_of_z_schtext⦎ : ZUserInterfaceSupport.Z_SCH_TEXT -> (TERM * TERM OPT);
+val ⦏term_of_z_tm⦎ : ZUserInterfaceSupport.Z_TM -> TERM;
+val ⦏list_term_of_z_tm⦎ : ZUserInterfaceSupport.Z_TM list -> TERM list;
+=DESCRIBE
+These functions are intended to be called by the Z
+paragraph processor when it is necessary to convert a Z abstract
+syntax tree representing a Z term, declaration or schema text
+into a HOL term.
+Two things happen when the term generator is called: Firstly,
+semantic constants which are required to form the HOL term which
+are not present in the current cache theory are generated
+by calls to functions in the structure $ZGeneratedConstants$.
+The Z abstract machine is then called for each of the constructions
+in the abstract tree to produce the HOL term.
+=USES
+It is intended that the code which calls these functions
+calls them indirectly using the function $do\_in\_theory$ to
+ensure that the generated semantic constants are entered into
+the current cache theory and not the current theory (if
+they differ).
+=EXAMPLE
+fun local_generate_term tm =
+	do_in_theory (force_get_cache_theory()) term_of_z_tm tm;
+=SEEALSO
+$do\_in\_theory$
+=FAILURE
+63001	The input has not been fully type-inferred
+63002	There is no abstract machine support for ?0
+63003	The input contains an invalid construct
+63004	Unexpected failure in type_match or inst
+=ENDDOC
+
+\section{EPILOGUE}
+
+=SML
+end (* of structure ZTermGenerator *);
+=TEX
+\section{TEST POLICY}
+
+The module tests for this module are to follow the guidelines
+laid down in the quality plan~\cite{DS/FMU/IED/PLN008}.
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
+
+
