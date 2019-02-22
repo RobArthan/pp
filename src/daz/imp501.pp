@@ -1,0 +1,1214 @@
+=IGN
+********************************************************************************
+imp501.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% imp501.doc   ℤ $Date: 2008/11/12 12:29:33 $ $Revision: 1.79 $ $RCSfile: imp501.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation: Compliance Notation Lexical Analyser}
+
+\def\AbstractText{This document contains the implementation for the CN parser.}
+
+\def\Reference{ISS/HAT/DAZ/IMP501}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation: Compliance Notation Lexical Analyser}  %% Mandatory field
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/IMP501}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.79 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2008/11/12 12:29:33 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{D.J.~King & DAZ Team Leader}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the implementation for the CN
+%% LaTeX2e port: parser.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issues 1.1 (1994/01/30)-1.28 (1994/11/25)] Initial Versions.
+\item[Issue 1.29 (1995/09/18)-1.31 (1995/10/02)] Annotations and pragmas enhancements.
+\item[Issue 1.34 (1995/10/18)-36] Added support for Hypertext links
+\item[Issue 1.37 (1995/10/31)-38] Hypertext links now appear on last line of each slot/spec. stmt.
+\item[Issue 1.39 (1995/11/07)] Corrected subtle problem with space skipping in $read\_until$ and friends.
+\item[Issue 1.40 (1995/11/07)] Fixing bug 1(V0.6).
+\item[Issue 1.42 (1997/06/17)] IUCT WP 3 changes.
+\item[Issue 1.43 (1997/06/30)] Fixed bug in line-counting (rationalisation
+of identifier recognition to make it fit for purpose and minor
+rework of delimiter identification).
+\item[Issue 1.44 (1997/07/18)-1.45 (1997/07/21)] IUCT WP 4 changes.
+\item[Issue 1.46 (1997/07/29)-1.47 (1997/07/30)] Optimising lexer, by untangling recursive calls, and
+eliminataing explode/implode pairs.
+This has fixed one reason for ``Running out of store - interrupting console process'' messages.
+\item[Issue 1.48 (1999/02/15)] Added $comment$ function for CUTDOWNVERSION.
+\item[Issue 1.49 (1999/02/15)-1.50 (1999/02/24)] Error message ref 501100 -> 10010.
+\item[Issue 1.51 (2000/10/25)] CTLE II R2/1: global variable unsoundness.
+\item[Issue 1.52 (2002/03/01)] New symbol for expansion of statement labels.
+\item[Issue 1.53 (2002/04/09)] Now helps SPARK output function get strings in annotations and arbitrary Ada right.
+\item[Issue 1.54 (2002/05/22)] Now tries to avoid building up lists by appending.
+\item[Issue 1.55 (2002/07/24), 1.56 (2002/07/24)] R0079: assertions (need to recognise and classify $\Gamma$ and treat
+it as a delimiter).
+\item[Issue 1.57 (2002/08/07)] R0052: block statements (new keyword ``DECLARE'').
+\item[Issue 1.58 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.59 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.60 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issues 1.61 (2002/12/11), 1.62 (2002/12/11)] Fixing problems with SPARK output function.
+\item[Issue 1.63 (2003/05/19)] Support for NOTHING statement form.
+\item[Issue 1.64 (2003/05/20)] Dollar escapes for Compliance Notation reserved words.
+\item[Issue 1.65 (2003/07/01)] Fixed treatment of case independence for Compliance Notation reserved words
+used as identifiers.
+\item[Issue 1.66 (2003/07/15)] Minor performance improvements after doing some space profiling.
+\item[Issue 1.67 (2004/10/27)] Now have an option to ignore SPARK annotations.
+\item[Issue 1.68 (2004/12/08)] Adjustments to lexical class data type (for syntax of Ada labels and goto statements).
+\item[Issue 1.69 (2005/04/22)] Support for derived types.
+\item[Issue 1.70 (2005/05/28)] `\$' prefix now required on Compliance Notation reserved words.
+\item[Issue 1.71 (2005/12/07)] Added new keyword \verb"$implicit".
+\item[Issue 1.72 (2006/01/26)] A `\$' not followed by an identifier no longer provokes an error.
+\item[Issue 1.73 (2006/06/12)] Removed dead code from {\em rec\_numeric}.
+\item[Issue 1.74 (2006/08/09)] The character that distinguishes SPARK annotations can now be specified by the user.
+\item[Issue 1.75 (2006/09/17)] Added support for deferred subprograms.
+\item[Issue 1,76] New reserved word for naming anonymous blocks.
+\item[Issue 1.77 (2008/09/05)] Fixed bug in handling of strings in annotations.
+\item[Issues 1.78 (2008/10/26), 1.79 (2008/11/12)] Annotations are now recognised in the reader/writer and passed
+in here using the {\em Lex.Separator} constructor.
+\item[Issue 1.80 (2010/02/11)] Removed obsolete CUTDOWNVERSION option.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation for the lexical analyser and the
+lexis for CN.
+The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD501}.
+
+\subsection{Introduction}
+
+\subsection{Purpose and Background}
+
+\subsection{Algorithms}
+
+\subsection{Dependencies}
+
+\subsection{Known Deficencies}
+
+\subsection{Possible Enhancements}
+
+=TEX
+
+\section{CASE INDEPENDENCE}
+=SML
+structure ⦏CaseIndependence⦎ : CaseIndependence = struct
+=TEX
+=SML
+val ordA = ord "A";
+val orda = ord "a";
+val ordQ = 81 (* explicit because R/Writer converts Qs. *);
+=TEX
+=SML
+fun ⦏to_lower⦎ (s : string) : string = (
+let	fun aux1 (all as (c1::c2::c3::rest)) = (
+		if ord c1 = ordQ andalso ord c2 = ordQ andalso ord c3 = ordQ
+		then
+			("q", rest)
+		else
+			("", all)
+	) | aux1 other = ("", other);
+	fun aux (c::rest) = (
+		if ord c = ordQ then
+			let	val (c', rest') = aux1 rest;
+			in
+				c'::aux rest'
+			end
+		else
+		if c >= "A" andalso c <= "Z"
+		then
+			(chr(ord c - ordA + orda))::aux rest
+		else
+			c::aux rest
+	) | aux _ = [];
+in
+	(implode o aux o explode) s
+end);
+=TEX
+=SML
+fun ⦏to_upper⦎ (s : string) : string = (
+	let fun aux ch = (
+		if ch = "q" then "Q"
+		else
+		if ch >= "a" andalso ch <= "z"
+		then chr(ord ch - orda + ordA)
+		else ch
+		);
+	in implode (map aux (explode s))
+	end
+);
+=TEX
+=SML
+val ⦏name_cache⦎ : string E_DICT ref = ref initial_e_dict;
+=TEX
+=SML
+fun ⦏get_internal_name⦎ (n : string) : string = (
+	let	val ln = to_upper n;
+		val side = case e_lookup ln (!name_cache) of
+				Nil => name_cache := e_enter ln n (!name_cache)
+				| Value ns =>
+					if n = ns then ()
+					else comment "CN-Parser" 501100
+					[fn()=>n,fn()=>ns];
+	in
+		ln
+	end
+);
+=TEX
+=IGN
+get_internal_name "thing";
+get_internal_name "Thing";
+get_internal_name "ThIng";
+
+=SML
+fun ⦏get_external_name⦎ (n : string) : string = (
+	let	val ln = to_upper n;
+	in
+		case e_lookup ln (!name_cache) of
+		Nil => n
+		| Value ns => ns
+	end
+);
+=TEX
+
+=SML
+fun ⦏reset_names⦎ () : unit = (
+	name_cache := initial_e_dict
+);
+=TEX
+=IGN
+get_external_name"thing";
+get_external_name"thINg";
+get_external_name"FReD";
+=TEX
+=SML
+end; (* of structure CaseIndependence *)
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+\section{LEXICAL ANALYSER}
+=SML
+structure ⦏CNLex⦎ : CNLex = struct
+	open CNTypes CaseIndependence Lex ZLex;
+=TEX
+=SML
+val ⦏cn_ignore_spark_annotations⦎ : bool ref = ref false;
+val _ = new_flag{
+	name = "cn_ignore_spark_annotations",
+	check = fun_true,
+	control = cn_ignore_spark_annotations,
+	default = fun_false} handle Fail _ => ();
+=TEX
+The main lexical analysis algorithm is exception-driven
+using the following local exception:
+=SML
+exception ⦏Unrecognised⦎;
+=TEX
+A state, $LEX\_STATE$, is used by most of the lexical analysis
+functions. The state is in two parts: first, the characters not yet tokenised,
+actually a list of strings of single characters produced by exploding
+the input text; second, the token immediately preceeding the first
+part.  The token may not be recognised (yet) so the token part of the
+state carries a success indicator.  On entry to an analysis function
+the state will be ``$(chars, (Unknown, \hbox{``''}))$''.
+=SML
+datatype ⦏SUCCESS⦎ = ⦏Known⦎ of string | ⦏Unknown⦎;
+
+type ⦏LEX_STATE⦎  = (string list) * SUCCESS;
+=TEX
+
+\subsection{Keeping Track of the Input}
+
+It is necessary for the Compliance Tool to be able to annotate the a Compliance Script with hypertext link macros (as defined in the $hyperbasics.sty$ style).
+
+
+A counter for the line number, is defined. It is incremented when a newline is read, and reset to 0 each time a
+socket (i.e. a declaration or statement label) is encountered.
+=SML
+val ⦏line_count⦎ : int ref = ref 0;
+=TEX
+
+=SML
+fun ⦏reset_line_count⦎ () = (
+	line_count := 0
+);
+fun ⦏inc_line_count⦎ () = (
+	line_count := !line_count + 1
+);
+=TEX
+The socket list is built up backwards and reversed when it's final value is needed.
+
+=SML
+val ⦏socket_list⦎ : int list ref = ref [];
+
+fun ⦏new_socket⦎ () = (
+	socket_list := !line_count :: !socket_list;
+	reset_line_count ()
+);
+
+fun ⦏get_and_reset_socket_list⦎ () = (
+let	val s = rev(!socket_list);
+in
+	socket_list := [];
+	s
+end
+);
+
+=TEX
+
+\subsection{Utilities}
+$collect$ adds the first character of the untokenised input text into the current token.
+=SML
+fun ⦏collect⦎ ( cstk : LEX_STATE ) : LEX_STATE = (
+	case cstk of
+		(c :: cs, Known s) => (cs, Known(s ^ c))
+	|	(c :: cs, Unknown) => (cs, Known c)
+	|	_ => error "CN-Parser" 15004 []
+);
+=TEX
+We need various character classifying functions:
+=SML
+=TEX
+=SML
+val ⦏chrNL⦎	= chr 10;
+val ⦏ord0⦎	= ord "0";
+val ⦏ord9⦎	= ord "9";
+val ⦏orda⦎	= ord "a";
+val ⦏ordA⦎	= ord "A";
+val ⦏ordz⦎	= ord "z";
+val ⦏ordZ⦎	= ord "Z";
+=TEX
+=SMLPLAIN
+fun ⦏is_newline⦎ (c : string) = c = chrNL;
+fun ⦏is_percent⦎ (c : string) = c = "%%";
+fun ⦏is_prime⦎ (c : string) = c = "'";
+fun ⦏is_us⦎ (c : string) = c = "_";
+fun ⦏is_e⦎ (c : string) = c = "E" orelse c = "e";
+fun ⦏is_plusminus⦎ (c : string) = c = "+" orelse c = "-";
+fun ⦏is_dot⦎ (c : string) = c = ".";
+fun ⦏is_hash⦎ (c : string) = c = "#";
+fun ⦏is_space⦎ c = c <= " ";
+=TEX
+=SML
+fun ⦏is_digit⦎  (d : string) = (
+	let	val ordd = ord d
+	in	(ordd >= ord0) andalso (ordd <= ord9)
+	end
+);
+=TEX
+=SML
+fun ⦏is_alpha⦎  (c : string) = (
+	let	val ordc = ord c
+	in		((ordc >= orda) andalso (ordc <= ordz))
+		orelse	((ordc >= ordA) andalso (ordc <= ordZ))
+	end
+);
+=TEX
+=SML
+fun ⦏is_alnum⦎  (c : string) = (
+	is_alpha c orelse is_digit c
+);
+=TEX
+=SML
+fun ⦏is_dollar⦎  (c : string) = (
+	c = "$"
+);
+=TEX
+=SML
+fun ⦏is_comment⦎  (c : string) = (
+		c = "--"
+);
+=TEX
+=SML
+fun ⦏is_numericliteral⦎ (s : string) = (
+	case explode s of
+	i::rest =>	is_digit i
+	|_ =>		false
+);
+=TEX
+=SML
+fun ⦏is_primedid⦎ (s : string) = (
+	case explode s of
+	"'"::_::_ =>	true
+	|_ =>		false
+);
+=TEX
+=SML
+fun ⦏is_characterliteral⦎ (s : string) = (
+	case explode s of
+	"'"::_::"'"::rest =>	true
+	|_ =>			false
+);
+=TEX
+=TEX
+Note that the following list includes ``.'' but omits the string quotation
+character. ``.'' is included so that $is\_delimiter$ may be
+used to detect a character which may begin a delimiter symbol.
+
+The algorithms used to access the list $delimiter$
+assume that if one delimiter is a leading substring
+of another then the longer of the two will appear earlier
+in the list; a reverse lexicographical sort achieves
+this.
+=SML
+val ⦏delimiter⦎ : string list list =
+	(Sort.sort (switch(Sort.lexicographic Sort.string_order)) o map explode)
+["&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=",
+ ">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>",
+ "Γ",  "Δ", "Ξ", "[", "]", "{","}", "⦁", "⟦", "⟧", "⟨","⟩", "⊑", "!⊑", "≡", "!≡"];
+=TEX
+=SML
+fun ⦏has_prefix⦎ (x::more : ''a list) (p : ''a list) : bool = (
+	case p of
+		[] => true
+	|	y :: more_p => x = y andalso has_prefix more more_p
+) | has_prefix [] (_::_) = false
+|   has_prefix _ _ = true;
+=TEX
+=SML
+fun ⦏next_is_delimiter⦎ (cs : string list) = (
+	any delimiter (has_prefix cs)
+);
+=TEX
+=SML
+fun ⦏skip_space⦎ (st as (cs as (c :: more), tk) : LEX_STATE) : LEX_STATE = (
+	if is_space c
+	then	(if is_newline c
+		then	inc_line_count ()
+		else	();
+		skip_space (more, tk)
+		)
+	else st
+) | skip_space (st as ([], _)) = st;
+=TEX
+
+$next$ is used to apply a classifier function such as $is\_digit$
+to the first character in the input part of a state. It returns false
+if the input part is empty.
+=SML
+fun ⦏next⦎ (test : string -> bool) ((c :: _, _) : LEX_STATE) = test c
+|   next _ ([], _) = false;
+=TEX
+When a lexeme
+has been recognised, the following material is used to classify the result.
+
+We list the Ada symbols and reserved words first
+=SML
+val ⦏ada_classes⦎ :  CN_LEX_CLASS S_DICT = [
+	("ABS",		LCAbs),
+	("&",		LCAmpersand),
+	("AND",		LCAnd),
+	("ARRAY",	LCArray),
+	("AT",		LCAt),
+	("|",		LCBar),
+	("BODY",	LCBBody),
+	(":=",		LCBecomes),
+	("BEGIN",	LCBegin),
+	("CASE",	LCCase),
+	(":",		LCColon),
+	(",",		LCComma),
+	("CONSTANT",	LCConstant),
+	("DECLARE",	LCDeclare),
+	("DELTA",	LCDelta),
+	("DIGITS",	LCDigits),
+	("/",		LCDiv),
+	("..",		LCDotDot),
+	(".",		LCDot),
+	("ELSE",	LCElse),
+	("ELSIF",	LCElsIf),
+	("END",		LCEnd),
+	("=",		LCEquals),
+	("EXIT",	LCExit),
+	("⦁",		LCFatDot),
+	("FOR",		LCFor),
+	("FUNCTION",	LCFunction),
+	("GOTO",		LCGoto),
+	("=>",		LCGoesTo),
+	(">=",		LCGreaterEquals),
+	(">",		LCGreaterThan),
+	("IF",		LCIf),
+	("IN",		LCIn),
+	("IS",		LCIs),
+	("(",		LCLBracket),
+	("<=",		LCLessEquals),
+	("<>",		LCLessGreat),
+	("<",		LCLessThan),
+	("LIMITED",	LCLimited),
+	("<<",		LCLLabel),
+	("LOOP",	LCLoop),
+	("-",		LCMinus),
+	("MOD",		LCMod),
+	("NEW",		LCNew),
+	("/=",		LCNotEquals),
+	("NOT",		LCNot),
+	("NULL",	LCNull),
+	("OF",		LCOf),
+	("OR",		LCOr),
+	("OTHERS",	LCOthers),
+	("OUT",		LCOut),
+	("PACKAGE",	LCPackage),
+	("+",		LCPlus),
+	("'",		LCPrime),
+	("PRAGMA",	LCPragma),
+	("PRIVATE",	LCPrivate),
+	("PROCEDURE",	LCProcedure),
+	(")",		LCRBracket),
+	("RECORD",	LCRecord),
+	("REM",		LCRem),
+	("RENAMES",	LCRenames),
+	("RETURN",	LCReturn),
+	("REVERSE",	LCReverse),
+	(">>",		LCRLabel),
+	("RANGE",	LCRRange),
+	(";",		LCSemi),
+	("SEPARATE",	LCSeparate),
+	("**",		LCStarStar),
+	("*",		LCStar),
+	("SUBTYPE",	LCSubtype),
+	("THEN",	LCThen),
+	("TYPE",	LCType),
+	("USE",		LCUse),
+	("WHEN",	LCWhen),
+	("WHILE",	LCWhile),
+	("WITH",	LCWith),
+	("XOR",		LCXor)
+];
+=TEX
+Now the symbols and reserved words of the Compliance Notation:
+=SML
+val ⦏cn_sym_classes⦎ :  CN_LEX_CLASS S_DICT = [
+	("⊑",		LCRefinedBy),
+	("!⊑",		LCImplementedBy),
+	("≡",		LCReplacedBy),
+	("!≡",		LCArbitraryAda),
+	("Γ",		LCGrkGamma),
+	("Δ",		LCGrkDelta),
+	("Ξ",		LCGrkXi),
+	("[",		LCLSqBrack),
+	("]",		LCRSqBrack),
+	("{",		LCLBrace),
+	("}",		LCRBrace),
+	("⟦",		LCLStrachey),
+	("⟧",		LCRStrachey),
+	("⟨",		LCLChevron),
+	("⟩",		LCRChevron)];
+=TEX
+=SML
+val ⦏cn_reserved_word_classes⦎ :  CN_LEX_CLASS S_DICT = [
+	("AUXILIARY",	LCAuxiliary),
+	("BLOCK",	LCBlock),
+	("BY",		LCBy),
+	("CON",		LCCon),
+	("DEFERRED",	LCDeferred),
+	("IMPLEMENT",	LCImplement),
+	("IMPLICIT",	LCImplicit),
+	("NOTHING",	LCNothing),
+	("REFERENCES",	LCReferences),
+	("TILL",		LCTill),
+	("USING",	LCUsing)
+];
+=TEX
+=SML
+val ⦏class_table⦎ : CN_LEX_CLASS E_DICT
+	= list_e_merge initial_e_dict (ada_classes @ cn_sym_classes);
+=TEX
+=SML
+val ⦏reserved_word_table⦎ : CN_LEX_CLASS E_DICT
+	= list_e_merge initial_e_dict cn_reserved_word_classes;
+=TEX
+In the following, the first parameter distinguishes between the calls made
+while just scanning the input (e.g., to find the end of a specification statement)
+and the calls made to deliver a lexical value that will actually be passed on to the parser.
+=SML
+fun ⦏classify⦎ (for_parser : bool) (what : string) : CN_LEX_ITEM = (
+let	val convert =
+		if for_parser
+		then get_internal_name
+		else to_upper;
+in
+	if	is_dollar(substring(what, 0, 1))
+	then	let	val identifier = substring(what, 1, size what - 1);
+			val converted = convert identifier;
+		in	(case e_lookup converted reserved_word_table of
+					Value cl => cl
+				|	Nil => (
+					if	for_parser
+					then	fail "CN-Parser" 501004 []
+					else	LCIdentifier
+				),
+			CNText ("$" ^ converted))
+		end
+	else if	is_comment what
+	then	(LCComment, CNText what)
+	else	let	val converted = convert what;
+		in	(case e_lookup converted class_table of
+			Value cl => cl
+			|	Nil	=> (
+					if	is_numericliteral what
+					then	LCNumericLiteral
+					else if is_characterliteral what
+					then	LCCharacterLiteral
+					else if is_primedid what
+					then	LCPrimedIdentifier
+					else	LCIdentifier
+					),
+			CNText converted)
+		end
+end
+);
+=TEX
+\subsection{Recognition of Delimiters}
+=SML
+fun ⦏get_next_delimiter⦎ (cs : string list) : string = (
+	implode (find delimiter (has_prefix cs))
+	handle ex => fail "CN-Parser" 501002 [fn()=>"invalid call of get_next_delimiter"]
+);
+=TEX
+$rec\_delimiter$ returns an appropriately updated state if the input
+begins with a delimiter symbol, if not it raises $Unrecognised$.
+=SML
+fun  ⦏rec_delimiter⦎ ( (cs, _) : LEX_STATE ) : LEX_STATE = (
+	if	next_is_delimiter cs
+	then	let	val tk = get_next_delimiter cs;
+        	in	(cs from size tk, Known tk)
+		end
+	else	raise Unrecognised
+);
+=TEX
+$rec\_comment$ returns an appropriately updated state if the input
+begins with a comment symbol, if not it raises $Unrecognised$.
+=SML
+fun  ⦏rec_comment⦎ ( (cs as ("-"::"-":: more), _) : LEX_STATE ) : LEX_STATE = (
+	(more, Known "--")
+) | rec_comment _ = raise Unrecognised;
+=TEX
+\subsection{Recognition of Identifiers}
+The following simply picks up the next identifier:
+=SML
+fun ⦏rec_simple_identifier⦎ (st : LEX_STATE) : LEX_STATE = (
+	let	fun aux st = (
+			if next is_alnum st orelse next is_us st
+			then aux (collect st)
+			else st
+		);
+	in	if next is_alpha st orelse next is_dollar st
+		then	aux(collect st)
+		else raise Unrecognised
+	end
+);
+=TEX
+The following hack ensures that a fragment such as ``{\tt CHARARR'('a', 'b')}'' is lexically analysed correctly.
+If an identifier is immediately followed by the offending pattern beginning with a prime, a space is forced in after the prime, which if the input is legal Ada will ensure that the first prime will not be taken as introducing a character quotation.
+Note that input like ``{\tt CHARARR ''}'' will be ``incorrectly'' analysed as an identifier followed by single space character quotation, but that will provoke a parser error anyway.
+=SML
+fun ⦏rec_identifier⦎ (st : LEX_STATE) : LEX_STATE = (
+	let	val st1 = rec_simple_identifier st;
+		val (cs, suc) = skip_space st1;
+	in	case cs of
+		("'":: (t as (_::"'"::_::"'"::_))) => (" "::"'"::" " :: t, suc)
+		| _ =>	(" " :: cs, suc)
+	end
+);
+=TEX
+\subsection{Recognition of Numbers}
+=TEX
+=SML
+fun ⦏rec_gen_integer⦎ (f : string -> bool) (st : LEX_STATE) : LEX_STATE = (
+	let	fun aux1 st = (
+			if	next f (collect st)
+			then	aux (collect st)
+			else	raise Unrecognised
+		)
+		and aux st = (
+			if	next f st
+			then	aux (collect st)
+			else if	next is_us st
+			then	aux1 st
+			else	st
+		);
+	in	if next f st
+		then aux (collect st)
+		else raise Unrecognised
+	end
+);
+=TEX
+=SML
+val ⦏rec_integer⦎ = rec_gen_integer is_digit;
+val ⦏rec_based_integer⦎ = rec_gen_integer is_alnum;
+=TEX
+=SML
+fun ⦏rec_exponent⦎ (st : LEX_STATE) : LEX_STATE = (
+	if	next is_e st
+	then	let val st' = collect st;
+		in
+			if	next is_plusminus st'
+			then	rec_integer (collect st')
+			else	rec_integer st'
+		end
+	else	st
+);
+=TEX
+=SML
+fun ⦏rec_based⦎ (st : LEX_STATE) : LEX_STATE = (
+let	val st' = rec_based_integer st;
+	fun aux st =
+		if	next is_hash st
+		then	rec_exponent (collect st)
+		else	raise Unrecognised;
+in
+	if	next is_dot st'
+	then	((aux o rec_based_integer) (collect st')
+			handle _ => st')
+	else 	aux st'
+end);
+=TEX
+=SML
+fun ⦏rec_numeric⦎ (st : LEX_STATE) : LEX_STATE = (
+let	val st' = rec_integer st;
+in
+	if	next is_dot st'
+	then	((rec_exponent o rec_integer) (collect st')
+			handle _ => st')
+	else if	next is_e st'
+	then	rec_exponent st'
+	else if	next is_hash st'
+	then	rec_based (collect st')
+	else	st'
+end);
+=TEX
+\subsection{Recognition of Keywords}
+=SML
+fun ⦏rec_keyword⦎ (st : LEX_STATE) : LEX_STATE = (
+        let     fun aux (([], _) : LEX_STATE) = (
+                        raise Unrecognised
+                ) | aux st = (
+                        if next is_percent st
+                        then (collect st)
+                        else aux (collect st)
+                );
+        in      if next is_percent st
+                then aux (collect st)
+                else raise Unrecognised
+        end
+);
+=TEX
+\subsection{Recognition of Character Literals}
+=SML
+fun ⦏rec_character_literal⦎ (st : LEX_STATE) : LEX_STATE = (
+	if next is_prime st
+	then	let	val st' = collect st;
+			val st'' = collect st';
+		in
+			if next is_prime st''
+			then
+				collect st''
+			else	case st' of
+					("\081"::"\081"::"\081"::"\081"::"'"::more, suc) => (
+						collect("'"::more, snd st'')
+				) | 	_ => raise Unrecognised
+		end
+	else
+		raise Unrecognised
+);
+=TEX
+
+\subsection{Recognition of Primed Identifiers}
+Note that spaces are allowed between the prime and the identifier (indeed the hack in $rec\_identifier\_aux$ above depends on this).
+=SML
+fun ⦏rec_primedid⦎ (st : LEX_STATE) : LEX_STATE = (
+	if next is_prime st
+	then	rec_identifier (skip_space (collect st))
+	else	raise Unrecognised
+);
+=TEX
+
+\subsection{Recognition of Lexemes}
+Function $rec\_next\_token$ picks off the next token from the input
+using the other recognisers.
+=SML
+fun ⦏rec_next_token⦎ (st : LEX_STATE) : LEX_STATE = (
+	((((((((rec_identifier st))
+	handle Unrecognised =>
+		(rec_character_literal st))
+	handle Unrecognised =>
+		(rec_primedid st))
+	handle Unrecognised =>
+		(rec_comment st))
+	handle Unrecognised =>
+		(rec_delimiter st))
+	handle Unrecognised =>
+		(rec_numeric st))
+	handle Unrecognised =>
+		(rec_keyword st))
+	handle Unrecognised =>
+		(fst st, Unknown)
+);
+=TEX
+\section{LEXICAL ANALYSER}
+The following constitute some essential requirements of this lexical analyser.
+The function $rec\_next\_token$ allows us to recognise the next lexeme
+in an input stream according to the SPARK (and Compliance Notation) lexis.
+We must now put this to use in constructing the overall lexical analyser.
+To do this we must handle embedded Z, comments and pragmas.
+To handle embedded Z we need to be able to recognise the end of the Z fragment while using the Z lexical analyser to process the Z lexemes.
+To handle comments is just a question of scanning to the end of line.
+Similarly, we take a pragma to be any text after the pragma keyword up to a semi-colon.
+
+\subsection{Comments}
+In the following, we often have a list of strings which is the exploded form of the unread part of the current $INPUT$ fragment, and a list of subsequent unread $INPUT$s.
+The function $ignore\_comment$ assumes a comment start symbol has just been read
+and skips on in the two lists to the end of a line.
+=SML
+fun ⦏ignore_comment⦎ (slist : string list) (rest : INPUT list)
+	: (string list * INPUT list)  = (
+	case slist of
+		("\n" :: more) => (inc_line_count();(more, rest))
+	|	(_ :: more) => ignore_comment more rest
+	|	[] => (
+		case rest of
+			Lex.Text s :: inputs => ignore_comment (explode s) inputs
+		|	_ :: inputs => ignore_comment [] inputs
+		|	[] => ([], [])
+	)
+);
+=TEX
+\subsection{Arbitrary Ada}
+The function $spark\_arbitrary$ assumes the symbol introducing an arbitrary Ada insert has just been read.
+It returns a $CN\_LEX\_ITEM$ containing the text of the insert (without the introducing symbol) together with
+two lists giving the unread part of the input (cf. $ignore\_comment$).
+In fact, everything should have been read here, and the $spark\_lex$ will eventually complain if something like a HOL type is encountered.
+=SML
+fun ⦏spark_arbitrary_aux⦎ (acc : string)
+		(rest : INPUT list)
+	: (CN_LEX_ITEM * string list * INPUT list)  = (
+	let	fun strip_last_nl str = (
+			case rev (explode str) of
+				"\n" :: more => implode (rev more)
+			|	_ => str
+		);
+	in
+		case rest of
+			Lex.Text s :: more =>
+				spark_arbitrary_aux (acc ^ translate_for_output s) more
+		|	Lex.String s :: more =>
+				spark_arbitrary_aux (acc ^ "\"" ^ s ^ "\"") more
+		|	Lex.Separator s :: more =>
+				spark_arbitrary_aux (acc ^ s ^ "\n") more
+		|	_  =>
+				((LCArbitraryAda,
+					(CNText (strip_last_nl acc))), [], rest)
+	end
+);
+=TEX
+=SML
+fun ⦏spark_arbitrary⦎
+		(slist : string list) (rest : INPUT list)
+	: (CN_LEX_ITEM * string list * INPUT list)  = (
+	spark_arbitrary_aux (translate_for_output (implode slist)) rest
+);
+=TEX
+\subsection{Z Fragments}
+First we define a table showing the symbols which can delimit a Z fragment.
+The table gives each symbol which can begin a Z fragment together with each symbol which can mark the end of a fragment begun by that symbol.
+=SML
+val ⦏z_delimiters⦎ = [
+	(LCGrkGamma, [LCLBrace]),
+	(LCGrkDelta, [LCLSqBrack, LCLBrace, LCGrkXi]),
+	(LCGrkXi, [LCLSqBrack, LCLBrace]),
+	(LCLBrace, [LCRBrace]),
+	(LCLSqBrack, [LCRSqBrack]),
+	(LCLStrachey, [LCRStrachey]),
+	(LCCon, [LCFatDot]),
+	(LCLChevron, [LCRChevron]),
+	(LCAuxiliary, [LCSemi]),
+	(LCImplement, [LCBy]),
+	(LCBy, [LCSemi])];
+=TEX
+Some of the above symbols can also be used in Z, so we need tables showing the brackets used in Z.
+=SML
+val ⦏z_open_brackets⦎ = ["(", "⟨", "[", "{"];
+val ⦏z_close_brackets⦎ = [")", "⟩", "]", "}"];
+=TEX
+The algorithm for finding the Z fragments is a little complicated by
+the structure of the as stream (as a list of $INPUT$s, some of which
+are themselves text-strings to be processed character by character).
+The following type is used to communicate between the functions which
+search for the end marker. The left contexts (input and text) are built up backwards and
+reversed when the final value is needed.
+=SML
+type ⦏INPUT_HANDLE⦎ = {
+	left_input : Lex.INPUT list,
+	left_text : string list,
+	right_text : string list,
+	right_input : Lex.INPUT list,
+	bracket_depth : int
+	};
+=TEX
+The following function is used below in circumstances where new-lines in the operand have already been accounted for; it does not increment the line counter.
+=SML
+fun skip_space_chars (chs as (ch :: more) : string list) : string list = (
+	if	is_space ch
+	then	skip_space_chars more
+	else	chs
+) | skip_space_chars [] = [];
+=TEX
+$find\_in\_text$ looks for an end marker in a text-string in the input
+and keeps track of bracket nesting in case the actual end-marker is in
+one of the later $INPUT$s.
+=SML
+fun ⦏find_in_text⦎ (terml : CN_LEX_CLASS list)
+	({left_input, left_text, right_text, right_input, bracket_depth}
+		: INPUT_HANDLE)
+		: (bool * INPUT_HANDLE) = (
+	let	fun aux (brk, sold, snew as (c::srest)) = (
+		if is_newline c
+		then inc_line_count()
+		else ();
+		if is_space c
+		then 	aux (brk, c::sold, srest)
+		else let
+			val (next, rest) =
+				(case rec_simple_identifier (snew, Unknown) of
+					(srest'', Known id) =>
+						(id, srest'')
+				|	(_, _) => (c, srest)
+				) handle Unrecognised => (c, srest);
+			val terminate_now = (fst o (classify false)) next mem terml
+							andalso brk = 0;
+		in
+				if terminate_now
+				then (true, brk, sold, (explode next)@rest)
+				else if next mem z_open_brackets
+				then aux (brk + 1, next::sold, rest)
+				else if next mem z_close_brackets
+				then aux (brk - 1, next::sold, rest)
+				else aux (brk, next::sold, rest)
+		end
+		) | aux (brk, sold, []) = (false, brk, sold, []);
+		val (flg, brk, sold, snew) =
+				aux (bracket_depth, left_text, right_text);
+	in
+		(flg, {left_input=left_input,
+			left_text=sold,
+			right_text=snew,
+			right_input=right_input,
+			bracket_depth=brk})
+	end
+);
+=TEX
+Assuming $find\_in\_text$ hasn't found the end marker, $find\_in\_input$ continues the search in the next $INPUT$ in the list.
+If we are reassembling a {\it Lex.Text} item in the left context as a string, we need to reverse the list version first.
+=SML
+fun ⦏find_in_input⦎ (terml : CN_LEX_CLASS list)
+	(ih as {left_input, left_text, right_text, right_input, bracket_depth}
+		: INPUT_HANDLE)
+		: (bool * INPUT_HANDLE) = (
+
+	case find_in_text terml ih of
+	(true, ih') => (true, ih')
+	| (false, ih') =>
+		let	val lt = skip_space_chars(rev (#left_text ih'));
+			val li = case lt of
+					[] => #left_input ih'
+					|_ => (Lex.Text o implode) lt :: #left_input ih';
+		in
+			case #right_input ih' of
+			Lex.Text txt::more => (
+				find_in_input terml
+					{	left_input=li,
+						left_text=[],
+						right_text=explode txt,
+						right_input=more,
+						bracket_depth= #bracket_depth ih'
+					}
+			) | other::more => (
+				find_in_input terml
+					{	left_input= other::li,
+						left_text=[],
+						right_text=[],
+						right_input=more,
+						bracket_depth= #bracket_depth ih'
+					}
+			) | [] => (
+				(false,{	left_input= li,
+						left_text=[],
+						right_text=[],
+						right_input=[],
+						bracket_depth= #bracket_depth ih'
+					})
+			)
+		end
+);
+
+=TEX
+$read\_until$ give the interface to the previous functions.
+It extracts a single Z fragment from the input stream (say an
+auxiliary expression) and returns the remaining input.
+This is the point at which we reverse the two parts of the left context.
+=SML
+fun ⦏read_until⦎ (classification : CN_LEX_CLASS,
+				cn_fun : Lex.INPUT list -> CN_TOKEN)
+			(terml : CN_LEX_CLASS list) (clist : string list, iplist : INPUT list)
+			(new_socket_needed : bool)		
+		: (CN_LEX_ITEM list * string list * INPUT list) = (
+let	val (found, ih') = find_in_input terml
+			{	left_input=[],
+				left_text=[],
+				right_text=clist,
+				right_input=iplist,
+				bracket_depth = 0};
+	val lt = skip_space_chars(rev (#left_text ih'));
+	val li = rev(case lt of
+			[] => #left_input ih'
+			| lt' => (Lex.Text o implode) lt :: #left_input ih');
+	val rt = #right_text ih';
+	val ri = #right_input ih';
+	val left_cxt = case li of
+				[] => []
+				| li' => [(classification,
+						cn_fun li)];
+	val side =	if new_socket_needed
+			then	new_socket()
+			else	();
+in
+	if found
+	then
+		(left_cxt, rt, ri)
+
+	else
+		(left_cxt, [], [])
+end);
+=TEX
+$spark\_xtext$ acts a dispatcher for the earlier functions which apply when
+a text string in the input is being processed, it analyses the
+next spark token in the input and takes action accordingly.
+=SML
+fun ⦏spark_xtext⦎ (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  = (
+	case skip_space (slist, Unknown) of
+	([], _) => spark_lex rest
+	| other => (
+		case rec_next_token other of
+		(srest, Known s) => (
+			let	val res as (class, _) = classify true s;
+			in case (class, lassoc5 z_delimiters class) of
+				(LCLChevron, Value terml) => (
+					res
+					::(let val (read, srest', rest') =
+					       read_until
+						(LCKSlot, CNKSlot) terml
+						(srest, rest)
+						true;
+					in
+						read @ spark_xtext srest' rest'
+					end)
+				)|(LCLSqBrack, Value terml) => (
+					res
+					::(let val (read, srest', rest') =
+						 read_until
+						(LCZ, CNZ o ZLex.z_lex) terml
+						(srest, rest)
+						true;
+					in
+						read @ spark_xtext srest' rest'
+					end)
+				)|(LCLBrace, Value terml) => (
+					res
+					::(let val (read, srest', rest') =
+						 read_until
+						(LCZ, CNZ o ZLex.z_lex) terml
+						(srest, rest)
+						true;
+					in
+						read @ spark_xtext srest' rest'
+					end)
+				)|(_, Value terml) => (
+					res
+					::(let val (read, srest', rest') =
+						read_until
+						(LCZ, CNZ o ZLex.z_lex) terml
+						(srest, rest)
+						false;
+					in
+						read @ spark_xtext srest' rest'
+					end)
+				)|(LCCharacterLiteral, Nil) => (
+					(class, (CNString o implode o tl
+							o rev o tl o explode) s)
+					::spark_xtext srest rest
+				)|(LCComment, Nil) => (
+					let val (srest', rest') =
+						ignore_comment srest rest;
+					in	spark_xtext srest' rest'
+					end
+				)|(LCArbitraryAda, Nil) => (
+					let val (tok, srest', rest') =
+						spark_arbitrary srest rest;
+					in	tok :: spark_xtext srest' rest'
+					end
+				)|(_, Nil) => 	
+					res::spark_xtext srest rest
+			end
+		)| (_, Unknown) =>
+			fail "CN-Parser" 501001 [fn() => implode slist]
+	)
+)
+=TEX
+$spark\_lex$ is the dispatcher for an arbitrary $INPUT$.
+=SML
+and ⦏spark_lex⦎ ((ip::more) : INPUT list) : CN_LEX_ITEM list = (
+	case ip of
+		Lex.Text s => (
+			spark_xtext (explode s) more
+	) |	Lex.String s => (
+			(LCStringLiteral, CNString s) :: spark_lex more
+	) |	Lex.Char s => (
+			fail "CN-Parser" 501001  [fn () => "`"^s^"`"]
+	) |	Lex.Type ty => (
+			fail "CN-Parser" 501001  [fn () => string_of_type ty]
+	) |	Lex.Term tm => (
+			fail "CN-Parser" 501001  [fn () => "antiquotation"]
+	) |	Lex.Separator s => (
+			if	not(!cn_ignore_spark_annotations)
+			then	(LCAnnotation, CNText s) :: spark_lex more
+			else	spark_lex more
+	) |	Lex.Error n => (fail "CN-Parser" 501003 [fn () => string_of_int n])
+) | spark_lex _ = [];
+=TEX
+Finally $cn\_lex$ is the external interface for the lexical analyser:
+=SML
+fun ⦏cn_lex⦎ (classify_label : CN_LEX_ITEM list -> CN_LEX_ITEM list) (inp : INPUT list)
+		: (CN_LEX_ITEM list * int list) = (
+	reset_line_count ();
+	get_and_reset_socket_list();
+	((classify_label o spark_lex) inp, get_and_reset_socket_list ())
+);
+=TEX
+
+=TEX
+\section{EPILOGUE}
+=SML
+end (* of structure CNLex *);
+=TEX
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+\end{document}
+=IGN
+val spark_lex = CNLex.cn_lex (Combinators.I);
+spark_lex [Lex.Separator "abcd def (12) --"];
+spark_lex [Lex.Text "abcd def (12) --# banana"];
+set_string_control("cn_spark_annotation_char", "$");
+spark_lex [Lex.Text "abcd def (12) --$ banana"];

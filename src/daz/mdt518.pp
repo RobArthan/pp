@@ -1,0 +1,460 @@
+=IGN
+********************************************************************************
+mdt518.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests: Compliance Notation Tactics Etc.}
+
+\def\AbstractText{This document contains tests for the material defined in ISS/HAT/DAZ/DTD518\cite{ISS/HAT/DAZ/DTD518}.}
+
+\def\Reference{ISS/HAT/DAZ/MDT518}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests: Compliance Notation Tactics Etc.}  %% Mandatory field
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/MDT518}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.10 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:04:45 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & HAT Manager}
+%% LaTeX2e port: \TPPabstract{This document contains tests for the material defined
+%% LaTeX2e port: in ISS/HAT/DAZ/DTD518\cite{ISS/HAT/DAZ/DTD518}.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{daz,fmu}
+
+\subsection{Changes history}
+\begin{description}
+\item[Issues 1.1 (1996/03/14)-1.6 (1996/03/19)]
+Initial drafts.
+\item[Issue 1.7 (2000/06/20)]
+Corrections for June 2000 enhancements.
+\item[Issue 1.8 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.9 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.10 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.11 (2006/03/28)] Allowed for automated state management.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes forecast}
+None.
+\section{GENERAL}
+\subsection{Scope}
+This document contains module tests for the module defined
+in \cite{ISS/HAT/DAZ/DTD518}.
+\subsection{Introduction}
+\subsubsection{Background and Purpose}
+See \cite{ISS/HAT/DAZ/DTD518}. The tests are intended to meet
+the requirements for module tests identified in the quality plan
+\cite{ISS/HAT/DAZ/PLN002}.
+\subsubsection{Dependencies}
+These tests depend on
+the test harness as implemented in DS/FMU/IED/IMP013, and
+its corresponding detailed design document, DS/FMU/IED/DTD013.
+\subsubsection{Possible Enhancements}
+None known.
+\subsubsection{Deficiencies}
+None known.
+
+\section{PREAMBLE}
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+val v : bool ref = ref true	(* set false to reduce verbose output *);
+v := false (* can skip this line for interactive working *);
+=TEX
+\section{THE TESTS}
+\subsection{HOL TACTICS}\label{HT}
+\subsubsection{The Rules}
+=SML
+open_theory"basic_hol";
+force_delete_theory"mdt518A" handle Fail _ => ();
+new_theory"mdt518A";
+set_pc"basic_hol";
+=TEX
+=SML
+new_const("iseven", ⓣ'a LIST → BOOL⌝);
+val ax1 = new_axiom(["ax1"], ⌜iseven []⌝);;
+val ax2 = new_axiom(["ax2"], ⌜∀x l⦁ iseven l ⇒ iseven(Cons x (Cons y l)) ⌝);;
+val r1_1 = hc_rule (!v) 10 hd [] [] [ax1, ax2];
+val t1_1 = ⌜iseven [x;y;z;a;b;c]⌝;
+val t1_2 = ⌜iseven []⌝;
+
+fun sr1 x  = store_mt_results_show
+	(mt_runf(fn (th,t) => is_nil(asms th) andalso concl th =$ t)) x;
+
+sr1 [
+	("mdt518.1.1", r1_1, t1_1, t1_1),
+	("mdt518.1.2", r1_1, t1_2, t1_2)
+];
+=TEX
+=SML
+new_type("type", 0);
+new_type("term", 0);
+declare_infix(210, "->");
+declare_infix(150, "⦂");
+declare_infix(300, "'");
+new_const("->", ⓣtype → type → type⌝);
+new_const("⦂", ⓣterm → type → BOOL⌝);
+new_const("'", ⓣterm → term → term⌝);
+new_const("K", ⓣterm⌝);
+new_const("S", ⓣterm⌝);
+val k_ax = new_axiom(["k_ax"], ⌜∀A B⦁ K ⦂ A -> B -> A⌝);
+val s_ax = new_axiom(["s_ax"], ⌜∀A B C⦁ S ⦂ (A -> B -> C) -> (A -> B) -> A -> C⌝);
+val app_ax = new_axiom(["app_ax"], ⌜∀A B f x⦁ f ⦂ A -> B ⇒ x ⦂ A ⇒ f ' x ⦂ B⌝);
+val app_ax1 = new_axiom(["app_ax1"], ⌜∀A B f x⦁ f ⦂ A -> B ∧ x ⦂ A ⇒ f ' x ⦂ B⌝);
+val r2_1 = hc_rule (!v) 100 hd [] [hc_∃_rule] [k_ax, s_ax, app_ax];
+val t2_1 = ⌜∃τ⦁ S ' K ' K ⦂ τ⌝;
+val t2_2 = ⌜∃τ⦁ (S ' K) ' K ⦂ τ -> τ⌝;
+val t2_3 = ⌜∃t; τ⦁ t ⦂ τ -> τ⌝;
+val r2_2  = hc_rule (!v) 100 hd [] [hc_∃_rule, hc_∧_rule] [k_ax, s_ax, app_ax1];
+sr1 [
+	("mdt518.2.1", r2_1, t2_1, t2_1),
+	("mdt518.2.2", r2_1, t2_2, t2_2),
+	("mdt518.2.3", r2_1, t2_3, t2_3),
+	("mdt518.2.4", r2_2, t2_1, t2_1)
+];
+=TEX
+=SML
+new_type("tree", 0);
+declare_infix(210, "--");
+declare_infix(190, "mem");
+new_const("--", ⓣtree → tree → tree⌝);
+new_const("mem", ⓣtree → tree → BOOL⌝);
+val ax3 = new_axiom(["ax3"], ⌜∀t⦁ t mem t⌝);
+val ax4 = new_axiom(["ax4"], ⌜∀t t1 t2⦁ t mem t1 ∨ t mem t2 ⇒ t mem t1 -- t2⌝);
+val ax5 = new_axiom(["ax5"], ⌜∀t t1 t2⦁
+	t mem t1 -- t2 ⇔ t = t1 -- t2 ∨ t mem t1 ∨ t mem t2⌝);
+val r3_1  = hc_rule (!v) 100 hd [] [hc_∨_rule] [ax3, ax4];
+val t3_1 = ⌜x mem x⌝;
+val t3_2 = ⌜x mem (x -- y)⌝;
+val t3_3 = ⌜x mem ((x -- y) -- (a -- b))⌝;
+val t3_4 = ⌜x mem ((a -- y) -- (a -- b)) -- (a -- (b -- x) -- a)⌝;
+val r3_2  = hc_rule (!v) 100 hd [] [hc_∨_rule, hc_rule_of_conv (eq_match_conv ax5)] [ax3];
+val thm3_3 = taut_rule⌜∀p q⦁(p ⇒ q) ⇔ ¬p ∨ q⌝;
+val r3_3  = hc_rule (!v) 100 hd []
+	[hc_∧_rule, hc_rule_of_conv(rewrite_conv[]),
+		conv_then_hc_rule (eq_match_conv thm3_3) hc_∨_rule] [ax3, ax4];
+val t3_5 = ⌜¬x mem x ⇒ x mem y⌝;
+new_const("bal", ⓣtree → BOOL⌝);
+val ax6 = new_axiom(["ax6"], ⌜∀t⦁bal (t -- t)⌝);
+val r3_4  = hc_rule (!v) 100 hd [] [(fn t => [all_∀_arb_elim ax6])] [];
+val t3_6 = ⌜bal((t1 -- t2) -- (t1 -- t2))⌝;
+=TEX
+=SML
+sr1 [
+	("mdt518.3.1", r3_1, t3_1, t3_1),
+	("mdt518.3.2", r3_1, t3_2, t3_2),
+	("mdt518.3.3", r3_1, t3_3, t3_3),
+	("mdt518.3.4", r3_1, t3_4, t3_4),
+	("mdt518.3.5", r3_2, t3_4, t3_4),
+	("mdt518.3.6", r3_3, t3_5, t3_5),
+	("mdt518.3.7", r3_4, t3_6, t3_6)
+];
+=TEX
+=SML
+=TEX
+\subsubsection{The Tactics}
+=SML
+fun f4_1 () = (
+set_goal([], t3_1);
+a(hc_tac[ax3, ax4]);
+diag_line(string_of_thm (top_thm()));
+pop_thm()
+);
+=TEX
+=SML
+val tac4_2 = basic_hc_tac (!v) 100 hd id_canon
+	[hc_∧_rule, hc_rule_of_conv(rewrite_conv[]),
+		conv_then_hc_rule (eq_match_conv thm3_3) hc_∨_rule] [ax3, ax4];
+fun f4_2 () = (
+set_goal([], t3_5);
+a(tac4_2);
+diag_line(string_of_thm (top_thm()));
+pop_thm()
+);
+=TEX
+=SML
+val tac4_3 = basic_hc_tac (!v) 100 hd hc_canon
+	[hc_∨_rule, hc_rule_of_conv(current_ad_st_conv())] [ax3, ax4];
+fun f4_3 () = (
+set_goal([], t3_5);
+a(tac4_3);
+diag_line(string_of_thm (top_thm()));
+pop_thm()
+);
+=TEX
+All that matters below is that the proof scripts don't fail.
+=SML
+store_mt_results_show (mt_runf fun_true) [
+	("mdt518.4.1", f4_1, (), mk_t),
+	("mdt518.4.2", f4_2, (), mk_t),
+	("mdt518.4.3", f4_3, (), mk_t)
+];
+
+=TEX
+\subsection{Z TACTICS}\label{ZT}
+=SML
+open_theory"z_library";
+force_delete_theory"mdt518B" handle Fail _ => ();
+new_theory"mdt518B";
+new_parent(hd(get_cache_theories())) handle Fail _ => ();
+set_pc"z_library";
+=TEX
+To test the two selection-membership rules, the easiest thing is to go proving things with them (after a quick direct test to see that the names are the right way round:
+=TEX
+=SML
+fun sr2 x = store_mt_results_show
+	(mt_runf(fn (th,t) => length(asms th) = 1 andalso concl th =$ t)) x;
+sr2 [
+	("mdt518.10.1", z_sel⋎s_∈_rule,
+		ⓩ(a⦂[abc,def:ℤ; ghi:ℤ × ℤ; jkl :ℙℕ]).jkl ∈ ℙℕ⌝,
+		ⓩ(a⦂[abc,def:ℤ; ghi:ℤ × ℤ; jkl :ℙℕ]).jkl ∈ ℙℕ⌝),
+	("mdt518.10.2", z_sel⋎t_∈_rule,
+		ⓩ(a ⦂ (ℕ × ℤ)).1 ∈ ℕ⌝, ⓩ(a ⦂ (ℕ × ℤ)).1 ∈ ℕ⌝)
+];
+=SML
+val conv = simple_eq_match_conv (pc_rule1"z_library" prove_rule[]
+		⌜∀x⦁
+	ⓜmk_z_≤(mk_z_signed_int (@@"0"), ⌜x:ℤ⌝)⌝ ⇔	ⓜmk_z_∈(⌜x:ℤ⌝, ⌜$"z'ℕ"⌝)⌝⌝);
+val z_rules = map
+	(conv_then_hc_rule conv o curry (op o) (switch (curry (op::)) nil))
+	[z_sel⋎t_∈_rule, z_sel⋎s_∈_rule, z_app_∈_rule];
+fun z_hc_sel (tms : TERM list) : TERM = (
+	let	fun aux tm = (
+			let	val (lhs, _) = dest_z_∈ tm;
+			in	is_z_gvar lhs orelse is_z_lvar lhs
+			end	handle Fail _ => false
+		);
+	in	find tms aux handle Fail _ => hd tms
+	end
+);
+val ⦏z_hc_tac⦎ : THM list -> TACTIC = (fn ths =>
+	basic_hc_tac (!v) 100 z_hc_sel hc_canon
+		(hc_rule_of_conv (current_ad_st_conv()) ::
+			hc_∧_rule :: hc_∨_rule ::z_rules)
+		ths
+);
+=TEX
+=SML
+set_pc"z_library1";
+=TEX
+=SML
+set_goal([], ⓩ∀i, j:ℕ⦁ i + j ∈ ℕ⌝);
+a(PC_T1 "z_lin_arith" prove_tac[]);
+val z_plus_∈_ℕ_thm = pop_thm();
+=TEX
+=SML
+set_goal([], ⓩ∀i, j:ℕ⦁ i * j ∈ ℕ⌝);
+a(REPEAT strip_tac);
+a(z_≤_induction_tac ⓩi⌝ THEN
+	rewrite_tac[z_times_plus_distrib_thm] THEN z_hc_tac[z_plus_∈_ℕ_thm]);
+val z_times_∈_ℕ_thm = pop_thm();
+=TEX
+=SML
+fun f11_1() = (
+set_goal([], ⓩ∀i, j, k:ℕ⦁ (i + j * i * 2 + 99) * (i + j*k) ∈ ℕ⌝);
+a(REPEAT strip_tac);
+a(z_hc_tac[z_plus_∈_ℕ_thm, z_times_∈_ℕ_thm]);
+diag_line(string_of_thm (top_thm()));
+pop_thm()
+);
+=TEX
+=SML
+fun f11_2() = (
+set_goal([], ⓩ ∀x:[a:ℤ; b : ℕ; c : ℤ]⦁ x.b + 99 ∈ ℕ⌝);
+a(REPEAT strip_tac);
+a(z_hc_tac[z_plus_∈_ℕ_thm, z_times_∈_ℕ_thm]);
+diag_line(string_of_thm (top_thm()));
+pop_thm()
+);
+=TEX
+=SML
+=TEX
+=SML
+fun f11_3() = (
+set_goal([], ⓩ∀f : ℕ → [a:ℤ; b : ℕ; c : ℤ] ⦁
+		(f 42).b + 99 ∈ ℕ ⌝);
+a(REPEAT strip_tac);
+a(z_hc_tac[z_plus_∈_ℕ_thm, z_times_∈_ℕ_thm]);
+diag_line(string_of_thm (top_thm()));
+pop_thm()
+);
+=TEX
+=SML
+fun f11_4() = (
+set_goal([], ⓩ∀f : ℕ → [a:ℤ; b : ℕ; c : ℤ] ⦁
+		1 < 2 ∧ (44 < 3 ⇒ false) ∧ (f 42).b + 99 ∈ ℕ ∧ ((f 42).b + 100 ∈ ℕ ∨ 1 = 2)⌝);
+a(z_∀_tac THEN ⇒_tac);
+a(z_hc_tac[z_plus_∈_ℕ_thm, z_times_∈_ℕ_thm]);
+diag_line(string_of_thm (top_thm()));
+pop_thm()
+);
+=TEX
+All that matters below is that the proof scripts don't fail.
+=SML
+store_mt_results_show (mt_runf fun_true) [
+	("mdt518.11.1", f11_1, (), mk_t),
+	("mdt518.11.2", f11_2, (), mk_t),
+	("mdt518.11.3", f11_3, (), mk_t),
+	("mdt518.11.4", f11_4, (), mk_t)
+];
+=TEX
+\subsection{COMPLIANCE NOTATION TACTICS}\label{CNT}
+=SML
+open_theory"cn";
+force_delete_theory"mdt518C" handle Fail _ => ();
+new_theory"mdt518C";
+set_pc"cn1";
+=TEX
+=SML
+val t20_1 = ⓩ	∀	x : INTEGER; y : INTEGER; z : INTEGER
+	|	(x + y) + 1 eq z = TRUE ∧ (x ≥ 0 ∧ y ≥ 0) ∧ x ≥ 0
+	⦁	x ≥ 0 ∧ z greater_eq 0 = TRUE⌝;
+=TEX
+=SML
+fun f20_1() = (
+set_goal([], t20_1);
+a(cn_vc_simp_tac[]);
+a(PC_T1 "z_lin_arith" prove_tac[]);
+diag_line(string_of_thm (top_thm()));
+pop_thm()
+);
+=TEX
+=SML
+val t20_2 = ⓩ	(x ≥ 0 ∧ y ≥ 0) ⇒ x + y greater_eq 0 = TRUE⌝;
+=TEX
+=SML
+fun f20_2() = (
+set_goal([], t20_2);
+a(cn_vc_simp_tac[]);
+a(PC_T1 "z_lin_arith" prove_tac[]);
+diag_line(string_of_thm (top_thm()));
+pop_thm()
+);
+=TEX
+ⓈZ
+│ RANGE ≜ 1 .. 10
+■
+=TEX
+=SML
+val t20_3 = ⓩ	∀	x : RANGE
+	|	x ≠ 1
+	⦁	x greater_eq 2 and x less 11 = TRUE ⌝;
+=TEX
+=SML
+fun f20_3() = (
+set_goal([], t20_3);
+a(cn_vc_simp_tac[z_get_specⓩRANGE⌝]);
+a(PC_T1 "z_lin_arith" prove_tac[]);
+diag_line(string_of_thm (top_thm()));
+pop_thm()
+);
+
+=TEX
+All that matters below is that the proof scripts don't fail.
+=SML
+store_mt_results_show (mt_runf fun_true) [
+	("mdt518.20.1", f20_1, (), mk_t),
+	("mdt518.20.2", f20_2, (), mk_t),
+	("mdt518.20.3", f20_3, (), mk_t)
+];
+=TEX
+=SML
+fun f21_1 () = (
+set_goal([], mk_f);
+a(cn_vc_simp_tac[])
+);
+=SML
+store_mt_results_show mt_run_fail [
+	("mdt518.21.1", f21_1, (),
+		gen_fail_msg "cn_vc_simp_tac" 518003 [string_of_term mk_f])
+];
+=TEX
+\section{SUMMARY OF RESULTS}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+
+\end{document}
+

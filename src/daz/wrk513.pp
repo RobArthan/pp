@@ -1,0 +1,452 @@
+=IGN
+********************************************************************************
+wrk513.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ $Date: 2006/06/01 14:56:09 $ $Revision: 1.13 $ $RCSfile: wrk513.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Calculator Example VCs Proof Scripts}
+
+\def\AbstractText{This document provides VC proof scripts for the Calculator Example from \cite{ISS/HAT/DAZ/USR503}.}
+
+\def\Reference{ISS/HAT/DAZ/WRK513}
+
+\def\Author{R.D. Arthan, G.M. Prout}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: % use_file "daz_init";
+%% LaTeX2e port: % use_file "wrk513";
+%% LaTeX2e port: % z_print_theory"-";
+%% LaTeX2e port: % open CNZGenerator;
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ,hyperbasics,ifthen]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Calculator Example VCs Proof Scripts}  %% Mandatory field
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/WRK513}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.13 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/06/01 14:56:09 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Informal}
+%% LaTeX2e port: %\TPPstatus{Informal}
+%% LaTeX2e port: \TPPtype{Technical}
+%% LaTeX2e port: %\TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01\\G.M.~Prout & HAT Team}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: %\TPPauthorisation{R.D.~Arthan & HAT Team}
+%% LaTeX2e port: \TPPabstract{%
+%% LaTeX2e port: This document provides VC proof scripts for the Calculator
+%% LaTeX2e port: Example from \cite{ISS/HAT/DAZ/USR503}.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: \def\TPPheadlhs{Lemma 1 Ltd.}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\pagebreak
+\section{INTRODUCTION}
+This document provides proof scripts for all the VCs generated in
+the Calculator Example from \cite{ISS/HAT/DAZ/USR503}. The style of the proofs
+is as advocated in that tutorial. This example was first presented in
+\cite{ISS/HAT/DAZ/WRK507}. Part of the purpose of that document was
+to demonstrate the insertion of hypertext links in a literate script by the compliance tool. This meant that the VC proofs were deliberately
+presented in a non obvious way to illustrate the advantage of these hypertext links. Here, they have been reproved in the order in which they were generated. The proofs have been amended slightly from those in \cite{ISS/HAT/DAZ/WRK507}
+so that they follow the style of proof advocated
+in \cite{ISS/HAT/DAZ/USR503}.
+
+The simplest way to interact with these proofs would be to  load
+the calculator example from \cite{ISS/HAT/DAZ/USR503}. First create
+the file $usr503.sml$  from $usr503.doc$  then
+make yourself a daz database. Instructions on how to do this
+are in
+\cite{ISS/HAT/DAZ/USR501}. Then enter the following command in your database:
+=GFT SML
+use_file"usr503";
+=TEX
+
+
+\section{PREAMBLE}
+
+The following Standard ML command sets up the Compliance Tool to process the rest of the script.
+=SML
+val _ = map (fn thy => (open_theory thy;
+	mapfilter delete_thm (flat (map fst (get_thms thy)))))
+	(get_descendants "calc_prelims");
+open_theory"calc_prelims";
+set_pc"cn1";
+=TEX
+\section{SUBSIDIARY LEMMAS}
+=SML
+push_pc"z_library1";
+set_goal([], ⓩ∀m : NATURAL⦁ m ≥ 0⌝);
+a(rewrite_tac[z_get_specⓩNATURAL⌝] THEN REPEAT strip_tac);
+val natural_thm = pop_thm();
+pop_pc();
+=TEX
+=SML
+push_pc"z_library1";
+set_goal([], ⓩfact 0 = 1 ∧ fact 1 = 1⌝);
+a(rewrite_tac[cn_fact_thm, rewrite_rule[cn_fact_thm]
+	((z_∀_elimⓩ0⌝ o ∧_right_elim) cn_fact_thm)]);
+val fact_thm  = pop_thm();
+pop_pc();
+=TEX
+=SML
+push_pc"z_library1";
+set_goal([], ⓩ∀x: ℤ⦁  x ** 1 = x⌝);
+a(REPEAT strip_tac);
+a(rewrite_tac[rewrite_rule[](
+    z_∀_elimⓩ(x ≜ x, y ≜ 0)⌝ (∧_right_elim(z_get_specⓩ(_**_)⌝)))]);
+val star_star_1_thm = pop_thm();
+=TEX
+=SML
+set_goal([], ⓩ∀x: ℤ⦁  x ** 2 = x * x⌝);
+a(REPEAT strip_tac);
+a(rewrite_tac[star_star_1_thm, rewrite_rule[](
+    z_∀_elimⓩ(x ≜ x, y ≜ 1)⌝ (∧_right_elim(z_get_specⓩ(_**_)⌝)))]);
+val star_star_2_thm = pop_thm();
+pop_pc();
+=TEX
+\section{VC PROOFS}
+=SML
+open_theory "OPS'body";
+set_goal([],get_conjecture"-""vcOPS_1");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vcOPS_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vcOPS_2");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vcOPS_2";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vcOPS_3");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vcOPS_3";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vcOPS_4");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vcOPS_4";
+=TEX
+=SML
+open_theory "OPSoDIGIT_BUTTON'proc";
+set_goal([],get_conjecture"-""vcOPSoDIGIT_BUTTON_1");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vcOPSoDIGIT_BUTTON_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vcOPSoDIGIT_BUTTON_2");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vcOPSoDIGIT_BUTTON_2";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc3001_1");
+a(cn_vc_simp_tac[]);
+a(REPEAT strip_tac THEN asm_rewrite_tac[cn_DO_DIGIT_thm]);
+save_pop_thm"vc3001_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc3001_2");
+a(cn_vc_simp_tac[]);
+a(REPEAT strip_tac THEN asm_rewrite_tac[cn_DO_DIGIT_thm]);
+save_pop_thm"vc3001_2";
+=TEX
+=SML
+open_theory "OPSoOPERATION_BUTTON'proc";
+set_goal([],get_conjecture"-""vcOPSoOPERATION_BUTTON_1");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vcOPSoOPERATION_BUTTON_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vcOPSoOPERATION_BUTTON_2");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vcOPSoOPERATION_BUTTON_2";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc3002_1");
+a(cn_vc_simp_tac calc_thms);
+a ⇒_tac;
+a(asm_rewrite_tac[]);
+save_pop_thm"vc3002_1";
+=TEX
+=SML
+val number_ax = get_axiom"-""Constraint 1";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc3002_2");
+a(cn_vc_simp_tac calc_thms);
+a ⇒_tac;
+a(asm_rewrite_tac[]);
+a(LIST_DROP_NTH_ASM_T[1,2,3,4,5,6,8,9,10] (MAP_EVERY discard_tac));
+a strip_tac;
+a(lemma_tac ⓩGVoDISPLAY ∈ NATURAL⌝);
+(* *** Goal "1" *** *)
+a(ante_tac number_ax);
+a(PC_T1"calc_prelims"asm_rewrite_tac[z_get_specⓩNATURAL⌝]);
+a(DROP_NTH_ASM_T 2 ante_tac THEN PC_T1 "z_lin_arith" prove_tac[]);
+(* *** Goal "2" *** *)
+a(ALL_FC_T rewrite_tac[z_get_specⓩFACT⌝]);
+save_pop_thm"vc3002_2";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc3002_3");
+a(cn_vc_simp_tac calc_thms);
+a ⇒_tac;
+a(asm_rewrite_tac[]);
+a(LIST_DROP_NTH_ASM_T[1,2,3,4,5,6,7,9,10,11] (MAP_EVERY discard_tac));
+a strip_tac;
+a(lemma_tac ⓩGVoDISPLAY ∈ NATURAL⌝);
+(* *** Goal "1" *** *)
+a(ante_tac number_ax);
+a(PC_T1"calc_prelims"asm_rewrite_tac[z_get_specⓩNATURAL⌝]);
+a(DROP_NTH_ASM_T 2 ante_tac THEN PC_T1 "z_lin_arith" prove_tac[]);
+(* *** Goal "2" *** *)
+a(ALL_FC_T rewrite_tac[z_get_specⓩSQRT⌝]);
+save_pop_thm"vc3002_3";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc3002_4");
+a(PC_T1"calc_prelims"cn_vc_simp_tac[]);
+a(⇒_tac THEN asm_rewrite_tac[]);
+save_pop_thm"vc3002_4";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc3002_5");
+a(PC_T1"calc_prelims"cn_vc_simp_tac[]);
+a(⇒_tac THEN asm_rewrite_tac[]);
+save_pop_thm"vc3002_5";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc3002_6");
+a(PC_T1"calc_prelims"cn_vc_simp_tac[]);
+a(⇒_tac THEN asm_rewrite_tac[]);
+save_pop_thm"vc3002_6";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc3002_7");
+a(PC_T1"calc_prelims"cn_vc_simp_tac[]);
+a(⇒_tac THEN asm_rewrite_tac[]);
+save_pop_thm"vc3002_7";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc3002_8");
+a(PC_T1"calc_prelims"cn_vc_simp_tac[]);
+a(⇒_tac THEN asm_rewrite_tac[]);
+save_pop_thm"vc3002_8";
+=TEX
+=SML
+open_theory "OPSoOPERATION_BUTTONoFACT'func";
+set_goal([],get_conjecture"-""vcOPSoOPERATION_BUTTONoFACT_1");
+a(cn_vc_simp_tac[]);
+a(REPEAT strip_tac THEN all_fc_tac[natural_thm]);
+save_pop_thm"vcOPSoOPERATION_BUTTONoFACT_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vcOPSoOPERATION_BUTTONoFACT_2");
+a(cn_vc_simp_tac[]);
+a(REPEAT strip_tac);
+a(all_var_elim_asm_tac1);
+save_pop_thm"vcOPSoOPERATION_BUTTONoFACT_2";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc1001_1");
+a(cn_vc_simp_tac[]);
+a(REPEAT strip_tac THEN asm_rewrite_tac[fact_thm]);
+save_pop_thm"vc1001_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc1001_2");
+a(cn_vc_simp_tac[]);
+a(REPEAT strip_tac);
+a(lemma_tacⓩM = 0 ∨ M = 1⌝
+	THEN1 PC_T1"z_lin_arith"asm_prove_tac[]
+	THEN asm_rewrite_tac[fact_thm]);
+save_pop_thm"vc1001_2";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc1001_3");
+a(cn_vc_simp_tac[]);
+a(REPEAT strip_tac);
+a(asm_ante_tacⓩ2 ≤ J⌝ THEN PC_T1 "z_lin_arith" prove_tac[]);
+save_pop_thm"vc1001_3";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc1001_4");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vc1001_4";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc1002_1");
+a(cn_vc_simp_tac[]);
+a(REPEAT strip_tac THEN all_var_elim_asm_tac1);
+a(lemma_tacⓩ∃K:𝕌⦁ K + 1 = J⌝);
+(* *** Goal "1" *** *)
+a(z_∃_tacⓩJ - 1⌝ THEN PC_T1 "z_lin_arith" prove_tac[]);
+(* *** Goal "2" *** *)
+a(all_var_elim_asm_tac1);
+a(rewrite_tac[z_plus_assoc_thm]);
+a(ALL_FC_T rewrite_tac[cn_fact_thm]);
+save_pop_thm "vc1002_1";
+=TEX
+=SML
+open_theory "OPSoOPERATION_BUTTONoSQRT'func";
+set_goal([],get_conjecture"-""vcOPSoOPERATION_BUTTONoSQRT_1");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vcOPSoOPERATION_BUTTONoSQRT_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vcOPSoOPERATION_BUTTONoSQRT_2");
+a(cn_vc_simp_tac[]);
+a(REPEAT strip_tac THEN all_var_elim_asm_tac1);
+save_pop_thm"vcOPSoOPERATION_BUTTONoSQRT_2";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc2001_1");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vc2001_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc2001_2");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vc2001_2";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc2002_1");
+a(cn_vc_simp_tac[]);
+a(REPEAT ⇒_tac THEN all_var_elim_asm_tac1);
+a(POP_ASM_T discard_tac THEN all_fc_tac[natural_thm]);
+a(DROP_NTH_ASM_T 2 discard_tac);
+a(asm_rewrite_tac[star_star_2_thm]);
+a(z_≤_induction_tacⓩM⌝);
+(* *** Goal "1" *** *)
+a(rewrite_tac[]);
+(* *** Goal "2" *** *)
+a(PC_T1 "z_lin_arith" asm_prove_tac[]);
+save_pop_thm "vc2002_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc2002_2");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vc2002_2";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc2002_3");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vc2002_3";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc2003_1");
+a(cn_vc_simp_tac[]);
+a(REPEAT strip_tac THEN all_var_elim_asm_tac1);
+save_pop_thm"vc2003_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc2003_2");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vc2003_2";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc2003_3");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vc2003_3";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc2004_1");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vc2004_1";
+=TEX
+=SML
+set_goal([],get_conjecture"-""vc2004_2");
+a(cn_vc_simp_tac[]);
+save_pop_thm"vc2004_2";
+
+
+
+=TEX
+\end{document}
+=IGN
+

@@ -1,0 +1,229 @@
+=IGN
+********************************************************************************
+wrk524.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,12pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+\ftlinepenalty=9999
+\makeindex
+%%%%% YOU WILL USUALLY WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{ Compliance Notation Specification Theory Listings }
+
+\def\Abstract{\begin{center}
+{\bf Abstract}\par\parbox{0.7\hsize}
+{\small This document contains the code to type-check the
+3 volumes of the Compliance Notation specification and
+gives the listings of the resulting theories.}
+\end{center}}
+
+\def\Reference{LEMMA1/DAZ/WRK524}
+
+\def\Author{R.D. Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 118 958 4409}
+
+\def\Fax{+44 118 956 1920}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+\begin{centering}
+
+
+
+\end{centering}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+%%%%% STANDARD RED-TAPE SECTIONS (MAY WANT TO INTERLEAVE SOME \newpage COMMANDS IN THESE)
+
+%%%%% CONTENTS:
+
+\subsection{Contents}
+
+\tableofcontents
+
+%%%%% REFERENCES:
+
+\subsection{References}
+
+\bibliographystyle{fmu}
+
+%%%%% CHANGE THE FOLLOWING AS NECESSARY (E.G., TO PICK UP daz.bib):
+{\raggedright
+\bibliography{fmu,daz}
+}
+%%%%% CHANGES HISTORY:
+\subsection{Changes History}
+\begin{description}
+\item[Issues 1.1 (2002/02/17)] First draft.
+\item[Issue 1.3 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.4 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.5 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%%%%%  CHANGES FORECAST:
+
+\subsection{Changes Forecast}
+
+None.
+
+%%%%% DISTRIBUTION LIST
+
+\subsection{Distribution}
+\begin{center}
+\begin{tabular}{ll}
+Rob Arthan & Lemma 1\\
+Gill Prout & Home \\
+Roger Jones & Home
+\end{tabular}
+\end{center}
+
+
+\newpage
+
+%%%%% NOW THE CREATIVE BIT:
+
+\section{Introduction}
+\subsection{Scope}
+This document contains the code to type-check the
+3 volumes of the Compliance Notation specification and
+gives the listings of the resulting theories.
+\subsection{Purpose and Background}
+
+QinetiQ now subcontract the task of maintaining the formal specification
+of the Compliance Notation to Lemma 1 (see \cite{LEMMA1/DAZ/PLN030A}.
+See \cite{LEMMA1/DAZ/WRK523} for information about how the
+three volumes of the specification are formed by pulling together
+information from various sources.
+
+Historically, the copies of the specifications in the detailed
+design documents have been type-checked in the special type-check
+only mode supported by {\ProductZ}. This mode intentionally allows
+things such as redefinition of global variables that are not legal
+in a fully formal {\ProductZ} document. Improvements in hardware
+and software since 1994 when the specifications where originally
+transcribed into {\ProductZ} mean that is now feasible to do
+full type-checking.
+
+Full type-checking takes about 1.5 hours on a 450MHz
+Pentium, so while it is not appropriate for routine builds of the
+design documentation, it is a worthwhile check to carry out
+in an {\it ad hoc} way.
+In particular, it provides a more rigorous check that the Z paragraphs
+have been pulled out of the detailed design documents in a valid way.
+
+This document contains the code to run a full type-check and to
+generate the theory listings for the specifications. Please note
+that the result is a long document --- well over 500 pages.
+Even if the defining properties are omitted (as in type-check only
+mode), the document will be well over 300 pages.
+
+Part of the ML preamble in volume 3 of the specifications uses
+an environment variable {\tt PPTYPECHECKONLY} to decide the
+value of the flag {\tt z\_type\_check\_only}. If this has the
+value {\it false}, then a full type-check is carried out.
+
+To run the full type-check use the UNIX command:
+\begin{verbatim}
+        PPTYPECHECKONLY=false docsml wrk524
+\end{verbatim}
+
+To run type-check only use the UNIX command:
+\begin{verbatim}
+        PPTYPECHECKONLY= docsml wrk524
+\end{verbatim}
+
+(or simply omit the setting of {\tt PPTYPECHECKONLY}).
+
+In either case, to typeset this document you may then run:
+
+\begin{verbatim}
+        docdvi wrk524
+\end{verbatim}
+
+The relevant dependencies are recorded in the daz makefile,
+which by default does a type-check only run.
+
+\newpage
+\section{The Code}
+\subsection{ML Code}
+=DUMP wrk524.ML
+fun show_progress recogniser args = (
+        recogniser args;
+        (hd o get_consts) "-" handle Fail _ => ⓩNo progress⌝
+);
+val z_axbox_recogniser = show_progress ZParagraphRecognizers.z_axbox_recogniser;
+val z_genbox_recogniser = show_progress ZParagraphRecognizers.z_genbox_recogniser;
+val z_schbox_recogniser = show_progress ZParagraphRecognizers.z_schbox_recogniser;
+val z_other_recogniser = show_progress ZParagraphRecognizers.z_other_recogniser;
+fun load f = (use_file f; f);
+val times = [
+	time_app Milliseconds load "spc503",
+	time_app Milliseconds load "spc502",
+	time_app Milliseconds load "spc501"];
+open_theory"Volume_1";
+z_output_theory{theory="Volume_1", out_file = "spc501.th.doc"};
+z_output_theory{theory="Volume_2", out_file = "spc502.th.doc"};
+z_output_theory{theory="Volume_3", out_file = "spc503.th.doc"};
+open_theory"SPARK_toolkit";
+z_output_theory{theory="-", out_file = "spc501a.th.doc"};
+open_theory"Z_toolkit_dependencies";
+z_output_theory{theory="-", out_file = "spc501b.th.doc"};
+=TEX
+\subsection{Shell Script}
+=SH
+pp_make_database -f -p zed cnspec >wrk524.run.log 2>&1
+pp -d cnspec -f wrk524.ML >>wrk524.run.log 2>&1
+doctex spc501.th spc502.th spc503.th spc501a.th spc501b.th >>wrk524.run.log 2>&1
+=TEX
+\include{spc501.th}
+\include{spc502.th}
+\include{spc503.th}
+\include{spc501a.th}
+\include{spc501b.th}
+\newpage
+\section{INDEX}
+\printindex
+\end{document}
+
+
+
+
+
+
+

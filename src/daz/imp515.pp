@@ -1,0 +1,870 @@
+=IGN
+********************************************************************************
+imp515.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% imp515.doc   ℤ $Date: 2008/03/24 14:33:48 $ $Revision: 1.58 $ $RCSfile: imp515.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation: Compliance Tool Test Utilities}
+
+\def\AbstractText{This document contains the implementation of test utilities for module testing the compliance tool.}
+
+\def\Reference{ISS/HAT/DAZ/IMP515}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation: Compliance Tool Test Utilities}  %% Mandatory field
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/IMP515}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.58 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2008/03/24 14:33:48 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & HAT Team}
+%% LaTeX2e port: \TPPabstract{This document contains the implementation of test utilities for module testing the compliance tool.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+    ableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.1 (1994/04/28)-1.20 (1995/01/05)] Initial Drafts.
+\item[Issue 1.1 (1994/04/28)-1.21 (1995/10/10)] Amended for enhanced syntax.
+\item[Issue 1.24 (1997/04/10)] Changes to match those caused by IUCT project WP 6.
+\item [Issue 1.25 (1997/05/29)] IUCT WP 7 changes.
+\item[Issue 1.26 (1997/06/03)] Changes for IUCT WP 2.
+\item[Issue 1.27 (1997/07/21)] Changes for IUCT WP 4.
+\item[Issue 1.28 (1997/07/23)] Removed $pack\_spec\_with\_modules$.
+\item[Issue 1.29 (2000/06/20)] Updates for June 2000 enhancements.
+\item[Issue 1.30 (2000/10/24)] CTLE II R1/9: SPARK 83 attributes.
+\item[Issue 1.31 (2001/12/15)] R0037: support for named numbers.
+\item[Issue 1.32 (2002/01/26)] Updates for new abstract syntax (R0006 changes).
+\item[Issue 1.33 (2002/01/29)] Updates for new CN environment (R0044 changes).
+\item[Issue 1.34 (2002/03/13), 1.35 (2002/05/02)] Spring 2002 enhancements: syntax changes for interim release.
+\item[Issue 1.36 (2002/05/07)]R0047: renaming (subprograms and data types for objects renamings).
+\item[Issue 1.37 (2002/07/24)] R0079: assertions (allowed for changed data types).
+\item[Issue 1.38 (2002/08/07), 1.39 (2002/08/08)] R0051/R0052: allowed for new syntax for default parameters and block statements.
+\item[Issue 1.40 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.41 (2002/10/17), 1.42 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.43 (2002/11/10)] Uniform treatment of block statements.
+\item[Issue 1.44 (2004/02/07)] The SPARK program is now referred to as the Ada program.
+\item[Issue 1.45 (2004/07/11)] Allowed for reformed environments.
+\item[Issue 1.46 (2004/07/17)] Using clauses now allowed anywhere in package body.
+\item[Issue 1.47 (2004/10/09)] Allowed for new represenation of procedures in the environments.
+\item[Issue 1.48 (2004/10/25)] Adjustments to lexical class data type (for syntax of Ada labels).
+\item[Issue 1.49 (2004/12/08)] Allowed for changes to Ada output interfaces.
+\item[Issue 1.146] Allowed for changes to types for enhancement 115: support for implicitly declared subprograms.
+\item[Issue 1.147, 1.148] Allowed for changes to {\em trans\_basic\_decl}.
+\item[Issue 1.54 (2006/04/12)] Support for general expanded names.
+\item[Issue 1.55 (2007/05/13)] Allowed for change to type of block names.
+\item[Issue 1.56 (2007/11/11)] Allowed for change to type of replacement environment.
+\item[Issues 1.56 (2007/11/11), 1.57 (2008/03/23)] Allowed for change to types for child packages.
+\item[Issue 1.58 (2008/03/24)] Allowed for change to environment entry type for functions.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+$fmt\_repl\_env$ has an untidy option, put in to make pattern matching
+exhaustive.
+This needs to be either a formal error message, or a suitable return value
+for the case in question.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD515}.
+\subsection{Introduction}
+\subsection{Purpose and Background}
+
+See \cite{ISS/HAT/DAZ/DTD515}.
+%\subsection{Algorithms}
+%\subsection{Dependencies}
+%\subsection{Known Deficencies}
+\subsection{Possible Enhancements}
+None known.
+=TEX
+
+\section{THE STRUCTURE $CNTestUtilities$}
+=SML
+structure ⦏CNTestUtilities⦎ : CNTestUtilities = struct
+	open	CaseIndependence CNBasicDeclsAndExprs CNParser CNTypes
+		CNTypes1 CNTypes2 ZParagraphs ZUserInterfaceSupport
+		CNAdaOutput CNZGenerator;
+=TEX
+
+\section{CREATING ABSTRACT SYNTAX FROM STRINGS}
+=SML
+local
+fun classify_label (itemlist : CN_LEX_ITEM list) : CN_LEX_ITEM list =
+  (case itemlist
+    of (LCLBracket, _)::(LCNumericLiteral, CNText ntxt)::(LCRBracket, _)::rest =>
+      (
+        (
+          (case nat_of_string ntxt
+            of 1 => LCCompLabel
+             | 2 => LCPPartLabel
+             | 3 => LCVPartLabel
+             | 4 => LCDecLabel
+             | 5 => LCStmtLabel
+             | 6 => LCSpecLabel
+             | _ => LCCompLabel
+          ),
+          CNText ("("^ntxt^")")
+        )::rest
+      )
+     |_ => itemlist
+  );
+in
+fun ⦏cn_of_string⦎ (s : string) : CNTypes.WEB_CLAUSE = (
+  let
+    val inp = [Lex.Text s];
+  in
+    (CNParser.cn_parser o fst o (CNLex.cn_lex classify_label)) inp
+  end)
+end;
+=TEX
+
+=SML
+fun ⦏cn_decl_of_string⦎ (s : string) : DECLARATION = (
+let	val prefix = "package mdt505 is ";
+	val epilogue = " end mdt505;"
+	val result = cn_of_string (prefix^s^epilogue);
+in
+	case result of
+	WCCompilation[KCUUnit{
+		comp_unit=CUPackageDeclaration{
+			pack_decl = {visible_decs = [decl], ...}, ...}, ...}] => decl
+	|_ => fail "cn_decl_of_string" 508001 []
+end);
+=TEX
+
+=SML
+fun ⦏cn_si_basic_decl_of_string⦎ (s : string) : SI_BASIC_DECL = (
+let	val prefix = "(4) ≡ ";
+	val result = cn_of_string (prefix^s);
+in
+	case result of
+	WCReplacedByDecl{decls=[DBasicDecl d],...} => d
+	|_ => fail "cn_decl_of_string" 508001 []
+end);
+=TEX
+
+=SML
+fun ⦏cn_exp_of_string⦎ (s : string) : EXP = (
+let	val prefix = "(6) ⊑ a:= ";
+	val epilogue = ";";
+	val result = cn_of_string (prefix^s^epilogue);
+in
+	case result of
+	WCRefinedBy{statement= STAssign{e,...},...} => e
+	|_ => fail "cn_exp_of_string" 508001 []
+end);
+=TEX
+
+=SML
+fun ⦏cn_statement_of_string⦎ (s : string) : STATEMENT = (
+let	val prefix = "(6) ⊑";
+	val result = cn_of_string (prefix^s);
+in
+	case result of
+	WCRefinedBy{statement= st,...} => st
+	|_ => fail "cn_statement_of_string" 508001 []
+end);
+=TEX
+
+=SML
+fun ⦏cn_specinfo_of_string⦎ (s : string) : (Z_ID list * Z_TM * Z_TM) = (
+let	val prefix = "(6) ⊑";
+	val epilogue = "(100)";
+	val result = cn_of_string (prefix^s^epilogue);
+in
+	case result of
+	WCRefinedBy{statement = STSpecNoIvars{spec={w, pre, post, ...},
+				...}, ...} =>
+		(w, pre, post)
+	|_ => fail "cn_prepost_of_string" 508001 []
+end);
+=TEX
+
+\section{A TEST ENVIRONMENT}
+=SML
+val ⦏var_info⦎ : ENV_INFO S_DICT ref = ref [];
+=TEX
+
+=SML
+fun ⦏init_env⦎ (() : unit) : unit = (var_info := []);
+=TEX
+
+=SML
+val ⦏env⦎ = (fn id =>
+	case lassoc5 (!var_info) id of
+	Value (ei as {tipe = Value _, ...}) => Value ei
+	|Value {tipe = Nil, canon_name, info, private} =>	 (
+		case get_const_info ("z'"^id) of
+		Value (ty,_) => Value {tipe = Value ty, canon_name =canon_name, info = info, private = false}
+		|Nil => Nil
+	)
+	|Nil =>	 (
+		case get_const_info ("z'"^id) of
+		Value (ty,_) => Value {tipe = Value ty, canon_name = id, info = EIEnvOther, private = false}
+		|Nil => Nil
+	)
+);
+=TEX
+
+=SML
+fun ⦏extend_env⦎ (id : ID)  (ei : ENV_INFO) : unit = (
+	(var_info := s_extend id ei (!var_info))
+);
+=TEX
+
+=SML
+fun ⦏change_env⦎ (id : ID) (ei : ENV_INFO) : unit = (
+	(var_info := s_enter id ei (!var_info))
+);
+=TEX
+
+=SML
+fun ⦏update_env_with_vars⦎ ({vars, tmark} : VAR_DECL) : unit = (
+let	val vars' = map to_upper vars;
+	val tmark' = to_upper tmark;
+	val ty = case env tmark' of
+				Value {tipe =Value ty, ...} => dest_z_power_type ty
+				|_ => fail "" 505001 [fn()=>tmark^" not declared"];
+in
+	((map (fn s => extend_env s
+		{tipe = Value ty,
+		 canon_name = s,
+		 info = EIEnvVar {tmark =  tmark', kind = VKVar},
+		 private = false}) vars');())
+end
+);
+=TEX
+
+=SML
+fun ⦏update_db_with_function⦎ ({designator, return, formal_part, globals, spec, ...}
+	 : FUNCTION_SPECIFICATION) : unit = (
+let	val des = to_upper designator;
+	fun get_ty (id : ID) : TYPE = (
+		 (dest_z_power_type o type_of) (trans_exp env (EId id))
+	);
+	val ret_ty = get_ty return;
+	fun trans_def Nil = Nil
+	|   trans_def (Value e) = Value(trans_exp env(adjust_exp env e));
+	fun mk_pars ({name, idlist, default, ...}:PARAMETER_SPECIFICATION) = (
+		map (fn id => ((id, (name, trans_def default)), get_ty name)) idlist
+	);
+	val (pars_tmarks_defs, par_tys) = (split o flat o map mk_pars) formal_part;
+	val pars = map fst pars_tmarks_defs;
+	val par_ty = case par_tys of
+			[par_ty] => par_ty
+			|_ => mk_z_tuple_type par_tys;
+	fun get_global_ty (zn : Z_ID) = (
+		force_value(#tipe (force_value (env zn)))
+	);
+	val ty1 = mk_z_power_type(mk_z_tuple_type [par_ty, ret_ty]);
+	val ty2 = case globals of
+		[] => ty1
+	|	[gl] => mk_z_power_type(mk_z_tuple_type[get_global_ty gl, ty1])
+	|	_ => mk_z_power_type(mk_z_tuple_type
+			[mk_z_tuple_type(map get_global_ty globals), ty1]);
+	val tci = TypeCheckInfo ([(des, ty2)], []);
+	val side = update_theory_db_with_parainfo tci;
+in
+	extend_env des
+	{tipe = Value ty2,
+	 canon_name = des,
+	 info = EIEnvFunction {spec = spec,
+			deps = globals,
+			pars = map (fn (p, (t, d)) => {id =p, tmark = t, default = d}) pars_tmarks_defs,
+			return_tmark = return},
+	 private = false}
+end
+);
+=TEX
+
+\section{INTRODUCING NEW CONSTANTS/VARIABLES}
+=SML
+fun ⦏cn_declare⦎ (pfx : Z_ID list) (s : string) : unit = (
+	case cn_decl_of_string s of
+	DBasicDecl (SIVarDecl vd) => (
+		let	val (bds, vd') = adjust_var_decls (env, []) [vd];
+			val paras = flat (map (trans_basic_decl (env, pfx)) bds);
+			
+		in	map update_theory_db_with_parainfo paras;
+			map update_env_with_vars vd';
+			()
+		end
+	)| DBasicDecl (SIVarDeclInit (vd,e)) => (
+		let	val (bds, vd') = adjust_var_decls (env, []) [vd];
+			val paras = flat (map (trans_basic_decl (env, pfx)) bds);
+			
+		in	map update_theory_db_with_parainfo paras;
+			map update_env_with_vars vd';
+			()
+		end
+	)| DBasicDecl (bd as SIConstDecl _) => (
+		let	val adj_bds = adjust_basic_decls (env, []) [bd];
+			val paras = flat (map (trans_basic_decl (env, pfx)) adj_bds);
+			val _ = map update_theory_db_with_parainfo paras;
+			fun do1 ty tm c = extend_env c
+				{tipe = Value ty,
+				canon_name =c ,
+				info = EIEnvConstant {tmark = tm},
+				private = false};
+			fun get_ty (id : ID) : TYPE = (
+				 (dest_z_power_type o type_of) (trans_exp env (EId id))
+			);
+		in	case rev adj_bds of
+				BDConstDecl{consts,tm=Value tm,expr}:: _ => (
+				let	val ty = get_ty tm;
+				in	map (do1 ty tm) (map (prefix_trans_id pfx) consts); ()
+				end
+			) | _ => (
+				diag_line("Weird result from adjust_basic_decls")
+			)
+		end
+	) | DBasicDecl bd => (
+		let	val adj_bds = adjust_basic_decls (env, []) [bd];
+			val paras = flat (map (trans_basic_decl (env, pfx)) adj_bds);
+			
+			val side = map update_theory_db_with_parainfo paras;
+		in
+			()
+		end
+	)| DFunctionDeclaration {spec = fd, ...} => (
+		update_db_with_function fd
+
+	)| _ => ()
+);
+=TEX
+
+\section{PRINTING VOLUME I ENVIRONMENTS}
+=SML
+fun diag_string_list ([] : string list) = ()
+|   diag_string_list ([x] : string list) = diag_line x
+|   diag_string_list (x::xs : string list) = (diag_line x;diag_string_list xs);
+=TEX
+
+=SML
+fun ⦏f_of_fmt⦎ (f : PP_FMT_INFO -> 'a -> unit)
+		: ('a -> string list) = (
+	fn arg => (
+		(strings_from_fmt f arg)
+	)			
+);
+=TEX
+
+=SML
+fun ⦏list_fmt⦎ (sl : string list) (fmt : string): string = (
+	format_list (fn x => x) sl fmt);
+=TEX
+
+=SML
+fun ⦏aux_var_decl_list⦎ (vdl : VAR_DECL list) : string list =
+	(map (fn x => " "^x) (f_of_fmt fmt_var_decl_list vdl));
+=TEX
+
+=SML
+fun ⦏aux_var_decl_list1⦎ (vdl : VAR_DECL list) : string list =
+	(map (fn x => "    "^x) (f_of_fmt fmt_var_decl_list vdl));
+=TEX
+
+=SML
+fun ⦏aux_const_decl_list⦎ ([] : BASIC_DECL list) : string list = []
+|   aux_const_decl_list (cdl : BASIC_DECL list) : string list =
+	(map (fn x => " "^x) ((flat o (map (f_of_fmt fmt_basic_decl))) cdl));
+=TEX
+
+=SML
+fun ⦏aux_param_spec⦎ (ps : PARAM_SPEC) : string list =
+	[(
+	case (#mode ps) of
+		MSparkIn true => "IN "
+		|MSparkIn false => " "
+		|MSparkOut => "OUT "
+		|MSparkInOut => "IN OUT "
+	) ^
+	((implode o aux_var_decl_list) [(#var_decl ps)])
+	];
+=TEX
+
+=SML
+fun ⦏aux_formal_proc⦎ (fp : FORMAL_PROC) : string list =
+	["    " ^ (#name fp) ^
+	" (" ^
+	list_fmt (flat (map aux_param_spec (#formal_ids fp))) " " ^
+	") " ^
+	implode (strings_from_fmt fmt_spec
+		(ProcedureSpecStatement, [], #spec fp))
+	];
+=TEX
+
+=SML
+fun ⦏aux_informal_fun⦎ (inf : INFORMAL_FUN) : string =
+	"    " ^ (#name inf) ^
+	" (" ^
+	list_fmt (flat (map aux_param_spec (#formal_pars inf))) " " ^
+	") : " ^
+	(#return_type inf) ^
+	";";
+=TEX
+
+=SML
+fun ⦏aux_formal_fun⦎ (form : FORMAL_FUN) : string list =
+	[(aux_informal_fun (#informal_fun form)) ^
+		implode (strings_from_fmt fmt_spec
+		(FunctionSpecStatement, #globals form, #spec form))];
+=TEX
+
+=SML
+fun ⦏aux_aux_vars⦎ (aux_vars : Z_DECL list) : string list =
+	map (implode o strings_from_fmt fmt_z_pred) aux_vars;
+=TEX
+
+=IGN
+fun ⦏cond_fmt_string⦎ (s : string) (s1 : string list) : string list = (
+	case s1 of
+	[] =>	[]
+	|_ =>	[s]@s1);
+=TEX
+=SML
+fun ⦏cond_fmt_string⦎ (s : string) (s1 : string list) : string list = (
+	case s1 of
+	[] =>	[]
+	|(s2::rest) =>	[s^s2]@rest);
+=TEX
+
+=SML
+local
+fun aux (id, pack : PACKAGE) : string list =
+	["************************************"] @ ["PACKAGE: "^id]@
+	(cond_fmt_string "  vars:"
+		(aux_var_decl_list (#vc_vars pack)))@
+	(cond_fmt_string "  consts_types:"
+		(aux_const_decl_list (#consts_types pack)))@
+	(cond_fmt_string "  formal_procs: "
+		(flat (map aux_formal_proc (#formal_procs pack))))@
+	(cond_fmt_string "  informal_funs: "
+		(map aux_informal_fun (#informal_funs pack)))@
+	(cond_fmt_string "  formal_funs: "
+		(flat (map aux_formal_fun (#formal_funs pack))))@
+	(cond_fmt_string "  aux_vars: "
+		(aux_aux_vars (#aux_vars pack))) @
+	(cond_fmt_string "  zmod: " [#zmod pack]);
+in
+fun ⦏fmt_pack_env⦎ ([] : PACK_ENV) : string list = []
+|   fmt_pack_env ([pack] : PACK_ENV) : string list = aux pack
+|   fmt_pack_env (pack::xs : PACK_ENV) : string list =
+	(aux pack)@(fmt_pack_env xs);
+end;
+=TEX
+
+=SML
+fun ⦏aux_flag⦎ (s : string) (fl : FLAG) : string list =
+	(if fl then [s ^ ": true"] else []);
+=TEX
+
+=SML
+fun ⦏formal_procs_of_in_scope⦎ ({dict, ...} : IN_SCOPE) : FORMAL_PROC list = (
+	let	fun aux acc [] = rev acc
+		|   aux acc (EIEnvProcedure {formal_proc = Value fp}::more) = (
+			aux (fp::acc) more
+		) | aux acc (_::more) = aux acc more;
+		val sd = flatten_env_dict dict;
+		fun my_order (s1, _) (s2, _) = Sort.string_order s1 s2;
+	in	aux [] (map (#info o snd) (Sort.sort my_order sd))
+	end
+);
+=TEX
+=SML
+fun ⦏vc_vars_of_in_scope⦎ ({dict, ...} : IN_SCOPE) : VAR_DECL list = (
+	let	val var_names = Sort.sort Sort.string_order (#vc_vars(get_local_vars dict));
+		fun do1 vn = (
+			case env_of_env_dict dict vn of
+				Value{info = EIEnvVar{tmark, ...}, canon_name, ...} =>
+					if	vn = canon_name
+					then	{vars = [vn], tmark = tmark}
+					else	{vars = [vn^"("^canon_name^")"], tmark = tmark}
+			|	_ => {vars = [vn], tmark = "** CORRUPT ENVIRONMENT ENTRY **"}
+		);
+	in	map do1 var_names
+	end
+);
+=TEX
+=SML
+fun ⦏vc_pars_of_in_scope⦎ ({dict, ...} : IN_SCOPE) : PARAM_SPEC list = (
+	let	val par_names = Sort.sort Sort.string_order (#vc_pars(get_local_vars dict));
+		fun do1 pn = (
+			case env_of_env_dict dict pn of
+				Value{info = EIEnvVar{tmark, kind = VKPar mode}, canon_name, ...} =>
+					if	pn = canon_name
+					then	{var_decl = {vars = [pn], tmark = tmark},
+						 mode = mode}
+					else	{var_decl = {vars = [pn^"("^canon_name^")"], tmark = tmark},
+						 mode = mode}
+			|	_ => {var_decl = {vars = [pn], tmark = "** CORRUPT ENVIRONMENT ENTRY **"},
+					mode = MSparkIn false}
+		);
+	in	map do1 par_names
+	end
+);
+=TEX
+=SML
+fun ⦏vc_aux_vars_of_in_scope⦎ ({dict, ...} : IN_SCOPE) : TERM list = (
+	let	val av_names = Sort.sort Sort.string_order (#vc_aux_vars(get_local_vars dict));
+		fun do1 avn = (
+			case env_of_env_dict dict avn of
+				Value{info = EIEnvAuxVar{decl, ...}, ...} => decl
+			|	_ => mk_var(avn ^  " : ** CORRUPT ENVIRONMENT ENTRY **", BOOL)
+		);
+	in	map do1 av_names
+	end
+);
+=TEX
+=SML
+fun ⦏vc_log_cons_of_in_scope⦎ ({dict, ...} : IN_SCOPE) : TERM list = (
+	let	val lc_names = Sort.sort Sort.string_order (#vc_log_cons(get_local_vars dict));
+		fun do1 lcn = (
+			case env_of_env_dict dict lcn of
+				Value{info = EIEnvAuxVar{decl, ...}, ...} => decl
+			|	_ => mk_var(lcn ^  " : ** CORRUPT ENVIRONMENT ENTRY **", BOOL)
+		);
+	in	map do1 lc_names
+	end
+);
+=TEX
+=SML
+fun ⦏aux_in_scope⦎ (p : string) (insc : IN_SCOPE) : string list =
+	(cond_fmt_string (p ^ "vc_vars: ")
+		(aux_var_decl_list (vc_vars_of_in_scope insc)))@
+	(cond_fmt_string (p ^ "vc_pars: ")
+		(flat (map aux_param_spec (vc_pars_of_in_scope insc))))@
+	(cond_fmt_string (p ^ "vc_log_cons: ")
+		(map string_of_term (vc_aux_vars_of_in_scope insc)))@
+	(cond_fmt_string (p ^ "vc_log_cons: ")
+		(map string_of_term (vc_log_cons_of_in_scope insc)))@
+	(cond_fmt_string (p ^ "formal_procs: ")
+		(flat (map aux_formal_proc (formal_procs_of_in_scope insc))))@
+	(cond_fmt_string (p ^ "dec_labels: ") (#dec_labels insc));
+=TEX
+
+=SML
+local
+fun aux (id, subunit : SUBUNIT) = (
+	["************************************"] @ ["SUBUNIT: "^id]@
+	(cond_fmt_string "  zmod: " [#zmod subunit])@
+	(aux_flag "  specif_flag" (#specif_flag subunit))@
+	(cond_fmt_string "  specif: " (strings_from_fmt fmt_spec (ProcedureSpecStatement, #globs subunit, #specif subunit)))@
+	(aux_in_scope "  in_scope." (#in_scope subunit))
+	);
+in
+fun ⦏fmt_subunit_env⦎ ([] : SUBUNIT_ENV) : string list = []
+|   fmt_subunit_env ([sub] : SUBUNIT_ENV) : string list = aux sub
+|   fmt_subunit_env (sub::xs : SUBUNIT_ENV) : string list =
+	(aux sub)@(fmt_subunit_env xs);
+end;
+=TEX
+
+=SML
+fun ⦏aux_flags⦎ (pre : string) (fl : FLAGS) : string list = (
+let	val flags = [
+		("pack_spec_flag",	(#pack_spec_flag fl)),
+		("pack_body_flag",	(#pack_body_flag fl)),
+		("stub_flag",		(#stub_flag fl)),
+		("subunit_flag",	(#subunit_flag fl)),
+		("formal_body_flag", (#formal_body_flag fl)),
+		("fun_flag",		(#fun_flag fl)),
+		("declabel_flag",	(#declabel_flag fl)),
+		("speclabel_flag",	(#speclabel_flag fl)),
+		("till_flag",		(#till_flag fl))];
+	val flist = list_fmt (map fst (flags drop (fn (_,v) => not v))) ", ";
+in
+	case flist of
+	"" =>	[]
+	|_ =>	[pre ^ ": {" ^ flist ^"}"]
+end
+);
+=TEX
+
+=SML
+fun ⦏aux_using_dec⦎ (id : Z_ID, (vdl : VAR_DECL list, zp : Z_PRED))
+			: string list =  (
+	[""]@
+	[("   id: " ^ id)]@
+	[("   var_decl: ")]@ (aux_var_decl_list1 vdl)@
+	[("   pred: "^(implode (strings_from_fmt fmt_z_pred zp)))]);
+=TEX
+
+=SML
+fun ⦏aux_using_decs⦎ (uds : (Z_ID * (VAR_DECL list * Z_PRED)) list)
+			: string list =  (
+	cond_fmt_string "using_decs: "
+		(flat (map aux_using_dec uds))
+);
+=TEX
+
+=SML
+fun ⦏fmt_block_name⦎ (ids : ID OPT list) : string = (
+	format_list(fn Value n => n | Nil => "") ids "."
+);
+=TEX
+
+=SML
+
+local
+fun aux (id, declab : DECLAB) = (
+	["************************************"] @ ["DECLAB: "^id]@
+	(cond_fmt_string "  block_name: " [fmt_block_name(#block_name declab)])@
+	(aux_flags "  flags: " (#flags declab))@
+	(aux_using_decs  (#using_decs declab))@
+	(aux_in_scope "  in_scope." (#in_scope declab))
+	);
+in
+fun ⦏fmt_dec_env⦎ ([] : DEC_ENV) : string list = []
+|   fmt_dec_env ([dec] : DEC_ENV) : string list = aux dec
+|   fmt_dec_env (dec::xs : DEC_ENV) : string list =
+	(aux dec)@(fmt_dec_env xs);
+end;
+=TEX
+
+=SML
+fun ⦏aux_wp_env⦎ (p : string) (wp : WP_ENV) : string list = (
+	(cond_fmt_string (p ^ "fun_header: ")
+		[(aux_informal_fun (#fun_header wp))])@
+	[p ^ "return: " ^ (string_of_term (#return wp))]@
+	[p ^ "till: " ^ (string_of_term (#till wp))]
+);
+=TEX
+
+=SML
+local
+fun aux (id, speclab : SPECLAB) = (
+	["************************************"] @ ["SPECLAB: " ^ id]@
+	(strings_from_fmt fmt_spec (SpecStatement, [], #spec speclab))@
+	(aux_flag "  formal_body_flag" (#formal_body_flag speclab))@
+	(aux_flag "  fun_flag" (#fun_flag speclab))@
+	(aux_flag "  till_flag" (#till_flag speclab))@
+	(aux_wp_env "  wp_env." (#wp_env speclab))@
+	(aux_in_scope "  in_scope." (#in_scope speclab))@
+	(cond_fmt_string "  block_name: " [fmt_block_name(#block_name speclab)])
+	);
+in
+fun ⦏fmt_spec_env⦎ ([] : SPEC_ENV) : string list = []
+|   fmt_spec_env ([spec] : SPEC_ENV) : string list = aux spec
+|   fmt_spec_env (spec::xs : SPEC_ENV) : string list =
+	(aux spec)@(fmt_spec_env xs);
+end;
+=TEX
+
+=SML
+local
+fun aux (id, {repl, ...} : SCOPED_REPLACEMENT) = (
+	["************************************"] @ ["REPLACEMENT: " ^ id]@
+	(case repl
+	of UnReplaced _ => [" Unreplaced"]
+	|  ReplaceComp comp =>
+		[list_fmt ((f_of_fmt fmt_replaced_by_comp) comp) ""]
+	|  ReplacePPart pp =>
+		[list_fmt ((f_of_fmt fmt_replaced_by_private_part) pp) ""]
+	|  ReplaceVPart vp =>
+		[list_fmt ((f_of_fmt fmt_replaced_by_visible_part) vp) ""]
+	|  ReplaceDecl decl =>
+		[list_fmt ((f_of_fmt fmt_replaced_by_decl) decl) ""]
+	|  RefineStat st =>
+		[list_fmt ((f_of_fmt fmt_refined_by) st) ""]
+	|  ReplaceStat st =>
+		[list_fmt ((f_of_fmt fmt_replaced_by) st) ""]
+	|  ReplaceArbitrary {label, replacement} =>
+		[label ^ "!≡" ^ replacement]
+       |  ReplaceAnnotation ann => (* added by KB to make exhaustive *)
+		fail "fmt_repl_env" 2003 [(fn () => ""), (fn () => ""), (fn () => "ReplaceAnnotation case invoked")]
+	));
+in
+fun ⦏fmt_repl_env⦎ ([] : REPL_ENV) : string list= []
+|   fmt_repl_env ([repl] : REPL_ENV) : string list = aux repl
+|   fmt_repl_env (repl::xs : REPL_ENV) : string list =
+	(aux repl)@(fmt_repl_env xs);
+end;
+=TEX
+
+=SML
+fun ⦏aux_dec_lab⦎ (declab : DECLAB) : string list =  (
+	[("  declab.block_name: " ^ (fmt_block_name(#block_name declab)))]@
+	(aux_flags "  declab." (#flags declab))@
+	(aux_in_scope "  declab." (#in_scope declab)));
+=TEX
+
+=SML
+local
+fun aux (block : BLOCK) : string list = (
+	["************************************"] @ ["BLOCK:"]@
+	(aux_dec_lab (#declab block))@
+	(cond_fmt_string "  current_formal_proc: "
+		(aux_formal_proc (#current_formal_proc block)))@
+	(cond_fmt_string "  current_formal_fun: "
+		(aux_formal_fun (#current_formal_fun block)))@
+	(cond_fmt_string "  dec_lab: " [#dec_lab block])@
+	(cond_fmt_string "  spec_lab: " [#spec_lab block])@
+	(cond_fmt_string "  till: " [string_of_term (#till block)]));
+in
+fun ⦏fmt_blocks⦎ ([] : ENV) : string list = []
+|   fmt_blocks ([env] : ENV) : string list = aux env
+|   fmt_blocks (env::xs : ENV) : string list =
+	(aux env)@(fmt_blocks xs);
+end;
+=TEX
+=SML
+fun ⦏print_envs_aux⦎ (zg_state : Z_GENERATOR_STATE) : string list = (
+	((fmt_pack_env o #pack_env) zg_state)@
+	((fmt_subunit_env o #subunit_env) zg_state)@
+	((fmt_dec_env o #dec_env) zg_state)@
+	((fmt_spec_env o #spec_env) zg_state)@
+	((fmt_blocks o #blocks) zg_state)@
+	((fmt_repl_env o #repl_env) zg_state)
+);
+=TEX
+=SML
+val ⦏print_z_generator_state⦎ : Z_GENERATOR_STATE -> unit =
+	(diag_string_list o print_envs_aux);
+=TEX
+=SML
+fun ⦏print_envs⦎ (() : unit) : unit = (
+	(print_z_generator_state o get_z_generator_state) ()
+);
+=TEX
+=SML
+fun ⦏trace_envs⦎ (() : unit) : unit = (
+	(diag_string_list o print_envs_aux) (!diag_z_generator_state)
+);
+
+=TEX
+
+\section{EPILOGUE}
+=SML
+end (* of structure CNTestUtilities *);
+open CNTestUtilities;
+=TEX
+
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+\end{document}
+
+=IGN
+#consts_types
+(snd (hd (tl (#pack_env (CNZGenerator.get_z_generator_state())))));
+hd (tl it;
+);
+ ⓈCN
+package test_basic_declaration is
+subtype WEEKRANGE is integer range 1..52;
+subtype TIME is real delta 0.01 range 0 .. 23.59;
+type DAYS is (MON, TUE, WED, THU, FRI, SAT, SUN);
+type DATE is record week : WEEKRANGE; day : DAYS; end record;
+pay_day : constant WEEKDAY := FRI;
+noon : constant TIME := 12.00;
+end test_basic_declaration;
+ ■
+ ⓈCN
+package banana is
+a,b : integer;
+c,d : real;
+end banana;
+ ■

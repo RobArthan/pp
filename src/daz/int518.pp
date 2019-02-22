@@ -1,0 +1,731 @@
+=IGN
+********************************************************************************
+int518.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{June 2000 Language Enhancement Tests}
+
+\def\AbstractText{This document gives scripts to test the new features implemented under the June 2000 Language Enhancements Contract (DERA ref 6085).}
+
+\def\Reference{ISS/HAT/DAZ/INT513}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: 
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: % use_file "daz_init";
+%% LaTeX2e port: % use_file "int502";
+%% LaTeX2e port: % z_print_theory"-";
+%% LaTeX2e port: % open CNZGenerator;
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{June 2000 Language Enhancement Tests}  %% Mandatory field
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/INT513}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.17 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/09/19 11:24:22 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Informal}
+%% LaTeX2e port: %\TPPstatus{Informal}
+%% LaTeX2e port: \TPPtype{Technical}
+%% LaTeX2e port: %\TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & BRA01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{K.Blackburn & BRA01}
+%% LaTeX2e port: \TPPabstract{%
+%% LaTeX2e port: This document gives scripts to test the new features implemented under the June 2000 Language
+%% LaTeX2e port: Enhancements Contract (DERA ref 6085).
+%% LaTeX2e port: }
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: \def\TPPheadlhs{Lemma 1 Ltd.}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\pagebreak
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1 (2000/06/30)] First Draft
+\item[Issue 1.2 (2000/07/01),1.3 (2000/07/01)] Corrected R5A6 and added extra tests for the bug fix.
+\item[Issue 1.4 (2001/12/11)] Allowed for and tested fix to logic error in check on statements that
+have to come first.
+\item[Issue 1.5 (2002/05/27)] Allowed for new translation of Ada constants (as axiomatic descriptions).
+\item[Issue 1.7 (2002/08/23)] Removed use of ICL logo font.
+\item[Issue 1.8 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.9 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.10 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.11 (2004/01/19)] The Z universal set is now called 𝕌
+\item[Issue 1.12 (2004/02/07)] The SPARK program is now referred to as the Ada program.
+\item[Issue 1.13 (2005/05/28)] Compliance Notation reserved words are now prefixed by a dollar sign.
+\item[Issue 1.14 (2006/03/23)] Allowed for enhancement 117.
+\item[Issue 1.15 (2006/03/28)] Allowed for automated state management.
+\item[Issue 1.17 (2006/09/19)] Allowed for enhancement 165.
+\item[Issue 1.18 (2010/02/11)] Removed obsolete CUTDOWNVERSION option.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains test data for the June 2000 Compliance Tool Language Enhancements
+being undertaken under DERA contract ref. 6085.
+The specification changes for the upgrades are given in \cite{LEMMA1/DAZ/HLD506}.
+
+\subsection{Introduction}
+This document contains specific tests for each of the 5 changes to the Compliance Tool identified as R1 to R5 in \cite{LEMMA1/DAZ/HLD506}.
+
+Sections \ref{R1} to \ref{R5} define the tests for changes R1 to R5 respectively.
+
+\newpage
+\subsection{Preliminaries}
+
+=SML
+use_file "dtd013";
+use_file "imp013";
+=TEX
+Function to clean up before doing a test.
+=SML
+fun clean_up () = (
+	let	val thys = get_descendants "z_library"
+					less "cn" less "z_library"
+					diff get_cache_theories();
+		fun del_thy thy =
+  (force_delete_theory thy handle Fail _ => ());
+=SML
+	in	
+  map del_thy thys;
+  open_theory "cn";
+  set_pc"cn1"
+	end
+);
+=TEX
+Sometimes the success of a test just depends on whether or not
+a computation fails:
+=SML
+fun check_fail (f: unit -> 'a) : bool = (
+		(f (); false)
+	handle Fail msg => (
+		diag_line (get_message_text msg);
+		true
+	)
+);
+(*val check_ok : (unit -> 'a) -> bool = not o check_fail;*)
+fun check_ok(f) = not (check_fail f);
+=TEX
+% #### #### #### #### #### #### #### #### #### #### #### #### #### ####
+\section{Multidimensional Arrays}\label{R1}
+\subsection{Test Plan}
+There are four areas to test:
+\begin{enumerate}
+\item Indexed selections
+\item Array type declarations
+\item Translation of attributes
+\item Array aggregates
+\end{enumerate}
+
+\subsection{The Tests}
+\subsubsection{Indexed selections}
+=SML
+clean_up();
+new_script{name="MAIN", unit_type="proc"};
+ⓈCN
+procedure main
+is
+ type day is range 1 .. 7;
+ type week is range 1 .. 52;
+ type d is array(day) of day;
+ type dw is array(day, week) of day;
+ type dwd is array(day, week, day) of day;
+ a, b : d;
+ x : dw;
+ y : dwd;
+begin
+  ΔA, B, X, Y[A(1) = B(1), A(1) = B(1) = X(1, 26) = Y(3, 26, 7) = 0]
+end main;
+■
+ⓈCN
+  ⊑ x(1, 26) := a(1) - b(1); y(3, 26, 7) := x(1, 26); a(1) := 0; b(1) := 0;
+■
+
+=SML
+val _ = cn_make_script_support"-""MAIN'proc";
+set_pc"MAIN'proc";
+set_goal([], get_conjecture"-""vc_1_1");
+a(rewrite_tac[z_⊕_↦_app_thm]);
+a(REPEAT strip_tac THEN asm_rewrite_tac[]);
+store_mt_results
+mt_run [
+    ("int518.R1A1", check_ok, pop_thm, true)
+];
+=TEX
+\subsubsection{Array type declarations}
+We continue investigating the example from the previous section:
+=SML
+
+val trues =
+	map (rewrite_rule[] o z_get_spec) [
+	ⓩDWDvFIRST⌝,ⓩDWDvLAST⌝,
+	   ⓩDWDvLENGTH⌝,ⓩDWDvRANGE⌝,ⓩDWDvFIRSTv1⌝,ⓩDWDvLASTv1⌝,ⓩDWDvLENGTHv1⌝,
+	   ⓩDWDvRANGEv1⌝,ⓩDWDvFIRSTv2⌝,ⓩDWDvLASTv2⌝,ⓩDWDvLENGTHv2⌝,ⓩDWDvRANGEv2⌝,
+	   ⓩDWDvFIRSTv3⌝,ⓩDWDvLASTv3⌝,ⓩDWDvLENGTHv3⌝,ⓩDWDvRANGEv3⌝];
+fun test_r2a1 th = (
+	case dest_thm th of
+		([], conc) => is_z_true conc
+	|	_ => false
+);
+
+store_mt_results
+mt_run [
+    ("int518.R1B1", switch all test_r2a1, trues, true)
+];
+=TEX
+=SML
+set_goal([], ⓩDWDvFIRSTv3 = 1 ∧ DWDvLAST = DWDvLASTv1 = 7⌝);
+a(rewrite_tac[]);
+store_mt_results
+mt_run [
+    ("int518.R1B2", check_ok, pop_thm, true)
+];
+=TEX
+\subsubsection{Translation of attributes}
+=SML
+clean_up();
+new_script{name="MAIN", unit_type="proc"};
+ⓈCN
+procedure main
+is
+ type day is range 1 .. 7;
+ type week is range 0 .. 51;
+ type d is array(day) of day;
+ type dw is array(day, week) of day;
+ type dwd is array(day, week, day) of day;
+ a, b : day;
+ x, y : week;
+begin
+  ΔA, B, X, Y[A = 1 ∧ B = 7 ∧ X = 0 ∧ Y = 51]
+end main;
+■
+ⓈCN
+  ⊑
+    a := dwd'first;
+    b := d'last(1);
+    x := dw'first(2);
+    y := dwd'last(2);
+■
+=SML
+val _ = cn_make_script_support"-""MAIN'proc";
+set_pc"MAIN'proc";
+set_goal([], get_conjecture"-""vc_1_1");
+a(rewrite_tac[]);
+store_mt_results
+mt_run [
+    ("int518.R1C1", check_ok, pop_thm, true)
+];
+=TEX
+\subsubsection{Array aggregates}
+=SML
+clean_up();
+new_script{name="MAIN", unit_type="proc"};
+ⓈCN
+procedure main
+is
+ type bit is range 1 .. 2;
+ type trit is range 1 .. 3;
+ type b is array(bit) of integer;
+ type t is array(trit) of integer;
+ type bt is array(bit, trit) of integer;
+ type bbt is array(bit, bit, trit) of integer;
+ xb : constant b := b'(5, 6);
+ xbt : constant bt := bt'( (1, 2, 3), (4, 5, 6) );
+ xbbt : constant bbt := bbt'( ((1, 2, 3), (4, 5, 6)), ((7, 8, 9), (10, 11, 12)));
+ yt : constant t := t'(42, others => 99);
+ ybt : constant bt := bt'( (1, 2, 3), others => (4, 5, 6) );
+ ybbt : constant bbt := bbt'( others => (others => (others => 1)));
+ zt : constant t := t'(1 | 3 => 9, 2 => 10);
+ zbt : constant bt := bt'(1 => (1 => 9, 2 => 10, 3 => 11), 2 => (4, 5, 6));
+ wbt : constant bt := bt'(1 => (1 => 9, others => 11), others => (4, 5, 6));
+begin
+   Δ [true]
+end main;
+■
+=SML
+set_goal([],
+ ⓩ WBT ∈ BT ∧ WBT =
+ array_agg2
+     ((BTvRANGEv1 × {succ ↗ 1 - BTvFIRSTv2 ↕ ⨾ ⟨4, 5, 6⟩})
+       ⊕ ({1} × {(BTvRANGEv2 × {11}) ⊕ ({1} × {9})}))⌝);
+a(accept_tac (z_get_specⓩWBT⌝));
+store_mt_results
+mt_run [
+    ("int518.R1D1", check_ok, pop_thm, true)
+];
+=TEX
+=SML
+set_goal([], ⓩ YBBT ∈ BBT ∧ YBBT = array_agg3 (BBTvRANGEv1 × {BBTvRANGEv2 × {BBTvRANGEv3 × {1}}})⌝);
+a(accept_tac (z_get_specⓩYBBT⌝));
+store_mt_results
+mt_run [
+    ("int518.R1D2", check_ok, pop_thm, true)
+];
+=TEX
+=SML
+set_goal([],  ⓩYBT ∈ BT ∧ YBT =
+  array_agg2
+      ((BTvRANGEv1 × {succ ↗ 1 - BTvFIRSTv2 ↕ ⨾ ⟨4, 5, 6⟩})
+          ⊕ (succ ↗ 1 - BTvFIRSTv1 ↕ ⨾ ⟨succ ↗ 1 - BTvFIRSTv2 ↕ ⨾ ⟨1, 2, 3⟩⟩))⌝);
+a(accept_tac (z_get_specⓩYBT⌝));
+store_mt_results
+mt_run [
+    ("int518.R1D3", check_ok, pop_thm, true)
+];
+=TEX
+\section{MULTIPLE LOGICAL CONSTANT DEFINITIONS}\label{R2}
+\subsection{Test Plan}
+We need to check that the unsoundness has been resolved and that the new syntax works.
+\subsection{The Tests}
+=SML
+clean_up();
+new_script{name="LOGCON", unit_type="proc"};
+ⓈCN
+procedure Logcon is
+  type t is (one, two);
+  X : t;
+begin
+  Δ X [X = ONE]							(1)
+end Logcon;
+■
+ⓈCN
+(1) ⊑ $con a : { i : ℤ | i < i } ⦁ Δ X [a = 1, X = TWO](2)
+■
+=SML
+set_pc"cn1";
+set_goal([get_conjecture"-""vc1_2"], ⓩfalse⌝);
+a(POP_ASM_T strip_asm_tac);
+store_mt_results
+mt_run [
+    ("int518.R2A1", check_ok, pop_thm, true)
+];
+=SML
+clean_up();
+new_script{name="LOGCON", unit_type="proc"};
+ⓈCN
+procedure Logcon is
+  X : Integer;
+begin
+  Δ X [X = 5, X = 10]							(1)
+end Logcon;
+■
+ⓈCN
+(1) ⊑ $con x, x1, x2, x3 : ℤ ⦁ Δ X [x = X ∧ x1 = 2 ∧ x2 = x1 + 2 ∧ x3 = 3*x1 + x2 ∧ x = 5, X = x3](2)
+■
+ⓈCN
+(2) ⊑ X := 7;
+Δ X [X = x + x1, X = x + x2 + 1]
+■
+=SML
+val vcs_r2b1 = get_conjectures"-";
+fun tp tac tm = tac_proof(([], tm), tac);
+fun delay_r2b1 () = (
+	map (tp (cn_vc_simp_tac[] THEN PC_T1 "z_lin_arith" prove_tac[]) o snd o snd) vcs_r2b1
+);
+store_mt_results
+mt_run [
+    ("int518.R2B1", check_ok, delay_r2b1, true)
+];
+=TEX
+\section{ASSIGNMENT TO RECORD COMPONENTS}\label{R3}
+\subsection{Test Plan}
+We need to check that the record update functions do get generated and then that
+translations of assignments use them.
+\subsection{The Tests}
+=SML
+clean_up();
+new_script{name="RECS", unit_type="proc"};
+ⓈCN
+procedure recs is
+  type rec1 is record x, y : integer; end record;
+  type rec2 is record r : rec1; x, y:integer; z : rec1; end record;
+  v : rec1;
+  w : rec2;
+begin
+  Δ V, W [W.R.X = 1 ∧ V.X = 4 ∧ W.X = 9]			(1)
+end recs;
+■
+=SML
+set_pc"cn1";
+val thm3a1 = (z_gen_pred_elim o dest_z_tuple)ⓩ(𝕌, 𝕌, 𝕌)⌝(z_get_specⓩREC2uR⌝);
+set_goal([], ⓩt = REC2uX(X, 4) ⇒ t.X = 4⌝);
+a(rewrite_tac[thm3a1] THEN REPEAT strip_tac THEN asm_rewrite_tac[]);
+store_mt_results
+mt_run [
+    ("int518.R3A1", check_ok, pop_thm, true)
+];
+
+ⓈCN
+ (1) ⊑ v.x := 1; w.r := v; v.x := 4; w.x := 9;
+■
+=SML
+val thm3a2 = z_gen_pred_elim [ⓩ𝕌⌝](z_get_specⓩREC1uX⌝);
+set_goal([], get_conjecture"-""vc1_1");
+a(rewrite_tac[thm3a1, thm3a2]);
+store_mt_results
+mt_run [
+    ("int518.R3A2", check_ok, pop_thm, true)
+];
+=TEX
+\section{FRAME ABBREVIATIONS}\label{R4}
+
+\subsection{Test Plan}
+We define a few schemas and check for successful and unsuccesful use of them in frames:
+\subsection{The Tests}
+=SML
+clean_up();
+new_script{name="RECS", unit_type="proc"};
+┌ FR1 ───────────
+│ A, B, C, D : ℤ
+└──────────────
+┌ FR2 ───────────
+│ A, B, C : ℤ
+└──────────────
+┌ FR3 ───────────
+│ A, B, C : ℤ × ℤ
+└──────────────
+ⓈCN
+procedure recs is
+ a, b, c, d : integer;
+begin
+  Δ A, B, C [A = B = C = D]			(1)
+end recs;
+■
+=SML
+fun ok4a1 () =
+ⓈCN
+ (1) ⊑ ΔFR2 [A = 1 ∧ B = C = D = 1]		(2)
+■
+=SML
+fun ok4a2 () =
+ⓈCN
+ (2) ⊑ ΔFR3 [A = 1 ∧ B = C = D = 1]		(3)
+■
+=SML
+fun not_ok4a3 () =
+ⓈCN
+ (3) ⊑ ΔFR1[A = 1 ∧ B = C = D = 1]			(4)
+■
+=SML
+store_mt_results
+mt_run [
+    ("int518.R4A1", check_ok, ok4a1, true),
+    ("int518.R4A2", check_ok, ok4a2, true)
+];
+store_mt_results
+mt_run_fail
+ [    ("int518.R4A3", not_ok4a3, (), gen_fail_msg"check_1_a" 505064 ["a, b, c", "a, b, c, d"])
+];
+=TEX
+\section{INITIAL VARIABLES IN CONDITIONALS}\label{R5}
+\subsection{Test Plan}
+We must test
+\begin{enumerate}
+\item initial variables in positions previously allowed.
+\item initial variables in conditionals now allowed.
+\item initial variables in other positions not allowed
+\item (bugfix) initial variables in pre-conditions not allowed.
+\end{enumerate}
+\subsection{The Tests}
+=SML
+clean_up();
+new_script{name="R5A1", unit_type="proc"};
+fun ok5a1 () =
+ⓈCN
+procedure r5a1(a, b : in out integer)
+  Δ A, B [A⋎0 = B]
+is
+begin
+  Δ A, B [A⋎0 = B]			(1)
+end r5a1;
+■
+=SML
+store_mt_results
+mt_run [
+    ("int518.R5A1", check_ok, ok5a1, true)
+];
+=TEX
+=SML
+clean_up();
+new_script{name="R5A2", unit_type="proc"};
+fun ok5a2 () =
+ⓈCN
+procedure r5a2(a, b : in out integer)
+  Δ A, B [A⋎0 = B]
+is
+begin
+  if a < b then
+	Δ A, B [A⋎0 = B]			(1)
+  elsif a = b then
+         a := 2;
+  elsif a >  b + 1 then
+	Δ A, B [A⋎0 = B]			(2)
+  elsif a > b then
+	Δ A, B [A⋎0 = B]			(3)
+  else
+	Δ A, B [A⋎0 = B]			(4)
+  end if;
+end r5a2;
+■
+=TEX
+=SML
+store_mt_results
+mt_run [
+    ("int518.R5A2", check_ok, ok5a2, true)
+];
+=TEX
+=SML
+clean_up();
+new_script{name="R5A3", unit_type="proc"};
+fun ok5a3 () =
+ⓈCN
+procedure r5a3(a, b : in out integer)
+  Δ A, B [A⋎0 = B]
+is
+begin
+  if a = b then
+	case a is
+           when 1 =>
+             Δ A, B [A⋎0 = B]			(1)
+           when 2 =>
+            Δ A, B [A⋎0 = B]			(2)
+           when 3 =>
+           Δ A, B [A⋎0 = B]			(3)
+         end case;
+  end if;
+end r5a3;
+■
+=TEX
+=SML
+store_mt_results
+mt_run [
+    ("int518.R5A3", check_ok, ok5a3, true)
+];
+=TEX
+(The error cases are also covered in INT503).
+=SML
+clean_up();
+new_script{name="R5A4", unit_type="proc"};
+fun not_ok5a4 () =
+ⓈCN
+procedure r5a4(a, b : in out integer)
+  Δ A, B [A⋎0 = B]
+is
+begin
+  while a /= b
+  loop
+       Δ A, B [A⋎0 = B]			(10)
+  end loop;
+end r5a4;
+■
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+    ("int518.R5A4", not_ok5a4, (), gen_fail_msg "adjust_statement" 505091 [])
+];
+=TEX
+=SML
+clean_up();
+new_script{name="R5A5", unit_type="proc"};
+fun not_ok5a5 () =
+ⓈCN
+procedure r5a5(a, b : in out integer)
+  Δ A, B [A⋎0 = B]
+is
+begin
+       Δ A, B [A⋎0 = B]			(10)
+       Δ A, B [A⋎0 = B]			(20)
+end r5a5;
+■
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+    ("int518.R5A5", not_ok5a5, (), gen_fail_msg "adjust_statement" 505091 [])
+];
+=TEX
+Finally, the bug fixes:
+=SML
+clean_up();
+new_script{name="R5A6", unit_type="proc"};
+fun not_ok5a6 () =
+ⓈCN
+procedure r5a6(a, b : in out integer)
+  Δ A, B [A⋎0 = B]
+is
+begin
+       Δ A, B {A⋎0 = B}			(10)
+end r5a6;
+■
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+    ("int518.R5A6", not_ok5a6, (), gen_fail_msg "vcs" 505095 [])
+];
+
+=TEX
+=SML
+clean_up();
+new_script{name="R5A7PACK", unit_type="spec"};
+fun not_ok5a7 () =
+ⓈCN
+package r5a7pack is
+procedure r5a7(a, b : in out integer)
+  Δ A, B {A⋎0 = B} ;
+end r5a7pack;
+■
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+    ("int518.R5A7", not_ok5a7, (), gen_fail_msg "vcs" 505095 [])
+];
+
+=TEX
+=TEX
+=SML
+clean_up();
+new_script{name="R5A8PACK", unit_type="spec"};
+fun not_ok5a8 () =
+ⓈCN
+package r5a8pack is
+function r5a8 (a, b : integer) return integer
+   Ξ {A⋎0 = B} ;
+end r5a8pack;
+■
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+    ("int518.R5A8", not_ok5a8, (), gen_fail_msg "update_theory_db_with_parainfo" 49006
+					["R5A8PACKoR5A8", "A⋎0"])
+];
+=TEX
+=SML
+clean_up();
+new_script{name="R5A9", unit_type="proc"};
+fun not_ok5a9 () =
+ⓈCN
+procedure r5a9(a, b : in out integer)
+  Δ A, B [A⋎0 = B]
+is
+begin
+       Δ A, B [A⋎0 = B]			(10)
+       Δ A, B [A⋎0 = B]			(20)
+      a := b;
+end r5a9;
+■
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+    ("int518.R5A9", not_ok5a9, (), gen_fail_msg "adjust_statement" 505091 [])
+];
+=TEX
+\section{EPILOGUE}
+=SML
+diag_line (summarize_mt_results());
+=TEX
+
+\end{document}
+=IGN

@@ -1,0 +1,269 @@
+=IGN
+********************************************************************************
+int516.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ $Revision: 1.10 $ $RCSfile: int516.doc,v $ $Date: 2006/03/28 11:22:56 $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{IUCT WP 9 Tests}
+
+\def\AbstractText{This document contains tests based on the Praxis Issues example.}
+
+\def\Reference{ISS/HAT/DAZ/INT516}
+
+\def\Author{K. Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: % use_file "daz_init";
+%% LaTeX2e port: % use_file "int515";
+%% LaTeX2e port: % z_print_theory"-";
+%% LaTeX2e port: % open CNZGenerator;
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{IUCT WP 9 Tests}  %% Mandatory field
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/INT516}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.10 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/03/28 11:22:56 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Informal}
+%% LaTeX2e port: %\TPPstatus{Informal}
+%% LaTeX2e port: \TPPtype{Technical}
+%% LaTeX2e port: %\TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{K.~Blackburn & IUCT Team}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & IUCT Team1}
+%% LaTeX2e port: \TPPabstract{%
+%% LaTeX2e port: This document contains tests based on the Praxis Issues example.
+%% LaTeX2e port: }
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: \def\TPPheadlhs{Lemma 1 Ltd.}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\pagebreak
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issues 1.1 (1997/06/30)] First draft.
+\item[Issues 1.2 (1997/07/31)] WP 4 changes.
+\item[Issue 1.3 (2002/08/23)] Removed use of ICL logo font.
+\item[Issue 1.4 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.5 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.6 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.7 (2004/02/07)] The SPARK program is now referred to as the Ada program.
+\item[Issue 1.8 (2005/05/28)] Compliance Notation reserved words are now prefixed by a dollar sign.
+\item[Issue 1.9 (2006/03/23)] Allowed for enhancements 117 and 118.
+\item[Issue 1.10 (2006/03/28)] Allowed for automated state management.
+\item[Issue 1.11 (2006/09/19)] Allowed for enhancement 165.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains test data for the Compliance Tool.
+\subsection{Introduction}
+This document contains tests of the IUCT WP 9.
+Most of the material tested is in the module described in \cite{ISS/HAT/DAZ/DTD507}.
+\section{PRELIMINARIES}
+
+=SML
+use_file "dtd013";
+use_file "imp013";
+init_mt_results();
+=TEX
+Function to clean up before doing a test.
+=SML
+fun clean_up () = (
+	let	val thys = get_descendants "cn" less "cn"
+					diff get_cache_theories();
+		fun del_thy thy = (force_delete_theory thy handle Fail _ => ());
+	in	map del_thy thys
+	end;	()
+);
+=TEX
+\section{K Slots in Package Specifications}
+=SML
+clean_up();
+new_script{name="K", unit_type="spec"};
+
+ⓈCN
+package K is
+ ⟨ Declarations for K ⟩			(1)
+end K;
+■
+ⓈCN
+ (1) ≡
+  C : constant INTEGER := 1;
+  function F (X : INTEGER)
+  return INTEGER
+  Ξ [ KoF(X) = X + KoC ] ;
+■
+=SML
+new_script{name="L", unit_type="proc"};
+
+fun ks_spec1 () =
+ⓈCN
+with K;
+procedure L( X : in out INTEGER)
+Δ X [ X = X + KoC ]
+is
+begin
+   X := K.F(X);
+end L;
+■
+=SML
+store_mt_results mt_run [ (
+	"ks_spec1", ks_spec1, (), ()
+)];
+=TEX
+
+\section{Nested K Slots}
+=SML
+clean_up();
+new_script{name="SQRT", unit_type="func"};
+ⓈCN
+  function SQRT (X : INTEGER) return INTEGER
+    Ξ [X ≥ 0, SQRT(X) ** 2 ≤ X < (SQRT(X) + 1) ** 2]
+  is
+     LO : INTEGER;
+     ⟨ local vars ⟩								(100)
+  begin
+    LO := 0;
+    Δ LO [X ≥ 0 ∧ LO = 0, LO ** 2 ≤ X < (LO + 1) ** 2]		(1)
+    return LO;
+  end SQRT;
+■
+ⓈCN
+(100) ≡		HI : INTEGER;
+		⟨ local vars ⟩							(200)
+■
+ⓈCN
+(1) ⊑	Δ LO, HI [X ≥ 0 ∧ LO = 0, LO ** 2 ≤ X < (LO + 1) ** 2]	(2)
+■
+ⓈCN
+(2) ⊑	HI := X + 1;
+	$till ⟦LO ** 2 ≤ X < (LO + 1) ** 2⟧
+	loop
+	Δ LO, HI [LO ** 2 ≤ X < HI ** 2, LO ** 2 ≤ X < HI ** 2]	(3)
+	end loop;
+■
+
+ⓈCN
+(3) ⊑	exit when LO + 1 = HI;
+	Δ LO,HI [LO ** 2 ≤ X < HI ** 2, LO ** 2 ≤ X < HI ** 2]	(4)
+■
+ⓈCN
+(200) ≡	MID : INTEGER;
+■
+=SML
+fun nested1() =
+ⓈCN
+(4) ⊑	MID := (LO + HI) / 2;
+	if MID ** 2 <= X then LO := MID; else HI := MID; end if;
+■
+=SML
+store_mt_results mt_run [ (
+	"nested1", nested1, (), ()
+)];
+=TEX
+
+\section{EPILOGUE}
+=SML
+diag_line (summarize_mt_results());
+=TEX
+\pagebreak
+\end{document}
+=IGN

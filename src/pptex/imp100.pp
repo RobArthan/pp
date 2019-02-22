@@ -473,7 +473,7 @@ files together with the extraction of error messages.
 
 =DUMP docsml
 #! /bin/sh
-#	docsml   From: $Id: imp100.doc,v 1.25 2009/09/06 13:02:41 rda Exp rda $
+#	docsml   From: $Id: imp100.doc$
 
 PROGNAME=`basename "$0"`
 USAGE="$PROGNAME [-v] [-f view_file] [-K] [-k keyword_file] <file> ..."
@@ -563,12 +563,12 @@ chmod +x docsml
 \newpage
 \section{PROGRAM PPSML}
 
-Shell script to strip {\tt.doc} files creating Standard~ML {\tt.sml}
+Shell script to strip {\tt.pp} files creating Standard~ML {\tt.sml}
 files together with the extraction of error messages.
 
 =DUMP ppsml
 #! /bin/sh
-#	ppsml   From: $Id: imp100.doc,v 1.25 2009/09/06 13:02:41 rda Exp rda $
+#	ppsml   From: $Id: imp100.doc$
 
 PROGNAME=`basename "$0"`
 USAGE="$PROGNAME [-v] [-f view_file] [-K] [-k keyword_file] <file> ..."

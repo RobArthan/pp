@@ -1,0 +1,620 @@
+=IGN
+********************************************************************************
+imp504.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ $Date: 2007/05/21 15:50:43 $ $Revision: 1.48 $ $RCSfile: imp504.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation: Web Clause Processor}
+
+\def\AbstractText{This document contains the implementation for the compliance notation web clause processor.}
+
+\def\Reference{ISS/HAT/DAZ/IMP504}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation: Web Clause Processor}  %% Mandatory field
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/IMP504}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.48 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2007/05/21 15:50:43 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: %\TPPkeywords{CN}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & HAT Team}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the implementation for the compliance notation web clause processor.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.1 (1994/01/30)-1.10 (1994/05/23)] Initial Drafts.
+\item[Issue 1.11 (1994/05/27) (27th May 1994)] First draft for comment.
+\item[Issue 1.14 (1994/11/03) (8th November 1994)] Made it handle errors in Reader/Writer set-up.
+\item[Issue 1.17 (1995/10/18)] Updated to reset the lexer state on error.
+\item[Issue 1.18 (1995/10/24)-1.19 (1995/10/25)] Added support for generating hypertext links.
+\item[Issue 1.20 (1995/10/27)-22] Fixed bugs and improved error handling in hypertext processing.
+\item[Issue 1.23 (1996/07/15)-1.24 (1996/07/16)] k-slots now allowed as annotations.
+\item[Issue 1.25 (2000/05/24)] Prototyping enhancement R5 --- Initial Variables in Conditionals.
+\item[Issue 1.26 (2000/10/26)] CTLE II R1/11 --- nested packages.
+\item[Issue 1.27 (2001/11/05)] Added syntax check only flag.
+\item[Issue 1.28 (2002/05/02)] Full syntax-check-only mode.
+\item[Issue 1.29 (2002/05/03)] DECLARE keyword now recognised (for block statements).
+\item[Issue 1.32 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.33 (2002/10/17), 1.34 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.35 (2002/11/10)] Uniform treatment of blocks.
+\item[Issue 1.36 (2002/12/15), 1.37 (2002/12/17)] Now uses flag {\it cn\_stop\_on\_exceptions}.
+\item[Issue 1.38 (2003/06/18)] R0096: improved formatting of nothing statement form in web clauses
+\item[Issue 1.39 (2003/07/14)]  Fixed incorrect classification of undeclared labels.
+\item[Issue 1.40 (2004/02/07)] Now checks for undeclared label errors.
+\item[Issue 1.41 (2004/02/07)] The name at the end of a package specification or a proper body is now optional.
+\item[Issue 1.42 (2004/08/29)] Implemented distinction between empty private part and omitted private part.
+\item[Issue 1.43 (2004/11/11)] Now follows convention of translating file names to solve problems with Qs.
+\item[Issue 1.44 (2004/12/08)] Adjustments to lexical class data type (for syntax of Ada labels).
+\item[Issue 1.45 (2005/04/19)] Now exports the functions for extracting labels.
+\item[Issue 1.46 (2005/12/07)] Allowed for changes to types for enhancement 115: support for implicitly declared subprograms.
+\item[Issues 1.47 (2007/05/18), 1.48 (2007/05/21)] Allowed for rationalisation to abstract syntax of loops.
+\item[Issue 1.49 (2008/03/24)] Allowed for data type changes for child packages.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation of the compliance notation web clause processor. It is written in response to the detailed design to be found in \cite{ISS/HAT/DAZ/DTD504}.
+\subsection{Introduction}
+\subsection{Purpose and Background}
+See \cite{ISS/HAT/DAZ/DTD504}.
+
+%\subsection{Algorithms}
+%\subsection{Dependencies}
+%\subsection{Known Deficencies}
+\subsection{Possible Enhancements}
+None.
+=TEX
+
+\section{THE STRUCTURE $WebClauses$}
+
+=SML
+structure ⦏WebClauses⦎ : WebClauses = struct
+local
+	open CNTypes CNTypes1 CNLex CNParser CNZGenerator;
+in
+=TEX
+=SML
+val ⦏has_no_label⦎ = "__empty";
+=TEX
+=SML
+val ⦏corrupt_hypertext_info⦎ = "__corrupt";
+=TEX
+=SML
+fun ⦏mark_place_for_procedure_specification⦎
+	({spec=Value _,...} : PROCEDURE_SPECIFICATION) : LABEL list = (
+		[has_no_label]
+) | mark_place_for_procedure_specification _ = (
+		[]
+);
+=TEX
+=SML
+fun ⦏mark_place_for_function_specification⦎
+	({spec=Value _,...} : FUNCTION_SPECIFICATION) : LABEL list = (
+		[has_no_label]
+) | mark_place_for_function_specification _ = (
+		[]
+);
+=TEX
+=SML
+structure LabelUtilities = struct
+=TEX
+=SML
+fun ⦏extract_labels_from_subprog_spec⦎ (SSProcedure proc_spec) : LABEL list = (
+	mark_place_for_procedure_specification proc_spec
+) | extract_labels_from_subprog_spec (SSFunction fun_spec) = (
+	mark_place_for_function_specification fun_spec
+);
+=TEX
+=SML
+fun ⦏extract_labels_from_renaming_decl⦎ (RDSubprogram
+		{subprogram_specification,...}) : LABEL list = (
+	extract_labels_from_subprog_spec subprogram_specification
+) | extract_labels_from_renaming_decl _  = [];
+=TEX
+=SML
+fun ⦏extract_labels_from_statement⦎ (STNull _ : STATEMENT)  : LABEL list = ([]
+) | extract_labels_from_statement (STAssign _) = ([]
+) | extract_labels_from_statement (STSpecNoIvars {label,...}) = (
+	[label]
+) | extract_labels_from_statement (STSemicolon (s1,s2)) = (
+	extract_labels_from_statement s1 @ extract_labels_from_statement s2
+) | extract_labels_from_statement (STIfThenElse {p,q,...}) = (
+	extract_labels_from_statement p @ extract_labels_from_statement q
+) | extract_labels_from_statement (STCase {s,others,...}) = (
+	flat (map (extract_labels_from_statement o (fn {p,...} => p)) s) @
+	extract_labels_from_statement others
+) | extract_labels_from_statement (STLoop {loop = {stmt,...}, ...}) = (
+	extract_labels_from_statement stmt
+) | extract_labels_from_statement (STWhile {loop={stmt,...},...}) = (
+	extract_labels_from_statement stmt
+) | extract_labels_from_statement (STForStatic {loop={stmt,...},...}) = (
+	extract_labels_from_statement stmt
+) | extract_labels_from_statement (STForTmark {loop={stmt,...},...}) = (
+	extract_labels_from_statement stmt
+) | extract_labels_from_statement (STLabelled { statement =stmt, ... } ) = (
+	extract_labels_from_statement stmt
+) | extract_labels_from_statement (STExitWhen _ ) = ([]
+) | extract_labels_from_statement (STExit _) = ([]
+) | extract_labels_from_statement (STRet _) = ([]
+) | extract_labels_from_statement (STGoto _) = ([]
+) | extract_labels_from_statement (STProcNoIvars _) = ([]
+) | extract_labels_from_statement (STKSlot {label,...}) = (
+	[label]
+) | extract_labels_from_statement (STPragma _) = ([]
+) | extract_labels_from_statement (STAnnotation _) = ([]
+) | extract_labels_from_statement (SSpecIvars {label,...}) = (
+	[label]
+) | extract_labels_from_statement (SForNonStatic {loop={stmt,...},...}) = (
+	extract_labels_from_statement stmt
+) | extract_labels_from_statement (SLogCon {label,...}) = (
+	[label]
+) | extract_labels_from_statement (SProcIvars _) = (
+	[]
+) | extract_labels_from_statement (SBlockStatement{declarative_part = Nil, statement =s, ...}) = (
+	extract_labels_from_statement s
+) | extract_labels_from_statement (SBlockStatement{declarative_part = Value dp, statement =s, ...}) = (
+	flat (map extract_labels_from_declaration dp) @
+	extract_labels_from_statement s
+)
+(*
+=TEX
+=SML
+*)
+and ⦏extract_labels_from_declaration⦎ (DDeclarationKSlot ({label,...}, _): DECLARATION) : LABEL list = (
+	[label]
+) | extract_labels_from_declaration (DRenamingDeclaration rd) = (
+	extract_labels_from_renaming_decl rd
+) | extract_labels_from_declaration (DBasicDecl _) = ([]
+) | extract_labels_from_declaration (DRepresentationClause _) = ([]
+) | extract_labels_from_declaration (DUseClause _) = ([]
+) | extract_labels_from_declaration (DProperBody pb) = (
+	extract_labels_from_proper_body pb
+) | extract_labels_from_declaration (DProcedureDeclaration {spec = pd, ...}) = (
+	mark_place_for_procedure_specification pd
+) | extract_labels_from_declaration (DFunctionDeclaration {spec = fd, ...}) = (
+	mark_place_for_function_specification fd
+) | extract_labels_from_declaration (DPackageDeclaration
+	{visible_decs,private_decs as Value pds,...}) = (
+	flat (map extract_labels_from_declaration visible_decs) @
+	flat (map extract_labels_from_declaration pds)
+) | extract_labels_from_declaration (DPackageDeclaration
+	{visible_decs,private_decs as Nil,...}) = (
+	flat (map extract_labels_from_declaration visible_decs)
+) | extract_labels_from_declaration (DProcedureStub ps) = (
+	mark_place_for_procedure_specification ps
+) | extract_labels_from_declaration (DFunctionStub fs) = (
+	mark_place_for_function_specification fs
+) | extract_labels_from_declaration (DPackageStub _) = ([]
+) | extract_labels_from_declaration (DExternalProcedureStub {spec = eps, ...}) = (
+	mark_place_for_procedure_specification eps
+) | extract_labels_from_declaration (DExternalFunctionStub {spec = efs, ...}) = (
+	mark_place_for_function_specification efs
+) | extract_labels_from_declaration (DAuxiliary _) = ([]
+) | extract_labels_from_declaration (DUsing {basic_decls,...}) = ([]
+)
+(*
+=TEX
+=SML
+*)
+and ⦏extract_labels_from_proper_body⦎ (PBProcedure
+		{procedure_spec,declarative_part,statement, ...} : PROPER_BODY)
+	: LABEL list = (
+	mark_place_for_procedure_specification procedure_spec @
+	flat (map extract_labels_from_declaration declarative_part) @
+	extract_labels_from_statement statement
+) | extract_labels_from_proper_body (PBFunction
+		{function_spec,declarative_part,statement, ...}) = (
+	mark_place_for_function_specification function_spec @
+	flat (map extract_labels_from_declaration declarative_part) @
+	extract_labels_from_statement statement
+) | extract_labels_from_proper_body (PBPackage {decls,statement,...}) = (
+	flat (map extract_labels_from_declaration decls) @
+	extract_labels_from_statement statement
+);
+=TEX
+=SML
+fun ⦏extract_labels_from_comp_unit⦎
+	(CUPackageDeclaration {pack_decl = {visible_decs,private_decs as Value pds,...}, ...} : COMPILATION_UNIT)
+	: LABEL list = (
+	flat (map extract_labels_from_declaration visible_decs) @
+	flat (map extract_labels_from_declaration pds)
+) | extract_labels_from_comp_unit
+	(CUPackageDeclaration {pack_decl = {visible_decs,private_decs as Nil,...}, ...}) = (
+	flat (map extract_labels_from_declaration visible_decs)
+) | extract_labels_from_comp_unit (CUProperBody pb) = (
+	extract_labels_from_proper_body pb
+) | extract_labels_from_comp_unit (CUSubUnit {proper_body,...}) = (
+	extract_labels_from_proper_body proper_body
+);
+=TEX
+=SML
+fun ⦏extract_labels_from_kslot_comp_unit⦎ (KCUKSlot {label,...} : KSLOT_COMPILATION_UNIT) : LABEL list = (
+	[label]
+) | extract_labels_from_kslot_comp_unit (KCUUnit {comp_unit,...}) = (
+	extract_labels_from_comp_unit comp_unit
+) | extract_labels_from_kslot_comp_unit (KCUPragma _) = ([]
+);
+=TEX
+=SML
+fun ⦏extract_labels_from_annotation⦎ (ANKSlot {label,...}::more : ANN list) : LABEL list = (
+	label :: extract_labels_from_annotation more
+) | extract_labels_from_annotation (_ :: more) = (
+	extract_labels_from_annotation more
+) | extract_labels_from_annotation [] = (
+	[]
+);
+=SML
+fun ⦏extract_labels_from_web_clause⦎ (WCCompilation comp_units : WEB_CLAUSE)
+	: (LABEL OPT *  LABEL list) = (
+	(Nil, flat (map extract_labels_from_kslot_comp_unit comp_units))
+) | extract_labels_from_web_clause (WCReplacedByCompilation {label,comp}) = (
+	(Value label, flat (map extract_labels_from_kslot_comp_unit comp))
+) | extract_labels_from_web_clause (WCReplacedByPrivatePart {label,private}) = (
+	(Value label, flat (map extract_labels_from_declaration private))
+) | extract_labels_from_web_clause (WCReplacedByVisiblePart {label,visible}) = (
+	(Value label, flat (map extract_labels_from_declaration visible))
+) | extract_labels_from_web_clause (WCReplacedByDecl {label,decls}) = (
+	(Value label, flat (map extract_labels_from_declaration decls))
+) | extract_labels_from_web_clause (WCReplacedByArbitraryAda {label,...}) = (
+	(Value label,[])
+) | extract_labels_from_web_clause (WCRefinedBy {label,statement}) = (
+	(Value label, extract_labels_from_statement statement)
+) | extract_labels_from_web_clause (WCReplacedBy {label,statement}) = (
+	(Value label, extract_labels_from_statement statement)
+) | extract_labels_from_web_clause (WCReplacedByAnnotation {label,replacement}) = (
+	(Value label, extract_labels_from_annotation replacement)
+);
+=TEX
+=SML
+end (* of nested structure LabelUtilities *);
+open LabelUtilities;
+=TEX
+=SML
+val ⦏hypertext_info⦎ : (int * LABEL) list list ref = ref [];
+=TEX
+=SML
+fun ⦏reset_hypertext_info⦎ () = (
+	hypertext_info := []
+);
+=TEX
+=SML
+fun ⦏get_hypertext_info⦎ () = (
+	!hypertext_info
+);
+=TEX
+=SML
+fun ⦏set_hypertext_info⦎ (h : (int * LABEL) list list) : unit = (
+	hypertext_info := h
+);
+=TEX
+=SML
+val ⦏goto_next_web_clause⦎ = (
+	["/\\\\begin{GFT}{Compliance Notation}\n"]
+);
+val ⦏goto_previous_web_clause⦎ = (
+	["?\\\\begin{GFT}{Compliance Notation}\n"]
+);
+=TEX
+=SML
+fun ⦏skip_fwd⦎ (n : int) = (
+	[".+"^string_of_int n^"\n"]
+);
+=TEX
+=SML
+fun ⦏generate_ed_line⦎ (offset : int, label : string) = (
+	if offset < 0 (* ⇔ is a plug *)
+	then
+		[
+		"s/^\\\\+/\\\\+\\\\FTHyperRefPlug{"^label^"} /\n"
+		]
+	else
+		skip_fwd offset@
+		[
+		"s/\\\\\\\\$/ \\\\FTHyperRefSocket{"^label^"}\\\\\\\\/\n"
+		]
+);
+=TEX
+=SML
+fun ⦏update_hypertext_info⦎ (lhsopt, labels : LABEL list)
+				 (offsets : int list) : unit = (
+let	val newinfo = combine offsets labels
+				handle ex => (
+					[(0,corrupt_hypertext_info)]
+				);
+	fun aux (carry : int) ((i,lab)::rest) = (
+		if lab = has_no_label
+		then
+			aux (i+carry) rest
+		else
+			(i+carry,lab)::aux 0 rest
+	) | aux _ _ = [];
+	val newinfo1 = aux 0 newinfo;
+	val newinfo2 = case lhsopt of
+				Value label	=> (~1,label)::newinfo1
+				|Nil		=> newinfo1;
+in
+	set_hypertext_info(get_hypertext_info()@[newinfo2])
+end
+);
+=TEX
+=SML
+fun ⦏output_hypertext_edit_script⦎ {
+	out_file : string
+	} : unit = (
+let	val info = get_hypertext_info();
+	val side =
+		if any (flat info) (fn (_, lab) => lab = corrupt_hypertext_info)
+		then	fail "output_hypertext_edit_script" 504110 []
+		else	();
+	val out_stream = open_out (translate_for_output out_file);
+	val output_string = curry output out_stream;
+	val ed_directives = flat (map
+					(fn hi => (
+						goto_next_web_clause @
+						skip_fwd 1 @
+						flat (map generate_ed_line hi)
+						)
+				        ) info
+				     );
+	
+in
+	map output_string ed_directives;
+	close_out out_stream
+end);
+=TEX
+
+\subsection{Interface}
+The following function checks whether an undeclared label is potentially valid.
+The only potentiall valid case is when the label is an identifier and the construct looks
+like a compilation unit refinement step introducing a package body (which might be
+the body of a nested package, with the label giving the name of the enclosing package).
+Even this could be invalid, but that will be detected by a semantic check.
+=SML
+fun ⦏check_label⦎ (is_ident : bool, items : CN_LEX_ITEM list) : CN_LEX_ITEM list = (
+	case (is_ident, items) of
+		(true,
+			(LCUndeclaredLabel, _)  ::
+			(LCReplacedBy, _) ::
+			(LCPackage, _) ::
+			(LCBBody, _) ::
+			more) => items
+	|	(_, (LCUndeclaredLabel, CNText lab)::_) =>
+			fail "CN-Parser" 504012 [fn () => lab]
+	|	_ => items
+);
+=TEX
+The following function looks at the initial label in a web clause (if there is one). The label determines the kind of web clause entered. This classification function is called from within the lexical analyser, and it is necessary for it to be called prior to the parser since the parser recognises a language in which the distinction between the kinds of web clause is made in the parser's input.
+
+=SML
+fun ⦏classify_initial_label⦎ (itemlist : CN_LEX_ITEM list) : CN_LEX_ITEM list = (
+	case itemlist of
+	(LCLBracket, _)::(lex_class, CNText labn)::(LCRBracket, _)::rest => (
+		if	lex_class = LCNumericLiteral
+		orelse	lex_class = LCIdentifier
+		then	check_label(lex_class = LCIdentifier,
+				((case classify_label labn of
+					Value RSCompilation => LCCompLabel
+				|	Value RSPrivatePart => LCPPartLabel
+				|	Value RSVisiblePart => LCVPartLabel
+				|	Value RSDeclaration => LCDecLabel
+				|	Value RSStatement => LCStmtLabel
+				|	Value RSSpecStatement => LCSpecLabel
+				|	Value RSAnnotation => LCAnnotationLabel
+				|	Nil => LCUndeclaredLabel
+				), CNText labn)::rest)
+		else	itemlist
+	)|_ => itemlist
+);
+=TEX
+=SML
+val ⦏cn_syntax_check_only⦎ : bool ref = ref false;
+val _ = new_flag{
+	name="cn_syntax_check_only",
+	check=fun_true,
+	control=cn_syntax_check_only,
+	default=fun_false} handle Fail _ => ();
+=TEX
+=SML
+val ⦏cn_stop_on_exceptions⦎ : bool ref = ref true;
+val _ = new_flag{
+	name="cn_stop_on_exceptions",
+	check=fun_true,
+	control=cn_stop_on_exceptions,
+	default=fun_true} handle Fail _ => ();
+=TEX
+=SML
+fun ⦏text_of_exn⦎ (Fail msg : exn) : string = get_message msg
+|   text_of_exn (Error msg) = get_message msg
+|  text_of_exn ex = string_of_exn ex;
+=TEX
+=SML
+
+
+fun ⦏cn_recogniser⦎ (start:string, lang:string, value:Lex.INPUT list, finish:string) :unit = (
+	if	ReaderWriterSupport.PrettyNames.is_same_symbol(start, "Ⓢ")
+	andalso	ReaderWriterSupport.PrettyNames.is_same_symbol(finish, "■")
+	andalso	(lang = "CN")
+	then
+		let	val save_cn_parser_state = get_cn_parser_state();
+		in
+			let	val (lexed, offsets) = CNLex.cn_lex classify_initial_label value;
+				val parsed = CNParser.cn_parser lexed;
+			   	val hi = extract_labels_from_web_clause parsed;
+			in	update_hypertext_info hi offsets;
+				if	get_flag "cn_syntax_check_only"
+				then	CNZGenerator.sco_z_generator parsed
+				else	CNZGenerator.cn_z_generator parsed
+			end	handle ex => (
+				set_cn_parser_state save_cn_parser_state;
+				(if	get_flag "cn_stop_on_exceptions"
+				then	raise ex
+				else	comment "cn_recogniser" 504011 [fn ()=>text_of_exn ex])
+			)
+		end
+	else
+		fail "cn_recogniser" 504010
+			[fn () => start, fn () => lang, fn () => finish]
+);
+=TEX
+=SML
+val _ = ReaderWriterSupport.add_named_reader(
+			"Ⓢ",
+			"CN",
+			"Lex.Term",
+			CNReaderWriter.cn_reader "cn_recogniser"
+	) handle Fail _ => ();
+val _ = ReaderWriterSupport.PrettyNames.add_new_symbols [
+	([	"refinedby"], Value "⊑", ReaderWriterSupport.PrettyNames.Simple),
+	([	"replacedby"], Value "≡", ReaderWriterSupport.PrettyNames.Simple)
+]
+	handle Fail _ => ();
+=TEX
+
+\subsection{Epilogue}
+=SML
+end (* local ... in *);
+end (* of structure WebClauses *);
+open WebClauses;
+=TEX
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+\end{document}
+=IGN
+
+
+get_hypertext_info();
+ ⓈCN
+procedure P is
+    A : INTEGER;
+    subtype S is INTEGER range 3 .. 10;
+    procedure Q
+        Δ A [ A = S_APOST_FIRST ]
+    is
+        S_APOST_FIRST : INTEGER;
+    begin
+        S_APOST_FIRST := A;
+    end Q;
+begin
+    Δ A[A = 5]
+end P;
+ ■
+
+
+ ⓈCN
+procedure P is
+	⟨ kslot ⟩			(1)
+	procedure proc_with_spec Δ [true] is separate;
+begin
+    null;
+end P;
+ ■
+output_hypertext_edit_script{out_file="x"};

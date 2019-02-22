@@ -1,0 +1,480 @@
+=IGN
+********************************************************************************
+wrk501.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ $Date: 2006/09/19 11:25:02 $ $Revision: 1.29 $ $RCSfile: wrk501.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation of First 1000 Primes Example}
+
+\def\AbstractText{This document gives an experimental implementation ``Refinement of Z to SPARK: First 1000 Primes'', DRA/CIS/CSE3/SWI/WP/5/2.}
+
+\def\Reference{ISS/HAT/DAZ/WRK501}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: % use_file "daz_init";
+%% LaTeX2e port: % use_file "PRIMES'proc";
+%% LaTeX2e port: % z_print_theory"-";
+%% LaTeX2e port: % open CNZGenerator;
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ,hyperbasics,ifthen]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation of First 1000 Primes Example}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{First 1000 Primes Example}
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/WRK501}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.29 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/09/19 11:25:02 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Informal}
+%% LaTeX2e port: %\TPPstatus{Informal}
+%% LaTeX2e port: \TPPtype{Technical}
+%% LaTeX2e port: %\TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & HAT Team}
+%% LaTeX2e port: \TPPabstract{%
+%% LaTeX2e port: This document gives an experimental implementation ``Refinement of Z to SPARK: First 1000 Primes'', DRA/CIS/CSE3/SWI/WP/5/2.
+%% LaTeX2e port: }
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: \def\TPPheadlhs{Lemma 1 Ltd.}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.15 (1995/01/06)] First Issue.
+\item[Issue 1.16 (1995/10/27)] TL added invocation of VC browser according to shell variable \texttt{PP\_USE\_VC\_BROWSER}
+\item[Issue 1.19 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.20 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.21 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.23 (2004/02/07)] The SPARK program is now referred to as the Ada program.
+\item[Issue 1.24 (2004/07/17)] Made it output success message in same format as the module tests use.
+\item[Issue 1.25 (2004/07/18)] Allowed for changes to VCs resulting from environment reforms.
+\item[Issue 1.26 (2005/05/28)] Compliance Notation reserved words are now prefixed by a dollar sign.
+\item[Issue 1.27 (2006/03/28)] Allowed for automated state management.
+\item[Issue 1.29 (2006/09/19)] Allowed for enhancement 165.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains a transcription of the literate script for the ``1000 Primes'' example in \cite{DRA/CIS/CSE3/SWI/WP/5/2} suitable for input into the Compliance Tool as specified in \cite{ISS/HAT/DAZ/HLD501} and \cite{ISS/HAT/DAZ/USR501}.
+\subsection{Introduction}
+\subsection{Background}
+
+The literate script for the ``1000 Primes'' example constitutes the case study which forms part of DRA's acceptance criteria for the compliance tool. This document contains an adaptation of the script in \cite{DRA/CIS/CSE3/SWI/WP/5/2} suitable for input into the compliance tool.
+
+\section{PREAMBLE}
+
+The following Standard ML script initialises the theory database and sets up the appropriate modes for processing the literate script which follows.
+=SML
+
+new_script {name="PRIMES", unit_type="proc"};
+
+=TEX
+
+\section{THE LITERATE SCRIPT}
+
+This literate script aims to follow exactly that supplied in \cite{DRA/CIS/CSE3/SWI/WP/5/2}.
+
+ⓈZ
+│	prime ≜ { n : ℕ⋎1 | ¬(∃ i, j : ℕ⋎1 \ {1} ⦁ i * j = n)}
+■
+
+ⓈZ
+│	not_prime ≜ ℕ⋎1 \ prime
+■
+
+ⓈZ
+│	rel     _ next_prime _
+■
+
+ⓈZAX
+│	_ next_prime _ : ℕ⋎1 ↔ ℕ⋎1
+├──────────────────────────
+│	(_ next_prime _) =
+│	{i, j : ℕ⋎1 | i ∈ prime ∧ j ∈ prime ∧ j>i ∧ (i+1)..(j-1) ⊆ not_prime}
+■
+
+ⓈZ
+│	primed ≜ {p : seq⋎1 ℕ⋎1 | p(1) = 2 ∧
+│			(∀ i : dom p \ {1} ⦁ p(i-1) next_prime p(i))}
+■
+
+ⓈCN
+procedure primes is
+subtype Indexrange is Integer range 1..1000;
+type Arraytype is array (Indexrange) of Integer;
+p : Arraytype;
+
+⟨ other declarations ⟩				(1)
+⟨ other declarations ⟩				(2)
+⟨ other declarations ⟩				(3)
+
+begin
+
+Δ P [true, P ∈ primed]
+
+end primes;
+■
+
+ⓈCN
+(1) ≡
+
+j, k : integer;
+■
+
+ⓈZ
+│	odd ≜ {n : ℕ⋎1 | ∀ i : ℕ⋎1 ⦁ n ≠ 2 * i}
+■
+┌Inv1─────────────
+│	P : ARRAYTYPE;
+│	J, K : ℤ
+├─────
+│	((1 .. K-1) ◁ P) ∈ primed;
+│	J = P(K-1);
+│	J ∈ odd
+└──────────
+
+ⓈCN
+⊑ Δ J,K,P [true, Inv1 ∧ K = 1001]
+■
+
+ⓈCN
+(2) ≡
+
+ord, square : Integer;
+ord_max : constant Integer := 30;
+subtype mult_index_type is Integer range 2..ord_max;
+type mult_type is array (mult_index_type) of Integer;
+mult : mult_type;
+■
+
+
+┌ ord_inv─────────────
+│	P : ARRAYTYPE;
+│	J, K, ORD, SQUARE : ℤ
+├─────
+│	ORD > 1;
+│	SQUARE = P(ORD) * P(ORD);
+│	J < SQUARE;
+│	ORD < K;
+│	ORD = 2 ⇒ J ∈ prime
+└──────────
+
+ⓈZ
+│	rel     _ factor_of _
+■
+
+ⓈZAX
+│	_ factor_of _ : ℕ⋎1 ↔ ℕ⋎1
+├──────────────────────────
+│	(_ factor_of _) =
+│	{i, n : ℕ⋎1 | ∃ j : 2..(n-1) ⦁ i * j = n}
+■
+
+
+┌ mult_inv─────────────
+│	P : ARRAYTYPE;
+│	MULT : MULT_TYPE;
+│	ORD, J : ℤ
+├─────
+│	∀ n : 2..(ORD - 1) ⦁
+│	MULT(n) ∈ odd ∧
+│	P(n) factor_of MULT (n) ∧
+│	(MULT(n) < J ∨
+│		MULT(n) - 2 * P(n) < J ≤ MULT(n))
+└──────────
+
+ⓈZ
+│	Inv ≜ ord_inv ∧ mult_inv
+■
+
+ⓈCN
+⊑
+
+p(1) := 2;
+p(2) := 3;
+j := 3;
+k := 3;
+ord := 2;
+square := 9;
+
+Δ J,K,P,ORD, SQUARE, MULT [Inv1 ∧ Inv, Inv1 ∧ Inv ∧ K = 1001]
+■
+
+
+ⓈCN
+⊑
+
+while k /= 1001
+loop
+	Δ J,K,P,ORD,SQUARE,MULT [Inv1 ∧ Inv, Inv1 ∧ Inv]
+end loop;
+■
+
+┌ Inter1─────────────
+│	P : ARRAYTYPE;
+│	J, K : ℤ
+├─────
+│	((1 .. K - 1) ◁ P) ∈ primed;
+│	P(K - 1) next_prime J;
+│	J ∈ odd
+└──────────
+
+ⓈCN
+⊑
+
+Δ J, ORD, SQUARE, MULT [Inv1 ∧ Inv, Inter1 ∧ Inv]
+p(k) := j;
+k := k+1;
+■
+
+ⓈCN
+⊑
+$CON lastj : ℤ ⦁ Δ J, ORD, SQUARE, MULT
+	[lastj = J ∧ Inv1 ∧ Inv, lastj next_prime J ∧ Inv]
+■
+
+┌ Inv2─────────────
+│	P : ARRAYTYPE;
+│	J, K, lastj : ℤ
+├─────
+│	lastj = P(K - 1);
+│	J ≥ lastj;
+│	(lastj+1) .. (J-1) ⊆ not_prime;
+│	((1..K-1) ◁ P) ∈ primed;
+│	J ∈ odd
+└──────────
+
+ⓈCN
+⊑
+
+$till ⟦Inv2 ∧ J > lastj ∧ J ∈ prime ∧ Inv⟧
+loop
+	Δ J, ORD, SQUARE, MULT [Inv2 ∧ Inv ∧ (J ∈ prime ⇒ lastj = J),
+		Inv2 ∧ Inv ∧ J ∉ prime]
+
+end loop;
+■
+
+ⓈCN
+(3) ≡
+
+jprime : Boolean;
+■
+
+ⓈCN
+⊑
+
+	Δ J, ORD, SQUARE, MULT [Inv2 ∧ Inv ∧ (J ∈ prime ⇒ lastj = J),
+		Inv2 ∧ Inv ∧ J = J⋎0 + 2]
+	Δ JPRIME, MULT [Inv2 ∧ Inv ∧ J > lastj,
+		Inv2 ∧ Inv ∧ J > lastj ∧ JPRIME = J mem prime]		(4)
+exit when jprime;
+■
+
+ⓈCN
+⊑
+
+j := j + 2;
+if j = square
+then
+	ord := ord + 1;
+	square := p(ord) * p(ord);
+	mult (ord-1) := j;
+end if;
+■
+
+ⓈCN
+(4) ⊑
+
+jprime := true;
+Δ JPRIME, MULT [Inv2 ∧ Inv ∧ JPRIME = TRUE,
+		Inv2 ∧ Inv ∧ JPRIME = J mem prime]
+■
+
+┌ Inv3─────────────
+│	P : ARRAYTYPE;
+│	J, ORD, N : ℤ;
+│	JPRIME : BOOLEAN
+├─────
+│	N ∈ 2..(ORD - 1);
+│	∀ m : 2.. (N-1) ⦁ ¬(P(m) factor_of J);
+│	JPRIME = TRUE;
+│	J ∈ odd
+└──────────
+
+ⓈCN
+⊑
+
+for n in Integer range 2 .. (ord - 1)
+$till ⟦P(N) factor_of J ∧ JPRIME = FALSE ∧ Inv⟧
+
+loop
+	Δ JPRIME, MULT [Inv3 ∧ Inv,
+			Inv3 ∧ Inv ∧ ¬(P(N) factor_of J)]
+end loop;
+■
+
+ⓈCN
+⊑
+
+Δ JPRIME, MULT [Inv3 ∧ mult_inv, mult_inv ∧ (P(N) factor_of J ⇔ JPRIME = FALSE)]
+
+exit when not jprime;
+■
+
+ⓈCN
+⊑
+Δ MULT[mult_inv, mult_inv ∧ MULT (N) ≥ J]
+Δ JPRIME [mult_inv ∧ MULT (N) ≥ J,
+		mult_inv ∧ MULT (N) ≥ J ∧ JPRIME = MULT (N) noteq J]	(5)
+■
+
+ⓈCN
+⊑
+
+while mult(n) < j
+loop
+	Δ MULT [mult_inv ∧ MULT(N) < J, mult_inv]
+end loop;
+■
+
+ⓈCN
+⊑
+
+mult(n) := mult(n) + p(n) + p(n);
+■
+
+ⓈCN
+(5) ⊑
+
+jprime := mult(n) /= j;
+■
+
+=SML
+
+
+output_z_document{script="PRIMES'proc", out_file="wrk501.zdoc"};
+output_ada_program{script="-", out_file="wrk501.ada"};
+
+
+val wrk501_browse =
+	let val shvar = get_shell_var "PP_USE_VC_BROWSER"
+	in	if shvar <> "" andalso shvar <> "NO" andalso shvar <> "no"
+			andalso shvar <> "No"
+		then browse_vcs() else ()
+	end;
+diag_line "All module tests passed";
+=TEX
+
+\pagebreak
+%\HOLindexOff
+%\input{wrk501.th.tex}
+%\HOLindexOn
+%\twocolumn[\section{INDEX OF DEFINED TERMS}]
+%\printindex
+\end{document}
+=IGN
+
+trace_envs();
+#w0(#spec(fst (hd(!CNZGenerator.diag_vc_args))));
+print_theory"-";
+
+
