@@ -24,13 +24,13 @@ rm -rf "$TMPBUILD"
 mkdir "$TMPBUILD"
 cd "$TMPBUILD"
 
-cp "$DOC"/wrk050.doc "$DOC"/wrk051.doc .
+cp "$DOC"/wrk050.pp "$DOC"/wrk051.pp .
 cp "$DOC"/usr011* .
-cp "$DOC"/usr023_slides.doc .
-cp "$DOC"/usr023S.doc .
-sieve sml <usr023S.doc >/dev/null
-mv zed_course_work.doc zed_course_solutions.doc "$DOC"
-sieve sml < wrk051.doc
+cp "$DOC"/usr023_slides.pp .
+cp "$DOC"/usr023S.pp .
+sieve sml <usr023S.pp >/dev/null
+mv zed_course_work.pp zed_course_solutions.pp "$DOC"
+sieve sml < wrk051.pp
 make -f wrk051.mkf all_zed
 
 
