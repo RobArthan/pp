@@ -380,7 +380,7 @@ Convert extended characters to keywords.
 */
 #define OPT_CONV_EXT 2048
 /*
-Convert extended characters to keywords.
+Convert extended characters and keywords to utf8 unicode.
 */
 #define OPT_UTF8_OUT 4096
 /*
@@ -531,6 +531,9 @@ check_cat_options(int flags)
 
 	if(flags & OPT_VERBATIM && flags & OPT_CONV_KW)
 		grumble1("conflicting options: 'verbatim' and 'convkw'", &view_F, True);
+
+	if(flags & OPT_KW && flags & OPT_UTF8_OUT)
+		grumble1("conflicting options: 'kw' and 'utf8'", &view_F, True);
 
 	/* Need both OPT_VERBATIM and OPT_KW for OPT_FLAG_KW */
 	if(flags & OPT_FLAG_KW && !(flags & OPT_VERBATIM && flags & OPT_KW))
