@@ -59,48 +59,48 @@ docsml usr001A.doc
 \kbUNITWIDTH=0.41in
 \vbox{
 	\hbox{%
-		\Key{1}{±}{Ў}{­}{Ы}
-		\Key{2}{І}{А}{Я}{Э}
-		\Key{3}{і}{Ј}{а}{ы}
-		\Key{4}{ґ}{¤}{п}{э}
-		\Key{5}{µ}{Ґ}{П}{§}
-		\Key{6}{¶}{Ю}{џ}{ў}
-		\Key{7}{·}{¦}{Џ}{${\dagger}^1$}
-		\Key{8}{Є}{ }{ю}{я}
-		\Key{9}{№}{Ё}{ћ}{ќ}
-		\Key{0}{°}{©}{Є}{њ}}%
+		\Key{1}{в€§}{в€©}{в†’}{в¦Џ}
+		\Key{2}{в€Ё}{в€Є}{в‡ё}{в¦Ћ}
+		\Key{3}{В¬}{вЉ–}{в†Ј}{вџ¦}
+		\Key{4}{в‡’}{в‡”}{в† }{вџ§}
+		\Key{5}{в€Ђ}{в‹‚}{в¤Ђ}{вџЁ}
+		\Key{6}{в€ѓ}{в‹ѓ}{в‡»}{вџ©}
+		\Key{7}{в¦Ѓ}{в‰њ}{в¤–}{${\dagger}^1$}
+		\Key{8}{в†”}{ }{в¤”}{в”Њ}
+		\Key{9}{в“€}{в¦‡}{в¤•}{в•’}
+		\Key{0}{в– }{в¦€}{в†”}{в•ђ}}%
 	\hbox{%
 		\hskip 0.5\kbUNITWIDTH
-		\Key{q}{у}{‘}{С}{}
-		\Key{w}{¬}{—}{Ч}{${\dagger}^5$}
-		\Key{e}{®}{${\dagger}^6$}{Е}{м}
-		\Key{r}{Ї}{’}{Т}{т}
-		\Key{t}{ф}{”}{Ф}{є}
-		\Key{y}{ }{™}{Щ}{ }
-		\Key{u}{ѓ}{•}{Х}{›}
-		\Key{i}{й}{${\relax}$}{Й}{Ь}
-		\Key{o}{«}{${\relax}$}{…}{ч}
-		\Key{p}{р}{ђ}{Р}{ь}}%
+		\Key{q}{в„љ}{в“њ}{П‡}{}
+		\Key{w}{вЊњ}{О©}{П‰}{${\dagger}^5$}
+		\Key{e}{вЊќ}{${\dagger}^6$}{Оµ}{в†ї}
+		\Key{r}{в„ќ}{в–·}{ПЃ}{в—Ѓ}
+		\Key{t}{вЉў}{в“Ј}{П„}{в¦‚}
+		\Key{y}{ }{ОЁ}{П€}{ }
+		\Key{u}{рќ•Њ}{ОҐ}{П…}{в‹Џ}
+		\Key{i}{в‰Ў}{${\relax}$}{О№}{в”‚}
+		\Key{o}{вЉ•}{${\relax}$}{в€}{в”њ}
+		\Key{p}{в„™}{О }{ПЂ}{в”Ђ}}%
 	\hbox{%
 		\hskip 1.0\kbUNITWIDTH
-		\Key{a}{с}{Ѓ}{Б}{б}
-		\Key{s}{ї}{“}{У}{Г}
-		\Key{d}{‰}{„}{Д}{${\dagger}^4$}
-		\Key{f}{ж}{†}{Ж}{щ}
-		\Key{g}{з}{‡}{З}{ѕ}
-		\Key{h}{и}{${\relax}$}{И}{${\dagger}^3$}
-		\Key{j}{к}{Љ}{К}{${\dagger}^2$}
-		\Key{k}{л}{‹}{Л}{€}
-		\Key{l}{ }{Њ}{М}{ј}}%
+		\Key{a}{в“©}{в©Ґ}{О±}{в©¤}
+		\Key{s}{рќ•Љ}{ОЈ}{Пѓ}{вЉ‘}
+		\Key{d}{в‹Ћ}{О”}{Оґ}{${\dagger}^4$}
+		\Key{f}{рќ”Ѕ}{О¦}{П†}{в†ѕ}
+		\Key{g}{в†—}{О“}{Оі}{в‰Ґ}
+		\Key{h}{в†}{${\relax}$}{О·}{${\dagger}^3$}
+		\Key{j}{в†•}{О}{Оё}{${\dagger}^2$}
+		\Key{k}{вЃЂ}{ }{Оє}{в””}
+		\Key{l}{ }{О›}{О»}{в‰¤}}%
 	\hbox{%
 		\hskip 1.5\kbUNITWIDTH
-		\Key{z}{ъ}{љ}{Ъ}{х}
-		\Key{x}{ё}{}{Ш}{ц}
-		\Key{c}{Ц}{ }{»}{Ђ}
-		\Key{v}{ }{д}{г}{е}
-		\Key{b}{–}{‚}{В}{в}
-		\Key{n}{о}{Ћ}{О}{Ѕ}
-		\Key{m}{н}{Ќ}{Н}{ }}%
+		\Key{z}{в„¤}{в€…}{О¶}{вЁЅ}
+		\Key{x}{Г—}{Оћ}{Оѕ}{вЁј}
+		\Key{c}{в„‚}{вЉ‚}{вЁѕ}{вЉ†}
+		\Key{v}{ }{вЉѓ}{в‡ђ}{вЉ‡}
+		\Key{b}{рќ”№}{вЉЋ}{ОІ}{вЉҐ}
+		\Key{n}{в„•}{в€‰}{ОЅ}{в‰ }
+		\Key{m}{в†¦}{в€€}{Ој}{ }}%
 }} % End of \KEYBOARD
 
 \def\KEYBOARDKEY{%
@@ -109,12 +109,12 @@ docsml usr001A.doc
 \hbox to \hsize{
 	\hspace{2em}
 	\begin{tabular}[c]{cl}
-		${\dagger}^1$ & \ShowAllImages №HOLCONST \\
-		${\dagger}^2$ & \ShowAllImages №ZAX \\
-		${\dagger}^3$ & \ShowAllImages №Z \\
-		${\dagger}^4$ & \ShowAllImages ‰R \\
-		${\dagger}^5$ & \ShowAllImages ›-›1 \\
-		${\dagger}^6$ & \ShowAllImages ¬ик~~~® \\[.1in]
+		${\dagger}^1$ & \ShowAllImages в“€HOLCONST \\
+		${\dagger}^2$ & \ShowAllImages в“€ZAX \\
+		${\dagger}^3$ & \ShowAllImages в“€Z \\
+		${\dagger}^4$ & \ShowAllImages в‹ЋR \\
+		${\dagger}^5$ & \ShowAllImages в‹Џ-в‹Џ1 \\
+		${\dagger}^6$ & \ShowAllImages вЊњв†в†•~~~вЊќ \\[.1in]
 	\end{tabular}
 	\hfill
 	\hbox{\Key{key}{Mod5+key}{Mod5+Shift+key}{Mod4+key}{Mod4+Shift+key}}%
