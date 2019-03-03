@@ -212,6 +212,11 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported to Lemma 1 document template.
+
+\item[2019/02/03]
+Can now select between ext and utf8 character sets using a shell
+variable (\textit{PPCHARSET}).
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -748,6 +753,30 @@ local
 	);
 in
 	val _ = Initialisation.new_init_fun set_db_name;
+end;
+=TEX
+\subsection{Setting the I/O Character Set}
+=SML
+local
+	fun ⦏set_char_set⦎ () : unit = (
+		case  get_shell_var "PPCHARSET" of
+			"" => ()
+		|	"ext" => (
+				set_flag("input_in_utf8", false);
+				set_flag("output_in_utf8", false);
+				()
+			)
+		|	"utf8" => (
+				set_flag("input_in_utf8", true);
+				set_flag("output_in_utf8", true);
+				()
+			)
+		|	unsupported => (
+			diag_line (get_error_message 36030 [unsupported])
+		)
+	);
+in
+	val _ = Initialisation.new_init_fun set_char_set;
 end;
 =TEX
 =SML
