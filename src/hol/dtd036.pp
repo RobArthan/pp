@@ -199,6 +199,11 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported to Lemma 1 document template.
+
+\item[2019/02/03]
+Can now select between ext and utf8 character sets using a shell
+variable (\textit{PPCHARSET}). Added error message for unrecognised value.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -521,32 +526,24 @@ Set a flag to indicate that the state is as yet unchanged.
 Load the database's hierarchy, if any,
 via $pp'database\_info$.
 \item
-Load the theory name stored in shell variable
-$hol\-\_current\-\_theory$, via $get\-\_shell\-\_var$,
-or if that is unset or the empty string then attempt to load the database's cache theory
-via $pp'database\_info$
-and failing that leave the current theory unchanged.
-If $hol\-\_current\-\_theory$ is a non-empty string that is
-not a theory that can be opened then the hol session will be
-quitted, and a shell script output to the file
-with name given by $hol\_initialisation\_error\_file$
-for program {\tt hol}, et al.
-\item
-Initialise the current state (e.g. current theory).
+If the environment variable \textit{PPINITCURRENTTHEORY} is not set or is set to an empty string, the theory
+that was current when the state was last saved will be opened.
 \item
 Initialise any modules which have an associated start of session initialisation function - such as flags, controls,
 proof context facilites, etc.
 \item
-Set the line length to two less than the terminal (to give
-a little leeway for any above average size extended ML characters.
-=GFTSHOW
-fn () => (set_line_length (get_terminal_line_length () - 2)
-	handle _ => ());
+If the environment variable
+\textit{PPINITCURRENTTHEORY} is set to a non-empty string, attempt to open the theory
+with that string as its name.
+If the attempt fails, an error message is output and the session exits immediately.
+\item
+Set the line length to the value given in the environment variable \textit{PPLINELENGTH}.
 =TEX
 \item
-Attempt to load (by $use\_file$) each of the comma-separated list of initialisation
-scripts stored in shell variable $hol\-\_initialisation\-\_scripts$.
-Failure on any particular load will not cause subsequent loading attempts to cease.
+\raggedright
+Attempt to load the scripts identified by the environment variables
+\textit{PPINITSCRIPT1}, \textit{PPINITSCRIPT2}, \ldots, in turn stopping when one of the enviroment
+variables is not set or is set to an tmpty string.
 \item
 Output the start of session banner message, via $print\-\_banner$.
 \item
@@ -558,6 +555,8 @@ Messages used in system initialisation:
 36005	Failed to load ?0: ?1
 36012	Could not read ?0
 36025	Database name: ?0
+36030	Ignoring unsupported character set name ?0 found in environment variable
+	PPCHARSET. The supported character set names are "ext" and "utf8"
 =TEX
 \section{EPILOGUE}
 =SML
