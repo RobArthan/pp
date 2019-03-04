@@ -140,6 +140,10 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported daz source documents onto the Lemma 1 document template
+
+\item[2019/03/03]
+Fixed test failure arising from conversion to UTF-8.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -237,8 +241,8 @@ Keywords inside a string should be ignored and not converted to an extended char
 
 =SMLPLAIN
 local
-    val t1 = ⓈCN "∀ ⦁" ■
-    val t2 = ⓈCN ∀ ⦁ ■
+    val t1 = ⓈCN "%forall% %spot%" ■
+    val t2 = ⓈCN %forall% %spot% ■
     val a1 = [Text "", String "%%forall%% %%spot%%", Text " "] : INPUT list;
     val a2 = [Text "∀ ⦁ "] : INPUT list;
 in
