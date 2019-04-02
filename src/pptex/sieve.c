@@ -307,82 +307,91 @@ typedef struct{
 	char *name;
 	int flag;
 } options_available;
-/*
+
+/* verbatim
 The {\tt flags} may take one of the following values.
 
 Lines are to be processed for the verbatim-like formal text
 	environments.  This flag implies {\tt OPT_LATEX} and {\tt OPT_CHAR}.
 */
 #define OPT_VERBATIM 1
-/*
 
-
+/* latex
 Text is to be processed for the verbatim-like formal text
 	environments, only with this flag set are the LaTeX conversions
 	applied.  This option is automatically set with {\tt
 	OPT_VERBATIM}.
-
-
 */
 #define OPT_LATEX 1024
-/*
+
+/* kw
 Percent keywords are to be understood.
 */
 #define OPT_KW 2
-/*
+
+/* char
 Convert extended characters, but not percent keywords, to their
 	\LaTeX{} form.  This option is automatically set with {\tt
 	OPT_VERBATIM}.
 */
 #define OPT_CHAR 4
-/*
+
+/* delindex
 Modifies options {\tt OPT_KW} and {\tt OPT_VERBATIM} so that
 	extended characters and percent keywords for indexing are
 	deleted.
 */
 #define OPT_DELINDEX 8
-/*
+
+/* ml_char
 Extended characters, but not percent keywords, are converted to
 	their Standard ML string form.  This option is not compatible
 	with {\tt OPT_KW} or {\tt OPT_VERBATIM}.
 */
-#define OPT_ML_CHAR 16
-/*
+#define OPT_MLCHAR 16
+
+/* warn_kw
 Issue a warning message when unknown keywords are
 	found.  Only meaningful when {\tt OPT_KW} is set.
 */
 #define OPT_WARN_KW 32
-/*
+
+/* flag_kw
 Convert unknown keywords to a call on the \LaTeX{} macro
 	\verb|\UnknownKeyword|.  Only meaningful when {\tt OPT_KW} and
 	{\tt OPT_VERBATIM} are set.
 */
 #define OPT_FLAG_KW 64
-/*
+
+/* verb_alone
 Lines containing at least one character of type {\tt verbalone}
 	plus any number of {\tt white} characters have a reduced
 	verbatim-like processing where the line ends are not marked.
 */
 #define OPT_VERB_ALONE 128
-/*
-Where possible keywords are converted to their corresponding
+
+/* conv_kw
+Where possible, keywords are converted to their corresponding
 	extended character.
 */
-#define OPT_CONV_KW 256
-/*
+#define OPT_CONVKW 256
+
+/* white
 Convert extended characters of class {\tt white} to a
 	space character.  When {\tt OPT_KW} is set also convert the
 	keywords.
 */
 #define OPT_WHITE 512
-/*
+
+/* conv_ext
 Convert extended characters to keywords.
 */
 #define OPT_CONV_EXT 2048
-/*
+
+/* utf8out
 Convert extended characters and keywords to utf8 unicode.
 */
-#define OPT_UTF8_OUT 4096
+#define OPT_UTF8OUT 4096
 /*
 
 \end{itemize}
@@ -393,32 +402,32 @@ Other checks are made in the startup function, {\tt initialize}.
 
 */
 #define AND_FLAGS	(	OPT_CHAR \
-			&	OPT_CONV_KW \
+			&	OPT_CONVKW \
 			&	OPT_DELINDEX \
 			&	OPT_FLAG_KW \
 			&	OPT_KW \
 			&	OPT_LATEX \
-			&	OPT_ML_CHAR \
+			&	OPT_MLCHAR \
 			&	OPT_VERBATIM \
 			&	OPT_VERB_ALONE \
 			&	OPT_WARN_KW \
 			&	OPT_WHITE \
 			&	OPT_CONV_EXT \
-			&	OPT_UTF8_OUT \
+			&	OPT_UTF8OUT \
 			)
 #define OR_FLAGS	(	OPT_CHAR \
-			|	OPT_CONV_KW \
+			|	OPT_CONVKW \
 			|	OPT_DELINDEX \
 			|	OPT_FLAG_KW \
 			|	OPT_KW \
 			|	OPT_LATEX \
-			|	OPT_ML_CHAR \
+			|	OPT_MLCHAR \
 			|	OPT_VERBATIM \
 			|	OPT_VERB_ALONE \
 			|	OPT_WARN_KW \
 			|	OPT_WHITE \
 			|	OPT_CONV_EXT \
-			|	OPT_UTF8_OUT \
+			|	OPT_UTF8OUT \
 			)
 
 #if AND_FLAGS != 0
@@ -434,16 +443,16 @@ get_options below.
 */
 options_available cat_options[] = {
 	{"char", OPT_CHAR},
-	{"convkw", OPT_CONV_KW | OPT_KW},
+	{"convkw", OPT_CONVKW | OPT_KW},
 	{"convext", OPT_CONV_EXT},
 	{"delindex", OPT_DELINDEX},
 	{"kw", OPT_KW},
 	{"kwflag", OPT_FLAG_KW},
 	{"kwwarn", OPT_WARN_KW},
 	{"latex", OPT_LATEX | OPT_CHAR},
-	{"mlchar", OPT_ML_CHAR},
+	{"mlchar", OPT_MLCHAR},
 	{"verbalone", OPT_VERB_ALONE},
-	{"utf8out", OPT_UTF8_OUT},
+	{"utf8out", OPT_UTF8OUT},
 	{"verbatim", OPT_VERBATIM | OPT_LATEX | OPT_CHAR},
 	{"white", OPT_WHITE},
 	{NULL, 0}
@@ -514,13 +523,13 @@ Validate the options set for the "cat" action.
 void
 check_cat_options(int flags)
 {
-	if(flags & OPT_VERBATIM && flags & OPT_ML_CHAR)
+	if(flags & OPT_VERBATIM && flags & OPT_MLCHAR)
 		grumble1("conflicting options: 'verbatim' and 'mlchar'", &view_F, True);
 
-	if(flags & OPT_LATEX && flags & OPT_ML_CHAR)
+	if(flags & OPT_LATEX && flags & OPT_MLCHAR)
 		grumble1("conflicting options: 'latex' and 'mlchar'", &view_F, True);
 
-	if(flags & OPT_CONV_EXT && flags & OPT_ML_CHAR)
+	if(flags & OPT_CONV_EXT && flags & OPT_MLCHAR)
 		grumble1("conflicting options: 'convext' and 'mlchar'", &view_F, True);
 
 	if(flags & OPT_VERBATIM && flags & OPT_CONV_EXT)
@@ -529,11 +538,8 @@ check_cat_options(int flags)
 	if(flags & OPT_LATEX && flags & OPT_CONV_EXT)
 		grumble1("conflicting options: 'latex' and 'convext'", &view_F, True);
 
-	if(flags & OPT_VERBATIM && flags & OPT_CONV_KW)
+	if(flags & OPT_VERBATIM && flags & OPT_CONVKW)
 		grumble1("conflicting options: 'verbatim' and 'convkw'", &view_F, True);
-
-	if(flags & OPT_KW && flags & OPT_UTF8_OUT)
-		grumble1("conflicting options: 'kw' and 'utf8'", &view_F, True);
 
 	/* Need both OPT_VERBATIM and OPT_KW for OPT_FLAG_KW */
 	if(flags & OPT_FLAG_KW && !(flags & OPT_VERBATIM && flags & OPT_KW))
@@ -556,14 +562,14 @@ show_options(FILE *fp, int flags)
 #define SHOW_OPT(f, s) if(flags & f) (void)fputs(s, fp)
 	SHOW_OPT(OPT_CHAR, " char");
 	SHOW_OPT(OPT_CONV_EXT, " convext");
-	SHOW_OPT(OPT_CONV_KW, " convkw");
+	SHOW_OPT(OPT_CONVKW, " convkw");
 	SHOW_OPT(OPT_DELINDEX, " delindex");
 	SHOW_OPT(OPT_KW, " kw");
 	SHOW_OPT(OPT_FLAG_KW, " kwflag");
 	SHOW_OPT(OPT_WARN_KW, " kwwarn");
 	SHOW_OPT(OPT_LATEX, " latex");
-	SHOW_OPT(OPT_ML_CHAR, " mlchar");
-	SHOW_OPT(OPT_UTF8_OUT, " utf8out");
+	SHOW_OPT(OPT_MLCHAR, " mlchar");
+	SHOW_OPT(OPT_UTF8OUT, " utf8out");
 	SHOW_OPT(OPT_VERB_ALONE, " verbalone");
 	SHOW_OPT(OPT_VERBATIM, " verbatim");
 	SHOW_OPT(OPT_WHITE, " white");
@@ -579,7 +585,6 @@ the available set are described in this structure.  Note that the
 entries in the array must be sorted on the {\tt name} field so that
 function {\tt find_action} works.  This ordering is checked in function
 {\tt check\-_program\-_initializations}.
-
 
 */
 struct actions_available{
@@ -1063,7 +1068,7 @@ copy_macro_arg(
 			ans = outp-orig_outp;
 		} else {
 			main_convert(macro,
-				flags | OPT_KW | OPT_CONV_KW,
+				flags | OPT_KW | OPT_CONVKW,
 				&(out_line[outp]),
 				maxlen - outp,
 				&main_F);
@@ -2065,14 +2070,14 @@ main_convert(
 	int opt_do_latex = flags & OPT_LATEX;
 	int opt_do_line_verbatim = flags & OPT_VERBATIM;
 	int opt_do_kw = flags & OPT_KW;
-	int opt_conv_kw = flags & OPT_CONV_KW;
-	int opt_do_ml_char = flags & OPT_ML_CHAR;
+	int opt_conv_kw = flags & OPT_CONVKW;
+	int opt_do_ml_char = flags & OPT_MLCHAR;
 	int opt_do_conv_ext = flags & OPT_CONV_EXT;
 	int opt_do_char = flags & OPT_CHAR;
 	int opt_kw_warn = flags & OPT_WARN_KW;
 	int opt_flag_kw = opt_do_kw && opt_do_latex && (flags & OPT_FLAG_KW);
 	int opt_do_white = flags & OPT_WHITE;
-	int opt_utf8_out = flags & OPT_UTF8_OUT;
+	int opt_utf8out = flags & OPT_UTF8OUT;
 	int tex_arg_stack[MAX_TEX_ARG_NESTING];
 	int tex_arg_stack_head = -1;
 
@@ -2460,10 +2465,8 @@ process_line(char *line, dir_info *di)
 	  }
 	  op_text = convert_area;
 	}
-	  if (a_flags & OPT_UTF8_OUT) {
-	    if (debug & D_UTF8){message1("UTF8:process_line 1");};
+	  if (a_flags & OPT_UTF8OUT) {
 	    output_ext_as_utf8(op_text, di->cur_fp);
-	    if (debug & D_UTF8){message1("UTF8:process_line 2");};
 	  }
 	  else FPRINTF(di->cur_fp, "%s\n", op_text);
 	  break;								/* BREAK */
@@ -2789,14 +2792,14 @@ decode_directive_line(
 		start_copy_source = 1;
 	}
 
-	/* Now have in the first character of "di->dl_line" the extended
+	/* Now we have in the first character of "di->dl_line" the extended
 		character that starts the directive.  If we have "KW_DIRECTIVE"
 		then this character is followed by a space, when
 		"KW_START_DIR" there is no space since the character is the
 		simply the first character of the directive.  */
 
 	main_convert(&(line[start_copy_source]),
-		OPT_KW | OPT_CONV_KW | OPT_WARN_KW | OPT_WHITE,
+		OPT_KW | OPT_CONVKW | OPT_WARN_KW | OPT_WHITE,
 		&(di->dl_line[start_copy_dest]),
 		MAX_LINE_LEN-start_copy_dest,
 		&main_F);
@@ -2932,7 +2935,6 @@ main_sieve(void)
 			 main_F.utf8 ? "utf8 input" : "ext input", main_F.name);
 	while( (!feof(main_F.fp)) && (!ferror(main_F.fp)) ) {
 	  	(void)read_line_as_ext(&main_F);
-	/*      (void)simple_read_line(main_F.cur_line, MAX_LINE_LEN, &main_F); */
 		main_F.line_no ++;
 
 		if(debug & D_READ_SOURCE_LINE) {
@@ -3054,7 +3056,7 @@ read_view_file(char *name)
 			q = find_space(p);
 			string_n_copy(view, p, q - p);
 			*(view + (q - p)) = '\0';
-			main_convert(view, OPT_KW | OPT_CONV_KW | OPT_WARN_KW,
+			main_convert(view, OPT_KW | OPT_CONVKW | OPT_WARN_KW,
 				cat, MAX_LINE_LEN, &view_F);
 
 			/* Get the view */

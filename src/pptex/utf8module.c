@@ -1273,7 +1273,6 @@ simple_read_line(char *line, int max_len, struct file_data *file_F)
 	int i = 0;
 
 	while(i < max_len && (whatgot = getc(file_F->fp)) != '\n' && whatgot != EOF) {
-      	  /* if (debug & D_UTF8) PRINTF("simple_read_line 1, whatgot=%i\n", whatgot); */
 	  line[i++] = whatgot;
 	}
 
@@ -1284,7 +1283,6 @@ simple_read_line(char *line, int max_len, struct file_data *file_F)
 		EXIT(4);
 	}
 	line[i] = '\0';
-	if (debug & D_UTF8) message("simple_read_line 2, line=%s", line);
 	file_F->line_no++;
 	return(i);
 }
@@ -1365,7 +1363,6 @@ read_keyword_file(char *name)
 		EXIT(25);							/* EXIT */
 	}
 
-	if(debug & D_UTF8) message("Processing keyword file '%s'", actname);
 	keyword_F.file_name = actname;
 	keyword_F.line_no = 0;
 
@@ -1516,7 +1513,6 @@ read_keyword_file(char *name)
 		unix_error1("i/o error reported on close file operation");
 		EXIT(8);							/* EXIT */
 	};
-	if(debug & D_UTF8) message("Keyword file '%s' closed", actname);
 }
 
 /*
@@ -1582,7 +1578,6 @@ conclude_keywordfile(void)
   for(i=1; i<kwi.num_keywords; i++) {
     struct keyword_information *cur_ki = &kwi.keyword[i];
     if (prev_ki != NULL && (strcmp(prev_ki->name, cur_ki->name) == 0)) {
-      /* if (debug & D_UTF8) FPRINTF(stderr, "%s\tsimple\t0x%06x\n", cur_ki->name, cur_ki->uni); */
       if (prev_ki->orig_kind != KW_SIMPLE || cur_ki->orig_kind != KW_SIMPLE)
 	grumble("Multiple keyword file entries for keyword %s, not all SIMPLE\n",
 		prev_ki->name, &keyword_F, False);
@@ -1610,12 +1605,6 @@ conclude_keywordfile(void)
   }
   kwi.num_keywords = j+1;
   
-  if (debug & D_UTF8){
-    for(i=0; i<kwi.num_keywords; i++) {
-      PRINTF ("keyword entry % 4i name =%s\n", i, kwi.keyword[i].name);
-    };
-  };
-
   /* Scan table to connect SAMEAS entries and do some checks */
   
   for(i=1; i<kwi.num_keywords; i++) {
@@ -1738,25 +1727,9 @@ conclude_keywordfile(void)
   for (i=0; i<kwi.num_keywords; i++)
     if (kwi.keyword[i].uni != U_NOT_FOUND) {
       kwi.unicode_code[kwi.num_unicodes] = &kwi.keyword[i];
-      if (debug & D_UTF8)
-	PRINTF("Add unicode_code 0%6x in position %3i\n", kwi.keyword[i].uni, kwi.num_unicodes);
       kwi.num_unicodes++;
     };
-  
-  if(debug & D_UTF8) {
-    PRINTF("\nChecking unicode_code mapping (before sort): num_unicodes = %i\n\n", kwi.num_unicodes);
-    fflush(NULL);
-  };
-  
-  if (debug & D_UTF8){
-    for(i=0; i<kwi.num_unicodes; i++) {
-      if (!(kwi.unicode_code[i] == NULL)){
-	PRINTF ("unicode_code entry %3i is 0x%6x\n", i, kwi.unicode_code[i]->uni);
-      }
-      else PRINTF ("unicode_code entry %i is NULL\n", i);
-    };
-  };
-
+    
   /* sort kwi.num_unicode_code */
 
   qsort((char*)kwi.unicode_code,
@@ -1771,24 +1744,9 @@ conclude_keywordfile(void)
     if (kwi.unicode_code[i]->uni == kwi.unicode_code[j]->uni) continue;
     if (++j < i) {
       kwi.unicode_code[j] = kwi.unicode_code[i];
-      if (debug & D_UTF8) FPRINTF(stdout, "j = %04i, i = %04i\n", j, i);
     };
   };
   kwi.num_unicodes=++j;
-
-  if(debug & D_UTF8) {
-    PRINTF("\nChecking unicode_code mapping (after sort and sift): num_unicodes = %i\n\n", kwi.num_unicodes);
-    fflush(NULL);
-  };
-  
-  if (debug & D_UTF8){
-    for(i=0; i<kwi.num_unicodes; i++) {
-      if (!(kwi.unicode_code[i] == NULL)){
-	PRINTF ("unicode_code entry %3i is 0x%6x\n", i, kwi.unicode_code[i]->uni);
-      }
-      else PRINTF ("unicode_code entry %i is NULL\n", i);
-    };
-  };
   
   if(dump_keywords || (debug & D_SHOW_KEYWORD_TABLE))
     show_keywords();
@@ -2017,13 +1975,6 @@ struct keyword_information *unicode_to_kwi(unicode cp)
   /*  int i; */
   key.uni = cp;
   keyr = &key;
-  /*  if(debug & D_UTF8) {
-    PRINTF("unicode_to_kwi: code_point = 0x%6X\n", cp);
-    fflush(NULL);
-    for (i=0; i<kwi.num_unicodes; i++){
-      PRINTF("unicode_to_kwi unicode_code entry 0x%6X (size = %i)\n", kwi.unicode_code[i]->uni, sizeof(search_result));
-    };
-    fflush(NULL);} */
   search_result = bsearch(&keyr, kwi.unicode_code,
 			  kwi.num_unicodes, sizeof(search_result), compare_keyword_unicode);
   if (search_result == NULL) return NULL;
@@ -2041,10 +1992,6 @@ Convert a unicode code point to a keyword in percents
 char *unicode_to_kw(unicode code_point)
 {
   struct keyword_information *kwi = unicode_to_kwi(code_point);
-  if(debug & D_UTF8) {
-    PRINTF("unicode_to_kw: code_point = 0x%6X, kwi = %p\n", code_point, (void *)kwi);
-    fflush(NULL);}
-  ;
   return (kwi == NULL) ? unicode_to_hex(code_point) : kwi->name;
 }
 
@@ -2070,10 +2017,6 @@ char *unicode_to_aekw(unicode code_point){
     return ascext;
   };
   kwi = unicode_to_kwi(code_point);
-  if(debug & D_UTF8) {
-    PRINTF("unicode_to_aekw: code_point = 0x%6X, kwi = %p\n", code_point, (void *)kwi);
-    fflush(NULL);
-  };
   if (kwi == NULL) return unicode_to_hex(code_point);
   else if (kwi->uni != code_point) {
     error_top();
@@ -2124,9 +2067,7 @@ void code_line_to_ext(struct file_data *file_F){
   codes = file_F->code_line;
   line = file_F->cur_line;
   while (*codes !=0 && op < MAX_LINE_LEN){
-    /*  if(debug & D_UTF8) {PRINTF("code_line_to_ext 1: *codes=%x\n", *codes); fflush(NULL);}; */
     r = unicode_to_aekw(*codes);
-    if(debug & D_UTF8) {PRINTF("code_line_to_ext 2: *codes=%x, r=%s\n", *codes, r); fflush(NULL);};
     while (*r !=0 && op < MAX_LINE_LEN) {
       *line = *r;
       line++;
@@ -2201,11 +2142,7 @@ The value returned is the unicode code point or else zero.
    int r, l;
    int whatgot = buff[(*pos)++];
    
-   /*  if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 1, whatgot=%i\n", whatgot); */
-
    r = whatgot & 0xff;
-
-   /*  if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 2, r=%i\n", r); */
 
    if(r <= 0x7f) { return r; };
    l = 0;
@@ -2215,18 +2152,13 @@ The value returned is the unicode code point or else zero.
    };
    if(l > 4) { message1("extract_code_point 3 l>4"); return invalid_unicode(); };
    r = r >> l;
-   if(debug & D_UTF8)FPRINTF(stdout, "extract_code_point 4, r=%i, l=%i\n", r, l);
    while(--l) {
      whatgot = buff[(*pos)++];
-     if(debug & D_UTF8){
-       FPRINTF(stdout, "extract_code_point 4, r=%x, l=%i, whatgot=%x\n", r, l, whatgot);fflush(NULL);};
      if((whatgot & 0xc0) != 0x80) {
-       if(debug & D_UTF8)FPRINTF(stdout,"extract_code_point code 5 problem, whatgot=%i, l=%i\n", whatgot, l);
        return invalid_unicode();
      };
      r = (r << 6) | (whatgot & 0x3f);
    };
-   if(debug & D_UTF8){FPRINTF(stdout, "extract_code_point 6, r=%x\n", r); fflush(NULL);};
    return r;
  }
 
@@ -2269,7 +2201,6 @@ from utf8 to unicode code points.
 int read_utf8_as_unicode(struct file_data *file_F){
   int r;
   r = simple_read_line(file_F->cur_line, MAX_LINE_LEN, file_F);
-  if (debug & D_UTF8) PRINTF("read_utf8_as_unicode: %i\n", file_F->line_no);
   if (r){
     utf8_line_to_codes(file_F->cur_line, file_F->code_line);    
   };
@@ -2297,10 +2228,6 @@ from keywords to ext chars is undertaken.
 
 int read_line_as_ext(struct file_data *file_F){
   int r = True;
-  if (debug & D_UTF8) {
-    PRINTF("read_line_as_ext, file_F->utf8=%i, file_F->name=%s\n", file_F->utf8, file_F->name);
-    fflush(NULL);
-  };
   if (file_F->utf8){
     if ((r = read_utf8_as_unicode(file_F))){code_line_to_ext(file_F);}
     else {return r;};    
@@ -2375,14 +2302,9 @@ of the keyword (inluding percents).
 unicode named_kw_to_unicode(char *line, int *len){
   unicode val;
   int kw_index;
-  if (debug & D_UTF8) message("named_kw_to_unicode 1:line=%s", line);
   kw_index = get_hol_kw(line, len, False, &dummy_F);
-  if (debug & D_UTF8) PRINTF("named_kw_to_unicode 2:kw_index=%i:*len=%i:\n", kw_index, *len);
   if (kw_index == NOT_FOUND){*len=0; return NOT_FOUND;}; 
   val = kwi.keyword[kw_index].uni;
-  if (debug & D_UTF8) PRINTF("named_kw_to_unicode 3:val=%i:\n", val);
-  /*  if (val = U_NOT_FOUND){*len=0; return U_NOT_FOUND;}; 
-      if (debug & D_UTF8) PRINTF("named_kw_to_unicode 4:val=%i:\n", val); */
   return val;
 }
 
@@ -2400,9 +2322,7 @@ percent enclosed name.
 
 unicode kw_to_unicode(char *line, int *len){
   unicode val;
-  if (debug & D_UTF8) message("kw_to_unicode 1:%s", line);
   val = percent_hex_to_unicode(line, len);
-  if (debug & D_UTF8) PRINTF("kw_to_unicode 2:*len=%i:val=%i\n", *len, val);
   if (*len>0) return val;
   val = named_kw_to_unicode(line, len);
   if (*len>0) return val;
@@ -2448,18 +2368,10 @@ unicode ext_or_kw_to_unicode(char *line, int *len){
   if (line[0] != '%'){
     if (line[0] == 0) return U_NOT_FOUND; 
     *len = 1;
-    if(debug & D_UTF8) {
-      PRINTF("ext_or_kw_to_unicode 1: line[0]=%i\n", line[0]);
-      fflush(NULL);
-    };
     if (line[0] & 0x80) return (ext_to_unicode(*line));
     else return line[0];
   };
   val = kw_to_unicode(line, len);
-  if(debug & D_UTF8) {
-    PRINTF("ext_or_kw_to_unicode 2: val=%x\n", val);
-    fflush(NULL);
-  };
   if (*len == 0) *len = 1; /* a percent not followed by a keyword */
   return val;
 }
@@ -2477,14 +2389,8 @@ void ext_seq_to_unicode(char *line, unicode codes[]){
   int ip = 0, op = 0, len = 0;
   unicode res;
   while (line[ip] != 0){
-    if (debug & D_UTF8) {
-      PRINTF("ext_seq_to_unicode 1:ip=%i, op=%i\n", ip, op); fflush(NULL);
-    };
     res = (line[ip] & 0x80) ? ext_to_unicode(line[ip]) : line[ip];
-    if (debug & D_UTF8) PRINTF("ext_seq_to_unicode 2: res=%x\n", res);
     if (res == U_NOT_FOUND){
-        if (debug & D_UTF8) PRINTF("ext_seq_to_unicode 3: len=%i, op=%i, ip=%i, line[ip]=%i\n",
-				   len, op, ip, line[ip]);
 	ip++;
       }
     else {
@@ -2501,7 +2407,7 @@ ext_kw_seq_to_unicode
 Takes a null terminated string of characters which are either asscii,
 or ProofPower extended characters, or percent enclosed keyword names
 (declared in the current keyword files) or percent enclosed ascii
-hexadecimal unicode code points and converst them to a null terminated
+hexadecimal unicode code points and converts them to a null terminated
 array of unicode code points. 
 */
 
@@ -2509,15 +2415,9 @@ void ext_kw_seq_to_unicode(char *line, unicode codes[]){
   int ip = 0, op = 0, len = 0;
   unicode res;
   while (line[ip] != 0){
-    if (debug & D_UTF8) {
-      PRINTF("ext_kw_seq_to_unicode 1:ip=%i, op=%i\n", ip, op); fflush(NULL);
-    };
     res = ext_or_kw_to_unicode(line+ip, &len);
-    if (debug & D_UTF8) PRINTF("ext_kw_seq_to_unicode 2: res=%x, len=%i\n", res, len);
     if (res == U_NOT_FOUND)
       while(len-- >0) {
-        if (debug & D_UTF8) PRINTF("ext_kw_seq_to_unicode 3: len=%i, op=%i, ip=%i, line[ip]=%i\n",
-				   len, op, ip, line[ip]);
 	codes[op++] = line[ip++];
       }
     else {
@@ -2550,7 +2450,6 @@ int read_line_as_ascii(struct file_data *file_F){
   int r = True;
   if (file_F->utf8){
     if ((r = read_utf8_as_unicode(file_F))){
-      if (debug & D_UTF8) FPRINTF(stdout, "read_line_as_ascii 1\n");
       code_line_to_ascii(file_F);}
     else {return r;};    
   }
@@ -2570,7 +2469,6 @@ output_ext_as_utf8
 
 void output_ext_as_utf8(char *line, FILE *file_F){
   static unicode codes[MAX_LINE_LEN+1];
-  if (debug & D_UTF8)  message("output_ext_as_utf8, line=%s", line);
   ext_seq_to_unicode(line, codes);
   output_unicode_sequence(codes, file_F);
 };
@@ -2583,7 +2481,6 @@ output_ext_kw_as_utf8
 
 void output_ext_kw_as_utf8(char *line, FILE *file_F){
   static unicode codes[MAX_LINE_LEN+1];
-  if (debug & D_UTF8)  message("output_ext_kw_as_utf8, line=%s", line);
   ext_kw_seq_to_unicode(line, codes);
   output_unicode_sequence(codes, file_F);
 };
@@ -2605,11 +2502,8 @@ This version will only translate ext codes, not keywords or literal code points.
 void
 transcribe_file_nkw_to_utf8(struct file_data *input_F, FILE *output_F){
   int r;
-  if(debug & D_UTF8) message1("transcribe_file_to_utf8 1");
   while (!feof(input_F->fp)) {
-    if(debug & D_UTF8) message1("transcribe_file_to_utf8 2");
     r=read_line_as_ext(input_F);
-    if(debug & D_UTF8) message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
     if(!(feof(input_F->fp) && r==0))
       output_ext_as_utf8(input_F->cur_line, output_F);
   };
@@ -2631,12 +2525,8 @@ which will be transformed.
 void
 transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F){
   int r;
-  if(debug & D_UTF8) message1("transcribe_file_to_utf8 1");
   while (!feof(input_F->fp)) {
-  if(debug & D_UTF8) message1("transcribe_file_to_utf8 2");
     r=read_line_as_ext(input_F);
-    if(debug & D_UTF8)
-      message("transcribe_file_to_utf8, input_F->cur_line=%s", input_F->cur_line);
     if(!(feof(input_F->fp) && r==0)){
       output_ext_kw_as_utf8(input_F->cur_line, output_F);};
   };
@@ -2657,7 +2547,6 @@ stream as FILE*.
 void
 transcribe_file_to_ext(struct file_data *input_F, FILE *output_F){
   int r;
-  if (debug) fflush(NULL);
   while (!feof(input_F->fp)) {
     r=read_line_as_ext(input_F);
     if(!(feof(input_F->fp) && r==0)){

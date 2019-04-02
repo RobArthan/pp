@@ -1,6 +1,6 @@
 =IGN
 ********************************************************************************
-usr001.doc: this file is part of the PPTex system
+usr001.pp: this file is part of the PPTex system
 
 Copyright (c) 2002 Lemma 1 Ltd.
 
@@ -8,18 +8,17 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% usr001.doc    ℤ $Date: 2011/07/27 13:04:13 $ $Revision: 3.34 $ $RCSfile: usr001.doc,v $
+% usr001.pp    ℤ $Date: 2011/07/27 13:04:13 $ $Revision: 3.34 $ $RCSfile: usr001.pp,v $
 %	usr001.tex
 
-doctex usr001 ; texdvi usr001
-doctex usr001 usr001A ; texdvi usr001
+pptex usr001 ; texdvi usr001
+pptex usr001 usr001A ; texdvi usr001
 bibtex usr001
 texdvi usr001 ; texdvi usr001 ; texdvi usr001 ; texdvi usr001
 dvipage usr001 &
 
 =TEX
 \documentstyle[hol1,11pt,fleqn,USR]{book}
-
 \USRmanual{Document Preparation}
 \USRref{USR001}
 \USRisbnl{978-1514276501}
@@ -131,20 +130,17 @@ aspects are oriented towards \LaTeX, but some are suitable for use with
 other typesetting systems, such as {\tt ptroff.}
 
 For typesetting the package consists of a \LaTeX\ style file (\ie, a
-macro suite) named {\tt hol1.sty}; some font files for screen use,
-namely, {\tt holnormal} for normal use
-and {\tt holdouble} for demonstrations; two shell
-scripts {\tt doctex} and {\tt texdvi} which are the recommended means
+macro suite) named {\tt hol1.sty}; some TrueType font files for screen use,
+namely, {\tt ProofPowerMono} and {\tt ProofPowerSerif}; two shell
+scripts {\tt pptex} and {\tt texdvi} which are the recommended means
 of preparing documents for typesetting and for running \LaTeX{} in
 normal use.  There are additional supporting programs which are
 normally invoked via the shell scripts but which may be called directly
 for special effects.
 
-The shell script {\tt doctex} (with the supporting programs) allows the
-user to prepare a \LaTeX\ file using an extended character set
-described in section~\ref{ExtCharSet}.
-With this character set the
-formal material appears on the screen much as it does in the printed
+The shell script {\tt pptex} (with the supporting programs) allows the
+user to prepare a \LaTeX\ file using UNICODE.
+The formal material appears on the screen much as it does in the printed
 document, and the document can be processed directly with {\Product}.
 Tools are available for editing files in this format.
 Under the X Windows System, {\tt xpp} is the recommended tool;
@@ -211,21 +207,20 @@ Z~paragraphs.
 
 To install the document processing package see section~\ref{Installation}.
 
-To use the package you prepare a file, say {\tt myfile.doc}, using an
-editor which supports an appropriate extended character font. The font {\tt
-holnormal.vfont} is recommended.
+To use the package you prepare a file, say {\tt myfile.pp}, using an editor
+for UNICODE files (e.g.{\tt xpp}) and  one of the supplied TrueType fonts.
 The characters available in this font are described in section~\ref{ExtCharSet}
 together with the character codes and the keystrokes used to access them.
 Another way of entering the extended characters is by copying from the
 palette which may be displayed with the command {\tt palette}.
 
 The form of the file is essentially that of a
-\LaTeX{} file except that you can use extended (\ie, non-ASCII)
-characters to type Z or HOL constructs, or constructs of other
-languages.  These characters are shown in section~\ref{ExtCharSet}
-below.  The remaining extended
-characters are used for bracketing formal text for printing and other
-processing, these characters are discussed elsewhere in this document.
+\LaTeX{} file except that you can include material in formal languaes
+including Z and HOL which require some processing before being acceptable
+to \LaTeX{} and are intended to be extracted for processing by other tools
+such as interactive proof tools, and typically make use of non-ascii
+UNICODE characters.
+These characters are shown in section~\ref{ExtCharSet}.
 
 The first \LaTeX\ command in the document (normally this is the
 \index{\BS documentstyle }\verb"\documentstyle" command) should
@@ -271,12 +266,12 @@ and then put the following command in your document preamble:
 	\usepackage{ProofPower}
 =TEX
 
-To process file {\tt myfile.doc} and produce a {\tt .dvi} file
-you run \index{\BS doctex }{\tt doctex} to form the {\tt.tex} file then
+To process file {\tt myfile.pp} and produce a {\tt .dvi} file
+you run \index{\BS pptex }{\tt pptex} to form the {\tt.tex} file then
 run \LaTeX{} (via \index{texdvi }{\tt texdvi}) as follows:
 
 =GFT
-	doctex myfile
+	pptex myfile
 	texdvi myfile
 =TEX
 
@@ -306,9 +301,9 @@ four times.  If bibliographies use \BibTeX{} then the program {\tt
 bibtex} should be run between the first and second execution of {\tt
 texdvi}.
 
-Program {\tt doctex} needs to be run once before the first execution of
+Program {\tt pptex} needs to be run once before the first execution of
 {\tt texdvi}, thereafter it only needs to be executed after the source
-file (e.g., {\tt myfile.doc}) is amended.
+file (e.g., {\tt myfile.pp}) is amended.
 
 %********************************************************************
 
@@ -322,7 +317,7 @@ Standard ML code, each surrounded\footnote{More precisely, the segments
 of Standard ML code are introduced with an `{\tt=SML}' and are normally
 concluded by an `{\tt=TEX}' directive, but any other directive line may
 be used.} by \index{=SML } `{\tt=SML}' and
-`{\tt=TEX}', the command `{\tt docsml~myfile}' extracts the code
+`{\tt=TEX}', the command `{\tt ppsml~myfile}' extracts the code
 segments and writes them into the file {\tt myfile.sml}.  There are no
 restrictions on the size or contents of the code segments, they may
 contain complete or partial declarations etc., a segment may contain
@@ -338,13 +333,13 @@ The Standard ML code segment is an example of the range of types of
 directive line is one of the types of `narrative text'.  Other types
 of formal and narrative text are discussed later on.
 
-Within narrative text segments extended characters may be used to
+Within narrative text segments UNICODE characters may be used to
 obtain many symbols not found in the normal keyboard.  These include
 many mathematical symbols, particularly those of~Z, plus the Greek
 letters.
 
-Within formal text segments the extended characters are available plus
-a number of percent keywords.  Each extended character has a
+Within formal text segments UNICODE characters are available plus
+a number of percent keywords.  Each supported non-ascii character has a
 corresponding percent keyword, but not vice versa.  The percent
 keywords give access to further symbols.
 
@@ -370,7 +365,7 @@ their special meaning, they are just printed.
 An additional pair of extended characters, `\StartIndex' and
 `\EndIndex' may be used to help make an index of defined terms for the
 document.  If you type, say, `\StartIndex
-\verb"InterestingThing"\EndIndex', somewhere in {\tt myfile.doc} then
+\verb"InterestingThing"\EndIndex', somewhere in {\tt myfile.pp} then
 \index{InterestingThing }
 InterestingThing \label{InterestingThing} will be printed in bold and
 the \LaTeX{} macro \index{\BS index }\verb"\index" will be  called with `InterestingThing'
@@ -423,9 +418,9 @@ and `\EndIndex' respectively.
 
 %--------------------------------------------------------------------
 
-\subsection{Indexing Extended Characters}
+\subsection{Indexing Non-Ascii Characters}
 
-Most of the extended characters (which are shown in
+Most of the supported non-ascii characters (which are shown in
 section~\ref{ExtCharSet}) may be used in names to be indexed, these
 characters may be the whole name.  Characters that cannot be indexed
 are described in section~\ref{ExtCharSet}.
@@ -465,7 +460,7 @@ Which prints as:
 These lines produce index entries (as shown in the index at the end of
 this document) for {\tt Index-1} and {\tt Index-2}, i.e., without the
 quotation characters.  No index entry is made for {\tt Index-3}.
-Processing by {\tt docsml} discards the first two pairs of indexing
+Processing by {\tt ppsml} discards the first two pairs of indexing
 characters but retains those around {\tt Index-3}.  When the text is
 compiled in the extended Standard~ML of \Product\ the indexing characters
 in the {\tt "\StartIndex Index-3\EndIndex "} are retained as part
@@ -485,11 +480,11 @@ This document includes two types of indexed entries.  First, many of
 the examples of formal text define some name, and these are indexed
 using the `\StartIndex' and `\EndIndex' characters.  Second, the names
 of various programs described as part of the text formatting package
-are indexed, for example, the program {\tt doctex} is described in a
+are indexed, for example, the program {\tt pptex} is described in a
 section starting:
 
 =GFT
-	\section{{\tt doctex}\index{doctex }}
+	\section{{\tt pptex}\index{pptex }}
 =TEX
 
 If an index-like feature for general text is required then the use of
@@ -499,13 +494,13 @@ the \LaTeX\ glossary system, see~\cite{lamport86}, is suggested.
 
 \subsection{Indexing and {\tt .sml} Files}
 
-When {\tt docsml} creates the {\tt .sml} file any indexing characters
+When {\tt ppsml} creates the {\tt .sml} file any indexing characters
 and keywords in `{\tt=SML}' sections are deleted.  If indexing
 characters or keywords are required in the {\tt .sml} file then the
 `{\tt=SMLLITERAL}' category, see section~\ref{OtherSMLCategories},
 should be used.
 
-Note that {\tt docsml} attempts to convert text in an `{\tt=SMLLITERAL}' section
+Note that {\tt ppsml} attempts to convert text in an `{\tt=SMLLITERAL}' section
 to Standard~ML by a simple algorithm: all extended characters are
 converted to their string literal form, i.e., to a backslash followed
 by their character code as a three-digit decimal number.  This means
@@ -520,7 +515,7 @@ provoke error messages from the Standard~ML compiler.
 A source document is divided into a number of segments of text of
 various categories.  Each segment starts with a directive line whose
 first letter is an equals~`{\tt=}' sign or is one of a small number
-of the extended characters.  These extended characters are used for
+of non-ascii characters.  These characters are used for
 categories such as Z~schemas and they are discused later, see
 section~\ref{ZLanguageMaterial}.
 
@@ -546,8 +541,8 @@ sections, particularly in sections~\ref{OtherCategories}.
 
 Text to be processed by the normal rules of \LaTeX{} is introduced by a
 directive line containing the four characters \index{=TEX } `{\tt=TEX}',
-this text is copied into the {\tt.tex} file by {\tt doctex} but
-discarded by {\tt docsml}.  Program {\tt doctex} additionally converts
+this text is copied into the {\tt.tex} file by {\tt pptex} but
+discarded by {\tt ppsml}.  Program {\tt pptex} additionally converts
 all extended characters in this category into calls of \LaTeX{} macros
 that, in most cases, will print the image of the extended character.
 
@@ -558,13 +553,13 @@ that, in most cases, will print the image of the extended character.
 Standard~ML source code, which is an example of formal text, is headed
 by a directive line containing the four
 characters \index{=SML } `{\tt=SML}', this text is copied into the
-{\tt.sml} file by {\tt docsml} to form the text to be read by the
-Standard~ML compiler.  Program {\tt docsml} actually handles an
+{\tt.sml} file by {\tt ppsml} to form the text to be read by the
+Standard~ML compiler.  Program {\tt ppsml} actually handles an
 extended Standard~ML which is described in~\cite{DS/FMU/IED/USR005}.
 Text in the~`{\tt=SML}' category is written in a
 WYSIWYG\footnote{Acronym:  WYSIWYG = what you see is what you get.}
 manner where the text is written exactly as it would be presented to
-the Standard~ML compiler.  Such text is processed by {\tt doctex} to
+the Standard~ML compiler.  Such text is processed by {\tt pptex} to
 obtain a verbatim-like layout on the printed page.
 
 %--------------------------------------------------------------------
@@ -619,8 +614,8 @@ need to be added at the start of lines.
 \subsection{Ignored Text}
 
 Text headed by the directive line \index{=IGN } `{\tt=IGN}' or
-\index{=IGNORE } `{\tt=IGNORE}' is discarded by both {\tt doctex} and
-{\tt docsml}, such text segments may be used for adding commentary and
+\index{=IGNORE } `{\tt=IGNORE}' is discarded by both {\tt pptex} and
+{\tt ppsml}, such text segments may be used for adding commentary and
 notes into a document but which are not to be extracted.  They might
 also be used to remove (or comment out) sections of a document without
 actually deleting the text.
@@ -632,7 +627,7 @@ discarded.
 \newpage
 \subsection{Example}
 
-A simple document in {\tt myfile.doc} containing two Standard~ML
+A simple document in {\tt myfile.pp} containing two Standard~ML
 functions might be written as follows.  Recall that the text before the
 first directive line is ignored, thus this area may be used to include
 version information about the document including keywords understood by
@@ -641,7 +636,7 @@ the UNIX {\tt sccs} program.
 {\catcode`\!=\active
 \def!{\%}% This is to stop SCCS messing up the real example
 =GFTSHOW Document example
-	File: myfile.doc
+	File: myfile.pp
 	SCCS version: !Z! !E! !I! !M!
 
 	=TEX
@@ -652,7 +647,7 @@ the UNIX {\tt sccs} program.
 	to calculate factorials and Fibonacci numbers.
 
 	=SML
-	fun ⦏factorial⦎ (n:int) : int = (
+	fun %SX%factorial%EX% (n:int) : int = (
 		if n > 0
 		then	n * factorial(n-1)
 		else	1
@@ -734,7 +729,7 @@ Index of defined names.
 
 \bigskip
 
-Processing the same example with {\tt docsml} would produce the file
+Processing the same example with {\tt ppsml} would produce the file
 {\tt myfile.sml} containing the following text.
 
 =GFTSHOW
@@ -757,8 +752,8 @@ Processing the same example with {\tt docsml} would produce the file
 \section{Z Language Material} \label{ZLanguageMaterial}
 
 Two categories of Z~material are supported, both will be printed (via
-{\tt doctex}), but only one is included in the output from {\tt
-docsml}.  Here they are termed formal and informal.  The
+{\tt pptex}), but only one is included in the output from {\tt
+ppsml}.  Here they are termed formal and informal.  The
 formal Z~material is labelled with~`Z' above it top left hand corner
 whereas the informal material has `Informal Z', see
 section~\ref{TextLabels}.
@@ -1031,7 +1026,7 @@ function `$labelled\-_product\-_spec$' in~\cite{LEMMA1/HOL/USR029}.
 
 \section{Other Categories} \label{OtherCategories}
 
-Programs {\tt doctex} and {\tt docsml} support the categories described
+Programs {\tt pptex} and {\tt ppsml} support the categories described
 in the preceding sections via a `view-file' and a `keyword-file'
 (i.e., command files for the program {\tt sieve}, see
 section~\ref{AboutSieve}) which describes the categories available and
@@ -1061,19 +1056,19 @@ this format.
 Category name				& Copied by		& Type		\\
 \hline\hline
 
-{\tt=DOC}\index{=DOC }			& {\tt doctex}		& Formal	\\
-					& {\tt docsml}		& 		\\
-{\tt=SYNOPSIS}\index{=SYNOPSIS }	& {\tt doctex}		& Narrative	\\
-{\tt=DESCRIBE}\index{=DESCRIBE }	& {\tt doctex}		& Narrative	\\
-{\tt=FAILURE}\index{=FAILURE }		& {\tt docsml}		& Formal	\\
-					& {\tt doctex}		& 		\\
-{\tt=FAILUREC}\index{=FAILUREC }	& {\tt doctex}		& Narrative	\\
-{\tt=EXAMPLE}\index{=EXAMPLE }		& {\tt doctex}		& Narrative	\\
-{\tt=USES}\index{=USES }		& {\tt doctex}		& Narrative	\\
-{\tt=COMMENTS}\index{=COMMENTS }	& {\tt doctex}		& Narrative	\\
-{\tt=SEEALSO}\index{=SEEALSO }		& {\tt doctex}		& Narrative	\\
-{\tt=KEYWORDS}\index{=KEYWORDS }	& {\tt doctex}		& Narrative	\\
-{\tt=ENDDOC}\index{=ENDDOC }		& {\tt doctex}		& Narrative	\\\hline
+{\tt=DOC}\index{=DOC }			& {\tt pptex}		& Formal	\\
+					& {\tt ppsml}		& 		\\
+{\tt=SYNOPSIS}\index{=SYNOPSIS }	& {\tt pptex}		& Narrative	\\
+{\tt=DESCRIBE}\index{=DESCRIBE }	& {\tt pptex}		& Narrative	\\
+{\tt=FAILURE}\index{=FAILURE }		& {\tt ppsml}		& Formal	\\
+					& {\tt pptex}		& 		\\
+{\tt=FAILUREC}\index{=FAILUREC }	& {\tt pptex}		& Narrative	\\
+{\tt=EXAMPLE}\index{=EXAMPLE }		& {\tt pptex}		& Narrative	\\
+{\tt=USES}\index{=USES }		& {\tt pptex}		& Narrative	\\
+{\tt=COMMENTS}\index{=COMMENTS }	& {\tt pptex}		& Narrative	\\
+{\tt=SEEALSO}\index{=SEEALSO }		& {\tt pptex}		& Narrative	\\
+{\tt=KEYWORDS}\index{=KEYWORDS }	& {\tt pptex}		& Narrative	\\
+{\tt=ENDDOC}\index{=ENDDOC }		& {\tt pptex}		& Narrative	\\\hline
 \end{tabular}
 \end{center}
 
@@ -1091,20 +1086,20 @@ Text may be written or appended to files.  This is useful for documents
 which contain shell scripts, make files and data files, it allows them
 to be written and documented using the same mechanisms as, for example,
 Standard~ML code.  Category \index{=DUMP } `{\tt=DUMP}' allows formal
-text to be printed by {\tt doctex} plus {\tt texdvi} and extracted into
-a named file by {\tt docsml}.  The directive line `{\tt=DUMP~auxfile1}'
-indicates to {\tt docsml} that the following lines are to be written to
+text to be printed by {\tt pptex} plus {\tt texdvi} and extracted into
+a named file by {\tt ppsml}.  The directive line `{\tt=DUMP~auxfile1}'
+indicates to {\tt ppsml} that the following lines are to be written to
 the file {\tt auxfile1} overwriting if it already exists.  When
 printed, the vertical line at the left of the formal text is headed
 with the text `{\tt Text dumped to file auxfile1}'.  Category
 \index{=DUMPMORE } `{\tt=DUMPMORE}' allows formal text to be appended to
 a file, the directive line `{\tt=DUMPMORE~auxfile2}' indicates to {\tt
-docsml} that the following lines are to be appended to the file {\tt
+ppsml} that the following lines are to be appended to the file {\tt
 auxfile2}, the header of the printed form replaces {\tt dumped} with
 {\tt appended}.
 
 Within the formal text of `{\tt=DUMP}' and `{\tt=DUMPMORE}' categories
-extended characters are allowed.  The text written out by {\tt docsml}
+extended characters are allowed.  The text written out by {\tt ppsml}
 will have any indexing characters (i.e., `\StartIndex' and `\EndIndex')
 deleted.  This allows, e.g., makefile target names to be indexed but
 not have the indexing characters included in the makefile.
@@ -1124,8 +1119,8 @@ open the file is considered a serious error: sieving will stop.
 Categories \index{=SH } `{\tt=SH}' and \index{=CSH } `{\tt=CSH}' may be
 used to execute arbitrary shell commands.  The text following the
 directive is written to the standard input of a Bourne shell or a
-C-shell, respectively, by {\tt docsml} (see {\tt sh(1)} and {\tt
-csh(1)} in the Sun UNIX manual set).  The text in these categories is
+C-shell, respectively, by {\tt ppsml} (see {\tt sh(1)} and {\tt
+csh(1)} in the UNIX or Linux manual set).  The text in these categories is
 printed with the shell name at the top of the left hand vertical bar.
 These categories are useful for, e.g., setting the execute flag on
 shell scripts created with the `{\tt=DUMP}' category.
@@ -1134,10 +1129,10 @@ shell scripts created with the `{\tt=DUMP}' category.
 
 Text from other files may be included by using the \index{=INCLUDE }
 `{\tt=INCLUDE}' category.  The text of this category is a list of file
-names.  When printed these names are just listed.  With {\tt docsml}
+names.  When printed these names are just listed.  With {\tt ppsml}
 the contents of the files are included by supplying the full list of
 file names as arguments to the UNIX command {\tt cat}, see {\tt cat(1)}
-in the Sun UNIX manual set.
+in the UNIX or Linux manual set.
 
 \bigskip
 
@@ -1194,7 +1189,7 @@ label is printed.
 Text in the category \index{=SMLPLAIN } `{\tt=SMLPLAIN}' is treated
 similarly to that of text in category `{\tt=SMLLABELLED}', the
 distinction is that keywords are not recognised when processed by {\tt
-docsml}.  This category is useful for text that includes percent
+ppsml}.  This category is useful for text that includes percent
 characters that are not to be otherwise processed.  Examples include:
 \TeX{} and \LaTeX{} macro files, where percent characters normally
 denote comments; and text that includes SCCS keywords.
@@ -1202,17 +1197,17 @@ denote comments; and text that includes SCCS keywords.
 Some sections of Standard~ML include indexing characters that are part
 of the program text rather than controlling how that text is to be
 printed.  A small number of other characters, those used for Z~box
-drawing, need are treated in the same manner.  Text in the category
+drawing, are treated in the same manner.  Text in the category
 \index{=SMLLITERAL } `{\tt=SMLLITERAL}' will be printed so that all the
 extended characters are visible, in particular the `\StartIndex' and
 `\EndIndex' are displayed and do not cause indexing.  When processed by
-{\tt docsml} all of the extended characters are converted to the
+{\tt ppsml} all of the extended characters are converted to the
 Standard~ML string literal form (namely backslash plus three decimal digits)
 and thus will be read by Standard~ML but keywords will not be recognised.
 Thus `{\tt=SMLLITERAL}' is useful when extended characters occur only
 in Standard~ML strings.
-Note that in the extended Standard~ML of \Product\
-indexing characters in strings are retained but elsewhere they are
+Note that in the extended Standard~ML of \Product,
+indexing characters in strings are retained, but elsewhere they are
 discarded, see also section~\ref{IndexingStrings}.
 
 Category `{\tt=SMLLITERAL}' is intended for use when extended
@@ -1246,7 +1241,7 @@ THSML		thydoc
 \subsection{General Formal Text}
 
 Sections of formal text which are to be printed in the style of the
-`{\tt=SML}' but discarded by {\tt docsml} are included in the
+`{\tt=SML}' but discarded by {\tt ppsml} are included in the
 \index{=GFT } `{\tt=GFT}' category.  This allows an optional label
 on the directive line which is printed at the head of the left hand
 vertical bar.  This category is used by many of the examples in this
@@ -1649,8 +1644,11 @@ For the formal text categories (of which only the `{\tt=SML}' and
 as `\verb|\|', `\verb|$|', `\verb|&|', `\verb|#|', `\verb|$|' and
 `\verb|_|' are not to be treated specially, they are just to be
 printed.  The intention is that the formal text categories give a
-verbatim representation of their contents apart from extended
-characters and percent keywords which are replaced by the symbols.
+verbatim representation of their contents including any supported
+non-ascii UNICODE characters which are supported.
+The set of supported non-ascii UNICODE characters is determined
+by the {\tt sievekeyword} file, which shows how these characters are to be
+rendered by \LaTeX{}.
 
 The package has also been designed on the assumption
 that if you use the \LaTeX\ \verb"\begin{...}" command
@@ -1663,7 +1661,7 @@ symbols \etc) must be requested explicitly.
 See the style file for details of how this is done.}
 (but, see \ref{TheoryListings} below for an exception to this).
 The package
-therefore only serves to translate extended characters
+therefore only serves to translate non-ascii characters
 in text which is not enclosed in a pair of
 bracketing characters.
 It does not put in controls
@@ -1672,7 +1670,7 @@ on the assumption that you will want to set the
 spacing yourself and to use the special characters
 as special characters.
 
-Extended characters may be used in the \LaTeX\ sectioning commands, but
+Non-ascii characters may be used in the \LaTeX\ sectioning commands, but
 in such cases
 they should not be used in maths mode, \ie, do not enclose them in
 dollar `\verb|$|' signs.  The sectioning commands are the commands that
@@ -2108,7 +2106,7 @@ HOLindexPlain }\verb|\HOLindexPlain| causes indexed terms to be shown
 in the same font as their enclosing text and macro \index{\BS
 HOLindexBold }\verb|\HOLindexBold| restores the bold font.
 
-It may useful to be able to turn of indexing over some blocks of text
+It may useful to be able to turn off indexing over some blocks of text
 even though the indexing macros (or extended characters) are still
 used.  Macros \index{\BS HOLindexOff }\verb|\HOLindexOff| and
 \index{\BS HOLindexOn }\verb|\HOLindexOn| turn on and off,
@@ -2238,7 +2236,7 @@ Sieving category
 
 Error and warning messages produced by \LaTeX\ include line numbers,
 these refer to the {\tt.tex} file that \LaTeX\ actually reads, not to
-the {\tt.doc} file.  Whenever \LaTeX\ opens a file for reading it
+the {\tt.pp} file.  Whenever \LaTeX\ opens a file for reading it
 prints an open bracket `{\tt(}' to the terminal and to the {\tt.log} file,
 followed by the file name.  A matching closing bracket `{\tt)}' is
 printed when \LaTeX\ closes the file.
@@ -2258,7 +2256,7 @@ messages the translations are shown in
 section~\ref{ExtendedCharImages}.
 
 Some extended character values are reserved for future expansion.  If
-one of these is found in a {\tt.doc} file then the default action is
+one of these is found in a {\tt.pp} file then the default action is
 for the style file to issue an error message and display the character
 as its hexadecimal value enclosed in a box.  For example, the character
 value $128\sb{10}$ would be shown as ``{\NoMoaning \makeatletter
@@ -2276,11 +2274,11 @@ section~\ref{RuleErrorMessages} gives details.
 Most of the processing tasks required to produce a printed form of a
 document are encapsulated in shell scripts documented here.  These
 scripts use other programs described later in this document.  The idiom
-for typesetting the literate script, {\tt myfile.doc} is to run the
+for typesetting the literate script, {\tt myfile.pp} is to run the
 following scripts.
 
 =GFT
-	doctex myfile
+	pptex myfile
 	texdvi myfile
 =TEX
 
@@ -2289,22 +2287,13 @@ for printing with {\tt pstex} or displaying with {\tt dvipage}.
 The names of these programs are formed by concatenating the extension
 of the source file with the extension of the main output file.
 
-The reason for having separate commands, {\tt doctex} and {\tt
+The reason for having separate commands, {\tt pptex} and {\tt
 texdvi}, is that one usually needs to run \LaTeX\ several times (\ie,
 using {\tt texdvi} up to four times) to ensure that contents lists,
 references, indexes and similar are all in step.
 
 Similar shell scripts are provided to extract Standard~ML text from a
 document to create the {\tt.sml} file.
-
-All scripts whose name begins with `{\tt doc}' are now available in
-a variant beginning `{\tt pp}' which expects a file coded as utf8 unicode
-instead of one using the {\Product} extended character set.
-The output formats from these files are determined by the view-file,
-and may therefore be encoded either as utf8 unicode or
-in the {\Product} extended character set (though in some cases, e.g.
-{\LaTeX} output, special target file specific transformations may be
-invoked by the viewfile).
 
 %********************************************************************
 
@@ -2317,26 +2306,6 @@ previous sections of this document.  For these shell scripts the {\tt
 -f} option may be used to name an alternate view-file, similarly {\tt
 -k} may be used to name additional keyword-files.   Option {\tt-K}
 may be used to suppress the default keyword-file.
-
-%********************************************************************
-
-\section{{\tt doctex\index{doctex }}}
-\label{DocTexProg}
-
-=GFT
-	doctex [-v] [-f view_file_name] [-K] [-k keyword_file_name] <files...>
-=TEX
-
-Each source file is read and sieved to produce a corresponding
-{\tt.tex} file.
-
-File name arguments may be the whole name of the {\tt .doc} file or just the
-stem part, i.e., for  file {\tt myfile.doc} either {\tt myfile.doc} or
-{\tt myfile} may be used.
-
-If the {\tt -v} option is given the programs prints out the names of
-the source and main output files.  The {\tt -f}, {\tt-K} and {\tt -k} options
-are described in section~\ref{FKOptions}.
 
 %********************************************************************
 
@@ -2360,20 +2329,6 @@ are described in section~\ref{FKOptions}.
 
 %********************************************************************
 
-\section{{\tt docsml\index{docsml }}}
-
-=GFT
-	docsml [-v] [-f view_file_name] [-K] [-k keyword_file_name] <files...>
-=TEX
-
-Each source file is read and sieved to produce a corresponding
-{\tt.sml} file.
-
-File name arguments and options are the same as with program {\tt doctex}
-in section~\ref{DocTexProg}.
-
-%********************************************************************
-
 \section{{\tt ppsml\index{ppsml }}}
 
 =GFT
@@ -2386,19 +2341,6 @@ Each source file is read and sieved to produce a corresponding
 File name arguments and options are the same as with program {\tt pptex}
 in section~\ref{PpTexProg}.
 
-%********************************************************************
-
-\section{{\tt doctch\index{doctch }}}
-
-=GFT
-	doctch [-v] [-f view_file_name] [-K] [-k keyword_file_name] <files...>
-=TEX
-
-Each source file is read and sieved to produce a corresponding
-{\tt.tch} file.
-
-File name arguments and options are the same as with program {\tt doctex}
-in section~\ref{DocTexProg}.
 
 %********************************************************************
 
@@ -2414,19 +2356,6 @@ Each source file is read and sieved to produce a corresponding
 File name arguments and options are the same as with program {\tt pptex}
 in section~\ref{PpTexProg}.
 
-%********************************************************************
-
-\section{{\tt doctds\index{doctds }}}
-
-=GFT
-	doctds [-v] [-f view_file_name] [-K] [-k keyword_file_name] <files...>
-=TEX
-
-Each source file is read and sieved to produce a corresponding
-{\tt.tds} file.
-
-File name arguments and options are the same as with program {\tt doctex}
-in section~\ref{DocTexProg}.
 
 %********************************************************************
 
@@ -2481,29 +2410,6 @@ If the {\tt -b} option is given, {\BibTeX} is run after running {\LaTeX}.
 
 %********************************************************************
 
-\section{{\tt docpr\index{docpr }}}
-
-=GFT
-	docpr [-n] [-p] [-s] [-v] [-w width] <files...>
-=TEX
-
-This program produces a verbatim listing of one or more files which
-may contain characters in the extended character set.
-By default the listings are sent to a printer using {\tt pstex}
-The {\tt -n} option is used to add line numbers to the listings.
-The {\tt -p} option is preserve the {\tt.dvi} file, i.e., it is not
-deleted when {\tt docpr} completes.
-The {\tt -s} option causes the output to be sent to the screen
-previewer {\tt dvipage}, allowing selected pages to be printed
-using the appropriate {\tt dvipage} commands.
-The {\tt -v} option causes details of some of the files read and
-written (but not all of the \LaTeX{} auxiliary files) to be listed on
-the standard output.  Long lines are folded to a width of~80 characters
-to allow the whole line to be listed, the {\tt -w} option may be used
-to alter the folding point.
-
-%********************************************************************
-
 \section{{\tt pppr\index{pppr }}}
 
 =GFT
@@ -2524,32 +2430,6 @@ written (but not all of the \LaTeX{} auxiliary files) to be listed on
 the standard output.  Long lines are folded to a width of~80 characters
 to allow the whole line to be listed, the {\tt -w} option may be used
 to alter the folding point.
-
-%********************************************************************
-
-\section{{\tt docdvi\index{docdvi }}}
-
-=GFT
-	docdvi [-v] [-f view_file_name] [-K] [-k keyword_file_name]
-		[-p TeX_program_name] [-%calN%] <filename> ...
-=TEX
-
-This program that combines the actions of {\tt doctex}, {\tt bibtex}
-(which is part of the basic \TeX{} distribution) and {\tt texdvi} with
-the intention of fully processing a simple document from its {\tt.doc}
-form to a printable {\tt.dvi} file.  The option $-\cal N$ controls how
-many times \LaTeX{} should be invoked, the default is three (i.e.,
-`$-3$'), the values of $\cal N$ may be in the range~1 to~4 inclusive.
-\LaTeX{} and {\tt bibtex} are run so that if they detect errors and
-thus would normally prompt for input they will read an end of file and
-thus stop immediately.
-
-In some cases an extra run of \LaTeX{} may be required.  In these cases
-\LaTeX{} will output the message: `{\em LaTeX Warning: Label(s) may
-have changed. Rerun to get cross-references right.}
-
-The remaining options are the same as for the programs {\tt doctex} in
-section~\ref{DocTexProg} and {\tt texdvi} in section~\ref{TexDviProg}.
 
 %********************************************************************
 
@@ -2576,50 +2456,6 @@ have changed. Rerun to get cross-references right.}
 
 The remaining options are the same as for the programs {\tt pptex} in
 section~\ref{PpTexProg} and {\tt texdvi} in section~\ref{TexDviProg}.
-
-%********************************************************************
-
-\section{{\tt conv\_ascii, conv\_extended, conv\_utf8\index{conv\_ascii}\index{conv\_extended}\index{conv\_utf8}}}
-
-=GFT
-	conv_ascii [-r] [-K] [-k keyword_file_name] <filename> ...
-	conv_extended [-r] [-K] [-k keyword_file_name] <filename> ...
-	conv_utf8 [-r] [-K] [-k keyword_file_name] <filename> ...
-=TEX
-
-Three codings are available for \Product\ documents.
-
-They may be coded in ASCII, using \% keywords for non-ascii characters.
-Alternatively they may be encoded using the \Product\ extended character set, in which the character codes from 128 to 255 are used for frequently used non-ascii characters, some other characters (determined by the {\tt sievekeyword} file) may be encoded using a name for the character enclosed in \% characters and any other UNICODE character may be included by giving its UNICODE code point in hexadecimal or decimal enclosed in \% characters.
-They may also be encoded using their UNICODE code in a utf-8 file.
-In the former two cases the file should have a {\tt .doc} suffix, in the latter a {\tt .pp} suffix.
-
-Conversion between these formats is done by chosing the command with the appropriate name, i.e. $conv\_ascii$ to ASCII, $conv\_extended$ to convert to the \Product\ extended character set, and $conv\_utf8$ to convert to {\tt utf-8}.
-
-The $filename$ arguments may be just the base-name, perhaps with a directory name prefix, or may include a {\tt.doc} suffix or a {\tt .pp} suffix.
-If more than one is present and the suffix is not given on the command line, then the program will fail.
-
-By default, the result of the conversion is checked by converting in the opposite direction and comparing with the input.
-If the check is successful, the source file is deleted and the destination file is saved with the suffix appropriate to the output format.
-If the check is not successful then the source file is not deleted, and if the output file would have had the same suffix (i.e. in conversions to and from ASCII and the \Product\ extended character set) then the output file will be saved with the suffix {\it .asc} or {\it .ext} as appropriate.
-
-If $-r$ is specified no check is made and the output of the conversion is placed
-in a file with suffix {\tt.asc}, {\tt.ext} or {\tt .pp}, as appropriate.
-
-Note that the check will always fail on a file containing a mixture of extended
-characters and ASCII keywords for the extended characters (not necessarily if the file contains keywords for unicode code points not corresponding to extended characters).
-Use $-r$ and then, if all is well, overwrite the {\tt.doc} file with the {\tt.asc} or {\tt.ext} file using $mv(1)$ or $cp(1)$ to convert a such file into a homogeneous one.
-Also note that {\tt conv\_utf8} assumes that its input file is in the extended character set.
-If if is in ASCII then the conversion will be correct, but the check will fail.
-In this case, either use the {\tt -r} option or apply {\tt conv\_ext} before {\tt conv\_utf8}.
-
-The check will also fail if the file is already in the desired format,
-in which case there is no need to re-run the conversion program.
-
-In the case of conversion to utf-8, extended characters or their corresponding keyword will be replaced by the corresponding unicode code point encoded in utf-8.
-Any other keyword which has been assigned a code point will be converted to that uncode code point, and any explicit unicode code point (in the form \%\#x\emph{HHHHHH}\%) will also be converted to that code point.
-
-The $-K$ and $-k$ options indicate the keyword files to be used to determine the mapping of keywords to UNICODE code points.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -2744,7 +2580,7 @@ Options may be merged provided all but the last have no arguments.
 Thus the string~`{\tt -v~-l~-d~1}' may be written as~`{\tt -vld~1}'. {}
 However, the following strings will not have the desired effect:~`{\tt
 -dlv~1}', `{\tt -ldv~1}' and `{\tt -ld1v}' --- options are recognised
-by the UNIX library function {\tt getopt(3)}, see the Sun UNIX manual
+by the UNIX library function {\tt getopt(3)}, see the UNIX or Linux manual
 for further details.
 
 
@@ -2873,8 +2709,8 @@ significant in the echoing actions described below).
 
 \subsection{Keyword File} \label{KeywordFile}
 
-The keyword file gives the association of extended characters with
-keywords and the \LaTeX{} macros needed to print them.
+The keyword file gives the association of keywords with character codes
+and \LaTeX{} macros which may be used to print them.
 
 The standard keyword file, {\tt sievekeyword}, may be used as an
 example.  It may be found, assuming the document processing system is
@@ -2886,7 +2722,7 @@ installed, by using the {\tt findfile} program as follows.
 
 \bigskip
 
-Multiple keyword file may be used, the effect is as if they were
+Multiple keyword files may be used, the effect is as if they were
 concatenated and then read as a single file.  The first keyword file
 read is the default {\tt sievekeyword}, unless the `{\tt-K}' option is
 given.  After this any other keyword files named on the command line
@@ -2911,18 +2747,18 @@ following words.
 	equivalent character or if there is no character then
 	the value~{\tt-1} is used.  The fourth element may be omitted if
 	the third is not~{\tt-1}, if present it gives a \LaTeX{}
-	macro suitable for printing this keyword, it may contain white
-	space.
+	macro suitable for printing the symbol designated by the keyword,
+	it may contain white space.
 
 	The \LaTeX{} macro is used when producing text from the {\tt
 	cat} action with the {\tt latex} option set.  If it is not
-	provided then the extended character or keyword is output in
+	provided then the character or keyword is output in
 	the \index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal NN$\verb|{}|' form
 	(see section~\ref{ConvertExtended}).  If both a character code
 	and a \LaTeX{} macro are given then the macro element is output
 	rather than the \index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal
 	NN$\verb|{}|' form of the extended character code.
-	For the {\tt cat} action with the {\tt xelatex} option set,
+	For the {\tt cat} action with the {\tt utf8out} option set,
 	keywords for which a UNICODE code point has been provided will
 	be output as the {\tt utf-8} encoding of that code point.
 
@@ -2939,24 +2775,24 @@ following words.
 	including a sequence of characters matching the regular expression
 	(or the rest of the input line if no match is found).
 	
-\ITEM{index} Same format as {\tt simple} keywords, but denotes an
-	extended character and keyword used for surrounding text to be
+\ITEM{index} Same format as {\tt simple} keywords, but denotes a
+	UNICODE character and keyword used for surrounding text to be
 	indexed.
 
 \ITEM{directive} Same format as {\tt simple} keywords, but denotes that the
-	extended character is a directive character that is a complete
+	character is a directive character that is a complete
 	category name.  These keywords must not\footnote{The reason is
 	that the extended category name has the extended character as
 	its first character.  Source file lines starting with keywords
-	are, effectively, modified so that the extended character
+	are, effectively, modified so that the character
 	replaces the keyword.} have a character code of~{\tt-1}.
 
 \ITEM{startdirective} Same as {\tt directive} keywords, but the
-	extended character is used as the first character of category
+	character is used as the first character of category
 	names.
 
 \ITEM{verbalone} Same format as {\tt simple} keywords, but indicates
-	the extended characters and percent keywords that are
+	the characters and percent keywords that are
 	recognised by the {\tt verbalone} option to the {\tt cat}
 	action of the view-file.
 
@@ -2967,15 +2803,15 @@ following words.
 	is defined to be the same as the third-element keyword.
 
 \ITEM{white} Same format as {\tt simple} keywords, but indicates
-	that the keyword and extended character are of a type that
+	that the keyword and character are of a type that
 	is generally ignored or treated as a space character.
 
 \end{description}}
 
-The UNICODE code points may be numeric hexadecimal, octal or decimal.  They
-must be in the appropriate ranges or the value~$-1$.
-{} Hexadecimal numbers start with {\tt 0x} and may use
-upper or lower case letters.  Octal numbers start with {\tt 0}.
+The UNICODE code points must be numeric hexadecimal in
+the appropriate ranges, or the value~$-1$.
+Hexadecimal numbers start with {\tt 0x} and may use
+upper or lower case letters.
 
 To illustrate the distinction between {\tt directive} and {\tt
 startdirective} keywords consider the following definitions where the
@@ -3003,19 +2839,19 @@ default keyword-file.
 
 =GFTSHOW
 	# keywordfile  @(#) 92/01/15 1.1 sievekeyword
-	⦁		simple	183
+	%=>%		simple	183
 	%>"		simple	174
-	─		white	0xfc
-	├		verbalone	247
-	■		directive	176
-	⦎		index	221
-	Π		simple	144
+	%BH%		white	0xfc
+	%BT%		verbalone	247
+	%EFT%	directive	176
+	%EX%		index	221
+	%Pi%		simple	144
 	%Q"		simple	81
-	Ⓢ		startdirective	185
-	⦏		index	219
-	%calA%		simple	-1	\MMM{\cal A}
-	λ		simple	204
-	λ	sameas	λ
+	%SFT%	startdirective	185
+	%SX%		index	219
+	%calA%	simple	-1	\MMM{\cal A}
+	%fn%		simple	204
+	%lambda%	sameas	%fn%
 =TEX
 
 %--------------------------------------------------------------------
@@ -3053,9 +2889,9 @@ These all indicate that lines of the category {\tt <category>} are to
 be processed in the indicated manner when sieving to get view {\tt
 <view>}.  The category names always start as the first character on a
 line.  The sieving process is to read lines of text following
-a directive line upto, but not including the next directive line and to
+a directive line up to, but not including the next directive line and to
 process them as indicated.  The output texts from each of these
-processes are concatenated to form the output of the sieving
+processes are concatenated to give the output of the sieving
 process.
 
 In any of the three forms, the optional field {\tt ?<var>[=<val>]} comprises a question
@@ -3090,12 +2926,13 @@ neater view-file.
 
 Category names are of two forms depending on their first character.
 Those whose first character has been specified as a `{\tt directive}'
-character in the keyword file, see section~\ref{KeywordFile} below, are
+or '{\tt startdirective}'
+character in the keyword file, see section~\ref{KeywordFile}, are
 known as `extended categories' because they are invoked without any
 special prefix.  All others are known as `equals categories' because
 they are invoked by source file lines starting with an `{\tt=}'
 character.  (Note that the source file may introduce an extended
-category using either the extended character or the corresponding
+category using either the character or the corresponding
 keyword on the directive line.)
 
 The actions allowed with the form~3 categories
@@ -3154,8 +2991,9 @@ are divided into three classes, as follows.
 	processed in some manner, then written to the standard output.
 	The processing may be null (i.e., just copy the text), it may
 	delete all the text so nothing remains to be written, it may be
-	an internal or an external filtering operation.  There must be
-	exactly one of these actions per category.
+	an internal or an external filtering operation.
+
+%There must be exactly one of these actions per category.
 
 	\begin{description}
 
@@ -3175,10 +3013,12 @@ are divided into three classes, as follows.
 			their \LaTeX{} equivalent.  This option is
 			implied by option {\tt verbatim}.
 
-		\ITEM{convkw}{}  Percent keywords are recognised
-			and are converted to their
-			corresponding extended character.  Only
-			meaningful when option {\tt verbatim} is not
+		\ITEM{convkw}{} This option triggers conversion of percent keywords
+		        either into extended characters (where one is assigned to the keyword)
+			or into UNICODE code points (if option {\tt utf8out} is selected,
+			in which case percent enclosed hexadecimal literal UNICODE code points
+			are also converted to the UNICODE character).
+			Only meaningful when option {\tt verbatim} is not
 			set.
 
 		\ITEM{convext}{} Extended characters are converted to
@@ -3186,26 +3026,23 @@ are divided into three classes, as follows.
 			is not allowed with options {\tt mlchar}, {\tt latex}
 			or {\tt verbatim}.
 
-		\ITEM{utf8}{} Extended characters and percent keywords
-			are converted to their UNICODE code point in the {\tt utf-8} encoding,
-			if the keyword has a UNICODE code point associated with
-			it in the {\tt sievekeyword} file.
-			Keywords of the form \%\#x\emph{HHHHHH}\%, (or the equivalent
-			octal or decimal form) are translated into
-			the {\tt utf-8} encoding of that code point.
-			This option is not allowed with option {\tt mlchar}.
-
 		\ITEM{delindex}{}  Extended characters for indexing
 			are deleted.  Additionally, with option {\tt
 			kw} percent keywords for indexing are deleted.
 
-		\ITEM{kw}{}  Percent keywords are to be recognised.
-			With option {\tt verbatim} all keywords will be
-			converted to their \LaTeX{} equivalent. With option
-			{\tt char} the keyword \verb"%%" which stands for a
-			single \verb"%" character is just copied, but all
-			other keywords are converted to their \LaTeX{}
-			equivalent.
+		\ITEM{kw}{} Percent keywords are to be recognised.
+		        If this option is \emph{not} selected percent keywords will be
+			passed through untouched, unless {\tt latex} is selected,
+			in which case the percent symbols are escaped.
+			If it is selected the action on keywords will depend
+			on what other options are selected and on what the keyword is.
+			
+%			With option {\tt verbatim} all keywords will be
+%			converted to their \LaTeX{} equivalent. With option
+%			{\tt char} the keyword \verb"%%" which stands for a
+%			single \verb"%" character is just copied, but all
+%			other keywords are converted to their \LaTeX{}
+%			equivalent.
 
 		\ITEM{kwflag}{}  Convert unknown keywords to a call on
 			the \LaTeX{} macro
@@ -3237,6 +3074,28 @@ are divided into three classes, as follows.
 			is not allowed with options {\tt convext}, {\tt latex}
 			or {\tt verbatim}.
 
+		\ITEM{utf8out}{} Output will be in UNICODE using the {\tt utf-8} encoding.
+		
+			If option {\tt convkw} is selected then
+			any keyword having a UNICODE code point associated with
+			it in the {\tt sievekeyword} file will be translated to that
+			unicode character output as utf-8 and
+			keywords of the form \%\#x\emph{HHHHHH}\% will be translated into
+			the {\tt utf-8} encoding of that code point.
+			
+			If option {\tt convkw} is not selected then percent keywords
+			and percent enclosed hex literals will be output unchanged
+			(the ascii and unicode utf-8 representations will be identical).
+
+			The translation to utf-8 unicode takes place after the
+			processing of the line taking into account all the other
+			specified options and does not affect that processing.
+
+% Note that while sieve continues to use ext internally this will require special
+% measures to ensure that percent keywords introduced by the translation of the
+% input file from utf8 to ext are translated back while those not thus obtained
+% are left alone.
+	
 		\ITEM{verbalone}{}  Modifies option {\tt verbatim} so
 			that lines containing at least one character of
 			type {\tt verbalone} and whose other characters
@@ -3254,14 +3113,19 @@ are divided into three classes, as follows.
 			This option is not allowed with options {\tt convext}
 			or {\tt mlchar}.
 
-		\ITEM{xelatex}{}  This is similar to the {\tt latex} option
-			except that the output is encoded as {\tt utf-8}
-			UNICODE code points and translation of keywords into
-			\LaTeX macros will only be done for keywords which
-			have no declared corresponding UNICODE code point
-			in the current {\tt sieveview} file.
-			This option is not allowed with options {\tt convext}
-			or {\tt mlchar}.
+		\ITEM{white}{} Extended characters of class "white" are replaced by
+			space characters.
+			If option {\tt kw} is also selected keywords for extended characters
+			of class "white" are also replaced by spaces.
+
+%		\ITEM{xelatex}{}  This is similar to the {\tt latex} option
+%			except that the output is encoded as {\tt utf-8}
+%			UNICODE code points and translation of keywords into
+%			\LaTeX macros will only be done for keywords which
+%			have no declared corresponding UNICODE code point
+%			in the current {\tt sieveview} file.
+%			This option is not allowed with options {\tt convext}
+%			or {\tt mlchar}.
 
 		\end{description}
 
@@ -3488,14 +3352,14 @@ In the above example the input for {\tt sieve} might look as follows.
 =TEX
 
 Assuming the view-file is file {\tt myviewfile}, that no keyword
-file is wanted and the source text is in file {\tt mydoc.doc} then the
+file is wanted and the source text is in file {\tt mydoc.pp} then the
 following {\tt sieve} commands would be used to obtain the various views of
 the file.
 
 =GFT Shell commands
-	sieve -k /dev/null -f myviewfile nroff < mydoc.doc > mydoc.nroff
-	sieve -k /dev/null -f myviewfile cc < mydoc.doc > mydoc.c
-	sieve -k /dev/null -f myviewfile f77 < mydoc.doc > mydoc.f77
+	sieve -k /dev/null -f myviewfile nroff < mydoc.pp > mydoc.nroff
+	sieve -k /dev/null -f myviewfile cc < mydoc.pp > mydoc.c
+	sieve -k /dev/null -f myviewfile f77 < mydoc.pp > mydoc.f77
 =TEX
 
 \bigskip
@@ -3734,11 +3598,6 @@ The entire file will be translated in a uniform manner, to or from utf8, as dete
 	users must not rely upon the outputs produced by these other
 	bits.
 
-	If the least significant bit is set (e.g., by `{\tt-d~1}')
-	then details of the view-file as interpreted for the requested
-	view are printed, the exact format of this is not defined and
-	may vary from issue to issue of the program.
-
 	If the second-least significant bit is set (e.g., by
 	`{\tt-d~2}') then details of the keyword-file are printed, the
 	exact format of this is not defined and may vary from issue to
@@ -3904,7 +3763,7 @@ Various files are read or written by the programs in the package.
 Suffixes, normally of three letters, are used in file names to
 distinguish the various file formats involved.  These are described in
 table \ref{FileSuffixes}.  Note that the master format for a literate
-script is the {\tt .doc} format; the other formats are derived from
+script is the {\tt .pp} format; the other formats are derived from
 this by running programs which, in general, lose some information.
 
 \begin{table}
@@ -3914,15 +3773,12 @@ this by running programs which, in general, lose some information.
 
 Suffix & Description\\\hline\hline
 
-{\tt .doc} & This is the usual format in which literate scripts are
+{\tt .pp} & This is the usual format in which literate scripts are
 	held in source code respositories and in which they are edited.
-	Some commonly used non-ascii characters may be included using
-	\Product\ extended characters, or using \% keywords. \\\hline
-
-{\tt .pp} & This suffix is used for files similar to .doc files but
-     	 using UNICODE code points in {\tt utf-8} encoding instead of
-	 \Product\ extended characters (though \% keywords may also
-	 be present for those which do not correspond to a UNICODE character). \\\hline
+	These are UNICODE files coded as utf-8, of which ascii files are
+	a special case.  Non-ascii characters can either be included
+	using their UNICODE code point, or (in some cases) using
+	an ascii \% enclosed keyword.\\\hline
 
 {\tt .dvi} & This is the {\tt texdvi} output file (more precisely, it
 	is the \TeX{} or \LaTeX{} output file) which may be viewed with
@@ -3939,16 +3795,16 @@ Suffix & Description\\\hline\hline
 =TEX
 
 {\tt .tex} & This is a \LaTeX{} input file. It is created from a {\tt
-	.doc} file using the utilities {\tt doctex}.\\\hline
+	.pp} file using the utilities {\tt pptex}.\\\hline
 
 {\tt .sml} & This is a Standard~ML input file. It is created from a
-	{\tt .doc} file using the utilities {\tt docsml}.\\\hline
+	{\tt .pp} file using the utilities {\tt ppsml}.\\\hline
 
 {\tt .tch} & This is a theory check file. It is created from a
-	{\tt .doc} file using the utilities {\tt docsml}.\\\hline
+	{\tt .pp} file using the utilities {\tt ppsml}.\\\hline
 
 {\tt .tds} &  This is a theory design file. It is created from a
-	{\tt .doc} file using the utilities {\tt docsml}.\\\hline
+	{\tt .pp} file using the utilities {\tt ppsml}.\\\hline
 \end{tabular}
 \end{center}
 
@@ -4521,6 +4377,7 @@ symbols using the keyboard. See {\XPPUSERGUIDE} for more information about
 {\tt xpp} and how to work with and customise the keyboard layout.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
 
 \pagebreak
