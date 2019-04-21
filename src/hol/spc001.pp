@@ -13,7 +13,12 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %	hol_list -d play spc001 >spc001.thy.doc
 %	doctex spc001.thy
 % TQtemplate.tex
-\documentstyle[hol1,11pt,TQa4]{article}
+% \documentstyle[hol1,11pt,TQa4]{article}
+\documentclass[a4paper,11pt]{article}
+\usepackage{A4}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+
 \ftlinepenalty=9999
 \def\Hide#1{}
 \def\Bool{``$\it{:}bool\,$''}
@@ -44,7 +49,7 @@ An index to the formal material is provided at the end of the document.
 \begin{centering}
 
 \bf Copyright \copyright\ : Lemma 1 Ltd \number\year \\
-Reference: DS/FMU/IED/SPC001; issue $Revision: 2.12 $%
+Reference: DS/FMU/IED/SPC001; Git revision: {\VCVersion}
 
 
 \end{centering}

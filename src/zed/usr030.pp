@@ -17,12 +17,16 @@ make -f zed.mkf usr030.dvi
 
 =TEX
 
-\documentstyle[hol1,11pt,fleqn,USR,ifthen]{book}
+%\documentstyle[hol1,11pt,fleqn,USR,ifthen]{book}
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+\def\SCCSversion{\VCVersion}
+\def\SCCSdate{\VCDate}
 
-\def\SCCSversion{$Revision: 1.9 $%
-}
-\def\SCCSdate{\FormatDate{$Date: 2011/07/22 16:34:13 $
-}}
+
+
 
 \makeatletter
 

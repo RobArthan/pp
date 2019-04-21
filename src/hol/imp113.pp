@@ -65,6 +65,8 @@ Augmented old RCS version numbers in the changes history with dates.
 Dates will be used in place of version numbers in future.
 \item[2015/04/15]
 Now uses new date and version macros from doctex
+\item[2019/04/21]
+Ported so that the generated files use {\LaTeXe}.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -452,7 +454,9 @@ by file {\tt 0.as1} above.
 Wrap around to convert the index list {\tt 0_idx_all} into something tex readable.
 
 =VDUMP 0idx_begin.pp
-\documentstyle[hol1,ifthen]{article}
+\documentclass{article}
+\usepackage{ProofPower}
+\usepackage{ifthen}
 \makeindex
 \def\UL@begin{\underline{(}}
 \def\UL@end{\underline{)}}

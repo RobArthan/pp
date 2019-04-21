@@ -35,12 +35,18 @@ doctex usr011 usr011A usr011X01 usr011X02 usr011X03; texdvi usr011
 =TEX
 % COPYRIGHT (c) Lemma 1 Ltd.
 
-\documentstyle[hol1,11pt,fleqn,USR]{book}
+%\documentstyle[hol1,11pt,fleqn,USR]{book}
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
 
-\def\SCCSversion{$Revision: 1.18 $%
-}
-\def\SCCSdate{\FormatDate{$Date: 2002/10/17 16:26:32 $
-}}
+\ftlmargin 0.5in
+\ftrmargin 0.5in
+
+\def\SCCSversion{\VCVersion}
+\def\SCCSdate{\VCDate}
+
 
 \USRmanual{Z Tutorial}
 \USRref{USR011}

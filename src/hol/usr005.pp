@@ -17,7 +17,12 @@ make -f docs.mkf usr005.dvi
 
 =TEX
 
-\documentstyle[hol1,11pt,fleqn,USR]{book}
+% \documentstyle[hol1,11pt,fleqn,USR]{book}
+
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
 
 \def\SCCSversion{$Revision: 1.22 $%
 }

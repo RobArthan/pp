@@ -32,12 +32,15 @@ dvipage usr004
 =TEX
 % COPYRIGHT (c) Lemma 1 Ltd.
 
-\documentstyle[hol1,11pt,fleqn,USR]{book}
+% \documentstyle[hol1,11pt,fleqn,USR]{book}
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
 
-\def\SCCSversion{$Revision: 3.26 $%
-}
-\def\SCCSdate{\FormatDate{$Date: 2011/07/17 14:01:16 $
-}}
+
+\def\SCCSversion{\VCVersion}
+\def\SCCSdate{\VCDate}
 
 \USRmanual{Introductory Tutorial}
 \USRref{USR004}

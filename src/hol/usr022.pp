@@ -31,37 +31,31 @@ or
 =TEX
 %\let\footnoterule=\relax
 %\documentstyle[TQa4,hol1]{slides}
-\documentstyle[hol1]{slides}
+%\documentstyle[hol1]{slides}
+\documentclass{slides}
+\usepackage{ProofPower}
 
-\makeatletter
+%\makeatletter
 
-\def\ps@LemmaOne{
-	\def\ps@slide{\let\@mkboth\@gobbletwo
-\def\@oddfoot{\@mainsize \hbox to \textwidth{\theslide \hfil {\tiny Copyright
- \copyright\ : Lemma 1 Ltd. 1992-\number\year}%
- 	}}
-\def\@oddhead{\hfil {\tiny \theslide}}%
-\let\@evenfoot\@oddfoot\def\@evenhead{\hfil {\tiny \theslide}}}
-	\def\ps@overlay{\def\@oddfoot{\@mainsize
- \mbox{}\hfil\hbox to
-3em{\theoverlay\hss}}\def\@oddhead{}\def\@evenfoot{\@mainsize
-\mbox{}\hfil\hbox to 3em{\theoverlay\hss}}\def\@evenhead{}}
-	\def\ps@note{\def\@oddfoot{\@mainsize
-\hbox{}\hfil\thenote}\def\@oddhead{}\def\@evenfoot{\@mainsize
-\hbox{}\hfil\thenote}\def\@evenhead{}}}
+%\def\ps@LemmaOne{
+%	\def\ps@slide{\let\@mkboth\@gobbletwo
+%\def\@oddfoot{\@mainsize \hbox to \textwidth{\theslide \hfil {\tiny Copyright
+% \copyright\ : Lemma 1 Ltd. 1992-\number\year}%
+% 	}}
+%\def\@oddhead{\hfil {\tiny \theslide}}%
+%\let\@evenfoot\@oddfoot\def\@evenhead{\hfil {\tiny \theslide}}}
+%	\def\ps@overlay{\def\@oddfoot{\@mainsize
+% \mbox{}\hfil\hbox to
+%3em{\theoverlay\hss}}\def\@oddhead{}\def\@evenfoot{\@mainsize
+%\mbox{}\hfil\hbox to 3em{\theoverlay\hss}}\def\@evenhead{}}
+%	\def\ps@note{\def\@oddfoot{\@mainsize
+%\hbox{}\hfil\thenote}\def\@oddhead{}\def\@evenfoot{\@mainsize
+%\hbox{}\hfil\thenote}\def\@evenhead{}}}
 
-%\def\ps@ICL{\let\@mkboth\@gobbletwo
-%	\def\@oddhead{}\def\@oddfoot{%
-%    \hbox to \textwidth
-%	{\hbox to 0pt{\bf Page \thepage\hss}\hfil
-%	\Copyright \copyright\ : Lemma 1 Ltd. 1992-1994.%
-%	\hfil\hbox to 0pt{\hss\icllogo ICL}}}%
-%\def\@evenhead{}\let\@evenfoot\@oddfoot}
+%\makeatother
 
-\makeatother
-
-\pagestyle{LemmaOne}
-%\pagestyle{plain}
+%\pagestyle{LemmaOne}
+\pagestyle{empty}
 \tabstop=2.2\tabstop
 \advance\voffset by -0.6in
 \advance\hoffset by -0.3in
@@ -69,6 +63,6 @@ or
 \advance\textheight by 1.3in
 \begin{document}
 %\onlyslides{4-4}
-\blackandwhite{usr022_slides.tex}
+\input{usr022_slides.tex}
 \end{document}
 

@@ -10,7 +10,12 @@ Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
 =TEX
 % TQtemplate.tex
-\documentstyle[hol1,11pt,TQa4]{article}
+% \documentstyle[hol1,11pt,TQa4]{article}
+\documentclass[a4paper,11pt]{article}
+\usepackage{A4}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+
 \ftlinepenalty=9999
 \def\Hide#1{}
 \def\Bool{``$\it{:}bool\,$''}
@@ -36,7 +41,7 @@ An index to the formal material is provided at the end of the document.
 \begin{centering}
 
 \bf Copyright \copyright\ : Lemma 1 Ltd \number\year \\
-Reference: DS/FMU/IED/SPC003; issue $Revision: 1.14 $%
+Reference: DS/FMU/IED/SPC001; Git revision: {\VCVersion}
 
 
 \end{centering}
@@ -1866,17 +1871,10 @@ proof work one might wish to do can be carried out.
 
 =IGN
 \pagebreak
-\section{THEORY LISTING}
-{\catcode`\_=\active
-\gdef\underscoreoff{% make _ a normal char
-        \catcode`\_=\active \let_=\_}}
-{\underscoreoff
-\def\Xref#1#2{\hbox to \hsize{$#1$\leaders\hbox to1em{\hss.\hss}\hfill $#2$}}
-\input{\jobname.thy.tex}}
+\input{\jobname.thy.tex}
 =TEX
 \twocolumn
 {\twocolumn[\section{INDEX OF DEFINED TERMS}]
-{\makeatletter
-\printindex}}
+\printindex}
 \end{document}
 

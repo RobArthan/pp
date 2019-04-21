@@ -14,43 +14,22 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \def\SCCSissue{$Revision: 1.31 $%
 }
 \def\ignore#1{}
-\documentstyle[11pt,hol1,fleqn,USR]{book}
-% temporary measure while waiting for LaTeXe to come along
-\def\LaTeXe{\LaTeX$2_{\varepsilon}$}
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+\def\SCCSversion{\VCVersion}
+\def\SCCSdate{\VCDate}
+
 % Set the following macros as necessary as release
 % numbers change.
 \def\daztool{Compliance Tool}
 % just useful macros
 \def\ltm{$^{\rm TM}$}
-=IGN
-\TPPproject{DAZ PROJECT}
-\TPPtitle{Compliance Tool Installation and Operation}
-\TPPref{DS/FMU/IED/USR502}
-\def\SCCSissue{$Revision: 1.31 $%
-}
-\TPPissue{\SCCSissue}
-\TPPdate{\FormatDate{$Date: 2002/12/18 13:46:58 $%
-}}
-%\TPPstatus{Approved}
-\TPPstatus{Draft}
-\TPPtype{Compliance Tool Installation and Operation}
-\TPPkeywords{}
-\TPPauthor{D.J.~King&WIN01}
-\TPPauthorisation{R.D.~Arthan&HAT Team
-}
-\TPPabstract{This document describes the contents of release \release{} of the Compliance Tool, and how to install this.}
-\TPPdistribution{\begin{tabular}{l}
-Library\\
-\end{tabular}
-}
 =TEX
 \ftlmargin 0.5in
 \ftrmargin 0.5in
 
-\def\SCCSversion{$Revision: 1.31 $%
-}
-\def\SCCSdate{\FormatDate{$Date: 2002/12/18 13:46:58 $%
-}}
 
 \USRmanual{Compliance Tool Installation and Operation}
 \USRref{USR502}

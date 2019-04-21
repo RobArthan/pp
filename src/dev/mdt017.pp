@@ -11,51 +11,52 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %  mdt017.doc  ℤ $Date: 2003/03/05 15:27:08 $ $Revision: 2.15 $ $RCSfile: mdt017.doc,v $
 =TEX
 % TQtemplate.tex
-\documentstyle[hol1,11pt,TQ]{article}
+% \documentstyle[hol1,11pt,TQ]{article}
+\documentclass[a4paper,11pt]{article}
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
 \ftlinepenalty=10000
 \def\Slrp{{\bf SLRP}}
 \def\Hide#1{}
 \def\Bool{``$\it{:}bool\,$''}
 \makeindex
-\TPPproject{FST PROJECT}  %% Mandatory field
-%\TPPvolume{}
-%\TPPpart{}
-\TPPtitle{Module Tests for SLRP Parser Generator}  %% Mandatory field
-\TPPref{DS/FMU/IED/MDT017}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.15 $%
-}
-\TPPissue{\SCCSversion}  %% Mandatory field
-%\TPPdate{}  %% Mandatory field (with sensible default)
-\TPPdate{\FormatDate{$Date: 2003/03/05 15:27:08 $
-}}  %% Mandatory field (with sensible default)
-\TPPstatus{Draft}			%% Mandatory field
-%\TPPstatus{Approved}			%% Mandatory field
-\TPPtype{Test Script}
-\TPPkeywords{HOL}
-\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
-%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
-\TPPauthorisation{R.B.~Jones & HAT Manager}
-\TPPabstract{
-The module tests for the SLRP parser generator.}
-%\TPPabstractB{}
-%\TPPabstractC{}
-%\TPPabstractD{}
-%\TPPabstractE{}
-%\TPPabstractF{}
-\TPPdistribution{\parbox[t]{4.0in}{%
-      Library}}
 
-%\TPPclass{CLASSIFICATION}
-%\def\TPPheadlhs{}
-%\def\TPPheadcentre{}
-%def\TPPheadrhs{}
-%\def\TPPfootlhs{}
-%\def\TPPfootcentre{}
-%\def\TPPfootrhs{}
+\def\Title{Module Tests for SLRP Parser Generator}
+\def\Reference{DS/FMU/IED/MDT017}
+\def\Version{\VCVersion}
+
+\def\Author{R.D.~Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 7497 030682}
+
+\def\AbstractText{ The module tests for the SLRP parser generator.}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
 
 \begin{document}
-\TPPsetsizes
-\makeTPPfrontpage
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
 
 \vfill
 \begin{centering}
@@ -139,7 +140,7 @@ the second pocket calculator example from \cite{DS/FMU/IED/DTD017}
 the same example as SLRP.3 but with an error routine
 which permits  partial parsing of an input stream.
 \item[SLRP.5]
-the grammar which is neither SLR(1) or NQLALR(1) from \cite{Bermudez}.
+the grammar which is neither SLR(1) or NQLALR(1) from \cite{Bermudez89}.
 \item[SLRP.6]
 Like SLRP.2 but using the {\it quote\_con} feature.
 \item[SLRP.7]
