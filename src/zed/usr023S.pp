@@ -18,16 +18,16 @@ Contact: Rob Arthan < rda@lemma-one.com >
 # `(* ?: *) stuff (* :? *)' ==> `(* ??? *)' in the work file
 # `(* ?: *) stuff (* :? *)' ==> `stuff' in the work file
 =SH
-if	test -f usr023S.doc
+if	test -f usr023S.pp
 then
-ed usr023S.doc <<!DONE
+LC_ALL=C ed usr023S.pp <<++++
 1,/^=TEX/-1d
 g/%X/d
 g/?X/d
 g/?:/s/?:.*:?/???/
 g/?A/s/(\* *?A *\*) *//
-w zed_course_work.doc
-e usr023S.doc
+w zed_course_work.pp
+e usr023S.pp
 1,/^=TEX/-1d
 g/%X/d
 g/?A/d
@@ -36,9 +36,9 @@ g/?A/s/(\* *?A *\*) *//
 g/(\* *?: *\*)/s///
 g/(\* *:? *\*)/s///
 g/?:.*:?:/s///
-w zed_course_solutions.doc
+w zed_course_solutions.pp
 Q
-!DONE
+++++
 fi >/dev/null 2>&1
 =TEX
 \documentclass[a4paper,12pt]{article}
