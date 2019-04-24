@@ -97,6 +97,7 @@ static char *file_name;
 #define XAPPLRESDIR "XAPPLRESDIR"
 #define HOME "HOME"
 #define BIN "bin"
+#define LANG "LANG"
 
 /*
 * In the following, the first two %s are set to $HOME and the third to $PPHOME
@@ -627,7 +628,9 @@ char *choose_app_class(char *argv0)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * choose_locale: choose locale based on value of using_ext_char_set
- * and/or the resources.
+ * and/or the resources. Some Motif functions use the LANG environment
+ * variable directly, so we set that equal to the locale if using
+ * the locale from the resources.
  * **** **** **** **** **** **** **** **** **** **** **** ****/
 void choose_locale(void)
 {
@@ -638,17 +641,31 @@ void choose_locale(void)
 			xpp_resources.locale);
 	}
 	if(!using_ext_char_set) {
-		char *mb = "\xe2\x84\x9a";
-		wchar_t wc;
-		mbtowc(&wc, mb, 3);
-		if(wc != 0x211a) {
+		char *mb1 = "\xe2\x84\x9a";
+		char *mb2 = "\xf0\x9d\x95\x8c";
+		char *env_entry;
+		wchar_t wc1, wc2;
+		mbtowc(&wc1, mb1, strlen(mb1));
+		mbtowc(&wc2, mb2, strlen(mb2));
+		if(wc1 != 0x211a) {
 			msg("initialisation warning: locale set to",
 	xpp_resources.locale);
 			msg("initialisation warning",
 	"this locale does not use UTF-8 encoding");
 			msg("initialisation warning",
 	"xpp is unlikely to work well with the encoding used by this locale");
+		} else if (wc2 != 0x1d54c) {
+			msg("initialisation warning: locale set to",
+	xpp_resources.locale);
+			msg("initialisation warning",
+	"the full Unicode character set is not supported");
 		}
+		env_entry = (char*)XtMalloc(strlen(LANG) +
+					strlen(xpp_resources.locale) + 2);
+		strcpy(env_entry, LANG);
+		strcat(env_entry, "=");
+		strcat(env_entry, xpp_resources.locale);
+		putenv(env_entry);
 	}
 }
 
