@@ -1,0 +1,318 @@
+=IGN
+********************************************************************************
+mdt008.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Release 1 ICL HOL: Module Tests for Nets}
+
+\def\AbstractText{A set of module tests are given for the net tools.}
+
+\def\Reference{DS/FMU/IED/MDT008}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Release 1 ICL HOL: Module Tests for Nets}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Release 1 ICL HOL \cr Module Tests for Nets}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT008}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.10 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $ %
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & Project Manager}
+%% LaTeX2e port: \TPPabstract{A set of module tests are given for the net tools.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{Document Control}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/03/05)]
+First draft version.
+\item [Issue 1.2 (1991/04/16)]
+Changed in line with issue 1.9 of \cite{DS/FMU/IED/DTD003}.
+\item [Issue 1.3 (1991/07/29)]
+Changed as result of changes caused by IR0016.
+\item [Issue 1.4 (1991/08/15)]
+Renamings of functions containing the name atom $simple$,
+and renaming of $aconv$.
+Changes in response to ID0030.
+Used material from \cite{DS/FMU/IED/DTD013}.
+\item [Issue 1.5 (1991/10/30)]
+Changes to match issue 2.2 of \cite{DS/FMU/IED/DTD008}.
+
+\item[Issue 1.6 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.7 (1992/04/09) (8th April 1992)]
+Changes required by CR0016.
+\item [Issue 1.8 (1992/04/14) (14th April 1992)]
+Changes required by CR0017.
+\item[Issue 1.9 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.10 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.11 (2013/11/24)] Added tests for {\em net\_flatten}.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+%\subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the net tools.
+The design and test policy is in \cite{DS/FMU/IED/DTD008}
+and the design is
+implemented in \cite{DS/FMU/IED/IMP008}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module testing of the material given a design in \cite{DS/FMU/IED/DTD008},
+following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+
+\subsubsection{Dependencies}
+This document is derived from the detailed design in \cite{DS/FMU/IED/DTD008},
+and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP008}.
+It uses the test harness material of \cite{DS/FMU/IED/DTD013}
+where appropriate.
+\subsubsection{Deficiencies}
+The coverage of the tests, as called for by the test specification, may currently be incomplete.
+\section{UTILITIES USED FOR TESTING}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+=TEX
+\section{VALUE BINDINGS}
+=SML
+val ℕ = mk_ctype("ℕ",[]);
+val tv1 = mk_vartype "'tv1";
+val tv2 = mk_vartype "'tv2";
+val tv3 = mk_vartype "'tv3";
+val vtv1 = mk_var("v1", tv1);
+val vtv2 = mk_var("v2", tv2);
+val vtv3 = mk_var("v3", tv3);
+
+val c1 = mk_const("c1",BOOL);
+val c2 = mk_const("c2",mk_→_type(tv1,mk_→_type(tv2,mk_→_type(tv3,
+	mk_ctype("triple",[tv1,tv2,tv3])))));
+val cm1 = mk_app(c2,vtv1);
+val cm2 = mk_app(cm1,vtv2);
+val cm3 = mk_app(cm2,vtv3);
+val cm4 = list_mk_app (c2, [vtv1,vtv2,mk_const("c",tv3)]);
+val a1 = mk_simple_λ(vtv1, cm3);
+val a2 = mk_simple_λ(vtv2,vtv2);
+
+val net_data = [(c1, 1), (vtv1, 2), (cm3,3), (cm1, 4), (a1, 5), (a2, 6),
+	(cm4,7), (cm3,8)];
+fun net_eq (net1, net2) = all [c1, vtv1, cm3, cm1, a1, a2, cm4, cm3,
+		mk_const("rubbish",BOOL)]
+	(fn tm => (net_lookup net1 tm = net_lookup net2 tm));
+=TEX
+\section{THE TESTS}
+A test net:
+=SML
+val net1 = list_net_enter net_data empty_net;
+=TEX
+Compare with other net construction methods:
+=SML
+store_mt_results (mt_runf net_eq) [("net_enter",
+	fold (uncurry net_enter) net_data,
+	empty_net,
+	net1)];
+
+store_mt_results (mt_runf net_eq) [("make_net",
+	make_net,
+	net_data,
+	net1),
+	("make_net empty_net",
+	make_net,
+	[],
+	empty_net)
+	];
+=TEX
+Some lookups on the list, the expected result is given in a comment
+after each lookup.
+From these results we can check the ordering behaviour of $net\_lookup$.
+=SML
+store_mt_results mt_run[
+	("net_lookup 1",
+	net_lookup net1,
+	c1,
+	[1,2]),
+	("net_lookup 2",
+	net_lookup net1,
+	vtv1,
+	[2]),
+	("net_lookup 3",
+	net_lookup net1,
+	cm3,
+	[3,8,2]),
+	("net_lookup 4",
+	net_lookup net1,
+	a1,
+	[5,6,2]),
+	("net_lookup 5",
+	net_lookup net1,
+	a2,
+	[6,2]),
+	("net_lookup 6",
+	net_lookup net1,
+	cm4,
+	[7,3,8,2]),
+	("net_lookup 7",
+	net_lookup net1,
+	mk_var("n",ℕ),
+	[2]),
+	("net_lookup 8",
+	net_lookup net1,
+	mk_const("c",ℕ),
+	[2]),
+	("net_lookup 9",
+	net_lookup net1,
+	mk_const("c1",ℕ),
+	[1,2]),
+	("net_lookup 10",
+	net_lookup net1,
+	mk_simple_λ(vtv2,vtv1),
+	[6,2]),
+	("net_lookup 11",
+	net_lookup net1,
+	mk_simple_λ(vtv2,cm3),
+	[5,6,2]),
+	("net_lookup 12",
+	net_lookup net1,
+	mk_simple_λ(vtv2,mk_app(cm2,mk_const("c",tv3))),
+	[5,6,2]),
+	("net_lookup 13",
+	net_lookup net1,
+	mk_simple_λ(vtv2,cm4),
+	[5,6,2]),
+	("net_lookup 14",
+	net_lookup net1,
+	mk_simple_λ(vtv2,cm2),
+	[6,2]),
+	("net_lookup 15",
+	net_lookup net1,
+	cm2,
+	[2]),
+	("net_lookup 16",
+	net_lookup net1,
+	list_mk_app ((mk_const ("c",type_of c2)), [vtv1,vtv2,vtv3]),
+	[2]),
+	("net_lookup 17",
+	net_lookup net1,
+	cm1,
+	[4,2])];
+=TEX
+=SML
+store_mt_results mt_run[
+	("net_lookup 1 a",
+	net_lookup empty_net,
+	a1,
+	[]),
+	("net_lookup 2 a",
+	net_lookup (net_enter (cm1,1) empty_net),
+	a1,
+	[]),
+	("net_lookup 3 a",
+	net_lookup (net_enter (cm1,1) empty_net),
+	cm1,
+	[1])];
+=TEX
+=SML
+store_mt_results mt_run[
+	("net_flatten 1 a",
+	net_flatten,
+	empty_net,
+	[]),
+	("net_flatten 2 a",
+	net_flatten,
+	(net_enter (cm1,1) empty_net),
+	[1]),
+	("net_flatten 3 a",
+	sort int_order o net_flatten,
+	(net_enter(cm3, 2) (net_enter(cm1, 4) (net_enter (cm1,1) empty_net))),
+	[1, 2, 4])];
+=TEX
+\subsection{End of Tests}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+\end{document}
+
+
+

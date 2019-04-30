@@ -1,0 +1,338 @@
+=IGN
+********************************************************************************
+imp023.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  ℤ $Date: 2002/10/17 16:20:01 $ $Revision: 1.18 $ $RCSfile: imp023.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation of Basic Definitions and Axioms}
+
+\def\AbstractText{This document contains an implementation of the basic definitions and axioms for ICL HOL.}
+
+\def\Reference{DS/FMU/IED/IMP023}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation of Basic Definitions and Axioms}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP023}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.18 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains an implementation of
+%% LaTeX2e port: the basic definitions and axioms for ICL HOL.
+%% LaTeX2e port: }
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library \\ R.D. Arthan\\ D.J. King}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1 (1991/05/24)]
+First version, based on \cite{DS/FMU/IED/DTD023}.
+\item[Issue 1.5 (1991/06/14)]
+Changed $∃_1\_def$ (KB).
+\item [Issue 1.6 (1991/06/27)]
+The name atom ``definition'' has been consistently changed
+to ``defn''.
+\item [Issue 1.7 (1991/07/29),1.8 (1991/07/30)]
+Changed as result of changes caused by IR0016.
+\item [Issue 1.9 (1991/07/31)]
+Amended relative precedence of equality and negation.
+
+\item[Issue 1.10 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.11 (1992/01/27) (23rd January 1992)]
+$new\_axiom$, $simple\-\_new\-\_type\-\_defn$, $new\-\_type\-\_defn$
+all changed to take lists of keys, rather than single ones.
+\item[Issue 1.12 (1992/01/27)]
+Fixed a typo, added trivial introductory material into ``GENERAL'' section.
+\item[Issue 1.13 (1992/02/07)]
+Added $Arbitrary$ to theory ``misc'', added some indexing.
+\item [Issue 1.14 (1992/04/14) (13th April 1992)]
+Changes due to CR0017.
+\item[Issue 1.15 (1992/05/15) (15 May 1992)] Use correct quotation symbols.
+\item [Issue 1.16 (1992/05/26)(26th May 1992)]
+Renamings from version 1.5 of DS/FMU/IED/WRK038.
+\item[Issue 1.17 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.18 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.19 (2014/04/12)] Now use $gen\_new\_spec$ in place of $simple\_new\_defn$.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains an implementation
+of the detailed design in \cite{DS/FMU/IED/DTD023}.
+
+\subsection{Introduction}
+\subsubsection{Background and Purpose}
+This document implements the three initial theories of ICL HOL,
+called ``min'', ``log'' and ``init'', as well as the first entries
+for a theory of miscellaneous material ``misc'',
+as described in \cite{DS/FMU/IED/DTD023}.
+
+\subsubsection{Dependencies}
+Its signature, \cite{DS/FMU/IED/DTD023}.
+\subsubsection{Possible Enhancements}
+None known.
+\subsubsection{Deficiencies}
+None known.
+\section{The Theory $min$}
+=SML
+structure ⦏MinTheory⦎ : MinTheory = struct
+local
+	val unit = open_theory "⦏min⦎";
+	val unit = new_type ("⦏→⦎", 2);
+	val unit = declare_infix (100, "→");
+	val unit = new_type ("⦏BOOL⦎", 0);
+	val unit = new_type ("⦏IND⦎", 0);
+
+	val unit = new_const ("⦏⇒⦎", ⓣBOOL → BOOL → BOOL⌝);
+	val unit = new_const ("⦏=⦎", ⓣ'a → 'a → BOOL⌝);
+	val unit = new_const ("⦏ε⦎", ⓣ('a → BOOL) → 'a⌝);
+	val unit = declare_infix (20, "⇒");
+	val unit = declare_infix (200, "=");
+	val unit = declare_binder "λ";
+	val unit = declare_binder "ε";
+
+	val unit = declare_terminator "→";
+	val unit = declare_terminator "⇒";
+	val unit = declare_terminator "=";
+	val unit = declare_terminator "λ";
+	val unit = declare_terminator "ε";
+in
+end (* of local ... in ... *)
+end; (* of structure MinTheory *)
+=TEX
+\section{The Theory $log$}
+=SML
+structure ⦏LogTheory⦎ : LogTheory = struct
+local
+	val unit = new_theory "log";
+	val unit = declare_binder "∀";
+	val unit = declare_terminator "∀";
+	val unit = declare_binder "∃";
+	val unit = declare_terminator "∃";
+	val unit = declare_prefix (50, "¬");
+	val unit = declare_terminator "¬";
+	val unit = declare_infix (40, "∧");
+	val unit = declare_terminator "∧";
+	val unit = declare_infix (30, "∨");
+	val unit = declare_terminator "∨";
+
+	fun define (keys, deflhs, defrhs) = (
+		gen_new_spec(keys, asm_rule(mk_eq(mk_var(deflhs, type_of defrhs), defrhs)))
+	);
+
+in
+	val ⦏t_def⦎ =
+		define (["T","t_def"], "⦏T⦎",
+			⌜(λx:BOOL ⦁ x) = (λx:BOOL ⦁ x)⌝);
+
+	val ⦏∀_def⦎ =
+		define (["∀","∀_def"], "⦏∀⦎",
+			⌜λP:'a → BOOL ⦁ P = (λx ⦁ T)⌝);
+
+	val ⦏∃_def⦎ =
+		define (["∃","∃_def"], "⦏∃⦎",
+			⌜λP:'a → BOOL ⦁ P ($ε P)⌝);
+
+	val ⦏f_def⦎ =
+		define (["F","f_def"], "⦏F⦎",
+			⌜∀ b:BOOL ⦁ b⌝);
+
+	val ⦏¬_def⦎ =
+		define (["¬","¬_def"], "⦏¬⦎",
+			⌜λb:BOOL ⦁ b ⇒ F⌝);
+
+	val ⦏∧_def⦎ =
+		define (["∧","∧_def"], "⦏∧⦎",
+		⌜λb1 ⦁ λb2 ⦁ ∀b ⦁ (b1 ⇒ (b2 ⇒ b)) ⇒ b⌝);
+
+	val ⦏∨_def⦎ =
+		define (["∨","∨_def"], "⦏∨⦎",
+		⌜λb1 ⦁ λb2 ⦁ ∀b ⦁ (b1 ⇒ b) ⇒ ((b2 ⇒ b) ⇒ b)⌝);
+
+	val ⦏one_one_def⦎ =
+		define (["OneOne","one_one_def"], "⦏OneOne⦎",
+		⌜λf:'a → 'b ⦁ ∀x1 ⦁ ∀x2 ⦁ (f x1 = f x2) ⇒ (x1 = x2)⌝);
+
+	val ⦏onto_def⦎ =
+		define (["Onto","onto_def"], "⦏Onto⦎",
+		⌜λf:'a → 'b ⦁ ∀y ⦁ ∃x ⦁ y = f x⌝);
+
+	val ⦏type_defn_def⦎ =
+		define (["TypeDefn","type_defn_def"], "⦏TypeDefn⦎",
+		⌜λP ⦁ λrep:'a → 'b ⦁  OneOne rep ∧ ∀x ⦁ P x = ∃y ⦁ x = rep y⌝);
+end; (* of local ... in ... *)
+end; (* of structure LogTheory *)
+=TEX
+\section{The Theory $init$}
+=SML
+structure ⦏InitTheory⦎ : InitTheory = struct
+local
+	val unit = new_theory "⦏init⦎";
+in
+
+	val ⦏bool_cases_axiom⦎ = new_axiom (["bool_cases_axiom"],
+		⌜∀b ⦁ (b = T) ∨ (b = F)⌝);
+
+	val ⦏⇒_antisym_axiom⦎ = new_axiom (["⇒_antisym_axiom"],
+		⌜∀b1 ⦁ ∀b2 ⦁ (b1 ⇒ b2) ⇒ (b2 ⇒ b1) ⇒ (b1 = b2)⌝);
+
+	val ⦏η_axiom⦎ = new_axiom (["η_axiom"],
+		⌜∀f:'a → 'b ⦁ (λx ⦁ f x) = f⌝);
+
+	val ⦏ε_axiom⦎ = new_axiom (["ε_axiom"],
+		⌜∀P:'a → BOOL ⦁ ∀x ⦁ P x ⇒ P($ε P)⌝);
+
+	val ⦏infinity_axiom⦎ = new_axiom (["infinity_axiom"],
+		⌜∃f:IND → IND ⦁ OneOne f ∧ $¬(Onto f)⌝);
+end; (* of local ... in ... *)
+end; (* of structure InitTheory *)
+=TEX
+\section{The Theory $misc$}
+This contains definitions of bi-implication and
+the unique existential quantifer, together with
+some of the constants needed to support the parser ⦁
+=SML
+structure ⦏MiscTheory⦎ : MiscTheory = struct
+local
+	val unit = new_theory "⦏misc⦎";
+	val unit = declare_binder "∃⋎1";
+	val unit = declare_terminator "∃⋎1";
+	val unit = declare_alias ("⦏⇔⦎", ⌜$=:BOOL→BOOL→BOOL⌝);
+	val unit = declare_infix (10, "⇔");
+	val unit = declare_terminator "⇔";
+	val unit = new_const("⦏Arbitrary⦎",ⓣ'a⌝);
+
+	fun define (keys, deflhs, defrhs) = (
+		gen_new_spec(keys, asm_rule(mk_eq(mk_var(deflhs, type_of defrhs), defrhs)))
+	);
+
+in
+	val ⦏∃⋎1_def⦎ = define (["∃⋎1","∃⋎1_def"], "⦏∃⋎1⦎",
+		⌜λP:'a → BOOL ⦁  ∃ t ⦁ P t ∧ ∀ x ⦁ P x ⇒ (x = t)⌝);
+
+	val ⦏let_def⦎ = define (["Let","let_def"], "⦏Let⦎",
+		⌜λf:'a → 'b ⦁ λx ⦁  f x⌝);
+
+	val ⦏cond_def⦎ = define (["Cond","cond_def"], "⦏Cond⦎",
+		⌜λb ⦁ λx1:'a ⦁ λx2 ⦁ εx ⦁ ((b=T) ⇒ (x=x1)) ∧ ((b=F) ⇒ (x=x2))⌝);
+end; (* of local ... in ... *)
+end; (* of structure MiscTheory *)
+=TEX
+
+=SML
+open MinTheory LogTheory InitTheory MiscTheory;
+=TEX
+
+\twocolumn[\section{INDEX OF DEFINED TERMS}]
+\printindex
+\end{document}
+
+
+
+
+

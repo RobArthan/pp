@@ -1,0 +1,905 @@
+=IGN
+********************************************************************************
+imp009.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation of Tactics I}
+
+\def\AbstractText{This document gives a detailed design for the first group of tactics and tacticals in ICL HOL.}
+
+\def\Reference{DS/FMU/IED/DTD009}
+
+\def\Author{K. Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: \TPPtitle{Implementation of Tactics I}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD009}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.30 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $ %
+%% LaTeX2e port: }}  %% Mandatory field
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document gives a detailed design for the
+%% LaTeX2e port: first group of tactics and tacticals in ICL HOL.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Project Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/06/13)]
+First version.
+\item[Issue 1.6 (1991/06/27)]
+$always\_tac$ and $always\_ttcl$ renamed to $id\_tac$ and $id\_ttcl$.
+\item [Issue 1.7 (1991/07/01)]
+Renamings of functions containing the name atom $simple$,
+and renaming of $aconv$.
+\item [Issue 1.11 (1991/08/21)]
+Function $format\_term$ has new argument.
+\item [Issue 1.12 (1991/09/25), 1.13 (1991/10/30)]
+Reacting to issue 1.16 of \cite{DS/FMU/IED/DTD009}.
+\item [Issue 1.14 (1991/10/31)]
+Corrected error message for $conv\_tac$.
+
+\item[Issue 1.15 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.16 (1992/02/10)]
+Put $translate\_for\_output$ around uses of $makestring$.
+\item [Issue 1.17 (1992/02/12)]
+Changed message 9504.
+\item [Issue 1.18 (1992/02/17)]
+Corrected $FAIL\_THEN$, etc.
+Minor corrections.
+\item [Issue 1.19 (1992/03/18), 1.20 (1992/03/18)(12th March 1992)] Various minor additions and extensions.
+\item [Issue 1.21 (1992/03/30) (30th March 1992)]
+Added $GET/DROP\_FILTER\_ASMS\_T$.
+\item [Issue 1.22 (1992/04/09) (1st April 1992)]
+Changes required by CR0016.
+\item [Issue 1.23 (1992/04/14) (1st April 1992)]
+Changes required by CR0017.
+\item [Issue 1.24 (1992/04/28) (28th April 1992)]
+Removed use of ``prof''.
+\item [Issue 1.25 (1992/05/27) (27th May 1992)]
+Removed a use of $makestring$.
+\item [Issue 1.27 (1993/08/12) (12th August 1993)]
+Addition of $discard\_tac$.
+\item [Issue 1.28 (1993/08/17) (17th August 1993)]
+Bug fixing in $discard\_tac$, addition of $k\_id\_tac$, $TRY$.
+\item [Issue 1.29 (1996/01/29) (29th January 1996)]
+SCCS keywords reinserted.
+\item[Issue 1.30 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.31 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+Most of the text outside the documentation boxes is a discussion
+of the design process, rather than being part of the final design.
+It will thus be removed or rephrased in later issues.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation for material
+whose detailed design is given in \cite{DS/FMU/IED/DTD009}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD009}.
+\subsubsection{Dependencies}
+This document depends on the derived rules of inference implemented
+in \cite{DS/FMU/IED/IMP007}.
+\subsubsection{Deficiencies}
+None known.
+\section{PREAMBLE}
+=SML
+structure ⦏Tactics1⦎ : Tactics1 = struct
+=TEX
+=SML
+open PrettyPrinter;
+=TEX
+\section{TYPE ABBREVIATIONS}
+=SML
+type GOAL		=	SEQ;
+type PROOF		=	THM list -> THM;
+type TACTIC		=	GOAL -> (GOAL list * PROOF);
+=TEX
+\section{UTILITIES}
+\[map_shape\,[(f_1, n_1),(f_2, n_2) \ldots]\,[a_1,a_2 \ldots]\]
+is \[[f_1[a_1,\ldots, a_{n_1}], f_2[a_{n_1+1},\ldots, a_{n_1+n_2}], \ldots]\].
+It is used to combine proofs.
+=SML
+fun ⦏map_shape⦎ (fns : (('a list -> 'b) * int) list)(args : 'a  list) : 'b list = (
+	case fns of
+		((f, n) :: morefns) => (
+			f (args to (n-1)) :: map_shape morefns (args from n)
+	) |	[] => []
+);
+=TEX
+=SML
+fun ⦏bad_proof⦎ (name : string) = (
+	error name 9001 []
+);
+=TEX
+=SML
+fun ⦏seq_eq⦎ ((asms1, conc1) : GOAL) ((asms2, conc2) : GOAL) : bool = (
+	let	fun	aux (t1 :: more1) (t2 :: more2) = t1 ~=$ t2 andalso aux more1 more2
+		|	aux [] [] = true
+		|	aux _ _ = false;
+	in	conc1 ~=$ conc2 andalso aux asms1 asms2
+	end
+);
+=TEX
+=SML
+fun ⦏string_of_seq⦎ ((a,c) : SEQ) : string = (
+	"([" ^
+	format_list string_of_term a ", " ^
+	"], " ^
+	string_of_term c ^
+	")"
+);
+=TEX
+=SML
+fun ⦏string_of_sgs⦎ (sgs : SEQ list) : string = (
+	format_list string_of_seq sgs ", "
+);
+=TEX
+\subsection{BASIC TACTICS 1}
+=SML
+val ⦏id_tac⦎ : TACTIC = (fn gl =>
+	([gl], (fn [x] => x | _ => bad_proof "id_tac"))
+);
+=TEX
+=SML
+val ⦏discard_tac⦎ : 'a -> TACTIC = (fn _ => id_tac);
+=TEX
+=SML
+val ⦏k_id_tac⦎ : 'a -> TACTIC = discard_tac;
+=TEX
+=SML
+val ⦏fail_tac⦎ : TACTIC = (fn gl =>
+	fail "fail_tac" 9201 []
+);
+=TEX
+=SML
+fun ⦏fail_with_tac⦎ (area : string) (msg : int) (inserts : (unit -> string) list)
+	: TACTIC = (fn gl =>
+	fail area msg inserts
+);
+=TEX
+=SML
+fun ⦏prove_asm_rule⦎ (thm1 : THM) (thm2 : THM) : THM = (
+let
+        val c1 = concl thm1;
+        val s1 = ⇒_intro c1 thm2;
+        val s2 = ⇒_elim s1 thm1;
+in
+        s2
+end);
+=TEX
+=SML
+fun ⦏list_⇒_intro⦎ [] thm = thm
+| list_⇒_intro (a :: x) thm = ⇒_intro a (list_⇒_intro x thm);
+
+=TEX
+=SML
+local
+=TEX
+The following keeps on changing a name until it becomes
+acceptable
+=SML
+	fun make_ok slist s = (
+	let	val s1 = string_variant slist s;
+	in
+		if s1 <> s
+		then make_ok slist s1
+		else (case (get_const_info s) of
+		Value _ => make_ok slist (s ^ get_variant_suffix ())
+		| Nil => s)
+	end);
+=TEX
+=SML
+fun ⦏llassoc1⦎ ((x, y) :: rest : (TERM * TERM) list) (what : TERM) : TERM = (
+	if x =$ what
+	then y
+	else llassoc1 rest what
+) | llassoc1 [] what = what;
+=TEX
+=SML
+fun ⦏llassoc3⦎ ((x, y) :: rest : (TERM * 'b) list) (what : TERM) : 'b = (
+	if x =$ what
+	then y
+	else llassoc3 rest what
+) | llassoc3 [] _ = fail "lassoc3" 1005 [];
+=TEX
+=SML
+in
+fun ⦏rename_tac⦎ (renamings: (TERM * string) list) : TACTIC = (
+let	val dummy = map (dest_var o fst) renamings
+		handle complaint =>
+		pass_on complaint "dest_var" "rename_tac";
+	val rename_to_names = map (make_ok [] o snd) renamings;
+	val renamings' = map (fn ((v,s),s') => (v,mk_var(s',type_of v)))
+		(combine renamings rename_to_names);
+=TEX
+Traverse a list of terms applying $make\_ok$ and renamings.
+=SML
+	fun lvariant acc [] = []
+	| lvariant acc (a :: x) = (
+	let	val a1 = llassoc1 renamings' a;
+		val (a1nm,a1ty) = dest_var a1;
+		val a2nm = make_ok acc a1nm;
+	in
+		(mk_var(a2nm,a1ty) :: lvariant (a2nm :: acc) x)
+	end);
+=TEX
+Traverse a term, with a substituition/avoid list, making
+changes according to the substituition, and modifying
+bound variable names as necessary.
+=SML
+fun trav subs slist tm (App (f,a)) = (
+	let val f' = trav subs slist f (dest_simple_term f);
+	in
+	(let val a' = trav subs slist a (dest_simple_term a)
+	in
+		mk_app(f',a')
+	end
+	handle (Fail _) =>
+	mk_app(f',a))
+	end
+	handle (Fail _) =>
+	mk_app(f,trav subs slist a (dest_simple_term a))
+) | trav subs slist tm (Var (nm,ty)) = (
+	llassoc3 subs tm
+) | trav subs slist tm (Const _) = fail "" 0 []
+| trav subs slist tm (Simpleλ(x,bdy)) = (
+let	val x1 = llassoc1 renamings' x;
+	val (x1nm,x1ty) = dest_var x1;
+	val x2nm = make_ok slist x1nm;
+	val x2 = mk_var(x2nm,x1ty);
+in
+	mk_simple_λ(x2, trav  ((x,x2) :: subs) (x2nm :: slist) bdy
+		(dest_simple_term bdy))
+end);
+
+fun trav1 subs slist tm = (
+	trav subs slist tm (dest_simple_term tm)
+	handle (Fail _) => tm
+);
+=TEX
+The main function:
+=SML
+in
+(fn (seqasms,conc) =>
+let	val glfrees = list_union (op =$) (frees conc :: map frees seqasms);
+	val newfrees1 = lvariant [] glfrees;
+	val init_subs = (combine glfrees newfrees1) drop
+		(fn (a,b) => a =$ b);
+	val init_names = map (fst o dest_var) newfrees1;
+	val seqasms' = map (fn asm => trav1 init_subs init_names asm) seqasms;
+	val conc' = trav1 init_subs init_names conc;
+	val template = list_mk_⇒(seqasms @ [mk_⇔(conc,mk_t)]);
+	val template' = list_mk_∀(rev(frees template), template);
+in
+	([(seqasms',conc')],(fn thms =>
+		case thms of
+		[thm] => (let val thm1 =
+			all_∀_intro(list_⇒_intro seqasms' (⇔_t_intro thm));
+		val thm2 = subst_rule [] template' thm1;
+		val thm3 = ⇔_t_elim(strip_⇒_rule(all_simple_∀_elim thm2))
+		in
+			thm3
+		end)
+		| _ => bad_proof "rename_tac"))
+end)
+end);
+end;
+=IGN
+val renamings = [(⌜x⌝,"y"),(⌜y⌝,"x"),
+	(mk_var("1",BOOL),"one"),
+	(mk_var("one'",ℕ),"1"),
+	(mk_var("brackets",BOOL),"[]"),
+	(mk_var("brackets'",BOOL),"[]"),
+	(mk_var("sigma'",BOOL),"σ'")];
+fun test gl = (push_goal gl;
+	(a (rename_tac renamings)handle complaint =>
+	 (drop_main_goal();
+	  reraise complaint (area_of complaint)));
+	drop_main_goal();());
+test ([],⌜a ∧ a⌝);
+test ([],⌜a ∧ ∀ a ⦁ a = 1⌝);
+test ([⌜∀ a ⦁ a = 1⌝],⌜a ∧ ∀ a ⦁ a = 1⌝);
+test ([⌜∀ a ⦁ a = []⌝],⌜a ∧ ∀ a ⦁ a = 1⌝);
+test ([],⌜x ∧ ∀ x :'a⦁ x = y⌝);
+test ([⌜∀ x ⦁ x = []⌝,⌜∀ x :'a⦁ f x (y:'a)⌝],⌜x ∧ ∀ x :'a⦁ x = y⌝);
+test ([⌜∀ x ⦁ x = []⌝,⌜∀ σ :'a ⦁ g σ⌝,⌜∀ x :'a⦁ f x (y:'a) σ⌝],⌜x ∧ ∀ x :'a⦁ x = y⌝);
+test ([⌜∀ x ⦁ x = []⌝,⌜∀ σ :'a ⦁ g ⓜmk_var("σ'",BOOL)⌝ σ⌝,⌜∀ x :'a⦁ f x (y:'a) σ⌝],⌜x ∧ ∀ x :'a⦁ x = y⌝);
+test ([⌜∀ x ⦁ ⓜmk_var("1",BOOL)⌝  ∨ (x = [])⌝,
+	⌜∀ σ :'a ⦁ g ⓜmk_var("σ'",BOOL)⌝ σ⌝,
+	⌜∀ x :'a⦁ (1 = one') ∧ f x (y:'a) σ⌝],
+	⌜x ∧ ∀ x :'a⦁ brackets ∧brackets' ∧  ⓜmk_var("()",BOOL)⌝ ∧ (x = y) ∧ sigma'⌝);
+test ([],ⓜmk_var("1",BOOL)⌝);
+test ([⌜∀ x ⦁ ⓜmk_var("1",BOOL)⌝  ∨ (x = []) ∨ (1 = one')⌝],mk_t);
+test ([],⌜∀ (x:'a) ⦁ ∀ (x:'b) ⦁ ∀ (x:'c) ⦁ f ⌜x:'a⌝ ⌜x:'b⌝ ⌜x:'c⌝ ∨
+	∃ (x:'a) ⦁ ∃ (x:'b) ⦁ ∃ (x:'c) ⦁ g ⌜x:'a⌝ ⌜x:'b⌝ ⌜x:'c⌝⌝);
+
+=TEX
+\section{ELEMENTARY TACTICALS}
+=SML
+fun ((tac1 : TACTIC) ⦏THEN_T⦎ (tac2 : TACTIC)) : TACTIC = (fn gl =>
+	let	val (sgs1, pf) = tac1 gl;
+		val (sgs2pfs2) = (map tac2 sgs1);
+	in	(flat (map fst sgs2pfs2),
+		pf o map_shape (map (fn (sgs, pf) => (pf, length sgs))sgs2pfs2))
+	end
+);
+=TEX
+=SML
+val op ⦏THEN⦎ : (TACTIC * TACTIC) -> TACTIC = op THEN_T;
+=TEX
+=SML
+fun (tac : TACTIC) ⦏THEN_LIST_T⦎ (tacs : TACTIC list) : TACTIC = (fn gl =>
+	let	val (sgs1, pf) = tac gl;
+	in	if length tacs = length sgs1
+		then	let	val sgs2pfs2 = (map (fn (f, a) => f a) (combine tacs sgs1));
+			in	(flat (map fst sgs2pfs2),
+				pf o map_shape (map (fn (sgs, pf) => (pf, length sgs))sgs2pfs2))
+			end
+		else	fail "THEN_LIST_T" 9101 []
+	end
+);
+val op ⦏THEN_LIST⦎ : (TACTIC * TACTIC list) -> TACTIC = op THEN_LIST_T;
+=TEX
+=SML
+fun ⦏EVERY_T⦎ (tacs : TACTIC list) :  TACTIC = (fn gl =>
+	(fold (op THEN_T) tacs id_tac) gl
+);
+=TEX
+=SML
+val ⦏EVERY⦎ : TACTIC list -> TACTIC = EVERY_T;
+=TEX
+=SML
+fun ⦏MAP_EVERY_T⦎ (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (
+	EVERY (map tacf things)
+);
+=TEX
+=SML
+val ⦏MAP_EVERY⦎ : ('a -> TACTIC) -> 'a list -> TACTIC = MAP_EVERY_T;
+=TEX
+=SML
+fun ((tac1 : TACTIC) ⦏ORELSE_T⦎ (tac2 : TACTIC))
+	: TACTIC = (fn gl =>
+	(tac1 gl) handle (Fail _) => tac2 gl
+);
+=TEX
+=SML
+val op ⦏ORELSE⦎ : (TACTIC * TACTIC) -> TACTIC = op ORELSE_T;
+=TEX
+=SML
+fun ⦏FIRST_T⦎ (tacs : TACTIC list) : TACTIC = (fn gl =>
+	(fold (op ORELSE_T) tacs (fail_with_tac "FIRST_T" 9105 [])) gl
+);
+=TEX
+=SML
+val ⦏FIRST⦎ : TACTIC list -> TACTIC = FIRST_T;
+=TEX
+=SML
+fun ⦏MAP_FIRST_T⦎ (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (fn gl =>
+	(fold (fn(t1,t2) => (tacf t1) ORELSE_T t2) things
+		(fail_with_tac "MAP_FIRST_T" 9105 []))
+		gl
+	handle complaint =>
+	pass_on complaint "FIRST_T" "MAP_FIRST_T"
+);
+=TEX
+=SML
+val ⦏MAP_FIRST⦎ : ('a -> TACTIC) -> 'a list -> TACTIC = MAP_FIRST_T;
+=TEX
+=SML
+fun ⦏COND_T⦎ (p : GOAL -> bool) (tac1 : TACTIC) (tac2 : TACTIC)
+	: TACTIC = (fn gl =>
+	(if p gl then tac1 else tac2) gl
+);
+fun ⦏REPEAT_T⦎ (tac : TACTIC) : TACTIC = (fn g =>
+	((tac THEN REPEAT_T tac) ORELSE_T id_tac) g
+);
+=TEX
+=SML
+val ⦏REPEAT⦎ : TACTIC -> TACTIC = REPEAT_T;
+=TEX
+=SML
+fun ⦏REPEAT_N_T⦎ (n : int) (tac : TACTIC) : TACTIC = (
+	let	fun aux n g = (
+			(if n > 0
+			then tac THEN aux (n-1)
+			else id_tac) g
+		);
+	in	aux n
+	end
+);
+=TEX
+=SML
+val ⦏REPEAT_N⦎ : int -> TACTIC -> TACTIC = REPEAT_N_T;
+=TEX
+=SML
+fun ⦏REPEAT_UNTIL_T1⦎ (p : GOAL -> bool) (tac : TACTIC)
+	: TACTIC = (
+	REPEAT (COND_T p fail_tac tac)
+);
+=TEX
+=SML
+val ⦏REPEAT_UNTIL1⦎ : (GOAL -> bool) -> TACTIC -> TACTIC =
+	REPEAT_UNTIL_T1;
+=TEX
+=SML
+fun ⦏REPEAT_UNTIL_T⦎ (p : TERM -> bool) : TACTIC -> TACTIC = (
+	REPEAT_UNTIL_T1 (p o snd)
+);
+=TEX
+=SML
+val ⦏REPEAT_UNTIL⦎ : (TERM -> bool) -> TACTIC -> TACTIC =
+	REPEAT_UNTIL_T;
+
+=TEX
+\section{BASIC THEOREM TACTICALS AND COMBINATORS}
+=SML
+type ⦏THM_TACTIC⦎ = THM -> TACTIC;
+
+type ⦏THM_TACTICAL⦎ = THM_TACTIC -> THM_TACTIC;
+=TEX
+=SML
+val op ⦏THEN_TTCL⦎ : (THM_TACTICAL * THM_TACTICAL) -> THM_TACTICAL =
+	op o;
+=TEX
+=SML
+fun  (ttcl1 : THM_TACTICAL) ⦏ORELSE_TTCL⦎ (ttcl2 : THM_TACTICAL)
+				: THM_TACTICAL = (fn ttac => fn th =>
+	(ttcl1 ttac th) handle (Fail _) => (ttcl2 ttac th)
+);
+=TEX
+=SML
+val ⦏ID_THEN⦎ : THM_TACTICAL = Combinators.I;
+=TEX
+=SML
+fun ⦏TRY_TTCL⦎ (ttcl : THM_TACTICAL) : THM_TACTICAL= (fn ttac => fn th =>
+	(ttcl ORELSE_TTCL ID_THEN) ttac th
+);
+=TEX
+=SML
+fun  (ttcl1 : THM_TACTICAL) ⦏THEN_TRY_TTCL⦎ (ttcl2 : THM_TACTICAL)
+				: THM_TACTICAL = (fn ttac =>
+	(ttcl1 THEN_TTCL (ttcl2 ORELSE_TTCL ID_THEN)) ttac
+);
+=TEX
+=SML
+fun ⦏CONV_THEN⦎ (conv : CONV) : THM_TACTICAL = (fn ttac => fn thm =>
+	let	val thm1 = conv (concl thm);
+	in	(ttac(⇔_mp_rule thm1 thm)
+		handle ex => divert ex "⇔_mp_rule" "CONV_THEN" 9400
+		[fn () => string_of_thm thm1,
+		fn () => string_of_term (concl thm)])
+	end
+);
+=TEX
+=SML
+fun ⦏FAIL_WITH_THEN⦎ (area : string) (msg : int) (inserts : (unit -> string) list)
+						: THM_TACTICAL = (fn thmtac => fn thm =>
+	fail area msg inserts
+);
+=TEX
+=SML
+val ⦏FAIL_THEN⦎ : THM_TACTICAL = (fn thmtac => fn thm =>
+	fail "FAIL_THEN" 9401 []
+);
+=TEX
+=SML
+fun ⦏REPEAT_TTCL⦎ (ttcl : THM_TACTICAL) : THM_TACTICAL= (fn ttac => fn th =>
+	((ttcl THEN_TTCL (REPEAT_TTCL ttcl)) ORELSE_TTCL ID_THEN) ttac th
+);
+=TEX
+=SML
+fun ⦏EVERY_TTCL⦎ (ttcls : THM_TACTICAL list) : THM_TACTICAL = (
+	fold op THEN_TTCL ttcls ID_THEN
+);
+=TEX
+=SML
+fun ⦏FIRST_TTCL⦎ (ttcls : THM_TACTICAL list) : THM_TACTICAL= (
+	fold op ORELSE_TTCL ttcls (FAIL_WITH_THEN "FIRST_TTCL" 9402 [])
+);
+=TEX
+\section{BASIC TACTICALS}
+\subsection{Using Assumptions}
+=SML
+fun ⦏GET_ASM_T⦎ (tm : TERM) (thmtac : (THM -> TACTIC))
+						: TACTIC = (fn gl as (seqasms, _) =>
+	if tm term_mem seqasms
+	then thmtac (asm_rule tm) gl
+	else term_fail "GET_ASM_T" 9301 [tm]
+);
+fun ⦏LIST_GET_ASM_T⦎ (tml : TERM list)
+	(thmtac : (THM list -> TACTIC))
+					: TACTIC = (fn gl as (seqasms, _) =>
+	if all tml (fn tm => tm term_mem seqasms)
+	then thmtac (map asm_rule tml) gl
+	else term_fail "LIST_GET_ASM_T" 9301
+		[find tml (fn tm => not(tm term_mem seqasms))]
+);
+fun ⦏DROP_ASM_T⦎ (tm : TERM) (thmtac : (THM -> TACTIC))
+						: TACTIC = (fn (seqasms, conc) =>
+	if tm term_mem seqasms
+	then (thmtac (asm_rule tm))(seqasms term_less tm, conc)
+	else term_fail "DROP_ASM_T" 9301 [tm]
+);
+=TEX
+=SML
+fun ⦏LIST_DROP_ASM_T⦎ (tml : TERM list)
+		(thmtac : (THM list -> TACTIC))
+					: TACTIC = (fn (seqasms, conc) =>
+	if all tml (fn tm => tm term_mem seqasms)
+	then (thmtac (map asm_rule tml))(seqasms term_diff tml, conc)
+	else term_fail "LIST_DROP_ASM_T" 9301
+		[find tml (fn tm => not(tm term_mem seqasms))]
+);
+=TEX
+=SML
+fun ⦏TOP_ASM_T⦎ (thmtac : (THM -> TACTIC)) : TACTIC = (fn gl as (seqasms, _) =>
+	case seqasms of
+		asm :: _ => thmtac (asm_rule asm) gl
+	|	_ =>  fail "TOP_ASM_T" 9302 []
+);
+=TEX
+=SML
+fun ⦏POP_ASM_T⦎ (thmtac : (THM -> TACTIC)) : TACTIC = (fn (seqasms, conc) =>
+	case seqasms of
+		asm :: more => (thmtac (asm_rule asm))(more term_less asm, conc)
+	|	_ =>  fail "POP_ASM_T" 9302 []
+);
+=TEX
+=SML
+fun ⦏GET_ASMS_T⦎ (thmstac : (THM list -> TACTIC)) : TACTIC = (
+	fn gl as (seqasms, _) =>
+	thmstac (map asm_rule seqasms) gl
+);
+=TEX
+=SML
+fun ⦏GET_FILTER_ASMS_T⦎ (pred: TERM -> bool)
+	(thmstac : (THM list -> TACTIC)) : TACTIC = (
+	fn gl as (seqasms, _) =>
+	thmstac (map asm_rule (filter pred seqasms)) gl
+);
+=TEX
+=SML
+fun ⦏DROP_ASMS_T⦎ (thmstac : (THM list -> TACTIC)) : TACTIC = (
+	fn (seqasms, conc) =>
+	(thmstac (map asm_rule seqasms))([], conc)
+);
+=TEX
+=SML
+fun ⦏DROP_FILTER_ASMS_T⦎  (pred: TERM -> bool)
+	(thmstac : (THM list -> TACTIC)) : TACTIC = (
+	fn (seqasms, conc) =>
+	(thmstac (map asm_rule (filter pred seqasms)))
+		((seqasms drop pred), conc)
+);
+=TEX
+=SML
+fun ⦏GET_NTH_ASM_T⦎ (i : int) (thmtac : (THM -> TACTIC))
+						: TACTIC = (fn gl as (seqasms, _) =>
+	((GET_ASM_T  (nth (i-1) seqasms) thmtac) gl)
+	handle ex => divert ex "nth" "GET_NTH_ASM_T" 9303 [fn () => string_of_int i]
+);
+fun ⦏LIST_GET_NTH_ASM_T⦎ (ilst : int list)
+		(thmtac : (THM list -> TACTIC))
+					: TACTIC = (fn gl as (seqasms, _) =>
+	((LIST_GET_ASM_T  (map (fn i => nth (i-1) seqasms) ilst) thmtac) gl)
+	handle ex => divert ex "nth" "LIST_GET_NTH_ASM_T" 9303 [fn () =>
+		(let val lasms = length seqasms;
+			val ei = find ilst (fn i => i> lasms orelse i < 0);
+		in
+			string_of_int ei
+		end)]
+);
+fun ⦏DROP_NTH_ASM_T⦎ (i : int) (thmtac : (THM -> TACTIC))
+						: TACTIC = (fn gl as (seqasms, _) =>
+	((DROP_ASM_T  (nth (i-1) seqasms) thmtac) gl)
+	handle ex => divert ex "nth" "DROP_NTH_ASM_T" 9303
+	[fn () => string_of_int i]
+);
+fun ⦏LIST_DROP_NTH_ASM_T⦎ (ilst : int list)
+		(thmtac : (THM list -> TACTIC))
+			: TACTIC = (fn gl as (seqasms, _) =>
+	(LIST_DROP_ASM_T  (map(fn i => nth (i-1) seqasms)ilst) thmtac) gl
+	handle ex => divert ex "nth" "LIST_DROP_NTH_ASM_T" 9303 [fn () =>
+		(let val lasms = length seqasms;
+			val ei = find ilst (fn i => i> lasms orelse i < 0);
+		in
+			string_of_int ei
+		end)]
+);
+=TEX
+\subsection{Utility Tacticals}
+=SML
+fun ⦏ROTATE_T⦎ (i : int) (tac : TACTIC) : TACTIC = (fn gl =>
+	case tac gl of
+		sgp as ([], _) => sgp
+	|	(sgs, pf) => (
+		let	val n = (length sgs);
+			val i' = i mod n;
+			val r' = n - i';
+			val sgs' = (sgs from i') @ (sgs to (i'-1));
+			fun pf' ths = (
+				if length ths <> n
+				then bad_proof "ROTATE_T"
+				else pf ((ths from r') @ (ths to (r'-1)))
+			);
+		in	(sgs', pf')
+		end
+	)	
+);
+=TEX
+=SML
+fun ⦏LEMMA_T⦎ (newsg : TERM) (thmtac : THM -> TACTIC) : TACTIC = (
+	fn gl as (seqasms, _) =>
+	let	val (sgs, pf) = thmtac (asm_rule newsg) gl;
+	in	((seqasms, newsg) :: sgs,
+		(fn (thm :: thms) => prove_asm_rule thm (pf thms) |
+		[] => bad_proof "LEMMA_T"))
+	end	handle ex =>	if area_of ex = "asm_rule"
+				then term_fail "LEMMA_T" 9603 [newsg]
+				else raise ex
+);
+=TEX
+=SML
+fun ⦏TRY_T⦎ (tac : TACTIC) : TACTIC = tac ORELSE id_tac;
+=TEX
+=SML
+val ⦏TRY⦎ = TRY_T;
+=TEX
+=SML
+fun ⦏CHANGED_T⦎ (tac : TACTIC) : TACTIC = (fn gl =>
+	case tac gl of
+		sgp as ([gl'], _) => (
+			if seq_eq gl gl'
+			then	fail "CHANGED_T" 9601 []
+			else sgp
+	) |	sgp => sgp
+);
+=TEX
+=SML
+fun ⦏SOLVED_T⦎ (tac : TACTIC) : TACTIC = (fn gl =>
+	case tac gl of
+		sgp as ([], _) => (sgp
+	) |	sgp => fail "SOLVED_T" 9602 []
+);
+=TEX
+=SML
+fun ((tac1 : TACTIC) ⦏THEN_TRY_T⦎ (tac2 : TACTIC))
+	: TACTIC = (fn gl =>
+	let	val (sgs1, pf) = tac1 gl;
+		val (sgs2pfs2) = (map (TRY_T tac2) sgs1);
+	in	(flat (map fst sgs2pfs2),
+		pf o map_shape (map (fn (sgs, pf) =>
+			(pf, length sgs))sgs2pfs2))
+	end
+);
+=TEX
+=SML
+val op ⦏THEN_TRY⦎ : (TACTIC * TACTIC) -> TACTIC = op THEN_TRY_T;
+=TEX
+=SML
+fun (tac : TACTIC) ⦏THEN_TRY_LIST_T⦎ (tacs : TACTIC list) : TACTIC = (fn gl =>
+	let	val (sgs1, pf) = tac gl;
+	in	if length tacs = length sgs1
+		then	let	val sgs2pfs2 = (map (fn (f, a) => (TRY_T f) a)
+				(combine tacs sgs1));
+			in	(flat (map fst sgs2pfs2),
+				pf o map_shape (map (fn (sgs, pf) =>
+				(pf, length sgs))sgs2pfs2))
+			end
+		else	fail "THEN_TRY_LIST_T" 9101 []
+	end
+);
+=TEX
+=SML
+val op ⦏THEN_TRY_LIST⦎ : (TACTIC * TACTIC list) -> TACTIC =
+	op THEN_TRY_LIST_T;
+=TEX
+
+\section{BASIC TACTICS 2}
+=SML
+fun ⦏accept_tac⦎ (thm : THM) : TACTIC = (fn (seqasms, conc) =>
+	if conc ~=$ (concl thm)
+	then	([], (fn [] => thm | _ => bad_proof "accept_tac"))
+	else	fail "accept_tac" 9102 [
+		fn () => string_of_thm thm,
+		fn () => string_of_term conc]
+);
+=TEX
+=SML
+fun  ⦏asm_tac⦎ (thm : THM) : TACTIC = (fn (seqasms, conc) =>
+	([((concl thm) :: seqasms, conc)],
+	(fn [thm1] => prove_asm_rule thm thm1 | _ =>
+		bad_proof "asm_tac"))
+);
+=TEX
+=SML
+fun ⦏conv_tac⦎ (conv : CONV) : TACTIC = (fn (seqasms, conc) =>
+	let	val thm = conv conc;
+		val (lhs, rhs) = dest_eq (concl thm)
+		handle complaint =>
+		divert complaint "dest_eq" "conv_tac" 9400
+			[fn () => string_of_thm thm,
+			 fn () => string_of_term conc];
+	in	if is_t rhs
+		then	([],
+			(fn _ => ⇔_t_elim thm))
+		else ([(seqasms, rhs)],
+			(fn [thm1] => ((⇔_mp_rule (eq_sym_rule thm) thm1)
+			handle ex => divert ex "⇔_mp_rule" "conv_tac" 9400
+			[fn () => string_of_thm thm,
+			 fn () => string_of_term conc])
+			| _ => bad_proof "conv_tac"))
+	end
+);
+=TEX
+\section{USING TACTICS}
+=SML
+fun simple_tac_proof (gl : GOAL, tac : TACTIC) : THM = (
+	case (tac gl)
+		handle Fail msg => fail "simple_tac_proof" 9502
+		 [fn()=>get_message msg]
+	 of
+		([], pf) => ((pf [])
+		handle Fail msg => fail "simple_tac_proof" 9503
+		[fn()=>get_message msg])
+	|	(sgs, pf) => fail "simple_tac_proof" 9501
+		[fn () => string_of_sgs sgs]
+);
+=TEX
+$tac\_proof$ is surprisingly complicated. First of all we check that
+the goal contains no duplicated assumptions and that all the terms in the
+goal are boolean. we then use $simple\_tac\_proof$ to attempt to
+prove the goal; this will either fail, in which case
+$tac\_proof$ fails, or it will result in a theorem, $thm$ say.
+Assume that the original goal was $([t1, \ldots, tk], c)$ and that the
+$thm$ is $t1', \ldots, tm' ⊢ c'$. We discharge each $t_i$ from $thm$ which
+should produce a theorem of the form $⊢t1 ⇒ \ldots ⇒ tk ⇒ c'$.
+We check this by using $⇔\_mp\_rule$ to attempt to derive
+$⊢t1 ⇒ \ldots ⇒ tk ⇒ c$ from it. If this succeeds and gives a theorem
+with no assumptions then we can undischarge the $t_i$ to give the desired
+theorem, otherwise the tactic has not achieved the desired goal and we report
+an error.
+=SML
+local
+	fun aux1 (asm :: more) thm = ⇒_intro asm (aux1 more thm)
+	| aux1 [] thm = thm;
+	fun chk_asms (asm :: more) = (
+		if any more (fn x => x ~=$ asm)
+		then term_fail "tac_proof" 9505
+			[asm, find more (fn x => x ~=$ asm)]
+		else if not(type_of asm =: BOOL)
+		then term_fail "tac_proof" 9506 [asm]
+		else chk_asms more
+	) | chk_asms [] = ();
+	fun aux2 (_ :: more) thm = undisch_rule (aux2 more thm)
+	|   aux2 [] thm = thm;
+
+in
+fun ⦏tac_proof⦎ (gl as (seqasms, conc) : GOAL, tac : TACTIC) : THM = (
+	let	val side_effect1 = chk_asms seqasms;
+		val side_effect2 = (
+			if not(type_of conc =: BOOL)
+			then term_fail  "tac_proof" 9507 [conc]
+			else ());
+		val thm = (simple_tac_proof(gl, tac))
+			handle exn => reraise exn "tac_proof";
+		val thm' = ⇔_mp_rule(refl_conv(list_mk_⇒(seqasms@[conc])))
+				(aux1 seqasms thm)
+			handle Fail _ => thm_fail "tac_proof" 9504 [thm];
+	in	case asms thm' of
+			[] => aux2 seqasms thm'
+		|	_ => thm_fail "tac_proof" 9504 [thm]
+	end
+);
+end;
+=TEX
+=SML
+fun ⦏prove_thm⦎ (nm:string, tm : TERM, tac : TACTIC) : THM = (
+	save_thm(nm,tac_proof(([],tm),tac))
+	handle (complaint as (Fail _)) =>
+	case area_of complaint of
+	"tac_proof" => pass_on complaint "tac_proof" "prove_thm"
+	| "save_thm" => pass_on complaint "save_thm" "prove_thm"
+	| other => reraise complaint other
+);
+=TEX
+=SML
+end; (* of structure Tactics1 *)
+open Tactics1;
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+

@@ -1,0 +1,553 @@
+=IGN
+********************************************************************************
+dtd100.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% dtd100.doc  ℤ $Date: 2004/02/21 16:09:06 $ $Revision: 1.9 $ $RCSfile: dtd100.doc,v $
+
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Design of Document Handling Commands}
+
+\def\AbstractText{This document contains the detailed design of the shell scripts for document processing.}
+
+\def\Reference{DS/FMU/IED/DTD100}
+
+\def\Author{A.J. Hammon}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % dtd100.doc  ℤ $Date: 2004/02/21 16:09:06 $ $Revision: 1.9 $ $RCSfile: dtd100.doc,v $
+%% LaTeX2e port: \documentstyle[11pt,TQ,hol1]{article}
+%% LaTeX2e port: 
+%% LaTeX2e port: \TPPtitle{Design of Document Handling Commands for Solaris 2}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD100}
+%% LaTeX2e port: 
+%% LaTeX2e port: =IGNORE
+%% LaTeX2e port: 
+%% LaTeX2e port: doctex dtd100 ; texdvi dtd100
+%% LaTeX2e port: bibtex dtd100
+%% LaTeX2e port: dvipage dtd100 &
+%% LaTeX2e port: 
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: 
+%% LaTeX2e port: \TPPissue{\VCVersion}
+%% LaTeX2e port: \TPPdate{\FormatDate{\VCDate}}
+%% LaTeX2e port: \TPPproject{FST}
+%% LaTeX2e port: 
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: \TPPtype{Literate Script}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design of the shell scripts
+%% LaTeX2e port: 		for document processing.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: 
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: 
+\catcode`\_=\active
+\def\_{\kern.06em\vbox{\hrule height.1ex width.3em}\hskip0.1em\relax}
+%% LaTeX2e port: 
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{center}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{center}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+
+\item[Issue 1.1 (1994/05/10)] First version based on \cite{DS/FMU/IED/DTD055}.
+\item[Issue 1.2 (1994/08/23)] removed palette.
+\item[Issue 1.3 (1995/12/18)] Typos.
+\item[Issue 1.4 (1997/08/12)] Noted can do out-of-directory files.
+\item[Issue 1.6 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.7 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.8 (2003/04/17)] Updates to work with doc2man.
+\item[Issue 1.9 (2004/02/21)] Now have module tests.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%********************************************************************
+
+%\subsection{Changes Forecast}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%********************************************************************
+%--------------------------------------------------------------------
+
+\newpage
+
+\section{GENERAL}
+
+%********************************************************************
+
+\subsection{Scope}
+
+This document contains the detailed design of the documents
+transforming utility programs whose detailed design is
+in~\cite{DS/FMU/IED/DTD100}.  The user interface is described in the
+user documentation for the document processing
+system~\cite{DS/FMU/IED/USR001}.
+
+%********************************************************************
+
+\subsection{Introduction}
+
+\subsubsection{Purpose and Background}
+
+Processing documents to obtain a printed form or a {\tt.sml} file for
+further processing are a sufficiently common operations to merit having
+some shell scripts that package these calls in a standard manner.
+Document files, with the {\tt.doc} suffix, may be sieved to produce
+both {\tt.tex} and {\tt.sml} files; then {\tt.tex} files are further
+processed by \LaTeX{} to get the {\tt.dvi} file for printing.  These
+transformations are all to get a file of one suffix from a file with
+the same base-name but a different suffix.  Thus we name the shell
+scripts according to these suffixes.
+
+%--------------------------------------------------------------------
+
+\subsubsection{Dependencies}
+
+These programs use the sieve program, see~\cite{DS/FMU/IED/DTD053},
+they are written as Bourne Shell scripts (see {\tt sh(1)} of the Sun
+UNIX manual set) and require some of the utilities found with the Unix
+operating system.
+
+%--------------------------------------------------------------------
+
+\subsubsection{Interface}
+
+The user interface is described in the user documentation for the
+document processing system~\cite{DS/FMU/IED/USR001}.
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Possible Enhancements}
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Deficiencies}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{THE SHELL SCRIPTS}
+
+%doc2man_description:extract TeX or Standard ML view of a ProofPower document
+=DOC
+⦏doctex⦎ [-v] [-f view_file_name] [-e edit_script]
+		[-K] [-k keyword_file_name] <filename> ...
+⦏docsml⦎ [-v] [-f view_file_name] [-K] [-k keyword_file_name] <filename> ...
+=DESCRIBE
+Shell scripts that sieve each of their $filename$ arguments to produce
+various output files.  These arguments may be given just as the
+base-name, perhaps with a directory name prefix, or may include the {\tt.doc}.  When the $-v$ option is
+set details of the files read and written are shown on the standard
+output.  The default steering files are named {\tt sieveview} and {\tt
+sievekeyword} and looked for first in the current directory, second on
+the callers execution path (from the UNIX environment variable
+{\tt\$PATH}).
+The default viewfile may be changed with the $-f$ option.
+The default keyword file may be suppressed with the $-K$ option.
+Additional keyword files may be given with the $-k$ option which may be used
+several times.
+The $-e$ option identifies the name of a script of {\tt ex} commands which are used to edit the {\tt .tex} file.
+
+The output file from {\tt doctex} has suffix {\tt .tex} and is intended for processing with {\tt texdvi}.
+The output file from {\tt docsml} has suffix {\tt .sml} and is typically processed by loading
+it into a {\Product} database.
+=SEEALSO
+{\it texdvi},
+{\it docdvi}
+
+%doc2man_extra:.I "USR001: ProofPower - Document Preparation"
+
+=ENDDOC
+
+
+%doc2man_description:extract TeX or Standard ML view of a ProofPower utf8 document
+=DOC
+⦏pptex⦎ [-v] [-f view_file_name] [-e edit_script]
+		[-K] [-k keyword_file_name] <filename> ...
+⦏ppsml⦎ [-v] [-f view_file_name] [-K] [-k keyword_file_name] <filename> ...
+=DESCRIBE
+Shell scripts that sieve each of their $filename$ arguments to produce
+various output files.  These arguments may be given just as the
+base-name, perhaps with a directory name prefix, or may include the {\tt.pp}.  When the $-v$ option is
+set details of the files read and written are shown on the standard
+output.  The default steering files are named {\tt sieveview} and {\tt
+sievekeyword} and looked for first in the current directory, second on
+the callers execution path (from the UNIX environment variable
+{\tt\$PATH}).
+The default viewfile may be changed with the $-f$ option.
+The default keyword file may be suppressed with the $-K$ option.
+Additional keyword files may be given with the $-k$ option which may be used
+several times.
+The $-e$ option identifies the name of a script of {\tt ex} commands which are used to edit the {\tt .tex} file.
+
+The output file from {\tt pptex} has suffix {\tt .tex} and is intended for processing with {\tt texdvi}.
+The output file from {\tt ppsml} has suffix {\tt .sml} and is typically processed by loading
+it into a {\Product} database.
+=SEEALSO
+{\it texdvi},
+{\it docdvi}
+
+%doc2man_extra:.I "USR001: ProofPower - Document Preparation"
+
+=ENDDOC
+
+=GFT Internal Documentation
+⦏doctch⦎ [-v] [-f view_file_name] [-K] [-k keyword_file_name] <filename> ...
+⦏doctds⦎ [-v] [-f view_file_name] [-K] [-k keyword_file_name] <filename> ...
+=DESCRIBE
+Shell scripts that sieve each of their $filename$ arguments to produce
+various output files.  These arguments may be just the
+base-name, perhaps with a directory name prefix, or may include the {\tt.doc} suffix.  When the $-v$ option is
+set details of the files read and written are shown on the standard
+output.  The default steering files are named {\tt sieveview} and {\tt
+sievekeyword} and looked for first in the current directory, second on
+the callers execution path (from the UNIX environment variable
+{\tt\$PATH}).
+The default viewfile may be changed with the $-f$ option.
+The default keyword file may be suppressed with the $-K$ option.
+Additional keywordfiles may be given with the $-k$ option which may be used
+several times.
+
+The scripts produce output files in the current directory as follows.
+
+\begin{center}
+\begin{tabular}{|l|l|l|}\hline
+Script		& Output	& Purpose \\
+		& file		& \\
+		& suffix	& \\\hline\hline
+{\tt doctch}	& {\tt.tch}	& Theory check file \\
+{\tt doctds}	& {\tt.tds}	& Theory design file \\\hline
+\end{tabular}
+\end{center}
+=TEX
+
+=GFT Internal Documentation
+⦏pptch⦎ [-v] [-f view_file_name] [-K] [-k keyword_file_name] <filename> ...
+⦏pptds⦎ [-v] [-f view_file_name] [-K] [-k keyword_file_name] <filename> ...
+=DESCRIBE
+Shell scripts that sieve each of their $filename$ arguments to produce
+various output files.  These arguments may be just the
+base-name, perhaps with a directory name prefix, or may include the {\tt.pp} suffix.  When the $-v$ option is
+set details of the files read and written are shown on the standard
+output.  The default steering files are named {\tt sieveview} and {\tt
+sievekeyword} and looked for first in the current directory, second on
+the callers execution path (from the UNIX environment variable
+{\tt\$PATH}).
+The default viewfile may be changed with the $-f$ option.
+The default keyword file may be suppressed with the $-K$ option.
+Additional keywordfiles may be given with the $-k$ option which may be used
+several times.
+
+The scripts produce output files in the current directory as follows.
+
+\begin{center}
+\begin{tabular}{|l|l|l|}\hline
+Script		& Output	& Purpose \\
+		& file		& \\
+		& suffix	& \\\hline\hline
+{\tt doctch}	& {\tt.tch}	& Theory check file \\
+{\tt doctds}	& {\tt.tds}	& Theory design file \\\hline
+\end{tabular}
+\end{center}
+=TEX
+
+
+%doc2man_description: generate a .dvi file and a .sid file from a .tex file
+=DOC
+⦏texdvi⦎ [-v] [-b] [-p TeX_program_name] <filename> ...
+=DESCRIBE
+Shell script that runs \LaTeX{} on each of the $filename$ arguments
+to produce the corresponding {\tt.dvi} file.  These arguments may be
+just the base-name, perhaps with a directory name prefix, or may include the {\tt.tex} suffix.  When the $-v$
+option is set details of the {\tt.tex} and{\tt.dvi} files read and
+written are shown on the standard output.  To support indexing this
+script ensures that a {\tt.sid} file exists before \LaTeX{} is called;
+when \LaTeX{} completes any {\tt.idx} file is sorted to create
+a{\tt.sid} file ready for the next time {\tt texdvi} is used.  When
+initially producing a {\tt.dvi} file {\tt texdvi} will need to be run
+up to four times so that the derived information such as tables of
+contents and inter-page references stabilise.
+
+The \LaTeX{} program is {\tt latex} by default but a different program
+may be specified with the $-p$ option.
+
+If the {\tt -b} option is specified, {\tt bibtex} is run after running {\tt latex}.
+=SEEALSO
+{\it texdvi},
+{\it docdvi}
+
+%doc2man_extra:.I "USR001: ProofPower - Document Preparation"
+
+=ENDDOC
+
+%doc2man_description: produce a .dvi file from a ProofPower document
+=DOC
+⦏docdvi⦎ [-v] [-f view_file_name] [-K] [-k keyword_file_name]
+	[-e edit_file_name] [-p TeX_program_name] [-%calN%] <filename> ...
+=DESCRIBE
+Shell script that combines the actions of {\tt doctex}, {\tt bibtex}
+(which is part of the basic \TeX{} distribution) and {\tt texdvi} with
+the intention of fully processing a simple document from its {\tt.doc}
+form to a printable {\tt.dvi} file.
+
+The option $-\cal N$ controls how
+many times \LaTeX{} should be invoked, the default is three (i.e.,
+`$-3$'), the values of $\cal N$ may be in the range one to four
+inclusive.
+The other options are as for {\tt doctex} and {\tt texdvi}.
+
+\LaTeX{} and {\tt bibtex} are run so that if they detect
+errors and prompt for input they will read an end of file and thus stop
+immediately.
+
+In some cases an extra run of \LaTeX{} may be required.  In these cases
+\LaTeX{} will output the message: `{\em LaTeX Warning: Label(s) may
+have changed. Rerun to get cross-references right.}'
+=SEEALSO
+{\it doctex},
+{\it texdvi}
+
+%doc2man_extra:.I "USR001: ProofPower - Document Preparation"
+=ENDDOC
+
+%doc2man_description: produce a .dvi file from a ProofPower utf8 document
+=DOC
+⦏ppdvi⦎ [-v] [-f view_file_name] [-K] [-k keyword_file_name]
+	[-e edit_file_name] [-p TeX_program_name] [-%calN%] <filename> ...
+=DESCRIBE
+Shell script that combines the actions of {\tt doctex}, {\tt bibtex}
+(which is part of the basic \TeX{} distribution) and {\tt texdvi} with
+the intention of fully processing a simple document from its {\tt.pp}
+form to a printable {\tt.dvi} file.
+
+The option $-\cal N$ controls how
+many times \LaTeX{} should be invoked, the default is three (i.e.,
+`$-3$'), the values of $\cal N$ may be in the range one to four
+inclusive.
+The other options are as for {\tt doctex} and {\tt texdvi}.
+
+\LaTeX{} and {\tt bibtex} are run so that if they detect
+errors and prompt for input they will read an end of file and thus stop
+immediately.
+
+In some cases an extra run of \LaTeX{} may be required.  In these cases
+\LaTeX{} will output the message: `{\em LaTeX Warning: Label(s) may
+have changed. Rerun to get cross-references right.}'
+=SEEALSO
+{\it doctex},
+{\it texdvi}
+
+%doc2man_extra:.I "USR001: ProofPower - Document Preparation"
+=ENDDOC
+
+%doc2man_description: convert between the ASCII and extended character set formats for a ProofPower document
+=DOC
+⦏conv_ascii⦎ [-r] [-K] [-k keyword_file_name] <filename> ...
+⦏conv_extended⦎ [-r] [-K] [-k keyword_file_name] <filename> ...
+=DESCRIBE
+Three codings are available for \Product\ documents.
+
+They may be coded in ASCII, using \% keywords for non-ascii characters.
+Alternatively they may be encoded using the \Product\ extended character set, in which the character codes from 128 to 255 are used for frequently used non-ascii characters, some other characters (determined by the {\tt sievekeyword} file) may be encoded using a name for the character enclosed in \% characters and any other UNICODE character may be included by giving its UNICODE code point in hexadecimal or decimal enclosed in \% characters.
+They may also be encoded using their UNICODE code in a utf-8 file.
+In the former two cases the file should have a {\tt .doc} suffix, in the latter a {\tt .pp} suffix.
+
+Conversion between these formats is done by chosing the command with the appropriate name, i.e. $conv\_ascii$ to ASCII, $conv\_extended$ to convert to the \Product\ extended character set, and $conv\_utf8$ to convert to {\tt utf-8}.
+
+The $filename$ arguments may be just the base-name, perhaps with a directory name prefix, or may include a {\tt.doc} suffix or a {\tt .pp} suffix.
+If more than one is present and the suffix is not given on the command line, then the program will fail.
+
+By default, the result of the conversion is checked by converting in the opposite direction and comparing with the input.
+If the check is successful, the source file is deleted and the destination file is saved with the suffix appropriate to the output format.
+If the check is not successful then the source file is not deleted, and if the output file would have had the same suffix (i.e. in conversions to and from ASCII and the \Product\ extended character set) then the output file will be saved with the suffix {\it .asc} or {\it .ext} as appropriate.
+
+If $-r$ is specified no check is made and the output of the conversion is placed
+in a file with suffix {\tt.asc}, {\tt.ext} or {\tt .pp}, as appropriate.
+
+Note that the check will always fail on a file containing a mixture of extended
+characters and ASCII keywords for the extended characters (not necessarily if the file contains keywords for unicode code points not corresponding to extended characters).
+Use $-r$ and then, if all is well, overwrite the {\tt.doc} file with the {\tt.asc} or {\tt.ext} file using $mv(1)$ or $cp(1)$ to convert a such file into a homogeneous one.
+Also note that {\tt conv\_utf8} assumes that its input file is in the extended character set.
+If if is in ASCII then the conversion will be correct, but the check will fail.
+In this case, either use the {\tt -r} option or apply {\tt conv\_ext} before {\tt conv\_utf8}.
+
+The check will also fail if the file is already in the desired format,
+in which case there is no need to re-run the conversion program.
+
+In the case of conversion to utf-8, extended characters or their corresponding keyword will be replaced by the corresponding unicode code point encoded in utf-8.
+Any other keyword which has been assigned a code point will be converted to that uncode code point, and any explicit unicode code point (in the form \%\#x\emph{HHHHHH}\%) will also be converted to that code point.
+
+The $-K$ and $-k$ options indicate the keyword files to be used to determine the mapping of keywords to UNICODE code points.
+
+=SEEALSO
+{\it docpr}
+
+%doc2man_extra:.I "USR001: ProofPower - Document Preparation"
+
+=ENDDOC
+
+The rationale of having the default of the $-\cal N$ option being three
+is because the outputs of successive runs of \LaTeX{} are as follows,
+assuming before the first that there is only the {\tt.doc} file
+present.  Recall that \LaTeX{} produces the table of contents and index
+entries by writing to auxiliary files which are read in during
+subsequent executions.  The default could be four but the number of
+occasions when that is required would appear to be outweighed by the
+time taken to run \LaTeX{} the extra time.
+
+\begin{itemize}
+
+\item Start with only the {\tt.doc} file present.
+
+\item[1] Create {\tt.aux}, {\tt.idx} and {\tt.dvi} files with no space
+	in the {\tt.dvi} file for table of contents, index or
+	bibliographies.
+
+\item Run {\tt bibtex} to create a {\tt.bbl} file.
+
+\item[2] Now the {\tt.dvi} file has space for table of contents, etc.,
+	but these all items have the page numbers from the first run.
+
+\item[3] Produce a {\tt.dvi} file with correct page numbers.
+
+\item[4] In some cases an extra run is required to stabilise the
+	contents of the {\tt.dvi} file, this is due to execution~3
+	inserting longer page numbers and bibliographic references
+	which may cause different line and page breaks than those
+	inserted by execution~2.
+
+\item In some pathological cases the output may not stabilise, this is
+	mentioned in the \LaTeX{} book~\cite[page~70]{Lamport86}.
+
+\end{itemize}
+
+%doc2man_description:print out files containing ProofPower symbols verbatim
+=DOC
+⦏docpr⦎ [-n] [-p] [-s] [-v] [-w width] <filename> ...
+=DESCRIBE
+Shell script that prints out files that may contain extended characters
+in a verbatim-like manner.  Lines may be numbered in the output by
+using the $-n$ option.  Lines are folded at at~80 characters wide, or
+at the width given by the $-w\;\;width$ option.  The output may be
+viewed on screen with the $-s$ option, the default is to print the
+output.  By default all intermediate files are deleted, with the $-p$
+option the {\tt.dvi} file will be preserved.  With the $-v$ option
+details of the files processed are listed on the standard output.
+=SEEALSO
+{\it doctex},
+{\it texdvi}
+
+%doc2man_extra:.I "USR001: ProofPower - Document Preparation"
+=ENDDOC
+
+%doc2man_description:print out files containing ProofPower symbols verbatim
+=DOC
+⦏pppr⦎ [-n] [-p] [-s] [-v] [-w width] <filename> ...
+=DESCRIBE
+Shell script that prints out utf8 files that may contain non-ascii unicode characters
+in a verbatim-like manner.  Lines may be numbered in the output by
+using the $-n$ option.  Lines are folded at at~80 characters wide, or
+at the width given by the $-w\;\;width$ option.  The output may be
+viewed on screen with the $-s$ option, the default is to print the
+output.  By default all intermediate files are deleted, with the $-p$
+option the {\tt.dvi} file will be preserved.  With the $-v$ option
+details of the files processed are listed on the standard output.
+=SEEALSO
+{\it doctex},
+{\it texdvi}
+
+%doc2man_extra:.I "USR001: ProofPower - Document Preparation"
+=ENDDOC
+
+=IGN DOC
+⦏palette⦎
+=IGN DESCRIBE
+Shell script, with no arguments, which is used to show a palette of the
+extended characters used by ICL HOL.
+=IGN ENDDOC
+=TEX
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{TEST POLICY}
+
+Tests to exercise the functionality of sieve and to check the way the scripts process their arguments are to be provided.
+\end{document}
+

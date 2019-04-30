@@ -1,0 +1,673 @@
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,12pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+\makeindex
+\def\Slrp{{\bf SLRP}}
+\def\Hide#1{\relax}
+
+%%%%% YOU WILL USUALLY WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{ The ANSI-C Reference Grammar in {\Slrp} Format }
+
+\def\Abstract{\begin{center}
+{\bf Abstract}\par\parbox{0.7\hsize}
+{\small This document gives the reference grammar for ANSI-C in {\Slrp} format.}
+\end{center}}
+
+\def\Reference{LEMMA1/PPTEX/WRK063}
+
+\def\Author{R.D. Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 118 958 4409}
+
+\def\Fax{+44 118 956 1920}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+\begin{centering}
+
+
+
+\end{centering}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{$Revision: 1.10 $%
+}
+\def\Date{\FormatDate{$Date: 2003/04/09 14:32:23 $%
+}}
+
+%%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+%%%%% STANDARD RED-TAPE SECTIONS (MAY WANT TO INTERLEAVE SOME \newpage COMMANDS IN THESE)
+
+%%%%% CONTENTS:
+
+\subsection{Contents}
+
+\tableofcontents
+
+%%%%% REFERENCES:
+
+\subsection{References}
+
+\bibliographystyle{fmu}
+
+%%%%% CHANGE THE FOLLOWING AS NECESSARY (E.G., TO PICK UP daz.bib):
+{\raggedright
+\bibliography{fmu}
+}
+%%%%% CHANGES HISTORY:
+\subsection{Changes History}
+\begin{description}
+\item[Issues 1.1 (2003/03/04) -- 1.3 (2003/03/05)] First drafts.
+\item[ Issue 1.4 (2003/03/05) ] Corrections after (semi-automatic) testing against all of the {\tt xpp} code.
+\item[ Issues 1.5 (2003/03/05), 1.6 (2003/03/06) ] Updates for new representation of {\it LEX\_VALUE}s.
+\item[ Issue 1.7 (2003/03/07) ] Added tests for (and corrected) lexis of floating constants etc.
+\item[ Issue 1.8 (2003/03/07) ] Better interface for tree printing.
+\item[ Issue 1.9 (2003/03/07) ] Allowed for new, more polymorphic, generic  parser interface.
+\item[Issue 1.10 (2003/04/09)] Added some extra commentary.
+\item[Issue 1.11 (2006/10/22)] A full working parser is now supplied in a separate document, \cite{LEMMA1/DEV/WRK077}, and the approximation to a working parser that was formally given in this document has been removed.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+\item[2015/11/25]
+Commented out confusing handling of the grammar files.
+\item[2015/11/26]
+Simplified handling of the grammar file: there is no longer any need to construct it in four pieces.
+
+
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%%%%%  CHANGES FORECAST:
+
+\subsection{Changes Forecast}
+
+As determined by experience with the template.
+
+%%%%% DISTRIBUTION LIST
+
+\subsection{Distribution}
+\begin{center}
+\begin{tabular}{ll}
+Lemma 1 Development Library
+\end{tabular}
+\end{center}
+
+
+\newpage
+
+%%%%% NOW THE CREATIVE BIT:
+
+\section{Introduction}
+\subsection{Scope}
+This document provides an example of a grammar in the {\Slrp} format.
+It may be used, {\it inter alia}, for testing the {\Slrp} parser generator.
+
+\subsection{Purpose and Background}
+This document is part of the {\Slrp} test suite and also provides an example of
+various techniques of interest to users of {\Slrp}.
+
+\subsection{Overview}
+
+This document gives a grammar for ANSI C as per the 1990 standard \cite{ansi90}.
+The grammar follows Kernighan \& Ritchie \cite{kernighan88} in leaving out lexical details and
+preprocessor syntax.
+
+The grammar is presented so that it can be processed by the {\Slrp} parser generator
+to check it for LALR(1) conflicts.
+Section~\ref{REFERENCE} of this document gives the grammar, much as in \cite{kernighan88}.
+This grammar is given top-down, and is divided into four sections: translation units, declarations,
+statements and expressions. The output from processing this section comprises
+a {\Slrp} input files: {\tt c.grm.txt}.
+The sentence symbols for the grammar is {\it translation\_unit}.
+
+The resulting {\Slrp} grammar for {\it translation\_unit} is essentially an instance of the observations at the beginning
+of appendix A13 of~\cite{kernighan88}, which correctly predicts that the results is free
+of LALR(1) conflicts apart from the shift/reduce conflict caused by the ``dangling else'' ambiguity
+(which is to be resolved by always shifting, which makes the dangling else belong to the innermost
+if-statement).
+
+The grammar as presented in section~\ref{REFERENCE} is not suitable for practical use.
+This is because it presupposes that the names defined in {\tt typedef} declarations.can be
+distinguished lexically, whereas, in fact, that distinction is necessarily context-sensitive.
+A companion document, \cite{LEMMA1/DEV/WRK077} gives a {\Slrp} grammar that
+can be used to parse the full ANSI-C language, but which is necesarily more complex than the
+reference grammar presented here.
+
+=TEX
+\section{THE GRAMMAR} \label{REFERENCE}
+\subsection{Translation Units}
+=DUMP c.grm.txt
+⦏translation_unit⦎
+	= external_declaration
+	| translation_unit, external_declaration
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏external_declaration⦎
+	= function_definition
+	| declaration
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏function_definition⦎
+	= declarator, compound_statement
+	| declarator, declaration_list, compound_statement
+	| declaration_specifiers, declarator, compound_statement
+	| declaration_specifiers, declarator, declaration_list, compound_statement
+	;
+=TEX
+\subsection{Declarations}
+
+=TEX
+=DUMPMORE c.grm.txt
+⦏declaration⦎
+	= declaration_specifiers, `;`
+	| declaration_specifiers, init_declarator_list, `;`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏declaration_list⦎
+	= declaration
+	| declaration_list, declaration
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏declaration_specifiers⦎
+	= storage_class_specifier
+	| storage_class_specifier, declaration_specifiers
+	| type_specifier
+	| type_specifier, declaration_specifiers
+	| type_qualifier
+	| type_qualifier, declaration_specifiers
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏storage_class_specifier⦎
+	= `auto`
+	| `register`
+	| `static`
+	| `extern`
+	| `typedef`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏type_specifier⦎
+	= `void`
+	| `char`
+	| `short`
+	| `int`
+	| `long`
+	| `float`
+	| `double`
+	| `signed`
+	| `unsigned`
+	| struct_or_union_specifier
+	| enum_specifier
+	| typedef_name
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏type_qualifier⦎
+	= `const`
+	| `volatile`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏struct_or_union_specifier⦎
+	= struct_or_union, `{`, struct_declaration_list, `}`
+	| struct_or_union, identifier, `{`, struct_declaration_list, `}`
+	| struct_or_union, identifier
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏struct_or_union⦎
+	= `struct`
+	| `union`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏struct_declaration_list⦎
+	= struct_declaration
+	| struct_declaration_list, struct_declaration
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏init_declarator_list⦎
+	= init_declarator
+	| init_declarator_list, `,`, init_declarator
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏init_declarator⦎
+	= declarator
+	| declarator, `=`, initializer
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏struct_declaration⦎
+	= specifier_qualifier_list, struct_declarator_list, `;`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏specifier_qualifier_list⦎
+	= type_specifier
+	| type_specifier, specifier_qualifier_list
+	| type_qualifier
+	| type_qualifier, specifier_qualifier_list
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏struct_declarator_list⦎
+	= struct_declarator
+	| struct_declarator_list, `,`, struct_declarator
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏struct_declarator⦎
+	= declarator
+	| `:`, constant_expression
+	| declarator, `:`, constant_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏enum_specifier⦎
+	= `enum`, `{`, enumerator_list, `}`
+	| `enum`, identifier, `{`, enumerator_list, `}`
+	| `enum`, identifier
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏enumerator_list⦎
+	= enumerator
+	| enumerator_list, `,`, enumerator
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏enumerator⦎
+	= identifier
+	| identifier, `=`, constant_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏declarator⦎
+	= direct_declarator
+	| pointer, direct_declarator
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏direct_declarator⦎
+	= identifier
+	| `(`, declarator, `)`
+	| direct_declarator, `[`, `]`
+	| direct_declarator, `[`, constant_expression, `]`
+	| direct_declarator, `(`, `)`
+	| direct_declarator, `(`, parameter_type_list, `)`
+	| direct_declarator, `(`, identifier_list, `)`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏pointer⦎
+	= `*`
+	| `*`, type_qualifier_list
+	| `*`, pointer
+	| `*`, type_qualifier_list, pointer
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏type_qualifier_list⦎
+	= type_qualifier
+	| type_qualifier_list, type_qualifier
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏parameter_type_list⦎
+	= parameter_list
+	| parameter_list, `,`, `...`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏parameter_list⦎
+	= parameter_declaration
+	| parameter_list, `,`, parameter_declaration
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏parameter_declaration⦎
+	= declaration_specifiers, declarator
+	| declaration_specifiers
+	| declaration_specifiers, abstract_declarator
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏identifier_list⦎
+	= identifier
+	| identifier_list, `,`, identifier
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏initializer⦎
+	= assignment_expression
+	| `{`, initializer_list, `}`
+	| `{`, initializer_list, `,`, `}`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏initializer_list⦎
+	= initializer
+	| initializer_list, `,`, initializer
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏type_name⦎
+	= specifier_qualifier_list
+	| specifier_qualifier_list, abstract_declarator
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏abstract_declarator⦎
+	= pointer
+	| direct_abstract_declarator
+	| pointer, direct_abstract_declarator
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏direct_abstract_declarator⦎
+	= `(`, abstract_declarator, `)`
+	| `[`, `]`
+	| `[`, constant_expression, `]`
+	| direct_abstract_declarator, `[`, `]`
+	| direct_abstract_declarator, `[`, constant_expression, `]`
+	| `(`, `)`
+	| `(`, parameter_type_list, `)`
+	| direct_abstract_declarator, `(`, `)`
+	| direct_abstract_declarator, `(`, parameter_type_list, `)`
+	;
+=TEX
+The production for {\it typedef\_name} has to be modified, since the grammar becomes ambiguous
+if typedef names cannot be distinugished from other names. E.g., to decide whether the
+expression ``{\tt(X)(x)}'' is a cast or a function call, one needs to know whether ``{\tt X}''
+denotes a type.
+=DUMPMORE c.grm.txt
+⦏typedef_name⦎ = TypeDefName;
+=TEX
+\subsection{Statements}
+=DUMPMORE c.grm.txt
+⦏statement⦎
+	= labeled_statement
+	| compound_statement
+	| expression_statement
+	| selection_statement
+	| iteration_statement
+	| jump_statement
+	;
+=TEX
+=TEX
+=DUMPMORE c.grm.txt
+⦏labeled_statement⦎
+	= identifier, `:`, statement
+	| `case`, constant_expression, `:`, statement
+	| `default`, `:`, statement
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏compound_statement⦎
+	= `{`, `}`
+	| `{`, statement_list, `}`
+	| `{`, declaration_list, `}`
+	| `{`, declaration_list, statement_list, `}`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏statement_list⦎
+	= statement
+	| statement_list, statement
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏expression_statement⦎
+	= `;`
+	| expression, `;`
+	;
+=TEX
+This is where the shift/reduce conflict arises. The statement ``{\tt if(a) if(b) f(); else g();}''
+can be parsed so that the else-part belongs to the inner if-statement or the outer one
+according to the following grammar. The resolution is that it should belong to the
+inner if-statement, i.e., reduce.
+=DUMPMORE c.grm.txt
+⦏selection_statement⦎
+	= `if`, `(`, expression, `)`, statement
+	| `if`, `(`, expression, `)`, statement, `else`, statement
+	| `switch`, `(`, expression, `)`, statement
+	;
+=TEX
+To avoid 7 extra cases in the following, we introduce a new production for an optional expression.
+=DUMPMORE c.grm.txt
+⦏iteration_statement⦎
+	= `while`, `(`, expression, `)`, statement
+	| `do`, statement, `while`, `(`, expression, `)`, `;`
+	| `for`, `(`, expression_opt, `;`, expression_opt, `;`, expression_opt, `)`,
+	  statement
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏expression_opt⦎
+	=
+	| expression;
+=TEX
+=DUMPMORE c.grm.txt
+⦏jump_statement⦎
+	= `goto`, identifier, `;`
+	| `continue`, `;`
+	| `break`, `;`
+	| `return`, expression_opt, `;`
+	;
+=TEX
+\subsection{Expressions}
+
+=DUMPMORE c.grm.txt
+⦏expression⦎
+	= assignment_expression
+	| expression, `,`, assignment_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+=TEX
+=DUMPMORE c.grm.txt
+⦏assignment_expression⦎
+	= conditional_expression
+	| unary_expression, assignment_operator, assignment_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏assignment_operator⦎
+	= `=`
+	| `*=`
+	| `/=`
+	| `%=`
+	| `+=`
+	| `-=`
+	| `<<=`
+	| `>>=`
+	| `&=`
+	| `^=`
+	| `|=`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏conditional_expression⦎
+	= logical_or_expression
+	| logical_or_expression, `?`, expression, `:`, conditional_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏constant_expression⦎
+	= conditional_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏logical_or_expression⦎
+	= logical_and_expression
+	| logical_or_expression, `||`, logical_and_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏logical_and_expression⦎
+	= inclusive_or_expression
+	| logical_and_expression, `&&`, inclusive_or_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏inclusive_or_expression⦎
+	= exclusive_or_expression
+	| inclusive_or_expression, `|`, exclusive_or_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏exclusive_or_expression⦎
+	= and_expression
+	| exclusive_or_expression, `^`, and_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏and_expression⦎
+	= equality_expression
+	| and_expression, `&`, equality_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏equality_expression⦎
+	= relational_expression
+	| equality_expression, `==`, relational_expression
+	| equality_expression, `!=`, relational_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏relational_expression⦎
+	= shift_expression
+	| relational_expression, `<`, shift_expression
+	| relational_expression, `>`, shift_expression
+	| relational_expression, `<=`, shift_expression
+	| relational_expression, `>=`, shift_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏shift_expression⦎
+	= additive_expression
+	| shift_expression, `<<`, additive_expression
+	| shift_expression, `>>`, additive_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏additive_expression⦎
+	= multiplicative_expression
+	| additive_expression, `+`, multiplicative_expression
+	| additive_expression, `-`, multiplicative_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏multiplicative_expression⦎
+	= cast_expression
+	| multiplicative_expression, `*`, cast_expression
+	| multiplicative_expression, `/`, cast_expression
+	| multiplicative_expression, `%`, cast_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏cast_expression⦎
+	= unary_expression
+	| `(`, type_name, `)`, cast_expression
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏unary_expression⦎
+	= postfix_expression
+	| `++`, unary_expression
+	| `--`, unary_expression
+	| unary_operator, cast_expression
+	| `sizeof`, unary_expression
+	| `sizeof`, `(`, type_name, `)`
+	;
+⦏unary_operator⦎
+	= `&`
+	| `*`
+	| `+`
+	| `-`
+	| `~`
+	| `!`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏postfix_expression⦎
+	= primary_expression
+	| postfix_expression, `[`, expression, `]`
+	| postfix_expression, `(`, `)`
+	| postfix_expression, `(`, argument_expression_list, `)`
+	| postfix_expression, `.`, identifier
+	| postfix_expression, `->`, identifier
+	| postfix_expression, `++`
+	| postfix_expression, `--`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏primary_expression⦎
+	= identifier
+	| constant
+	| string
+	| `(`, expression, `)`
+	;
+=TEX
+=DUMPMORE c.grm.txt
+⦏argument_expression_list⦎
+	= assignment_expression
+	| argument_expression_list, `,`, assignment_expression
+	;
+=TEX
+We leave enumeration constants out of the following list, on the grounds that a practical parser
+would more likely treat them as identifiers during lexical analysis. The distinction between
+enumeration constants and other identifiers does not affect the parsing.
+=DUMPMORE c.grm.txt
+⦏constant⦎
+	= IntegerConstant
+	| CharacterConstant
+	| FloatingConstant
+	;
+=TEX
+We add productions for {\it string} and identifier just to keep the naming scheme uniform.
+=DUMPMORE c.grm.txt
+⦏string⦎
+	= String
+	;
+=DUMPMORE c.grm.txt
+⦏identifier⦎
+	= Identifier
+	;
+=TEX
+In the following 
+=SH
+slrp -g -l 2  -f c.grm.txt >c.grm.run
+=TEX
+\newpage
+\section{INDEX}
+\small
+\printindex
+\end{document}
+

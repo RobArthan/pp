@@ -1,0 +1,334 @@
+=IGN
+********************************************************************************
+imp072.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  ℤ $Date: 2002/10/17 16:20:01 $ $Revision: 1.13 $ $RCSfile: imp072.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation for the Theory of Functional Relations}
+
+\def\AbstractText{This document creates the theory ``relation''.}
+
+\def\Reference{DS/FMU/IED/IMP072}
+
+\def\Author{R.B.Jones}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: %  ℤ $Date: 2002/10/17 16:20:01 $ $Revision: 1.13 $ $RCSfile: imp072.doc,v $
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}
+%% LaTeX2e port: \TPPtitle{Implementation for the Theory of Functional Relations}
+%% LaTeX2e port: \def\TPPheadtitle{Implementation for the Theory \cr
+%% LaTeX2e port: of Functional Relations}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP072}
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.13 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{R.B.Jones & WIN01}
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document creates the theory ``relation''.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Project Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item[Issue 1.4 (1992/05/28) (\FormatDate{92/05/28
+})]
+This is the first draft of the document.
+\item[Issue 1.6 (1992/06/16) (\FormatDate{92/06/16
+})]
+Spec now in this document not the implementation.
+\item[Issue 1.7 (1992/06/26) (\FormatDate{92/06/26
+})]
+Corrected definition of $At$ and added a theorem about it.
+
+\item[Issue 1.8 (1992/10/07)~(\FormatDate{92/10/07%%
+})]
+	First real issue.
+
+\item[Issue 1.9 (1992/10/23)~(\FormatDate{92/10/23%%
+})]
+	Add $at\_at\_eq\_thm$.
+
+
+%\item[Issue 1.10 (1993/02/02)]
+	Proof context name changes.
+\item[Issue 1.11 (1993/02/02)]
+	Fixed {\LaTeX} errors.
+\item[Issue 1.12 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.13 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.14 (2006/12/10)] Removed dead code.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+
+\section{GENERAL}
+\subsection{Scope}
+This document contains an implementation of the theory of functional relations.
+The design is in \cite{DS/FMU/IED/DTD072}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains an implementation of the theory of functional relations.
+\subsubsection{Dependencies}
+This document takes its signature from \cite{DS/FMU/IED/DTD072}.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+\section{THE THEORY ``fun\_rel''}
+=SML
+structure ⦏FunRelTheory⦎ : FunRelTheory = struct
+val _ = open_theory "fun_rel";
+val _ = push_pc "basic_hol";
+=TEX
+=SML
+val ⦏⇸_def⦎ = get_defn"-""⇸";
+=SML
+val ⦏→_def⦎ = get_defn"-""→";
+val ⦏⤔_def⦎ = get_defn"-""⤔";
+val ⦏↣_def⦎ = get_defn"-""↣";
+val ⦏⤀_def⦎ = get_defn"-""⤀";
+val ⦏↠_def⦎ = get_defn"-""↠";
+val ⦏⤖_def⦎ = get_defn"-""⤖";
+val ⦏at_def⦎ = get_defn"-""At";
+
+val arrow_thms = [ ⇸_def, →_def, ⤔_def, ↣_def, ⤀_def, ↠_def, ⤖_def ];
+=TEX
+=SML
+val _ = (
+push_consistency_goal⌜$At⌝;
+a(prove_∃_tac THEN REPEAT strip_tac);
+a(cases_tac⌜∃y⦁ (x', y) ∈ f' ∧ (∀ z⦁ (x', z) ∈ f' ⇒ z = y)⌝);
+(* *** Goal "1" *** *)
+a(∃_tac⌜y⌝ THEN REPEAT strip_tac);
+a(spec_asm_tac⌜∀ z⦁ (x', z) ∈ f' ⇒ z = y'⌝⌜y⌝);
+(* *** Goal "2" *** *)
+a(asm_rewrite_tac[]);
+save_consistency_thm⌜$At⌝(pop_thm())
+);
+=TEX
+=SML
+val ⦏graph_at_thm⦎ = save_thm("graph_at_thm", (
+push_goal([], ⌜∀f x⦁ Graph f @ x = f x⌝);
+a(REPEAT strip_tac);
+a(rewrite_tac[get_spec⌜Graph⌝]);
+a(PC_T"hol1"(strip_asm_tac(list_∀_elim[⌜{(x, y)|y = f x}⌝, ⌜x⌝, ⌜f x⌝](get_spec⌜$At⌝))));
+pop_thm()
+));
+=TEX
+See \cite{spivey89} section 4.3.
+
+
+=SML
+val _ = push_merge_pcs["'bin_rel","hol2"];
+
+val inv_rel_∈_arrow_thm = save_thm("inv_rel_∈_arrow_thm", tac_proof((nil, ⌜
+∀ f a b ⦁
+(	f↗~↕ ∈ (b ↔ a) ⇔ f ∈ (a ↔ b) )
+∧ (	f↗~↕ ∈ (b ⇸ a) ⇔ f ∈ (a ↔ b) ∩ Injective )
+∧ (	f↗~↕ ∈ (b → a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ (Surjective b) )
+∧ (	f↗~↕ ∈ (b ⤔ a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ Functional )
+∧ (	f↗~↕ ∈ (b ⤀ a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ (Total a) )
+∧ (	f↗~↕ ∈ (b ↠ a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ (Total a) ∩ (Surjective b) )
+∧ (	f↗~↕ ∈ (b ⤖ a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ Functional ∩ (Surjective b) ∩ (Total a) )
+∧ (	f↗~↕ ∈ (b ↣ a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ Functional ∩ (Surjective b) )
+⌝),
+	pure_rewrite_tac(arrow_thms@[∩_def,
+		prove_rule nil ⌜ ∀ f a b ⦁ f↗~↕ ∈ (b ↔ a) ⇔ f ∈ (a ↔ b) ⌝,
+		inv_rel_thm])
+	THEN taut_tac));
+
+val _ = pop_pc();
+=TEX
+
+=IGN
+push_goal(nil,⌜
+∀ f a b ⦁
+(	f↗~↕ ∈ (b ↔ a) ⇔ f ∈ (a ↔ b) )
+∧ (	f↗~↕ ∈ (b ⇸ a) ⇔ f ∈ (a ↔ b) ∩ Injective )
+∧ (	f↗~↕ ∈ (b → a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ (Surjective b) )
+∧ (	f↗~↕ ∈ (b ⤔ a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ Functional )
+∧ (	f↗~↕ ∈ (b ⤀ a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ (Total a) )
+∧ (	f↗~↕ ∈ (b ↠ a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ (Total a) ∩ (Surjective b) )
+∧ (	f↗~↕ ∈ (b ⤖ a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ Functional ∩ (Surjective b) ∩ (Total a) )
+∧ (	f↗~↕ ∈ (b ↣ a) ⇔ f ∈ (a ↔ b) ∩ Injective ∩ Functional ∩ (Surjective b) )
+⌝);
+a(pure_rewrite_tac(arrow_thms@[∩_def,
+		prove_rule nil ⌜ ∀ f a b ⦁ f↗~↕ ∈ (b ↔ a) ⇔ f ∈ (a ↔ b) ⌝,
+		inv_rel_thm]));
+
+
+push_goal(nil,⌜∀ f a b ⦁ f↗~↕ ∈ (b ↔ a) ⇔ f ∈ (a ↔ b) ⌝);
+a(prove_tac nil);
+
+val bin_rel_defs = map snd(get_defns "-");
+
+=SML
+val at_at_eq_thm = save_thm("at_at_eq_thm", (
+push_goal(nil, ⌜ ∀ f X Y x y ⦁ f ∈ (X ⇸ Y) ∧ x ∈ Dom f ∧ y ∈ Dom f
+	⇒ (f @ x = f @ y ⇔ ∃ z ⦁ (x, z) ∈ f ∧ (y, z) ∈ f) ⌝ );
+a(REPEAT ∀_tac);
+a(strip_asm_tac(∀_elim ⌜f⌝ (get_spec⌜$At⌝)));
+a(PC_T1 "sets_ext" rewrite_tac ((map snd(get_defns "bin_rel")) @ arrow_thms) THEN REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(list_spec_nth_asm_tac 6 [⌜x⌝,⌜y'⌝]);
+(* *** Goal "1.1" *** *)
+a(list_spec_nth_asm_tac 6 [⌜x⌝,⌜z⌝,⌜y'⌝]);
+(* *** Goal "1.2" *** *)
+a(list_spec_nth_asm_tac 7 [⌜y⌝,⌜y''⌝]);
+(* *** Goal "1.2.1" *** *)
+a(list_spec_nth_asm_tac 7 [⌜y⌝,⌜z⌝,⌜y''⌝]);
+(* *** Goal "1.2.2" *** *)
+a(∃_tac ⌜y'⌝ THEN REPEAT strip_tac);
+a(GET_NTH_ASM_T 2 (rewrite_thm_tac o eq_sym_rule));
+a(GET_NTH_ASM_T 3 rewrite_thm_tac);
+a(GET_NTH_ASM_T 1 rewrite_thm_tac THEN REPEAT strip_tac);
+(* *** Goal "2" *** *)
+a(list_spec_nth_asm_tac 7 [⌜x⌝,⌜z⌝]);
+(* *** Goal "2.1" *** *)
+a(list_spec_nth_asm_tac 7 [⌜x⌝,⌜z'⌝,⌜z⌝]);
+(* *** Goal "2.2" *** *)
+a(list_spec_nth_asm_tac 8 [⌜y⌝,⌜z⌝]);
+(* *** Goal "2.2.1" *** *)
+a(list_spec_nth_asm_tac 8 [⌜y⌝,⌜z'⌝,⌜z⌝]);
+(* *** Goal "2.2.2" *** *)
+a(pure_asm_rewrite_tac nil THEN strip_tac);
+
+pop_thm()
+));
+=TEX
+
+
+\subsection{End of Theory ``fun\_rel''}
+\section{CONVERSIONS}
+\section{PROOF CONTEXTS}
+The extensional context is good for proving results involving the operators introduced in this theory.
+
+=SML
+val _ = (delete_pc "'fun_rel_ext"; "Deleted original proof context: 'fun_rel_ext")
+	handle _ => "Could not delete original proof context: 'fun_rel_ext";
+=TEX
+
+
+=SML
+val _ =
+	new_pc					⦏"'fun_rel_ext"⦎;
+val _ =
+	commit_pc				"'fun_rel_ext";
+=IGN
+val _ =
+let
+	val pos_bits =
+		thms_to_eqn_cxt[rel_∈_in_clauses, fun_rel_ext_clauses]
+	;
+	val neg_strips = map (mk_¬ ** RAND_C) pos_bits;
+	val new_strips = pos_bits @ neg_strips;
+in
+	new_pc					⦏"'fun_rel_ext"⦎;
+	set_st_eqn_cxt	new_strips		"'fun_rel_ext";
+	set_sc_eqn_cxt	new_strips		"'fun_rel_ext";
+	set_rw_eqn_cxt	pos_bits		"'fun_rel_ext";
+	add_rw_thms	bin_rel_defs		"'fun_rel_ext";
+	set_pr_tac	basic_prove_tac		"'fun_rel_ext";
+	set_pr_conv	basic_prove_conv	"'fun_rel_ext";
+	commit_pc				"'fun_rel_ext";
+
+	()
+end;
+=TEX
+=SML
+end; (* of structure FunRelTheory *)
+open FunRelTheory;
+=TEX
+\newpage
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+

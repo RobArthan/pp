@@ -1,0 +1,823 @@
+=IGN
+********************************************************************************
+int501.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ $Revision: 1.33 $ $RCSfile: int501.doc,v $ $Date: 2006/09/19 11:24:22 $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{VC Generation Examples}
+
+\def\AbstractText{This document gives a Compliance Notation script with examples of each kind of VC generation.}
+
+\def\Reference{ISS/HAT/DAZ/INT501}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{VC Generation Examples}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{VC Generation Examples}
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/INT501}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.33 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/09/19 11:24:22 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Informal}
+%% LaTeX2e port: %\TPPstatus{Informal}
+%% LaTeX2e port: \TPPtype{Technical}
+%% LaTeX2e port: %\TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & HAT Team}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{D.J.~King & WIN01}
+%% LaTeX2e port: \TPPabstract{%
+%% LaTeX2e port: This document gives a Compliance Notation script with examples of each kind of VC generation.
+%% LaTeX2e port: }
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: \def\TPPheadlhs{Lemma 1 Ltd.}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\pagebreak
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1 (1994/11/08)-1.13
+] Initial Drafts.
+\item[Issue 1.14 (1997/05/22)]
+Changed to have only one compilation unit per script.
+\item[Issue 1.15 (1997/05/29)-1.16 (1997/06/02)]
+IUCT WP 7 changes (checking variable initialisation is handled correctly).
+\item[Issue 1.17 (1997/06/03)] IUCT WP 2 changes.
+\item[Issue 1.18 (1997/07/21)] IUCT WP 4 changes.
+\item[Issue 1.19 (1997/08/05)] Made it work with resolution of issue 4 (V0.7.3).
+\item[Issue 1.20 (2000/06/24)] Fixed test that had an initial variable in a pre-condition.
+\item[Issue 1.21 (2000/10/25)] CTLE II R2/1: global variable unsoundness.
+\item[Issue 1.22 (2002/08/23)] Removed use of ICL logo font.
+\item[Issue 1.23 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.24 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.25 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.26 (2004/02/07)] The SPARK program is now referred to as the Ada program.
+\item[Issue 1.27 (2005/05/28)] Compliance Notation reserved words are now prefixed by a dollar sign.
+\item[Issue 1.28 (2006/03/22)] Allowing for issues 117 and 118.
+\item[Issue 1.29 (2006/03/28)] Allowed for automated state management.
+\item[Issue 1.31 (2006/06/01)] Accommodated enhancement 139 --- 1-theory-per-subprogram.
+\item[Issue 1.32 (2006/07/21)] Accommodated enhancement 162 --- context theories.
+\item[Issue 1.33 (2006/09/19)] Allowed for enhancement 165.
+\item[Issue 1.34 (2008/02/10)] Allowed for change to lexical rules for underscores in Z.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+\subsection{Changes Forecast}
+None.
+
+\pagebreak
+\section{GENERAL}
+
+\subsection{Scope}
+
+This document contains test data for the Compliance Tool as specified in \cite{ISS/HAT/DAZ/HLD501} and \cite{ISS/HAT/DAZ/USR501}.
+
+\subsection{Introduction}
+
+For integration testing and other purposes it is convenient to have a brief script showing each kind of VC generation, i.e., exercising each use of the function $vcs$ in volume I of \cite{DRA/CIS/CSE3/TR/94/27/1.2}
+
+\section{THE LITERATE SCRIPTS}
+
+The following list of reasons why VCs are generated is believed to be comprehensive and may be checked by looking for uses of the function $vcs$ in \cite{DRA/CIS/CSE3/TR/94/27/1.2}.
+
+\begin{enumerate}
+\item
+To check that a formal subprogram in a package body refines its specification statement in the package specification (there are three cases: procedure with and without data refinement, and function: $form\_proc\_pack\_body$, $form\_fun\_pack\_body$: ).
+\item
+To check that a formal subprogram appearing as a subunit refines its specification statement in the stub (two cases: procedure and function form: \_proc\_subunit, $form\_fun\_subunit$).
+\item
+To check that the sequence of statements constituting the body of a subprogram is a refinement of its formal specification (two cases: procedure and function form: $vcs\_body\_proc$, $vcs\_body\_fun$).
+\item
+To check that a package initialisation establishes the invariants introduced in the using clauses of the package body. ($vcs\_aux\_initial$).
+\item
+To check that the sequence of statements in a refinement does refine the corresponding specification statement ($vcs\_speclabel$).
+\end{enumerate}
+
+\subsection{Setting up of the enivronment}
+
+Set up flags so the compilance tool works correctly.
+
+=SML
+set_flags [("z_type_check_only", false),("z_use_axioms", true)];
+=TEX
+
+Load the test harness.
+
+=SML
+use_file "dtd013";
+use_file "imp013";
+=TEX
+
+\subsection{Useful functions}
+
+Functions for recording some statistics of theories.
+
+=SML
+type theory_stats = {np : int, ng : int, na : int, nd : int, nc : int};
+local
+    fun noof_parents thy = (length o get_parents) thy;
+    fun noof_global thy = (length o get_consts) thy;
+    fun noof_axioms thy = (length o get_axioms) thy;
+    fun noof_defns thy = (length o get_defns) thy;
+    fun noof_conjectures thy = (length o get_conjectures) thy;
+in
+    fun get_theory_stats (thy : string) : theory_stats =
+    let
+        val np = noof_parents thy;
+        val ng = noof_global thy;
+        val na = noof_axioms thy;
+        val nd = noof_defns thy;
+        val nc = noof_conjectures thy;
+    in
+        {np = np, ng = ng, na = na, nd = nd, nc = nc}
+    end;
+end;
+=TEX
+=SML
+fun clean_up () = (
+        let     val thys = (get_descendants "cn" less "cn")
+                                        diff get_cache_theories();
+                fun del_thy thy = (force_delete_theory thy handle Fail _ => ());
+        in      map del_thy thys
+        end;    ()
+);
+=TEX
+
+\pagebreak
+\subsection{Subprograms in Packages}
+\subsubsection{Functions in Packages}
+
+=SML
+open_theory"cn";
+clean_up();
+new_script{name="FNC_IN_PCK", unit_type="spec"};
+=TEX
+
+ⓈCN
+package FNC_IN_PCK is
+
+	function LOWER_BOUND (M : INTEGER) return INTEGER
+	Ξ [FNC_IN_PCKoLOWER_BOUND(M) < M];
+
+end FNC_IN_PCK;
+■
+=SML
+output_z_document {script="FNC_IN_PCK'spec", out_file="int501A.sml"};
+output_ada_program {script="-", out_file="int501A.ada"};
+new_script{name="FNC_IN_PCK", unit_type="body"};
+
+ⓈCN
+package body FNC_IN_PCK is
+
+	function LOWER_BOUND (M : INTEGER) return INTEGER
+	Ξ [LOWER_BOUND(M) = M - 1]
+	is
+	begin
+		return M - 1;
+	end LOWER_BOUND;
+
+end FNC_IN_PCK;
+■
+
+=SML
+output_z_document {script="FNC_IN_PCK'body", out_file="int501Aa.sml"};
+output_ada_program {script="-", out_file="int501Aa.ada"};
+=TEX
+
+\pagebreak
+\subsubsection{Procedure without Data Refinement}
+
+=SML
+open_theory"cn";
+new_script{name="PRC_IN_PCK_NO_RFN", unit_type="spec"};
+=TEX
+
+ⓈCN
+package PRC_IN_PCK_NO_RFN is
+
+	procedure UPPER_BOUND (M : INTEGER; X : out INTEGER)
+	Δ X [X > M];
+
+end PRC_IN_PCK_NO_RFN;
+■
+=SML
+output_z_document {script="PRC_IN_PCK_NO_RFN'spec", out_file="int501B.sml"};
+output_ada_program {script="-", out_file="int501B.ada"};
+new_script{name="PRC_IN_PCK_NO_RFN", unit_type="body"};
+ⓈCN
+package body PRC_IN_PCK_NO_RFN is
+
+	procedure UPPER_BOUND (M : INTEGER; X : out INTEGER)
+	Δ X [X = M + 1]
+	is
+	begin
+		X := M + 1;
+	end UPPER_BOUND;
+
+end PRC_IN_PCK_NO_RFN;
+■
+
+=SML
+output_z_document {script="PRC_IN_PCK_NO_RFN'body", out_file="int501Ba.sml"};
+output_ada_program {script="-", out_file="int501Ba.ada"};
+=TEX
+
+\pagebreak
+\subsubsection{Procedure with Data Refinement}
+\label{ProcedurewithDataRefinement}
+The following is a cut-down version of an example supplied by DRA:
+
+=SML
+open_theory"cn";
+new_script{name="PRC_IN_PCK_RFN", unit_type="spec"};
+=TEX
+ⓈZ
+│ fun 100 sum _, size _
+■
+
+ⓈZAX
+│	sum _ : bag ℤ → ℤ
+├───────────
+│	sum ⟦ ⟧ = 0 ∧
+│	(∀ b : bag ℤ; n : ℤ ⦁ sum (b ⊎ ⟦n⟧) = sum b + n)
+■
+ⓈZAX
+│	size _: bag ℤ → ℤ
+├───────────
+│	size ⟦ ⟧ = 0 ∧
+│	(∀ b : bag ℤ; n : ℤ ⦁ size (b ⊎ ⟦n⟧) = size b + 1)
+■
+ⓈCN
+package PRC_IN_PCK_RFN is
+
+	$auxiliary B : bag ℤ;
+
+	procedure MEAN (M : out INTEGER)
+	Δ M Ξ B[B ≠ ⟦ ⟧, M = sum B intdiv size (B)];
+
+end PRC_IN_PCK_RFN;
+■
+=SML
+output_z_document {script="PRC_IN_PCK_RFN'spec", out_file="int501C.sml"};
+output_ada_program {script="-", out_file="int501C.ada"};
+new_script1{name="PRC_IN_PCK_RFN", unit_type="body", library_theories = ["PRC_IN_PCK_RFN'spec"]};
+┌Bag_Inv────────────
+│	B : bag ℤ;
+│	S, N : INTEGER
+├──────
+│	S = sum B;
+│	N = size B
+└────────────────
+ⓈCN
+package body PRC_IN_PCK_RFN is
+
+	$using S, N : INTEGER; $implement B $by Bag_Inv;
+
+	procedure MEAN (M : out INTEGER)
+	Δ M, S, N [N ≠ 0, M = S intdiv N ∧ S = S⋎0 ∧ N = N⋎0]
+	is
+	begin
+		M := S / N;
+	end MEAN;
+
+begin
+	S := 0;
+
+end PRC_IN_PCK_RFN;
+■
+
+=SML
+output_z_document {script="PRC_IN_PCK_RFN'body", out_file="int501Ca.sml"};
+output_ada_program {script="-", out_file="int501Ca.ada"};
+=TEX
+
+\pagebreak
+\subsection{Subunits}
+\subsubsection{Function as Subunit}
+Note that a function stub and the corresponding subunit cannot appear in the same literate script.
+
+=SML
+open_theory"cn";
+new_script{name="FNC_SBNT", unit_type="proc"};
+=TEX
+
+ⓈCN
+procedure FNC_SBNT (A : INTEGER; B : out INTEGER)
+is
+	I : constant  INTEGER := 99;
+	function  TIMES_2_I (X : INTEGER) return INTEGER
+	Ξ [TIMES_2_I(X) = I * X + I * X]
+	is
+	separate;
+begin
+	B := A;
+	B := TIMES_2_I(B);
+end FNC_SBNT;
+■
+
+=SML
+output_z_document {script="FNC_SBNT'proc", out_file="int501D1.sml"};
+output_ada_program {script="-", out_file="int501D1.ada"};
+open_theory"cn";
+new_script{name="FNC_SBNT.TIMES_2_I", unit_type="func"};
+=TEX
+
+ⓈCN
+separate (FNC_SBNT)
+function TIMES_2_I (X : INTEGER) return INTEGER
+	Ξ [TIMES_2_I(X) = 2*I*X]
+is
+begin
+	return 2*I*X;
+end TIMES_2_I;
+■
+
+=SML
+output_z_document {script="FNC_SBNToTIMES_2_I'func", out_file="int501D2.sml"};
+output_ada_program {script="-", out_file="int501D2.ada"};
+=TEX
+
+\pagebreak
+\subsubsection{Procedure as Subunit}
+
+=SML
+open_theory"cn";
+new_script{name="PRC_SBNT", unit_type="proc"};
+=TEX
+
+ⓈCN
+procedure PRC_SBNT (A : INTEGER; B : out INTEGER)
+is
+	J : constant INTEGER := 99;
+	procedure MULT_BY_2_J (X : INTEGER; Y : out INTEGER)
+	Δ Y[Y = J * X + J * X]
+	is
+	separate;
+begin
+	MULT_BY_2_J(A, B);
+end PRC_SBNT;
+■
+=SML
+output_z_document {script="PRC_SBNT'proc", out_file="int501E1.sml"};
+output_ada_program {script="-", out_file="int501E1.ada"};
+open_theory"cn";
+new_script{name="PRC_SBNT.MULT_BY_2_J", unit_type="proc"};
+=TEX
+ⓈCN
+separate (PRC_SBNT)
+procedure MULT_BY_2_J (X : INTEGER; Y : out INTEGER)
+	Δ Y[Y = 2*J*X]
+is
+begin
+	Y := 2*J*X;
+end MULT_BY_2_J;
+■
+
+=SML
+output_z_document {script="PRC_SBNToMULT_BY_2_J'proc", out_file="int501E2.sml"};
+output_ada_program {script="-", out_file="int501E2.ada"};
+=TEX
+
+\pagebreak
+\subsection{Subprogram Bodies}
+This type of VC generation has already been exercised in by other examples;
+however, we give additional examples here.
+\subsubsection{Function Bodies}
+
+=SML
+open_theory"cn";
+new_script{name="MAX", unit_type="func"};
+=TEX
+
+ⓈCN
+function MAX (X : INTEGER; Y : INTEGER) return INTEGER
+Ξ [MAX(X, Y) ∈ {X, Y} ∧ X ≤ MAX(X, Y) ∧ Y ≤ MAX(X, Y)]
+is
+begin
+	if	X < Y
+	then	return Y;
+	end if;
+	return X;
+end MAX;
+■
+
+=SML
+output_z_document {script="MAX'func", out_file="int501F.sml"};
+output_ada_program {script="-", out_file="int501F.ada"};
+=TEX
+
+\pagebreak
+\subsubsection{Procedure Bodies}
+
+=SML
+open_theory"cn";
+new_script{name="SWAP", unit_type="proc"};
+=TEX
+
+ⓈCN
+procedure SWAP (X : in out INTEGER; Y : in out INTEGER)
+Δ X, Y [X = Y⋎0 ∧ Y = X⋎0]
+is
+	T : INTEGER;
+begin
+	T := X;
+	X := Y;
+	Y := T;
+end SWAP;
+■
+
+=SML
+output_z_document {script="SWAP'proc", out_file="int501G.sml"};
+output_ada_program {script="-", out_file="int501G.ada"};
+=TEX
+
+\pagebreak
+\subsection{Package Initialisation}
+Section \ref{ProcedurewithDataRefinement} contains an example of this.
+\subsection{Refinement}
+
+=SML
+open_theory"cn";
+new_script{name="EG1", unit_type="proc"};
+=TEX
+
+ⓈCN
+procedure EG1 (X : in out INTEGER; Y : in out INTEGER)
+is
+	T : INTEGER;
+begin
+	Δ T [ X  > 1 ∧ Y > 1 ⇒ X + Y < T < X * Y]		(10)
+end EG1;
+■
+ⓈCN
+(10) ⊑
+	T := X + Y + 1;
+■
+=SML
+output_z_document {script="EG1'proc", out_file="int501H.sml"};
+output_ada_program {script="-", out_file="int501H.ada"};
+new_script{name="EG2", unit_type="proc"};
+ⓈCN
+procedure EG2 (X : in out INTEGER)
+is
+	T : INTEGER;
+begin
+	Δ T [ X  < 1 ⇒ T > X]
+end EG2;
+■
+ⓈCN
+⊑
+
+	T := 1;
+■
+
+=SML
+output_z_document {script="EG2'proc", out_file="int501Ha.sml"};
+output_ada_program {script="-", out_file="int501Ha.ada"};
+=TEX
+
+\pagebreak
+\subsubsection{Variable Initialisation(normal)}
+
+=SML
+open_theory"cn";
+new_script{name="VAR1", unit_type="proc"};
+=TEX
+ⓈCN
+procedure VAR1 (X : in out INTEGER; Y : in out INTEGER)
+Δ X, Y [X = Y⋎0 ∧ Y = 3]
+is
+	A : INTEGER;
+	B : INTEGER := 1;
+	C,D : INTEGER;
+	E,F : INTEGER := 2;
+begin
+	X := Y;
+	D := B;
+	C := F + D;
+	E := C;
+	Y := E;
+end VAR1;
+■
+=SML
+output_z_document {script="VAR1'proc", out_file="int501I.sml"};
+output_ada_program {script="-", out_file="int501I.ada"};
+=TEX
+Just check that everything proves OK:
+=SML
+set_pc "cn";
+store_mt_results_show (mt_runf (op =$)) [
+    ("int501Iproof", concl o tac_proof, (([], get_conjecture "-" "vcVAR1_1"),
+		(REPEAT strip_tac
+			THEN all_var_elim_asm_tac1
+			THEN rewrite_tac[])),
+	  get_conjecture "-" "vcVAR1_1")
+];
+=TEX
+\subsubsection{Variable Initialisation(using)}
+
+=SML
+open_theory"cn";
+new_script{name="STACK", unit_type="spec"};
+=TEX
+ⓈCN
+package STACK is
+
+   $auxiliary S : seq ℤ;
+
+   procedure PUSH (X : in INTEGER)
+   Δ S [S = S⋎0 ⁀ ⟨X⟩];
+
+end STACK;
+■
+=SML
+output_z_document {script="STACK'spec", out_file="int501J.sml"};
+output_ada_program {script="-", out_file="int501J.ada"};
+open_theory "cn";
+new_script{name="STACK", unit_type="body"};
+
+┌ S_inv ───────────────
+│ S : seq ℤ;
+│ ST : 1..10 → INTEGER;
+│ TOP : 0..10
+├───────────────
+│ (1 .. TOP) ◁ ST = S
+└──────────────
+
+ⓈCN
+package body STACK is
+   $using
+   subtype STACK_RANGE is INTEGER range 1..10;
+   type STACK_TYPE is array (STACK_RANGE) of INTEGER;
+   ST : STACK_TYPE;
+   subtype TOP_RANGE is INTEGER range 0..10;
+   TOP : TOP_RANGE := 0;
+   $implement
+   S $by S_inv;
+
+   procedure PUSH (X : in INTEGER)
+   Δ ST, TOP [TOP = TOP⋎0 + 1 ∧ ST = ST⋎0 ⊕ {TOP ↦ X}]
+   is
+   begin
+      TOP := TOP + 1;
+      ST(TOP) := X;
+   end PUSH;
+
+begin
+   Δ ST, TOP [TOP < 1, ST(1) = 1]	(50101)
+end STACK;
+■
+ⓈCN
+ (50101) ⊑ PUSH (1);
+■
+
+=SML
+output_z_document {script="STACK'body", out_file="int501Ja.sml"};
+output_ada_program {script="-", out_file="int501Ja.ada"};
+=TEX
+Just check that the easy ones prove OK:
+=SML
+set_pc "cn";
+
+store_mt_results_show (mt_runf (op =$)) [
+    ("int501Jproofvcvc50101_1", concl o tac_proof,
+	(([], get_conjecture "-" "vc50101_1"),
+		(REPEAT strip_tac
+			THEN all_var_elim_asm_tac1
+			THEN rewrite_tac[])),
+	  get_conjecture "-" "vc50101_1"),
+    ("int501JproofvcSTACK_3", concl o tac_proof,
+	(([], get_conjecture "-" "vcSTACK_3"),
+		(REPEAT strip_tac
+			THEN all_var_elim_asm_tac1
+			THEN rewrite_tac[])),
+	  get_conjecture "-" "vcSTACK_3"),
+    ("int501JproofvcSTACK_1", concl o tac_proof,
+	(([], get_conjecture "-" "vcSTACK_1"),
+		(REPEAT strip_tac
+			THEN all_var_elim_asm_tac1
+			THEN rewrite_tac[])),
+	  get_conjecture "-" "vcSTACK_1")
+];
+=TEX
+=SML
+open_theory "STACKoPUSH'proc";
+set_pc "cn";
+get_conjectures "-" ;
+
+store_mt_results_show (mt_runf (op =$)) [
+    ("int501JproofvcSTACKoPUSH_1", concl o tac_proof,
+	(([], get_conjecture "-" "vcSTACKoPUSH_1"),
+		(REPEAT strip_tac
+			THEN all_var_elim_asm_tac1
+			THEN rewrite_tac[])),
+	  get_conjecture "-" "vcSTACKoPUSH_1")
+];
+=TEX
+\section{Z document checking}
+
+Save copies of the theory statistics.
+
+=SML
+val int501A_stats = get_theory_stats "FNC_IN_PCK'spec";
+val int501B_stats = get_theory_stats "PRC_IN_PCK_NO_RFN'spec";
+val int501C_stats = get_theory_stats "PRC_IN_PCK_RFN'spec";
+val int501D1_stats = get_theory_stats "FNC_SBNT'proc";
+val int501D2_stats = get_theory_stats "FNC_SBNToTIMES_2_I'func";
+val int501E1_stats = get_theory_stats "PRC_SBNT'proc";
+val int501E2_stats = get_theory_stats "PRC_SBNToMULT_BY_2_J'proc";
+val int501F_stats = get_theory_stats "MAX'func";
+val int501G_stats = get_theory_stats "SWAP'proc";
+val int501H_stats = get_theory_stats "EG1'proc";
+val int501I_stats = get_theory_stats "VAR1'proc";
+val int501J_stats = get_theory_stats "STACK'spec";
+val int501Aa_stats = get_theory_stats "FNC_IN_PCK'body";
+val int501Ba_stats = get_theory_stats "PRC_IN_PCK_NO_RFN'body";
+val int501Ca_stats = get_theory_stats "PRC_IN_PCK_RFN'body";
+val int501Ha_stats = get_theory_stats "EG2'proc";
+val int501Ja_stats = get_theory_stats "STACK'body";
+=TEX
+
+Delete all the theories we've created.
+
+=SML
+open_theory "cn";
+force_delete_theory "FNC_IN_PCK'body";
+force_delete_theory "PRC_IN_PCK_NO_RFN'body";
+force_delete_theory "PRC_IN_PCK_RFN'body";
+force_delete_theory "FNC_IN_PCK'spec";
+force_delete_theory "PRC_IN_PCK_NO_RFN'spec";
+force_delete_theory "PRC_IN_PCK_RFN'spec";
+force_delete_theory "FNC_SBNT'proc";
+force_delete_theory "FNC_SBNToTIMES_2_I'func";
+force_delete_theory "PRC_SBNT'proc";
+force_delete_theory "PRC_SBNToMULT_BY_2_J'proc";
+force_delete_theory "MAX'func";
+force_delete_theory "SWAP'proc";
+force_delete_theory "EG1'proc";
+force_delete_theory "EG2'proc";
+force_delete_theory "VAR1'proc";
+force_delete_theory "STACK'body";
+force_delete_theory "STACK'spec";
+force_delete_theory "FNC_SBNToTIMES_2_I'context";
+force_delete_theory "PRC_SBNToMULT_BY_2_J'context";
+=TEX
+
+
+Reload the Z documents.
+
+=SML
+use_file "int501A";
+use_file "int501Aa";
+use_file "int501B";
+use_file "int501Ba";
+use_file "int501C";
+use_file "int501Ca";
+use_file "int501D1";
+use_file "int501D2";
+use_file "int501E1";
+use_file "int501E2";
+use_file "int501F";
+use_file "int501G";
+use_file "int501H";
+use_file "int501Ha";
+use_file "int501I";
+use_file "int501J";
+use_file "int501Ja";
+=TEX
+
+Check the theory statistics are correct.
+
+=SML
+store_mt_results_show mt_run [
+    ("int501A", get_theory_stats, "FNC_IN_PCK'spec", int501A_stats),
+    ("int501B", get_theory_stats, "PRC_IN_PCK_NO_RFN'spec", int501B_stats),
+    ("int501C", get_theory_stats, "PRC_IN_PCK_RFN'spec", int501C_stats),
+    ("int501Aa", get_theory_stats, "FNC_IN_PCK'body", int501Aa_stats),
+    ("int501Ba", get_theory_stats, "PRC_IN_PCK_NO_RFN'body", int501Ba_stats),
+    ("int501Ca", get_theory_stats, "PRC_IN_PCK_RFN'body", int501Ca_stats),
+    ("int501D1", get_theory_stats, "FNC_SBNT'proc", int501D1_stats),
+    ("int501D2", get_theory_stats, "FNC_SBNToTIMES_2_I'func", int501D2_stats),
+    ("int501E1", get_theory_stats, "PRC_SBNT'proc", int501E1_stats),
+    ("int501E2", get_theory_stats, "PRC_SBNToMULT_BY_2_J'proc", int501E2_stats),
+    ("int501F", get_theory_stats, "MAX'func", int501F_stats),
+    ("int501G", get_theory_stats, "SWAP'proc", int501G_stats),
+    ("int501H", get_theory_stats, "EG1'proc", int501H_stats),
+    ("int501Ha", get_theory_stats, "EG2'proc", int501Ha_stats),
+    ("int501I", get_theory_stats, "VAR1'proc", int501I_stats),
+    ("int501J", get_theory_stats, "STACK'spec", int501J_stats),
+    ("int501Ja", get_theory_stats, "STACK'body", int501Ja_stats)
+];
+=TEX
+
+\section{EPILOGUE}
+=SML
+diag_line (summarize_mt_results());
+=TEX
+
+\pagebreak
+%\HOLindexOff
+\let\oldsection=\section
+\let\oldsubsection=\subsection
+\def\section{\pagebreak\oldsubsection}
+\def\subsection{\subsubsection}
+%\HOLindexOn
+%\twocolumn[\section{INDEX OF DEFINED TERMS}]
+%\printindex
+\end{document}
+=IGN

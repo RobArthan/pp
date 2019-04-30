@@ -1,0 +1,889 @@
+=IGN
+********************************************************************************
+dtd081.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of Algebraic Normalisation Conversions}
+
+\def\AbstractText{This document contains the detailed design of conversions which perform normalisation of monomials in a commutative and associative operator and of polynomials in a pair of commutative and associative operators one of which distributes over the other. Some associated functions of general utility are also provided (such as facilities for creating ordering relations on types and terms) as well as three applications of the polynomial normalisation (namely, disjunctive and conjunctive normal forms for the propositional calculus and a normalisation of arithmetic expressions over $+$ and $*$ analogous to the procedure of ``multiplying out and collecting like terms'' of elementary algebra).}
+
+\def\Reference{DS/FMU/IED/DTD081}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design of Algebraic Normalisation Conversions}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD081}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{1.7
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{2002/10/17 16:20:01%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.B.~Jones & FMU Manager}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design of conversions which
+%% LaTeX2e port: perform normalisation of monomials in a commutative and associative operator
+%% LaTeX2e port: and of polynomials in a pair of commutative and associative operators
+%% LaTeX2e port: one of which distributes over the other. Some associated functions of general
+%% LaTeX2e port: utility are also provided (such as facilities for creating ordering relations
+%% LaTeX2e port: on types and terms) as well as three applications of the polynomial normalisation
+%% LaTeX2e port: (namely, disjunctive and conjunctive normal forms for the propositional calculus
+%% LaTeX2e port: and a normalisation of arithmetic expressions over $+$ and $*$ analogous to
+%% LaTeX2e port: the procedure of ``multiplying out and collecting like terms'' of elementary
+%% LaTeX2e port: algebra).}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}
+\begin{description}
+\item[1.1 (\FormatDate{92/09/07%
+})] First draft (adapted from prototype implementation of \cite{DS/FMU/IED/SML023}) for comment.
+\item[1.2(\FormatDate{92/09/11%
+})] Amended in the light of comments. Added $ANF\_C$ and description of
+error handling.
+\item[1.3~(\FormatDate{92/09/21
+})] The description of the conversions which are supplied as
+arguments to $sort\_conv$ and $poly\_conv$
+has been revised.
+\item[1.4] All normalisations now fail if nothing to do.
+\item[1.5] Update for INTEGER type.
+\item[Issue 1.6 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.7 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.8 (2007/08/15)] Added {\em gen\_term\_order1}.
+\item[Issue 1.9 (2007/08/28)] Corrected typo.
+\item[Issue 1.10 (2007/09/08)] Redesign of {\em gen\_term\_order1} which is now
+called {\em make\_term\_order}.
+\item[Issue 1.11 (2012/05/07)] Tidied documentation for {\em make\_term\_order}.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes forecast}
+Error messages and numbers TBA.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the detailed design of part of the \ProductHOL\ system.
+The document responds to \cite{DS/FMU/IED/HLD012}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+Some proof procedures are facilitated if certain classes of term can
+be brought into an appropriate normal form.
+Some generally useful  classes are the class of
+terms formed using a commutative and associative
+operator and the class of terms formed using a pair of commutative and
+associative operators one of which distributes over the other.
+We will refer to normalisation for the former class as {\em monomial normalisation}
+and for the latter as {\em polynomial normalisation}.
+
+Informally, monomial normalisation is so natural as to feel trivial.
+Given an expression
+=INLINEFT
+x⋎1 + x⋎2 + ... + x⋎k
+=TEX
+, in the commutative associate operator $+$, monomial normalisation amounts
+to the observation that variant bracketing of the expression is irrelevant,
+as is the order of the
+=INLINEFT
+x⋎i
+=TEX
+. Thus, given an ordering on the
+=INLINEFT
+x⋎i
+=TEX
+, we may write the expression with the
+=INLINEFT
+x⋎i
+=TEX
+\ arranged in order and with the brackets arranged in the right-associative
+fashion, say.
+In \Product, this idea may be realised by a conversion, parameterised
+by an ordering relation and by
+theorems expressing the associativity and commutativity of the operator,
+which given any expression over the operator will prove the theorem that
+that expression is equal to one in the monomial normal form.
+
+Similarly, the polynomial normalisation is just the usual ``multiplying out''
+part of the process of ``multiplying out and collecting like terms'' which
+is familiar from elementary algebra in the integers say.
+Again, this may be realised in \Product\ as a conversion parameterised
+by an ordering and by theorems about the two operators.
+
+Useful extra generality may be obtained by adding additional parameters
+to the normalisation conversions allowing them, for example, to evaluate
+literal sub-expressions during the normalisation process. This is achieved
+by having extra parameters which are conversions to be applied at selected
+points during normalisation. ``Collecting like terms'' may be implemented
+in this fashion, for example.
+
+Many useful special effects can be achieved by adjusting the ordering
+relation used on terms. For example, arranging for the immediate
+successor of any boolean term $t$ to be $¬t$ greatly simplifies elimination
+of trivial conjuncts when the polynomial normalisation is used to find
+conjunctive normal form. Consequently, we supply reasonably general
+means for creating ordering relations on terms as part of the normalisation
+tool-kit.
+\subsubsection{Dependencies}
+This document depends on the theory $basic\_hol$ defined in
+\cite{DS/FMU/IED/DTD045} and on the tactics and rules of
+\cite{DS/FMU/IED/DTD027,DS/FMU/IED/DTD029}.
+\subsubsection{Algorithms}
+These are described in the body of the document.
+Some of the normalisation procedures involve sorting
+which is done by two-way merge sorting
+(see \cite{Knuth73}). Background information on
+conjunctive and disjunctive normal forms may be found
+in e.g. \cite{Manna74}.
+\subsubsection{Known Deficiencies}
+The prototype version of this had asymmetric versions of the various
+rewriting tools. These are not currently supplied since there is
+no direct way of producing variants of the rewriting tools which only
+differ from the standard ones in the choice of traversal strategy
+(i.e. the conversional).
+\subsubsection{Possible Enhancements}
+A form of polynomial normalisation in which the ``multiplication''
+is not required to be commutative could easily be provided if desired.
+
+The prototype version exposed the merge part of the monomial
+(sorting) conversion as a separate conversion. This has not been made
+visible here for several reasons: (a) I cannot see what use it is;
+(b) the parameterisation which is most natural and efficient in the
+implementation is not nice for an end-user; and (c) if we wanted to use
+a slicker sorting algorithm it would be annoying to have to supply part
+of an earlier algorithm just in case someone had ever used it in its own
+right. It would be fairly simple to expose the merge conversion if a case
+for doing so can be made (although a user-friendly reparameterisation would
+be in order).
+
+It has been assumed in designing the interface that the user of the general
+purpose interfaces (such as
+=INLINEFT
+sort_conv
+=TEX
+) will be fairly aware and prepared to read the manual. Thus positional
+parameters (rather than labelled records) are used even though there are
+quite a lot of them. This allows for a certain amount of partial evaluation
+and is, perhaps, cleaner for the expert. More self-explanatory interfaces
+could be supplied if desired.
+
+\section{SIGNATURE}
+=DOC
+signature ⦏Normalisation⦎ = sig
+=DESCRIBE
+This is the signature of a structure containing conversions for monomial
+and polynomial term normalisation and related metalanguage functions.
+=ENDDOC
+\section{TERM ORDERING}
+=DOC
+	val ⦏type_order⦎ : TYPE -> TYPE -> int;
+=DESCRIBE
+=INLINEFT
+type_order
+=TEX
+\ gives a useful ordering relation HOL types. The ordering relation
+follows the same conventions as those used
+by the sorting function $sort$, namely,
+=INLINEFT
+type_order t1 t2
+=TEX
+\ is negative if $t1$ precedes $t2$, $0$ if $t1$ and $t2$ are
+equivalent and positive if $t2$ precedes $t1$.
+The ordering used is essentially that type variables are ordered by
+the alphabetic ordering of their names and precede all compound types
+which are ordered by the lexicographic ordering on their immediate
+constituents (using the alphabetic ordering for the type constructor
+names and the type ordering recursively for its operands).
+=ENDDOC
+=DOC
+	val ⦏term_order⦎ : TERM -> TERM -> int;
+=DESCRIBE
+=INLINEFT
+term_order
+=TEX
+\ gives an ordering relation on HOL terms. The ordering relation
+follows the same conventions as those used
+by the sorting function $sort$, namely,
+=INLINEFT
+term_order t1 t2
+=TEX
+\ is negative if $t1$ precedes $t2$, $0$ if $t1$ and $t2$ are
+equivalent and positive if $t2$ precedes $t1$.
+The ordering used is, with some exceptions, that all constants precede all variables
+which precede all abstractions which precede all applications.
+Lexicographic ordering on the immediate constituents
+gives the ordering within each of these four classes (using alphabetic
+ordering of strings,
+=INLINEFT
+type_order
+=TEX
+\ or
+=INLINEFT
+term_order
+=TEX
+\ recursively to order the constituents as appropriate).
+The exceptions are {\em(i)} that any term of the form
+=INLINEFT
+¬t
+=TEX
+\ comes immediately after $t$, {\em(ii)} that the numeric literals
+=INLINEFT
+0, 1, ...
+=TEX
+\ are taken in numeric rather than alphabetic order and come before all other
+terms, and {\em(iii)} that terms of the form
+=INLINEFT
+i * x
+=TEX
+\ where $i$ is a numeric literal are ordered so that the terms
+=INLINEFT
+x, 0*x, 1*x, 2*x, ...
+=TEX
+\ are consecutive.
+=SEEALSO
+$gen\_term\_order1$ which is the recommended way of constructing new term orderings.
+=ENDDOC
+=DOC
+	val ⦏gen_term_order⦎ : (TERM -> (TERM * INTEGER)) ->
+				TERM -> TERM -> int;
+=DESCRIBE
+
+=INLINEFT
+gen_term_order
+=TEX
+\ gives a means of creating orderings on terms.
+It is retained for backwards compatibility,
+=INLINEFT
+make_term_order
+=TEX
+\ now being the recommended way of constructing term orderings.
+
+In the call
+=INLINEFT
+gen_term_order special
+=TEX
+, the idea is that whenever two terms, $tm1$ and $tm2$ say,
+are compared, $special$ is applied to them to produce
+two pairs, $(tm1',\,k1)$ and $(tm2',\,k2)$ say. These
+pairs are then compared lexicographically (using the
+ordering recursively for the first components, in a similar way to $term\_order$, q.v.).
+It is the caller's responsibility to provide an argument $special$ which
+will ensure that this procedure terminates.
+A sufficient condition is only to use functions
+$special$ with the property that for some
+disjoint sets of terms $X_1$, $X_2$, \ldots, we have that
+$special\,tm=(tm,\,0)$ if $tm \not\in X_i$ for any $i$
+and that $special\,tm=(x_i,\,f_i(tm))$ if $tm \in X_i$,
+where $x_i$ is a fixed element of $X_i$ and $f_i$
+is a fixed injection of $X_i$ into the natural numbers.
+
+=SEEALSO
+$make\_term\_order1$ which is now the recommended way of constructing new term orderings.
+=ENDDOC
+=DOC
+	val ⦏make_term_order⦎ :
+		(TERM ORDER -> TERM ORDER) list -> TERM ORDER;
+=DESCRIBE
+=INLINEFT
+make_term_order
+=TEX
+\ provides a systematic method for constructing term orderings.
+Its argument is a list of term order combinators: i.e., endofunctions on the type of term orderings.
+
+The orderings
+=INLINEFT
+make_term_order
+=TEX
+\ returns are derived from a base ordering on terms which works as follows:
+\begin{enumerate}
+\item
+Constants are ordered lexicographically by name (using
+=INLINEFT
+ascii_order
+=TEX
+), then type (using
+=INLINEFT
+type_order
+=TEX
+).
+\item
+Variables are ordered lexicographically by name (using
+=INLINEFT
+ascii_order
+=TEX
+), then type (using
+=INLINEFT
+type_order
+=TEX
+).
+\item
+Simple $\lambda$-abstractions are ordered lexicographically by recursion, bound variable first, then matrix.
+\item
+Applications ordered lexicographically by recursion, function first, then operand.
+\end{enumerate}
+
+If the above function were called $base$, then the ordering
+=INLINEFT
+make_term_order [f, g, ..., h]
+=TEX
+\ acts as:
+=INLINEFT
+f(g(...(h(base))...))
+=TEX
+\ where each recursive call in $base$ is replaced by a call of
+=INLINEFT
+make_term_order [f, g, ..., h]
+=TEX
+.
+
+For example, the following defines an ordering on terms that makes
+=INLINEFT
+¬t
+=TEX
+\ the immediate successor of
+=INLINEFT
+t
+=TEX
+\ for every term
+=INLINEFT
+t
+=TEX
+\ of type
+=INLINEFT
+BOOL
+=TEX
+.
+
+=GFT
+fun f t = (dest_¬ t, 1) handle Fail _ => (t, 0);
+
+val ¬_order = make_term_order [fn r => induced_order(f, pair_order r int_order)];
+=TEX
+=ENDDOC
+\section{ASYMMETRIC EQUATIONAL REASONING}
+=DOC
+	val ⦏ASYM_C⦎ : CONV -> CONV
+	val ⦏GEN_ASYM_C⦎ : TERM ORDER -> CONV -> CONV
+=DESCRIBE
+These conversionals allow one to control the behaviour of a conversion
+by making it asymmetric with respect to an ordering relation on terms
+(in the sense that the resulting conversion will only prove theorems
+of the form
+=INLINEFT
+t1 = t2
+=TEX
+\ in which $t2$ strictly precedes $t1$ in the ordering.
+
+=INLINEFT
+ASYM_C c
+=TEX
+\ is a conversion which behaves like $c$ on terms $t1$ for which
+=INLINEFT
+c t1
+=TEX
+\ is a theorem with conclusion
+=INLINEFT
+t1 = t2
+=TEX
+\ where $t2$ (strictly) precedes $t1$ in the standard ordering on terms given by
+=INLINEFT
+term_order
+=TEX
+\ q.v. and fails on other terms.
+
+=INLINEFT
+GEN_ASYM_C
+=TEX
+\ is like
+=INLINEFT
+ASYM_C
+=TEX
+\ but allows the ordering function used to be supplied as a parameter.
+The parameter is interpreted as an ordering relation on terms
+in the same sense as the ordering relations used by $sort$, q.v.
+=FAILURE
+81010	The conversion did not decrease the order of the term
+81011	On argument ?0 the conversion returned ?1 which is not an equation
+=ENDDOC
+\section{GENERAL MONOMIAL NORMALISATION}
+=DOC
+	val ⦏sort_conv⦎ : TERM ORDER ->
+		THM -> THM -> CONV -> CONV -> CONV;
+=DESCRIBE
+This conversion normalises a term constructed from atoms
+using an associative and commutative binary operator,
+$op$ say.  For clarity, we write two operator with infix syntax although
+it need not actually be an infix constant.
+Here, by ``atom'' we mean any term which is not of the form
+=INLINEFT
+t1 op t2
+=TEX
+.
+The theorems computed by the conversion have the form
+=INLINEFT
+t = t⋎1 op t⋎2 op ...
+=TEX
+, where the
+=INLINEFT
+t⋎i
+=TEX
+\ are in non-decreasing order with respect to the ordering on terms given
+by the first parameter.
+
+The associativity and commutativity of the operator are given as the two
+theorem parameters (which are also used to infer what $op$ is; n.b. $op$
+can be an arbitrary term, it need not be a constant).
+The remaining parameters are conversions which are applied to each atom
+as it is encountered and to each subterm of the form
+=INLINEFT
+t = t⋎i op ...
+=TEX
+\ as it is created.
+In more detail the parameters are, in order, as follows:
+
+\begin{enumerate}
+\parsep=0.1\parsep
+\itemsep=0.1\itemsep
+\item
+A term ordering, such as $term\_order$, q.v.
+\item
+A theorem of the form
+=INLINEFT
+⊢ ∀x y⦁t x y = t y x
+=TEX
+.
+\item
+A theorem of the form
+=INLINEFT
+⊢ ∀x y z⦁(x op y) op z = x op y op z
+=TEX
+.
+\item
+A conversion to be applied to each subterm of the form:
+=INLINEFT
+t⋎i op ...
+=TEX
+\ whenever such a subterm is created.
+The result of the conversion will not be further normalised.
+\item
+A conversion to be applied to each atom as it is encountered.
+If the conversion
+produces a non-atomic term, this is normalised recursively.
+\end{enumerate}
+
+The conversions supplied as parameters may signal that they do not
+wish to change a subterm, $t$ say, either by failing or by returning $t = t$,
+the former approach is more efficient. The whole conversion fails with error number 81025 if there
+are no changes to be made to the term.
+=FAILURE
+81021	?0 does not have the form ⊢ t1 op t2 = t2 op t1
+81022	?0 does not have the form ⊢ (t1 op t2) op t3 = t1 op (t2 op t3)
+81025	?0 is already sorted
+81029	Internal error: unexpected error in term normalisation package
+=ENDDOC
+\section{GENERAL POLYNOMIAL NORMALISATION}
+=DOC
+	val ⦏poly_conv⦎ : TERM ORDER ->
+		THM -> THM -> THM -> THM -> THM ->
+		CONV -> CONV -> CONV -> CONV;
+=DESCRIBE
+This conversion normalises terms constructed from atoms using two operators,
+both associative and commutative, the second of which, say
+=INLINEFT
+op⋎*
+=TEX
+\ distributes over the other, say
+=INLINEFT
+op⋎+
+=TEX
+. For clarity, we write the two operators with infix syntax although
+they need not actually be infix constants.
+Here, by ``atom'' we mean any term which is not of the form
+=INLINEFT
+t1 op⋎+ t2
+=TEX
+\ or
+=INLINEFT
+t1 op⋎* t2
+=TEX
+.
+The theorems computed by the conversion have the form
+=INLINEFT
+t = t⋎1 op⋎+ t⋎2 op⋎+ ...
+=TEX
+, where the
+=INLINEFT
+t⋎i
+=TEX
+are in non-decreasing order with respect to the ordering on terms given
+by the first parameter and have the form
+=INLINEFT
+s⋎1 op⋎* s⋎2 op⋎* ...
+=TEX
+, where the
+=INLINEFT
+s⋎i
+=TEX
+\ are atoms and are in non-decreasing order.
+
+The associativity and commutativity of the operators and the distributivity
+are given as the five
+theorem parameters (which are also used to infer what the two operators are;
+n.b. the operators
+can be arbitrary terms, they need not be constants).
+The remaining parameters are conversions which are applied to each atom
+as it is encountered and to each subterm of the form
+=INLINEFT
+t⋎i op⋎+ ...
+=TEX
+\ or
+=INLINEFT
+t⋎i op⋎* ...
+=TEX
+\ as it id created.
+In more detail the parameters are, in order, as follows:
+\begin{enumerate}
+\parsep=0.1\parsep
+\itemsep=0.1\itemsep
+\item
+A term ordering, such as $term\_order$, q.v.
+\item
+A theorem of the form
+=INLINEFT
+⊢ ∀x y⦁x op⋎+ y = y op⋎+ x
+=TEX
+.
+\item
+A theorem of the form
+=INLINEFT
+⊢ ∀x y z⦁(x op⋎+ y) op⋎+ z = x op⋎+ y op⋎+ z
+=TEX
+.
+\item
+A theorem of the form
+=INLINEFT
+⊢ ∀x y⦁x op⋎* y = y op⋎* x
+=TEX
+.
+\item
+A theorem of the form
+=INLINEFT
+⊢ ∀x y z⦁(x op⋎* y) op⋎* z = x op⋎* y op⋎* z
+=TEX
+.
+\item
+A theorem of the form
+=INLINEFT
+⊢ ∀x y z⦁x op⋎* (y op⋎+ z) = (x op⋎* y) op⋎+ (x op⋎* z)
+=TEX
+.
+\item
+A conversion to be applied to any subterm of the form
+=INLINEFT
+t⋎i op⋎+ ...
+=TEX
+\ whenever such a subterm is created.
+The result of the conversion will not be further normalised.
+\item
+A conversion to be applied to any subterm of the form
+=INLINEFT
+t⋎i op⋎* ...
+=TEX
+\ whenever such a subterm is created.
+The result of the conversion will not be further normalised.
+\item
+A conversion to be applied to any atom as it is encountered.
+If the conversion
+produces a non-atomic term, this is normalised recursively as it is produced.
+\end{enumerate}
+The conversions supplied as parameters may signal that they do not
+wish to change a subterm, $t$ say, either by failing or by returning $t = t$,
+the former approach is more efficient. The whole conversion fails with error
+number 81025 if there
+are no changes to be made to the term.
+
+=FAILURE
+81023	?0 does not have the form ⊢ t1 op1 (t2 op2 t3) = (t1 op1 t2) op2 (t1 op1 t3)
+81024	?0 and ?1 do not have the forms  ⊢ t1 op1 t2 = t2 op1 t1
+	and  ⊢ t1 op1 (t2 op2 t3) = (t1 op1 t2) op2 (t1 op1 t3)
+81025	?0 is already sorted
+=ENDDOC
+=DOC
+	val ⦏cnf_conv⦎ : CONV;
+=DESCRIBE
+This is a conversion which proves theorems of the form
+=INLINEFT
+⊢ t1 ⇔ t2
+=TEX
+\ where $t2$ is in conjunctive normal form, i.e. either $T$ or $F$
+or a conjunction of one or more disjunctions
+in which each disjunct is a propositional atom. Here, by atom
+we mean either a term whose principal connective is not a propositional
+calculus connective or the negation of such a term.
+
+The conversion simplifies disjunctions and conjunctions
+as they are generated according to the following schema.
+=GFT
+a ∧ T	→	a
+T ∧ a	→	a
+F ∧ a	→	F
+a ∧ F	→	F
+a ∧ a	→	a
+a ∧ ¬a	→	F
+
+a ∨ T	→	T
+T ∨ a	→	T
+F ∨ a	→	a
+a ∨ F	→	a
+a ∨ a	→	a
+a ∨ ¬a	→	T
+
+¬T	→	F
+¬F	→	T
+=TEX
+
+Note, however, that more global simplifications are not done,
+e.g. there is no attempt to eliminate a conjunct all of whose constituent
+atoms are contained in another conjunct.
+Thus, the conversion will not automatically prove tautologies.
+
+The conversion fails with error number 81030 if there are no changes to be
+made to the term.
+
+
+=SEEALSO
+=INLINEFT
+strip_tac
+=TEX
+\ and
+=INLINEFT
+taut_rule
+=TEX
+\ which supply a more useful and efficient means for working with the propositional calculus
+in most cases.
+=FAILURE
+81030	?0 is not of type ⓣBOOL⌝ or is already in conjunctive normal form
+=ENDDOC
+=DOC
+	val ⦏dnf_conv⦎ : CONV;
+=DESCRIBE
+This is a conversion which proves theorems of the form
+=INLINEFT
+⊢ t1 ⇔ t2
+=TEX
+\ where $t2$ is in disjunctive normal form, i.e. either $T$ or $F$
+or a disjunction of one or more conjunctions
+in which each conjunct is a propositional atom. Here, by atom
+we mean either a term whose principal connective is not a propositional
+calculus connective or the negation of such a term.
+
+The conversion simplifies disjunctions and conjunctions
+as they are generated according to the following schema.
+=GFT
+a ∧ T	→	a
+T ∧ a	→	a
+F ∧ a	→	F
+a ∧ F	→	F
+a ∧ a	→	a
+a ∧ ¬a	→	F
+
+a ∨ T	→	T
+T ∨ a	→	T
+F ∨ a	→	a
+a ∨ F	→	a
+a ∨ a	→	a
+a ∨ ¬a	→	T
+
+¬T	→	F
+¬F	→	T
+=TEX
+
+Note, however, that more global simplifications are not done,
+e.g. there is no attempt to eliminate a disjunct all of whose constituent
+atoms are contained in another disjunct.
+Thus, the conversion will not automatically prove tautologies.
+
+The conversion fails with error number 81031 if there are no changes to be
+made to the term.
+
+=SEEALSO
+=INLINEFT
+strip_tac
+=TEX
+\ and
+=INLINEFT
+taut_rule
+=TEX
+\ which supply a more useful and efficient means for working with the propositional calculus
+in most cases.
+=FAILURE
+81031	?0 is not of type ⓣBOOL⌝ or is already in disjunctive normal form
+
+=ENDDOC
+
+
+=DOC
+	val ⦏anf_conv⦎ : CONV;
+	val ⦏ANF_C⦎ : CONV -> CONV;
+=DESCRIBE
+=INLINEFT
+anf_conv
+=TEX
+\ is a conversion which proves theorems of the form
+=INLINEFT
+⊢ t1 = t2
+=TEX
+\ where $t1$ is a term formed from atoms of type ℕ and
+$t2$ is in what we may call additive normal form, i.e. it has the form:
+=INLINEFT
+t⋎1 + t⋎2 + ...
+=TEX
+, where the
+=INLINEFT
+t⋎i
+=TEX
+\ have the form
+=INLINEFT
+s⋎1 * s⋎2 * ...
+=TEX
+where the
+=INLINEFT
+s⋎i
+=TEX
+\ are atoms.
+Here, by atom
+we mean a term which is not of the form
+=INLINEFT
+t⋎1 + t⋎2 + ...
+=TEX
+or
+=INLINEFT
+s⋎1 * s⋎2 * ...
+=TEX
+.
+
+The summands
+=INLINEFT
+t⋎i
+=TEX
+\ and,
+within them,
+the factors
+=INLINEFT
+s⋎j
+=TEX
+\ are given in increasing order with respect to the ordering
+on terms given by the function
+=INLINEFT
+term_order
+=TEX
+, q.v. Arithmetic computation is carried out on atoms to ensure
+that at most one of the summands is a numeric literal and that, within
+each summand, at most one factor is a numeric literal. Any literal appears
+at the beginning of its factor or summand and addition of $0$
+or multiplication by $1$ is simplified out.
+
+=INLINEFT
+ANF_C conv
+=TEX
+\ is a conversion which acts like
+=INLINEFT
+anf_conv
+=TEX
+\ but which applies
+=INLINEFT
+conv
+=TEX
+\ to each atom as it is encountered (and normalises the result recursively).
+The argument conversion  may signal that it does not
+wish to change a subterm, $t$ say, either by failing or by returning $t = t$,
+the former approach is more efficient.
+
+The conversions fail with error number 81032 if there are no changes to be
+made to the term.
+
+=FAILURE
+81032	?0 is not of type ⓣℕ⌝ or is already in additive normal form
+=ENDDOC
+\section{EPILOGUE}
+=SML
+end (* of signature Normalisation *);
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+

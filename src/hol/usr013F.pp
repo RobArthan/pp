@@ -1,0 +1,175 @@
+=IGN
+********************************************************************************
+usr013F.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+% usr013F.doc $Date: 2002/10/17 16:20:01 $ $Revision: 2.3 $ $RCSfile: usr013F.doc,v $
+% COPYRIGHT (c) Lemma 1 Ltd.
+\ignore{
+=SML
+(* usr013F.sml $Date: 2002/10/17 16:20:01 $ $Revision: 2.3 $ $RCSfile: usr013F.doc,v $
+   COPYRIGHT (c) Lemma 1 Ltd. *)
+=TEX
+}
+
+\chapter{GOAL ORIENTED PROOF}\label{GoalOrientedProof}
+
+\section{Introduction}
+
+Direct forward proof of non-trivial results is usually a complex and difficult process.
+
+In practice, finding such a proof will usually begin with a conjecture thought to be true of which a proof is sought, and will proceed by working backwards from this conjecture to more elementary results from which it can be derived until the conjecture is seen to be derivable from axioms or previously proven theorems.
+
+A `subgoal package' is available in {\Product} to assist in this process, and this is normally used in constructing all but the very simplest proofs.
+
+The subgoal package is based on the notion of a {\tactic}.
+A {\tactic}, given a {\goal} which the user wishes to prove, will determine one or more ⦏subgoal⦎s from which the {\goal} is derivable and return the list of {\subgoal}s and a function, known as a {\proof} which is able to prove the original {\goal} from theorems corresponding to the {\subgoal}s which the {\tactic} has chosen.
+Normally a tactic would be expected to deliver a set of subgoals which are easier to prove than the original {\goal}, and in this way the proof is progressed until {\subgoal}s are reduced to the level at which {\tactic}s can be found which are able to prove the {\subgoal}s from the empty set of {\subgoal}s.
+
+The subgoal package helps the user to manage the development of a proof using {\tactic}s by keeping track of the outstanding subgoals and composing together the fragments of proof delivered by the various {\tactic}s applied during the development of the proof.
+
+\begin{itemize}
+\item a {\goal},
+
+is just a sequent, viz:
+\begin{itemize}
+\item
+a list of assumptions (boolean {\term}s)
+\item
+a conclusion (also a boolean {\term})
+\end{itemize}
+
+{\it GOAL = TERM list * TERM = SEQ}
+\item a ⦏PROOF⦎,
+
+is a function which computes a theorem from a list of theorems.
+
+{\it PROOF = THM list -$>$ THM}
+
+\item a {\tactic},
+
+is a function which:
+\begin{itemize}
+\item
+takes a {\goal}
+\item
+returns
+\begin{itemize}
+\item
+a list of {\subgoal}s
+\item
+a {\it PROOF} which will compute a theorem corresponding to (``achieving'') the input goal from theorems corresponding to the {\subgoal}s.
+\end{itemize}
+\end{itemize}
+
+{\it TACTIC = GOAL -$>$ (GOAL list * PROOF)}
+
+\end{itemize}
+
+\section{Using the Subgoal Package}
+
+\subsection{Getting Started}
+
+A proof using the subgoal package is initiated by supplying to the subgoal package the {\goal} to be proven.
+
+The following three functions are available for this purpose:
+
+=SML
+⦏set_goal⦎			: GOAL -> unit;
+⦏push_goal⦎			: GOAL -> unit;
+⦏push_consistency_goal⦎	: TERM -> unit;
+=TEX
+
+{\it set_goal} is the function most frequently used.
+If the subgoal package was already in use this will replace the current GOAL by the newly supplied goal and the proof in progress will be aborted.
+
+In the case that a proof is in progress and the user wishes to return to that proof after completing the proof he is about to start, then he should use {\it push_goal}.
+In this case the old proof will be resurrected when the new proof has been completed.
+
+{\it push_consistency_goal} is used when the consistency of a HOL constant specification has not been proven automatically when the constant was introduced and the user wishes to complete the proof himself.
+In this case a HOL {\term} is supplied as parameter to the procedure.
+This TERM must consist of the constant the consistency of whose specification is to be proven, and the goal will then be set appropriately.
+
+\subsection{Doing the Proof}
+
+Only a small number of subgoal package procedures are needed to conduct the proof.
+
+=SML
+⦏apply_tactic⦎		: TACTIC -> unit;
+⦏a⦎			: TACTIC -> unit;
+⦏undo⦎			: int -> unit;
+⦏set_labelled_goal⦎	: string -> unit;
+⦏lemma_tac⦎		: TERM -> TACTIC;
+=TEX
+
+{\it apply_tactic}, which may be abbreviated simply as {\it a}, may be used to progress the proof by applying a tactic to the current goal.
+The user selects the tactic to be applied and supplies this as a parameter to {\it apply_tactic}.
+The tactic will then be applied to the current subgoal, and if it is successful the resulting subgoals will be displayed.
+If the application of the tactic is successful but no new subgoals result, then the tactic has completed the proof of the original subgoal.
+Another outstanding subgoal will be selected and displayed.
+If all subgoals have been proven the user will be informed that his proof is complete.
+
+If, on seeing the effect of his selected tactic, the user decides that he would rather do something else, then he may use {\it undo} to reverse the effects of the tactic application.
+The user may step back through several steps, the number of steps remembered by the subgoal package for this purpose being determined by a system control parameter.
+
+At each step in the development of the proof, after applying a tactic to the current subgoal, the subgoal package will select a subgoal as the {\it current} subgoal.
+If the user wishes to prove the outstanding subgoals in an order differing from that selected by the subgoal package then he may select a subgoal for processing by using {\it set_labelled_goal}.
+This function requires a string parameter which is the label assigned by the subgoal package to the goal when it was first introduced.
+This is displayed as a string suitable for input by cut and paste to {\it set_labelled_goal} when the goal is displayed.
+
+In many cases the best thing to prove next is in fact not one of the outstanding subgoals but some other result from which the current subgoal could be proven.
+For this purpose no special functionality in the subgoal package is required, use of a {\tactic} called {\it lemma_tac} will do the job.
+{\it lemma_tac} should be used to commence proof of a result which can be proven from the list of assumptions on the current subgoal, and which will facilitate the proof of the conclusion of the current subgoal.
+The tactic is used by supplying the new conclusion as a {\term} parameter to {\it lemma_tac}.
+{\it lemma_tac} will then (usually) create two new subgoals.
+The first is the subgoal with the same assumptions as the current subgoal, but the new conclusion as supplied to {\it lemma_tac}.
+The second subgoal is the original subgoal with the new result stripped into the assumptions.
+The stripping process may cause further case splits, in which case more than two subgoals may arise, or it may even cause the second subgoal to be discharged, in which case only the one subgoal will result from the application of {\it lemma_tac}.
+
+{\it lemma_tac} would not normally be used where the result to be proven is of general interest beyond the current proof.
+In such a case the general result would be set up as a new main goal by using {\it push_goal}.
+After completion of this subsidiary proof the result would be stored in a suitable theory or bound to an ML name.
+The original proof can then be resumed making use of the result thus obtained.
+
+\subsection{Finishing Off}
+
+When the subgoal package declares that the proof is complete the user has the following options:
+
+=SML
+⦏top_thm⦎		: unit -> THM;
+⦏pop_thm⦎		: unit -> THM;
+⦏save_pop_thm⦎	: string -> THM;
+=TEX
+
+{\it top_thm} may be used to retrieve the theorem just proven, returning this as a value but making no other changes.
+
+{\it pop_thm} returns the theorem just proven, without retaining the theorem in the subgoal package.
+If the proof was started with a {\it push} the previous proof will now be resumed by displaying the current subgoal in that proof.
+
+Often the user will wish to save the theorem in his current theory, in which case {\it save_pop_thm} may be used.
+A single string is supplied as a keyword for retrieving the theorem from the theory, and the value of the theorem is returned as well as being stored (it is usually convenient to bind the theorem to an ML name at the same time).
+
+also note:
+=SML
+⦏drop_main_goal⦎		: unit -> GOAL;
+⦏save_thm⦎			: string * THM -> THM;
+⦏list_save_thm⦎		: string list * THM -> THM;
+⦏save_consistency_thm⦎	: TERM -> THM -> THM;
+=TEX
+
+{\it drop_main_goal} may be used to abandon a proof attempt (possibly because it has become clear that the original {\goal} is unprovable).
+If there are other proofs stacked, the most recent will be resumed.
+{\it repeat drop_main_goal} may be used to discard all the goals on the main goal stack.
+
+{\it save_thm} and {\it list_save_thm} may be used to save theorems which have been proven without using the subgoal package.  {\it list_save_thm} allows the theorem to be saved under more than one key (and may be used for this, with {\it pop_thm} to save the result of a subgoal package proof under multiple keys).
+
+{\it save_consistency_thm} should be used to save the result of a subgoal proof where the proof was initiated using {\it push_consistency_goal}.
+It does however require the theorem to be saved to be submitted as a parameter, and is therefore normally used with {\it pop_thm}.  The {\term} parameter must be one of the constants whose specification has been proven consistent.
+
+

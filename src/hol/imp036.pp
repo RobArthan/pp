@@ -1,0 +1,792 @@
+=IGN
+********************************************************************************
+imp036.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ $Date: 2009/04/21 11:17:33 $ $Revision: 1.63 $ $RCSfile: imp036.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{HOL PDS System Initialisation}
+
+\def\AbstractText{This document contains the implementation for the system initialisation functions.}
+
+\def\Reference{DS/FMU/IED/IMP036}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{HOL PDS System Initialisation}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP036}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.63 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2009/04/21 11:17:33 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{ML Literate Script}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the implementation for the
+%% LaTeX2e port: system initialisation functions.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library\\RDA\\AJH\\DJK}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1 (1991/07/31)]
+First draft.
+\item[Issue 1.2 (1991/10/23)]
+Removed some hangovers from quick document creation.
+Added setting of $profiling$ to $false$.
+\item [Issue 1.3 (1992/01/17)]
+Added $reset\_flag$ $"subgoal\_package\_quiet"$.
+\item[Issue 1.4 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.5 (1992/05/06)]
+Changes to reflect needs of \cite{DS/FMU/IED/DTD069}.
+\item [Issue 1.6 (1992/05/11)]
+Added $print\_status$.
+\item [Issue 1.7 (1992/05/21)]
+Changed save and exit commands.
+\item [Issue 1.8 (1992/05/26) (26th May 1992)]
+Renamings from version 1.5 of DS/FMU/IED/WRK038.
+\item [Issue 1.9 (1992/05/26) (26th May 1992)]
+Added $use\_terminal$ to initialisation list.
+\item [Issue 1.10 (1992/06/23) (23rd June 1992)]
+Removed spurious line in $pp'write\_to\_initialisation\_error\_file$.
+\item [Issue 1.11 (1992/06/29) (29th June 1992)]
+Recognise difference between unreadable and unprocessable
+initialisation files.
+\item [Issue 1.12 (1992/06/29) (29th June 1992)]
+Changed formatting of $print\_status$ line.
+\item [Issue 1.13 (1992/07/13), 1.14 (1992/07/13), 1.15 (1992/08/13)(13th July 1992)]
+Protecting against run-time environment errors.
+\item [Issue 1.16 (1992/09/14) (14th September 1992)]
+Swapped order of initialisation functions.
+\item [Issue 1.17 (1992/11/03) (3rd November 1992)]
+Improved banner mechanism, lost system version from $print\_status$.
+\item [Issue 1.18 (1992/12/15) (15th December 1992)]
+Improved $save\_and\_quit$.
+\item [Issue 1.19 (1992/12/15) (22nd December 1992)]
+Moved line length in initialisation functions.
+\item [Issue 1.20 (1993/01/05) (6th January 1993)]
+Protecting user from shell error messages.
+\item [Issue 1.21 (1993/01/06),1.22 (1993/01/11) (11th,12th January 1993)]
+Improved start of session error message database resetting.
+\item [Issue 1.24 (1993/01/19) (19th January 1993)]
+$save\_and\_quit$ now checks for state being inconsistent.
+\item [Issue 1.25 (1993/07/07)-1.26 (1993/07/15) (7th July 1993)]
+Bug 126 fixed.
+\item [Issue 1.27 (1993/08/17) (17th August 1993)]
+Added clearing the type compactification cache into $save\_and\_quit$.
+\item [Issue 1.28 (1993/09/24), 1.29 (1994/02/01) (1st February 1994)]
+Changed $exit$ and $save\_and\_exit$ to return the exit status, provided
+as an argument, to the calling process. Both functions now have type $int -> unit$.
+Added $use\_files\_save\_and\_exit$ to support batch processing of files.
+\item [Issue 1.30 (1994/05/09) (9th May 1994)]
+Added the function $save()$ and recoded $save\_and\_quit$ and $save\_and\_exit$ to use it.
+\item [Issues 1.31 (1994/05/17),1.32 (1999/02/12)]
+Basic update for NJML.
+\item [Issue 1.33 (1999/02/28),1.34 (1999/03/15)]
+Fixed bug in sanitize function.
+\item [Issue 1.35 (2000/06/30)]
+Rationalised treatment of line lengths, environment variables and initialisation errors.
+\item [Issue 1.36 (2002/03/13)]
+Now allows for control variables in child databases properly.
+\item [Issue 1.37 (2002/03/19)]
+Fixed bug in restoring the system controls for a child database.
+\item [Issue 1.38 (2002/04/25)]
+Made {\it load\_files} print file names containing `Q' properly.
+\item[Issue 1.39 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.40 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.41 (2004/11/10),1.42 (2004/11/11)] Fix to problems with `Q' in file names.
+\item[Issue 1.43 (2005/04/15)] Removed restrictions on setting the banner and introduced a single function to restore the state at start of a session.
+\item[Issue 1.44 (2005/04/16)] Now provides {\em get\_init\_funs} and supports {\em new\_init\_fun}  in child databases under Poly/ML).
+\item[Issue 1.45 (2005/04/18)] {\em pending\_reset\_ksc\_functions} has been renamed as {\em pending\_reset\_kernel\_interface}.
+\item[Issue 1.46 (2005/12/15)] Made it better at reporting exceptions; updated to reflect kernel interface reform.
+\item[Issue 1.47 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.48 (2006/01/17)] Moved restoring of the current theory forwards.
+\item[Issue 1.49 (2006/03/28)] Added $new\_save\_fun$.
+\item[Issue 1.50 (2006/05/04)] Initialisation scripts are now run after all the initialisation functions.
+\item[Issue 1.51 (2006/06/15)] Rationalised initial cache theory set-up.
+\item[Issues 1.43 (2005/04/15),1.44 (2005/04/16)] Initial current theory and initialisation scripts in {\tt pp} are now passed in environment variables with more conventional name (and the theory is opened using {\em use\_string} so that `Q's in the name are handled sensibly).
+\item[Issues 1.45 (2005/04/18)--1.50 (2006/05/04)] Revised interface for initialisation scripts.
+\item[Issues 1.51 (2006/06/15), 1.52 (2006/07/07)] Improved treatment of cache theories.
+\item[Issues 1.53 (2007/05/16), 1.54 (2007/05/28)] Standardised environment variable names.
+\item[Issues 1.55 (2007/07/24), 1.56 (2007/07/26)] Comma separated lists of file names are no longer supported.
+\item[Issues 1.57 (2008/02/03)--1.59 (2008/02/07)] Poly/ML 5.1 port.
+\item[Issues 1.60 (2008/02/26), 1.61 (2008/03/05)] Now announce the database name.
+\item[Issue 1.62 (2009/04/21)] ``Branch'' for Poly/ML 4.1.3.
+\item[Issue 1.63 (2009/04/21)] Revert to main branch.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+
+\item[2019/02/03]
+Can now select between ext and utf8 character sets using a shell
+variable (\textit{PPCHARSET}).
+
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation for the system initialisation functions.
+The detailed design for this material is given in \cite{DS/FMU/IED/DTD036}.
+\subsection{Introduction}
+\subsection{Dependencies}
+\subsection{Algorithms}
+\subsection{Possible Enhancements}
+\subsection{Deficiencies}
+A number of initialisation functions use
+=INLINEFT
+handle _ =>
+=TEX
+{} which is a bit crude.
+We handle the error message database as follows.
+We have a local assignable variable, $sos\_emdb$, which is set to the
+start of session state of the error message database.
+We then during the start of session add (using $pp'change\_error\_message$)
+those messages in the $error\_messages$ field of our private database.
+
+At the end of the session we determine what messages have been
+added to the error message database (by using $sos\_emdb$), and record them in
+the $error\_messages$ field of our private database.
+
+Thus, because of the behaviour of assignable variables) the $error\_messages$ will no longer contain a particular
+message after two saves if in the supplied database,
+but if in a child database will remain in $error\_messages$
+``forever''.
+
+Because the string comprising a capital Q in between two percent signs
+is an SCCS key word, we resort to knowledge of the ASCII character set here.
+=SML
+=TEX
+
+\section{SYSTEM INITIALISATION}
+=SML
+structure ⦏Initialisation⦎ : Initialisation = struct
+=TEX
+=SML
+val ⦏init_funs⦎ : (unit -> unit) list ref = ref [];
+=TEX
+=SML
+fun ⦏new_init_fun⦎ (f : unit -> unit) : unit = (
+	init_funs := !init_funs @ [f]
+);
+=TEX
+=SML
+fun ⦏get_init_funs⦎ (() : unit) : (unit -> unit) list = (
+	!init_funs
+);
+=TEX
+=SML
+val ⦏save_funs⦎ : (unit -> unit) list ref = ref [];
+=TEX
+=SML
+fun ⦏new_save_fun⦎ (f : unit -> unit) : unit = (
+	save_funs := !save_funs @ [f]
+);
+=TEX
+=SML
+fun ⦏get_save_funs⦎ (() : unit) : (unit -> unit) list = (
+	!save_funs
+);
+=TEX
+=SML		
+fun ⦏load_scripts⦎ (() : unit) : unit = (
+let	fun double_q s = (
+		let	fun  aux "\081" = "Q"
+			|   aux ch = ch;
+		in	implode (map aux(explode s))
+		end
+	);
+	fun aux i = (
+		let	val s = ExtendedIO.get_env ("PPINITSCRIPT" ^ string_of_int i);
+		in	if	s = ""
+			then	()
+			else	((((use_file1 s
+					handle (Io _) =>
+						warn "load_scripts" 36012
+							[fn _ => double_q s])
+					handle (Fail msg) =>
+						warn "load_scripts" 36005
+							[fn _ => double_q s, fn _ => get_message msg])
+					handle ex =>
+						warn "load_scripts" 36005
+						[fn _ => double_q s, fn _ => string_of_exn ex]);
+				aux (i+1))
+		end
+	);
+in	aux 1
+end);
+=TEX
+=SML
+fun ⦏print_exn⦎ (Fail mess) = (
+	diag_string(get_error_message
+		36014 ["Fail",
+			(get_message mess)])
+) | print_exn (Error mess) = (
+	diag_string(get_error_message
+		36014 ["Error",
+			(get_message mess)])
+) | print_exn other = (
+	diag_string(get_error_message
+		36014 [string_of_exn other, ""])
+);
+=TEX
+The following is allowing for the possibility of the initialisation functions adding extra initialisations to the list.
+This happens, for example, when the initialisation functions are restored in {\em pp'reset\_database\_info}.
+
+=SML
+fun ⦏init⦎ (() : unit) : unit = (
+	let	val fs1 = !init_funs;
+		fun go [] = ()
+		|   go (f::fs) = (
+			(f() handle ex => print_exn ex);
+			go fs
+		);
+		val _ = go fs1;
+		val fs2 = !init_funs from length fs1;
+		val _ = go fs2;
+		val _ = load_scripts();
+	in	()
+	end
+);
+=TEX
+The following type and associated bindings is not really necessary
+for NJML, but we retain it since there may be useful special
+effects that can be obtained with it in the future.
+=SML
+type ⦏ICL'DATABASE_INFO_TYPE⦎ = {
+	theory : string,
+	cache_theories : string list,
+	control_state : unit -> unit,
+	controls : ((string * bool) list *
+		(string * int) list *
+		(string * string) list),
+	error_messages : unit -> unit,
+	stats : int S_DICT,
+	pc_stack : unit -> unit,
+	pc_database : unit -> unit,
+	pc_evaluators : unit -> unit,
+	kernel_interface : unit -> unit,
+	subgoal_package : unit -> unit,
+	init_fun_state : (unit -> unit) list,
+	save_fun_state : (unit -> unit) list
+};
+=TEX
+Make a good starting point for the creation of cache theories in child databases.
+=SML
+val _ = set_cache_theories ["basic_hol"];
+=TEX
+Make it start up with theory hol current.
+=SML
+val _ = open_theory "basic_hol";
+val _ = reset_controls();
+=TEX
+=SML
+val ⦏pp'theory_hierarchy⦎: pp'Kernel.pp'HIERARCHY OPT = Nil;
+val ⦏pp'database_info⦎ : ICL'DATABASE_INFO_TYPE = {
+	theory = get_current_theory_name(),
+	cache_theories = get_cache_theories(),
+	control_state = pending_reset_control_state(),
+	controls = get_controls (),
+	error_messages = pending_reset_error_messages(),
+	stats = get_stats (),
+	pc_stack = pending_reset_pc_stack(),
+	pc_database = pending_reset_pc_database(),
+	pc_evaluators = pending_reset_pc_evaluators(),
+	kernel_interface = pending_reset_kernel_interface(),
+	subgoal_package = pending_reset_subgoal_package(),
+	init_fun_state = !init_funs,
+	save_fun_state = !save_funs
+};
+=TEX
+=SML
+fun ⦏pp'set_database_info⦎ ():unit = (use_string (" \
+\PPCompiler.print_depth 0; \
+\  val pp'database_info : Initialisation.ICL'DATABASE_INFO_TYPE = { \
+\  theory = get_current_theory_name(), \
+\  cache_theories = get_cache_theories(), \
+\  control_state = pending_reset_control_state(), \
+\  controls = get_controls(), \
+\  error_messages = pending_reset_error_messages(), \
+\  stats = get_stats(), \
+\  pc_stack = pending_reset_pc_stack(), \
+\  pc_database = pending_reset_pc_database(), \
+\  pc_evaluators = pending_reset_pc_evaluators(), \
+\  kernel_interface = pending_reset_kernel_interface(), \
+\  subgoal_package = pending_reset_subgoal_package(), \
+\  init_fun_state = Initialisation.get_init_funs(), \
+\  save_fun_state = Initialisation.get_save_funs() \
+\  }; \
+\ PPCompiler.print_depth 999;");
+	()
+);
+=TEX
+In the following it is important to reset the kernel interface before doing anything that might call a kernel interface function (i.e., almost anything, so do it first!).
+
+=SML
+fun ⦏pp'reset_database_info⦎
+	(do_current_theory : bool)
+	({	theory,
+		cache_theories,
+		control_state,
+		controls,
+		error_messages,
+		stats,
+		pc_stack,
+		pc_database,
+		pc_evaluators,
+		kernel_interface,
+		subgoal_package,
+		init_fun_state,
+		save_fun_state} : ICL'DATABASE_INFO_TYPE) : unit = (
+	(kernel_interface () handle ex => print_exn ex);
+	(if	do_current_theory
+	 then	open_theory theory handle ex => print_exn ex
+	 else	());
+	(set_cache_theories cache_theories; ()) handle ex => print_exn ex;
+	(control_state () handle ex => print_exn ex);
+	(set_controls controls handle ex => print_exn ex);
+	(error_messages () handle ex => print_exn ex);
+	(set_stats stats handle ex => print_exn ex);
+	(pc_stack () handle ex => print_exn ex);
+	(pc_evaluators () handle ex => print_exn ex);
+	(pc_database () handle ex => print_exn ex);
+	(subgoal_package () handle ex => print_exn ex);
+	(init_funs := init_fun_state);
+	(save_funs := save_fun_state);
+	()
+);
+=TEX
+=SML
+end; (* of structure Initialisation *)
+=TEX
+We now wish to expose $pp'database_info$ and $pp'theory\_hierarchy$.
+=SML
+val ⦏pp'database_info⦎ = Initialisation.pp'database_info;
+val ⦏pp'theory_hierarchy⦎ = Initialisation.pp'theory_hierarchy;
+=TEX
+\section{USER INTERFACES}
+=SML
+structure ⦏HOLSystem⦎ : HOLSystem = struct
+=TEX
+The following turns off profiling, so that though the system build
+is profiled automatically, any further profiling must be
+requested.
+=SML
+val side_effect3 = set_flag("profiling",false);
+=TEX
+The following sets the subgoal package ``quietness'' to its default (``noisy'').
+This means that if the switch is quiet from its point of creation then
+no subgoal pacage material will arrive in the log.
+=SML
+val side_effect4 = reset_flag "subgoal_package_quiet";
+=TEX
+To have the initialisation functions called appropriately, we use a stream
+to detect whether or not the return from the $PolyML.commit$ is in the same
+session or the new one. This works because in the new session the stream
+will have become closed.
+=SML
+
+fun ⦏quit⦎ (():unit) : unit = ((
+let	val resp = ask_at_terminal (get_error_message 36001 ["quit"]);
+in
+	if resp = "y\n"
+	then PPCompiler.exit 0
+	else diag_line (get_error_message 36011 [])
+end)
+handle complaint =>
+if area_of complaint = "ask_at_terminal"
+then PPCompiler.exit 0
+else raise complaint);
+
+fun ⦏exit⦎ (ret : int) : unit = ((
+let	val resp = ask_at_terminal (get_error_message 36001 ["exit"]);
+in
+	if resp = "y\n"
+	then PPCompiler.exit ret
+	else diag_line (get_error_message 36018 [])
+end)
+handle complaint =>
+if area_of complaint = "ask_at_terminal"
+then PPCompiler.exit ret
+else raise complaint);
+=TEX
+=SML
+fun ⦏save_then_this⦎ (caller : string)
+	(this_session : unit -> unit) : unit -> unit = (fn () =>
+if	!PPBuild.pp'save_name <> ""
+then	let	val dummy = if valid_thm bool_cases_axiom
+			then ()
+			else error "save" 36017 [];
+		val _ = app (fn f => f()) (Initialisation.get_save_funs());
+		val _ = clear_compactification_cache();
+		val _ = Initialisation.pp'set_database_info();
+		fun next_session () = (
+			Initialisation.init ();
+			reset_use_terminal ();
+			use_terminal ()
+		);
+	in	PPBuild.pp'save_then {
+			this_session = this_session,
+			next_session = next_session}
+	end
+else	fail caller 36010 []
+);
+=TEX
+=SML
+val ⦏save⦎ : unit -> unit = save_then_this "save" (fn () => ());
+=TEX
+=SML
+fun ⦏save_as⦎ (name : string) : unit = (
+	PPBuild.pp'save_name := name;
+	diag_line (get_error_message 36025 [!PPBuild.pp'save_name]);
+	save()
+);
+=TEX
+=SML
+fun ⦏save_and_exit⦎ (ret : int) : unit = (
+	save_then_this "save_and_exit" (fn () => PPCompiler.exit ret) ()
+);
+=TEX
+=SML
+fun ⦏save_and_quit⦎ (() : unit) : unit = (
+	save_then_this "save_and_quit" (fn () => PPCompiler.exit 0) ()
+);
+=TEX
+=SML
+fun ⦏load_files⦎ (filelist : string list) : bool = (
+let	fun do_file (file : string) (last_one : bool) : bool = (
+	let	val last_one_msg = if last_one then
+				get_error_message 36024 []
+				else "";
+	in
+		(
+			use_file file;
+			raw_diag_line(get_error_message 36021 [
+				translate_for_output file,
+				get_error_message 36022 [],
+				last_one_msg
+				]);
+			true
+		)
+		handle ex => (
+			(case ex of
+				Io _ =>  warn "load_files" 36012 [fn _ => file]
+			|	Fail msg => warn "load_files" 36005
+					[fn _ => file, fn _ => get_message msg]
+			|	ReaderWriterSupport.Stop => ()
+			|	_ => warn "load_files" 36005
+					[fn _ => file, fn _ => string_of_exn ex]);
+			raw_diag_line(get_error_message 36021 [
+				translate_for_output file,
+				get_error_message 36023 [],
+				last_one_msg
+				]);
+			false
+		)
+	end);
+	fun do_file_list (f1::f2::rest) : bool = (
+		do_file f1 false andalso do_file_list (f2::rest)
+	) | do_file_list [f1] = (
+		do_file f1 true
+	) | do_file_list [] = true;
+in
+	do_file_list filelist
+end);
+=TEX
+
+=SML
+
+fun ⦏print_status⦎ () : unit = (
+	map (fn x => diag_string(x ^";"))
+	[get_error_message 36006 [get_current_theory_name()],
+	get_error_message 36007 [
+		format_list (Combinators.I) (fst(get_current_pc())) ", "],
+	(get_error_message 36009 [string_of_int(length (top_goals()))]
+		handle (Fail _) =>
+		get_error_message 30010 [])];
+	diag_string(
+	(get_error_message 36008 [top_current_label()]
+		handle (Fail _) =>
+		get_error_message 30026 []) ^ ".")
+);
+=TEX
+
+=SML
+val ⦏get_shell_var⦎ : string -> string = ExtendedIO.get_env;
+=TEX
+
+\subsection{Initialisation Steps}
+\subsubsection{Theory Hierarchy}
+=SML
+fun ⦏init_theory_hierarchy⦎ () : unit = (
+	use_string(
+	"case (pp'theory_hierarchy) of " ^
+	"Value th => pp'Kernel.pp'load_hierarchy th " ^
+	"| Nil => ();")
+	handle _ => ()
+);
+
+val _ = Initialisation.new_init_fun init_theory_hierarchy;
+=TEX
+Note that we deliberately catch any exceptions in the above.
+
+\subsubsection{Current State}
+=SML
+=TEX
+Then the function proper:
+=SML
+fun ⦏init_current_state⦎ () : unit = (
+	(case get_shell_var "PPINITCURRENTTHEORY" of
+	"" => (
+		use_string
+		"Initialisation.pp'reset_database_info true pp'database_info;"
+	) | hct => (
+		use_string
+	(	"Initialisation.pp'reset_database_info false pp'database_info;\
+\\	\\	\open_theory \"" ^ hct ^ "\"")
+		handle (Fail msg) => (	diag_line(get_message msg);
+			output(ExtendedIO.std_err,
+				get_error_message 36002 [hct] ^ "\n");
+			PPCompiler.exit 1
+		) | _ => (
+			output(ExtendedIO.std_err,
+				get_error_message 36002 [hct] ^ "\n");
+			ExtendedIO.flush_out ExtendedIO.std_err;
+			PPCompiler.exit 1
+		)
+	));
+	()
+);
+val _ = Initialisation.new_init_fun init_current_state;
+=TEX
+Note that we deliberately catch any exceptions in the above.
+\subsubsection{Line Length}
+Some things such as rs232 lines often claim their line length is 0.
+If this happens wie pick 80 rather than 20 as the sensible guess.
+=SML
+fun ⦏init_line_length⦎ () : unit = (
+let	val ll = nat_of_string(get_shell_var "PPLINELENGTH")
+		handle Fail _ => 80;
+in
+	((if ll = 0
+	then set_line_length 80
+	else if ll < 20
+	then set_line_length 20
+	else set_line_length ll);())
+end);
+
+val _ = Initialisation.new_init_fun init_line_length;
+=TEX
+=TEX
+Note that we deliberately catch any exceptions in the above.
+
+
+\subsubsection{System Banner}
+=SML
+fun ⦏default_banner⦎ (():unit) : string = (
+	get_error_message 36000 [system_version]
+);
+=TEX
+=SML
+val ⦏system_banner⦎ : string ref = ref (default_banner());
+=TEX
+=SML
+val _ = new_string_control {
+	name = "system_banner",
+	check = fun_true,
+	control = system_banner,
+	default = default_banner
+} handle Fail _ => ();
+=TEX
+=SML
+val ⦏user_banner⦎ : string ref = ref "";
+=TEX
+=SML
+val _ = new_string_control {
+	name = "user_banner",
+	check = fun_true,
+	control = user_banner,
+	default = fn () => ""
+} handle Fail _ => ();
+=TEX
+=SML
+val ⦏copyright_year⦎ : string = string_of_int(Date.year build_date);
+fun ⦏print_banner⦎ () : unit = (
+	diag_string (get_error_message 36050 [!system_banner]);
+	diag_string (get_error_message 36051 [copyright_year, !user_banner])
+);
+=TEX
+=SML
+fun ⦏pp'set_banner⦎ (Value (ban:string)) : string = (
+	set_string_control("system_banner", ban)
+) | pp'set_banner Nil = !system_banner;
+=TEX
+=SML
+val _ = Initialisation.new_init_fun print_banner;
+=TEX
+\subsection{Control of Garbage Collector Messages}
+With SML/NJ, we have to tell the garbage collector what to do at the start of
+each session. Hence we need an initialisation function to remember the state.
+
+=SML
+local
+	val gc_message_flag : bool ref = ref false;
+	fun check_gc_flag (new : bool) : bool = (
+		PPCompiler.gc_messages new;
+		true
+	);
+	val _ = new_flag{
+		name = "gc_messages",
+		check = check_gc_flag,
+		control = gc_message_flag,
+		default = fn _ => false} handle Fail _ => ();
+	fun init_gc_messages () : unit = (
+		PPCompiler.gc_messages (!gc_message_flag)
+	);
+in
+	val _ = Initialisation.new_init_fun init_gc_messages;
+end;
+=TEX
+\subsection{Setting the Database Name}
+=SML
+local
+	fun ⦏set_db_name⦎ () : unit = (
+		PPBuild.pp'save_name := get_shell_var "PPDATABASENAME";
+		diag_line (get_error_message 36025 [!PPBuild.pp'save_name])
+	);
+in
+	val _ = Initialisation.new_init_fun set_db_name;
+end;
+=TEX
+\subsection{Setting the I/O Character Set}
+=SML
+local
+	fun ⦏set_char_set⦎ () : unit = (
+		case  get_shell_var "PPCHARSET" of
+			"" => ()
+		|	"ext" => (
+				set_flag("input_in_utf8", false);
+				set_flag("output_in_utf8", false);
+				()
+			)
+		|	"utf8" => (
+				set_flag("input_in_utf8", true);
+				set_flag("output_in_utf8", true);
+				()
+			)
+		|	unsupported => (
+			diag_line (get_error_message 36030 [unsupported])
+		)
+	);
+in
+	val _ = Initialisation.new_init_fun set_char_set;
+end;
+=TEX
+=SML
+end (* of structure HOLSystem *);
+open HOLSystem;
+=TEX
+
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
+

@@ -1,0 +1,1143 @@
+=IGN
+********************************************************************************
+dtd082.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of Linear Arithmetic Proof Procedure}
+
+\def\AbstractText{This document contains the detailed design of proof procedures for linear arithmetic and related conversions, rules, proof contexts etc.}
+
+\def\Reference{DS/FMU/IED/DTD082}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design of Linear Arithmetic Proof Procedure}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD082}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.8 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.B.~Jones & FMU Manager}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design of proof
+%% LaTeX2e port: procedures for linear arithmetic and related conversions, rules, proof contexts
+%% LaTeX2e port: etc.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}
+\begin{description}
+\item[1.6] Providing actual error numbers.
+\item[Issue 1.8 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.9 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes forecast}
+As determined by comments and use.
+\newpage
+\section{GENERAL}
+\subsection{Scope}
+This document contains the detailed design of part of the \ProductHOL\ system.
+The document responds to \cite{DS/FMU/IED/HLD012}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+There are algorithms which will decide the satisfiability
+of a system of linear constraints over the rationals. Here
+by a system of {\em linear constraints}, we mean a finite set of
+formulae of the form:
+
+=GFT
+	a⋎1*x⋎1 + a⋎2*x⋎2 + ... a⋎k * x⋎k R c
+=TEX
+in which the constants $a_1$ and $c$ (which we will call {\em coefficients})
+are rationals,
+the variables $x_i$ range over the rationals
+and R is one of $=$, $<$, $≤$, $>$, $≥$.
+
+Since a system which is unsatisfiable over the rationals is {\it a fortiori}
+unsatisfiable over the natural numbers or the integers, such a decision procedure
+acts as a semi-decision procedure for the unsatisfiability of such a system
+over the natural numbers or the integers (or indeed any subset of the
+rationals).
+
+It turns out that some of the algorithms which solve the rational
+decision problem, such as the one given by L. Hodes in \cite{Hodes71} and
+used in the Boyer-Moore theorem prover, see \cite{Boyer88b}, may readily
+be adapted not only to decide the unsatisfiability but also to produce
+as output a linear combination of the input constraints which reduces,
+by collecting like terms and cancellation, to an unsatisfiable ground constraint
+(i.e. one in which there are no variables). Such a procedure may
+be used in \ProductHOL\ to prove facts of arithmetic which can be expressed
+in terms of the unsatisfiability systems of linear constraints.
+For example, the assertion
+=INLINEFT
+∀x y:ℕ⦁ x > 1 ∧ y > x ⇒ y > 2
+=TEX
+\ is, by contradiction, true iff. the following system of
+constraints is unsatisfiable:
+=GFT
+(a)		x	≥	2
+(b)		y - x	≥	1
+(c)		y	≤	2
+=TEX
+The procedure of Hodes, suitability adapted, will tell us that
+the linear combination
+=INLINEFT
+(c)-(a)-(b)
+=TEX
+\ of these constraints reduces to the ground constraint
+=INLINEFT
+3 ≤ 2
+=TEX
+. This information may be used to derive a contradiction from the three
+constraints in HOL.
+
+The purpose of this document is to provide proof procedures
+and proof contexts
+based on these techniques for the natural numbers and also
+to provide an implementation of the basic tools which support these
+proof procedures by testing
+unsatisfiability of a system over the rationals for use
+in constructing similar procedures for other number systems.
+
+\subsubsection{Dependencies}
+This document depends on the theory $basic\_hol$ defined in
+\cite{DS/FMU/IED/DTD045}, on the conversions in
+\cite{DS/FMU/IED/DTD081}, and on the tactics and rules of
+\cite{DS/FMU/IED/DTD027,DS/FMU/IED/DTD029}.
+\subsubsection{Algorithms}
+See \cite{Hodes71} for the basic algorithm and other references
+given in \cite{Boyer88b} for subsequent developments in this topic.
+Section \ref{ALGORITHM} below describes the algorithm we have actually
+adopted.
+
+Note that \cite{Hodes71} is concerned with a quantifier-elimination
+algorithm acting as a decision procedure for a certain first-order theory,
+whereas we, as in \cite{Boyer88b} but for rather different reasons, only
+implement the heart of the algorithm which is a decision procedure for the
+quantifier-free formulae of that theory
+(represented as \Product\ subgoal package goals). Boyer and Moore are only
+interested in quantifier-free formulae in clausal form because that is all that
+their theorem-prover works with internally. In \Product\ we only deal with
+quantifier-free formulae represented as subgoal package goals because
+{\em(i)} that approach integrates more easily
+with the other tools in \Product\ for handling predicate calculus connectives
+and with the proof context mechanism,
+{\em(ii)} the full quantifier-elimination algorithm is, I believe,
+very significantly harder to implement efficiently,
+and, last but not least,
+{\em(iii)} the quantifier-free case already covers a very large class of
+useful problems.
+
+
+\subsubsection{Known Deficiencies}
+Many more variants along the lines of
+=INLINEFT
+list_scale_nth_asm_tac
+=TEX
+\ could be provided.
+\subsubsection{Possible Enhancements}
+When the proof procedure fails to derive a contradiction and the exception
+signalling that failure is propagated to the top level, the diagnostic
+print-out just shows the assignment of variables to atoms in the problem
+and the system of constraints as expressed in terms of those variables.
+It is possible, but not entirely straightforward, actually to exhibit
+a solution to the constraints as well, but this has not been done in the
+current implementation.
+\newpage
+\section{ALGORITHM}\label{ALGORITHM}
+The main algorithm is
+a decision procedure for the problem of the non-satisfiability of a finite set
+of {\em linear constraints} over the rationals, i.e. finite
+sets of formulae of the form:
+=GFT
+	a⋎1*x⋎1 + a⋎2*x⋎2 + ... a⋎k * x⋎k R c
+=TEX
+in which the constants $a_1$ and $c$ (which we will call {\em coefficients})
+are integers and
+the variables $x_i$ range over the rationals
+and R is one of $=$, $<$, $≤$.
+Note that such a procedure may be used to handle linear systems of
+constraints formed
+using any combination of the relations $=$, $<$, $≤$, $>$ or $≥$ and with
+arbitrary rational coefficients, since
+from such a system we may derive an equivalent system by multiplying
+each equation through by the least common denominator of all its coefficients
+to make all its coefficients integers and then using the following
+bi-implications to derive an equivalent system of upper bounds:
+=GFT
+	t ≥ c	⇔	-t ≤ -c
+	t > c	⇔	-t < -c
+=TEX
+Note, also, that if we are interested in the case where variables only
+range over (some subset of) the integers, then it is better
+to represent $t < c$ as $t + 1 ≤ c$, since that is equivalent over the
+integers and stronger over the rationals. The applications of the
+procedure to ℕ in \ProductHOL\ in the sequel work in this way, but the
+general implementation of the algorithm we give supports $<$, since that
+is easy to add in and is useful for the rationals or reals.
+
+The method is similar that of Hodes as described in \cite{Hodes71}.
+
+Using the transformation:
+=GFT
+	t = c	⇔	t ≤ c ∧ -t ≤ -c
+=TEX
+we may assume that all the $R$ are $≤$ or $<$. We may then replace
+the system
+=GFT
+	a⋎1⋎1*x⋎1 +a1⋎2*x⋎2 + ... a⋎1⋎k*x⋎k R c⋎1
+	a⋎2⋎1*x⋎1 +a⋎2⋎2*x⋎2 + ... a⋎2⋎k*x⋎k R c⋎2
+	.
+	.
+	.
+	a⋎m⋎1*⋎x⋎1 +a⋎1⋎2*x⋎2 + ... am⋎k*x⋎k R c⋎m
+=TEX
+by an equivalent system of ground constraints (i.e. ones
+in which no variables appear) by
+repeating the following steps, which
+eliminate $x_j$ from the system, with $j$ running from $1$ to $k$:
+
+\begin{enumerate}
+\item let $N$, $Z$, $P$ be the sets of constraints in which the coefficient of $x_j$ is
+negative, zero, or positive respectively.
+
+\item if $N$ and $P$ are empty, then we are done (for this step) -- no
+constraint mentions $x_j$.
+
+\item if exactly one of $N$ or $P$ is empty, then we may discard all constraints
+involving $x_i$, since the satisfiability of any system of inequalities
+is equivalent to the satisfiability of that system augmented by inequalities
+in which a fresh variable $x$ ($x_j$ in this case) appears always with the same
+sign.
+
+\item Otherwise, replace the system by the union of $Z$ and all new constraints obtainable by taking a pair of inequalities, one from $N$ and one from $P$, and
+multiplying and adding to eliminate $x_j$.
+\end{enumerate}
+
+Note that 4 essentially embraces 1, 2 and 3 if one is careful
+about edge conditions.
+
+The above procedure works for equations by replacing each equation by
+two inequalities. Hodes treats equations as a special case, however the
+extra speed gained thereby is not currently felt to justify the slight
+extra complication (given that the performance on all cases tried to
+date is dominated by the inference before and after the search phase).
+
+
+In order that this procedure be useful within the context of \ProductHOL,
+we must arrange to keep track of the derivation of each generated constraint
+as a linear combination of the input constraints, but this is a very
+simple extension to the algorithm. It is here that the
+efficiency of this method for HOL becomes apparent: the extended algorithm
+can work with a compact representation of the problem and can output,
+without doing any inference, a representation of a linear combination
+of the input constraints which results in an unsatisfiable (i.e. false)
+ground constraint. Thus while the search part of the algorithm involves
+much computation, this can be conducted using
+an efficient representation of the problem and without carrying out any
+inference, while the output is an encoding of a fairly
+efficient means for inferring a contradiction.
+
+It is worth remarking that the problem this algorithm solves is closely
+connected to the well-known linear programming problem, viz. ``given a system
+of constraints and a, so-called objective,
+function on the constrained variables, find an
+assignment of values to the variables which satisifies the constraints and
+minimises (or maximises) the objective function''. (See \cite{Hodes71} and
+the works it refers to for more information.)
+The simplex method and its variants,
+which are commonly used
+to solve such problems, actually begin with a phase where the satisfiability
+of the system is checked by a recursive application of the simplex method
+itself to an extended system of constraints which has obvious solutions
+and an objective function which measures how far a solution
+to the extended system fails to solve the original system.
+The typical performance of the simplex method on large problems is
+much better than that of Hodes' algorithm. However,
+{\em(i)}
+Hodes' algorithm is much easier to implement in the context of theorem
+proving (essentially because it has a much simpler metatheory, which greatly
+facilitates
+the inference of a contradiction from an unsatisfiable system of constraints),
+{\em(ii)}
+on typical problem data in theorem-proving (rather than economics
+or what have you) Hodes' algorithm is probably as efficient as the simplex
+methods (which only comes into its own on rather large data sets),
+and {\em(iii)}
+Hodes' algorithm (and its later variants) are the only ones I know of which
+handle systems involving $<$ (it seeming, geometrically speaking,
+to be an important part of the simplex method that the simplex in question
+is topologically closed).
+\newpage
+\section{SIGNATURE}
+=DOC
+signature ⦏LinearArithmetic⦎ = sig
+=DESCRIBE
+This is the signature of a structure containing proof procedures for linear
+arithmetic and related functions.
+=ENDDOC
+\section{TOOLS}
+The structure contains an embedded structure $LinearArithmeticTools$ which
+implements the algorithm discussed in section \ref{ALGORITHM} for reuse
+elsewhere. The rather terse description of the types and functions in
+this structure in the box below is intended as an aide-memoire at best, and
+someone who is really interested in using the functions, e.g. for the reals,
+should consult this document or the forthcoming description manual for
+\ProductHOL.
+
+Note that the error handling of
+=INLINEFT
+lin_arith_contr
+=TEX
+\ is adequate for the programmer --- it raises an exception when the
+system it is given is unsatisfiable --- but not sufficient for the end user
+in typical applications. Functions for formatting the main data types used
+to represent systems of constraints are made available for use by
+callers of
+=INLINEFT
+lin_arith_contr
+=TEX
+\ in constructing more helpful error messages.
+
+Note that the algorithm could be further extended to produce a counterexample
+(i.e. a solution) when the system of constraints supplied is not contradictory
+(i.e. is satisfiable). It is not clear of what benefit this would be in the
+production of helpful diagnostics, but it might be worth investigating if
+further work is thought desirable in this area. Note that producing a
+counterexample adds some overhead to the algorithm and so the more
+sophisticated techniques due to Bledsoe and others might be worth
+investigating (see references in
+\cite{Boyer88b}), since, I believe, counterexamples fall out more naturally
+from these.
+
+=DOC
+structure ⦏LinearArithmeticTools⦎ : sig
+	type ⦏POLY⦎ 	(*= (INTEGER * int) list *);
+	datatype ⦏CONSTRAINT_TYPE⦎ = ⦏Eq⦎ | ⦏LessEq⦎ | ⦏Less⦎;
+	type ⦏CONSTRAINT⦎
+		(* = POLY * CONSTRAINT_TYPE * INTEGER * POLY *);
+	val ⦏normalise_poly⦎ : POLY -> POLY;
+	val ⦏normalise_constraint⦎ : CONSTRAINT -> CONSTRAINT;
+	val ⦏format_poly⦎ : POLY -> string;
+	val ⦏format_constraint⦎ : CONSTRAINT -> string;
+	val ⦏mult_and_add_poly⦎
+		: INTEGER -> POLY -> INTEGER ->
+			POLY -> POLY;
+	val ⦏mult_and_add_constraint⦎
+		: INTEGER -> CONSTRAINT -> INTEGER ->
+				CONSTRAINT -> CONSTRAINT;
+	val ⦏lin_arith_contr⦎ : CONSTRAINT list -> POLY;
+end;
+=DESCRIBE
+This is  a structure contained in the
+structure
+=INLINEFT
+LinearArithmetic
+=TEX
+\ giving types and functions used to represent systems
+of linear constraints with integer coefficients over the rational numbers.
+Most importantly,
+=INLINEFT
+lin_arith_contr
+=TEX
+\ provides a decision procedure for the unsatisfiability of such systems.
+In more detail:
+
+Degree one polynomials in many variables $x\sb{1}$, $x\sb{2}$, ...
+(henceforth, just {\em polynomials}) are represented, using the
+type $POLY$, as
+lists of pairs of integers, a pair $(a, i)$ indicating that the $i$-th variable
+has coefficient $a$. The function
+=INLINEFT
+normalise_poly
+=TEX
+\ puts any polynomial in a normal form,
+in which the variables in such a polynomial occur in strictly
+increasing order and pairs with zero coefficients are omitted.
+Provided two polynomials, $p$ and $q$, are in normal form,
+=INLINEFT
+mult_and_add_poly i p j q
+=TEX
+\ computes the normalised representation of
+=INLINEFT
+i*p + j*q
+=TEX
+. N.B. for efficiency reasons, these functions do not check that their
+arguments are normalised and may produce results which are not only
+not normalised but also incorrect in such cases.
+
+
+Constraints are labelled with an indicator of their
+origin. This is a polynomial, and typically
+one would label the $j$-th constraint with $x\sb{j}$.
+The provenance of a generated constraint is then represented using a polynomial,
+where e.g. $2x\sb{1} + 3x\sb{2}$ means add twice the polynomial labelled with
+$x\sb{1}$ to thrice that labelled $x\sb{2}$.
+A constraint
+=INLINEFT
+a⋎1*x⋎1 + a⋎2*x⋎2 + ... a⋎k * x⋎k R c
+=TEX
+\  with provenance $p$ is then represented as a 4-tuple
+=INLINEFT
+([(a⋎1, x⋎1), (a⋎2, x⋎2), ...], R, c, p)
+=TEX
+. The polynomials in a constraint may be put into the normal form
+described above using
+=INLINEFT
+normalise_constraint
+=TEX
+\ and constraints may be multiplied by constants and added using
+=INLINEFT
+mult_and_add_constraint
+=TEX
+.
+
+
+Given a list, $cs$, of constraints (not necessarily normalised),
+=INLINEFT
+lin_arith_contr cs
+=TEX
+\ determines whether $cs$ is unsatisfiable (i.e. contradictory):
+if so, it returns a normalised polynomial indicating, in terms of
+of the origin labels in the inputs, a linear combination of the inputs
+which reduces, by cancellation, to an unsatisfiable constraint
+with no variables; if not, it fails with error number 82110.
+=FAILURE
+82110	System is satisfiable
+=ENDDOC
+\section{RULES}
+\subsection{Linear Arithmetic Proof Procedure}
+The following messages are used behind the scenes by the decision
+procedure to format its main diagnostic print-out when it cannot find
+a contradiction:
+
+=FAILURE
+82100	Cannot derive a contradiction from the following assumptions
+	using the linear arithmetic proof procedure:
+82101	Assigning variables to terms as follows:
+82102	Gives the satisfiable system:
+82113	Unable to combine theorem ?0 with ?1
+82114	Unable to use theorem ?0
+82115	Argument list is empty
+82116	Unable to find match for term ?0
+=TEX
+Care is taken to ensure that the overhead of formatting the print-out is
+only incurred when the exception raised is not handled.
+
+The format of one of these diagnostic print-outs is shown
+in the fragment of a session below:
+
+=GFT
+:> lin_arith_rule1[⌜1 ≤ f(a, b)⌝, ⌜f(a,b) ≤ g(x, y)⌝];
+Cannot derive a contradiction from the following assumptions using the linear
+ arithmetic proof procedure:
+⌜1 ≤ f (a, b)⌝
+⌜f (a, b) ≤ g (x, y)⌝
+Assigning variables to terms as follows:
+X1 = ⌜g (x, y)⌝
+X2 = ⌜f (a, b)⌝
+Gives the satisfiable system:
+1: -X2 ≤ -1
+2: -X1 +X2 ≤ 0
+3: -X1 ≤ 0
+4: -X2 ≤ 0
+Exception- Fail * System is satisfiable [lin_arith_rule1.82110] * raised
+=TEX
+Note how inequalities 3 and 4 show how
+=INLINEFT
+lin_arith_rule1
+=TEX
+\ has introduced additional constraints saying that the variables are
+non-negative.
+=DOC
+	val ⦏lin_arith_rule⦎ : TERM list -> THM;
+	val ⦏lin_arith_rule1⦎ : TERM list -> THM;
+=DESCRIBE
+
+Given a system,
+=INLINEFT
+Γ = [r⋎1, r⋎2, ...]
+=TEX
+, of numeric constraints,
+=INLINEFT
+r⋎i
+=TEX
+, of the form
+=INLINEFT
+(s⋎i:ℕ) = t⋎i
+=TEX
+or
+=INLINEFT
+s⋎i ≤ t⋎i
+=TEX
+\ these rules attempt to prove a theorem of the form
+=INLINEFT
+Γ ⊢ F
+=TEX
+\ (terms in Γ which are not of either of these forms are ignored and
+do not appear in the assumptions of the result theorem).
+The usual interface to these rules is via the decision procedures in the
+proof context $lin\_arith$, q.v., e.g. as invoked by
+=INLINEFT
+PC_T1"lin_arith"prove_tac[]
+=TEX
+. The following description of the detailed operation of the rule is
+mainly intended for those who wish to produce similar proof procedures
+for other number systems. The rules operate as if by the following steps:
+
+1.
+The system of constraints is replaced by a new system in which the
+=INLINEFT
+s⋎i
+=TEX
+\ and
+=INLINEFT
+t⋎i
+=TEX
+are formed only from numeric literals, variables, $+$ and $*$.
+This is done by choosing variables,
+=INLINEFT
+x⋎k
+=TEX
+, such that each
+=INLINEFT
+r⋎i
+=TEX
+\ is a substitution instance of a constraint of the form
+=INLINEFT
+u⋎i⋎1 + u⋎i⋎2 + ... = v⋎i⋎1 + v⋎i⋎2 + ...
+=TEX
+\ or
+=INLINEFT
+u⋎i⋎1 + u⋎i⋎2 + ... ≤ v⋎i⋎1 + v⋎i⋎2 + ...
+=TEX
+, where the summands
+=INLINEFT
+u⋎i⋎j
+=TEX
+\ and
+=INLINEFT
+v⋎i⋎j
+=TEX
+\ have one of the forms:
+=INLINEFT
+a⋎i⋎j*x⋎k
+=TEX
+,
+=INLINEFT
+a⋎i⋎j
+=TEX
+\ or
+=INLINEFT
+x⋎k
+=TEX
+\ where
+=INLINEFT
+a⋎i⋎j
+=TEX
+is a numeric literal; this is done using as few variables as possible
+subject to the constraint that a
+=INLINEFT
+u⋎i⋎j
+=TEX
+\ or a
+=INLINEFT
+v⋎i⋎j
+=TEX
+\ will only have the form
+=INLINEFT
+x⋎k
+=TEX
+\ if it corresponds to a summand in
+=INLINEFT
+r⋎i
+=TEX
+\ which is not of the form
+=INLINEFT
+a*t
+=TEX
+\ where $a$ is a numeric literal.
+
+2.
+In the case of
+=INLINEFT
+lin_arith_rule1
+=TEX
+\ only, the new system is now augmented with an additional inequality
+=INLINEFT
+x⋎k ≥ 0
+=TEX
+\ for each variable
+=INLINEFT
+x⋎k
+=TEX
+. (These additional inequalities do not appear in the assumptions of
+the result theorem.)
+
+3.
+An attempt to derive a contradiction from the new system,
+=INLINEFT
+Δ = [r⋎1', r⋎2', ...]
+=TEX
+\ say, is then made using
+the search procedure
+=INLINEFT
+lin_arith_contr
+=TEX
+. If this attempt fails then an exception is raised (see below),
+otherwise, it produces integer values,
+=INLINEFT
+i⋎1, i⋎2, ...
+=TEX
+\ say, such that the linear combination
+=INLINEFT
+i⋎1*r⋎1' + i⋎2*r⋎2' + ...
+=TEX
+\ of the constraints
+=INLINEFT
+r⋎i'
+=TEX
+\ reduces by multiplying through and cancelling like terms to a term of the fom
+=INLINEFT
+a = b
+=TEX
+\ (resp.
+=INLINEFT
+a ≤ b
+=TEX
+), where $a$ and $b$ are numeric literals such
+that
+=INLINEFT
+¬a = b
+=TEX
+\ (resp.
+=INLINEFT
+¬a ≤ b
+=TEX
+).
+(Multiplying out by a negative value, $-i$ say, amounts to interchanging
+the left- and right-hand side of the constraint, replacing $≤$ by
+$≥$ if appropriate, then multiplying by $i$.)
+
+4.
+The theorem
+=INLINEFT
+Δ ⊢ F
+=TEX
+\ is then derived using
+=INLINEFT
+anf_conv
+=TEX
+\ to effect the multiplication and cancelling, and then
+=INLINEFT
+Γ ⊢ F
+=TEX
+\ is derived from it using the substitution constructed in step 1.
+
+If no contradiction can be derived then the rules both raise an exception
+which, if not handled, causes a diagnostic print of the input terms and
+of the system of linear equations which was derived
+from them.
+This is done by calling $fail$, q.v., with its third argument set to
+a list containing a function which produces the diagnostic print-out by
+side-effect. The function $get\_message$, or $get\_message\_text$
+should not therefore be evaluated on the exception value unless the
+diagnostics are to be printed immediately.
+=FAILURE
+82110	System is satisfiable
+82111	A system with no constraints is satisfiable
+82112	No constraints of the form ⊢ t1 ≤ t2 or ⊢ (t1:ℕ) = t2 could
+	be derived from the assumptions
+=TEX
+=ENDDOC
+\subsection{Conversions}
+=DOC
+	val ⦏ℕ_eq_cancel_conv⦎ : CONV
+	val ⦏≤_cancel_conv⦎ : CONV
+
+=DESCRIBE
+=INLINEFT
+ℕ_eq_cancel_conv
+=TEX
+\ (resp.
+=INLINEFT
+≤_cancel_conv
+=TEX
+) normalises arithmetic equations (resp. inequalities formed with $≤$) by
+putting the left- and right-hand sides in additive normal form, in the
+sense of
+=INLINEFT
+anf_conv
+=TEX
+, q.v., then
+cancelling like terms.
+
+For example, the calls:
+=GFT ProofPower Input
+ℕ_eq_cancel_conv⌜x + 2*y + 5*z + 3 = 1 +6*y + z⌝;
+≤_cancel_conv⌜x + 2*y + x + 3 ≤ y + 2 + 2*x + y⌝;
+=TEX
+produce the following output
+=GFT ProofPower Output
+val it = ⊢ x + 2 * y + 5 * z + 3 = 1 + 6 * y + z ⇔ 2 + x + 4 * z = 4 * y : THM
+val it = ⊢ x + 2 * y + x + 3 ≤ y + 2 + 2 * x + y ⇔ 1 ≤ 0 : THM
+=TEX
+
+Note that, as in the last example, if the result of the normalisation has
+numeric literals on both left- and right-hand sides, then one of the literals
+will be $0$. However, the truth value is not evaluated.
+=INLINEFT
+ℕ_eq_conv
+=TEX
+\ or
+=INLINEFT
+≤_conv
+=TEX
+\ may be used to perform the evaluation, where required.
+
+=USES
+The conversions are intended for use in tactic and conversion programming.
+The normal interactive interface is via rewriting or stripping in the proof context
+=INLINEFT
+lin_arith
+=TEX
+, which performs other useful simplifications. For example, the call
+=GFT ProofPower Input
+PC_C1"lin_arith"rewrite_conv[]⌜x + 2*y + x + 3 ≤ y + 2 + 2*x + y⌝;
+=TEX
+produces the following output:
+=GFT ProofPower Output
+val it = ⊢ x + 2 * y + x + 3 ≤ y + 2 + 2 * x + y ⇔ F : THM
+=TEX
+
+=FAILURE
+82120	?0 is not of the form (t1:ℕ) = t2 or is already in normal form
+82121	?0 is not of the form (t1:ℕ) ≤ t2 or is already in normal form
+=SEEALSO
+=INLINEFT
+lin_arith, ℕ_eq_conv, ≤_conv, make_≤_conv
+=TEX
+=ENDDOC
+=DOC
+	val ⦏make_≤_conv⦎ : CONV
+=DESCRIBE
+This conversion transforms arithmetic relations formed with
+$<$, $≥$ or $>$, or the negation of one formed with
+$=$, $≤$, $<$, $≥$ or $>$ into relations involving
+only $≤$ as follows:
+=GFT
+t1 < t2	→	t1 + 1 ≤ t2
+t1 ≥ t2	→	t2 ≤ t1
+t1 > t2	→	t2 + 1 ≤ t1
+¬ t1 = t2	→	t1 + 1 ≤ t2 ∨ t2 + 1 ≤ t1
+¬ t1 ≤ t2	→	t2 + 1 ≤ t1
+¬ t1 < t2	→	t2 ≤ t1
+¬ t1 ≥ t2	→	t1 + 1 ≤ t2
+¬ t1 > t2	→	t1 ≤ t2
+=TEX
+=USES
+The conversion is intended for use in tactic and conversion programming.
+The normal interactive interface is via rewriting or stripping in the proof context
+=INLINEFT
+lin_arith
+=TEX
+, which performs other useful simplifications. For example, the call
+=GFT ProofPower Input
+PC_C1"lin_arith"rewrite_conv[]⌜¬x + 2*y + x + 3 = y + 2 + 2*x + y⌝;
+=TEX
+produces the following output:
+=GFT ProofPower Output
+val it = ⊢ ¬ x + 2 * y + x + 3 = y + 2 + 2 * x + y ⇔ T : THM
+=TEX
+=FAILURE
+82012	?0 is not of the form ⊢ (t1:ℕ) R1 t2 or ⊢ ¬(t1:ℕ) R2 t2 where R2 is one
+	of <, ≥ or > and R2 is one of =, ≤, <, ≥ or >
+=ENDDOC
+\subsection{Other Rules}
+=DOC
+	val ⦏scale_rule⦎ : TERM -> THM -> THM
+=DESCRIBE
+In the simplest cases, given a term, $t$, of type ⓣℕ⌝
+and a theorem with conclusion
+of the form $(t1:ℕ) = t2$ or $t1 ≤ t2$,
+=INLINEFT
+scale_rule
+=TEX
+\ returns a theorem which expresses the result of multiplying
+both sides of the conclusion of the theorem by $t$.
+More generally,
+=INLINEFT
+scale_rule t
+=TEX
+\ processes theorems whose conclusions are atomic arithmetic propositions
+or negations of same as follows:
+
+=GFT
+t1 = t2	→	t * t1 = t * t2
+t1 ≤ t2	→	t * t1 ≤ t * t2
+t1 < t2	→	t * t1 + t ≤ t * t2
+t1 ≥ t2	→	t * t2 ≤ t * t1
+t1 > t2	→	t * t2 + t ≤ t * t1
+¬t1 = t2	→	t * t1 + t ≤ t * t2 ∨ t * t2 + t ≤ t * t1
+¬t1 ≤ t2	→	t * t2 + t ≤ t * t1
+¬t1 < t2	→	t * t2 ≤ t * t1
+¬t1 ≥ t2	→	t * t1 + t ≤ t * t2
+¬t1 > t2	→	t * t1 ≤ t * t2
+=TEX
+
+Thus in the first two cases
+=INLINEFT
+scale_rule t
+=TEX
+\ just scales the equation or inequality in the theorem by the factor $t$ and in the
+other cases the theorem is first converted to one or more inequalities with $≤$
+and then scaled by $t$.
+=FAILURE
+82010	?0 does not have type ⓣℕ⌝
+82011	?0 is not of the form ⊢ (t1:ℕ) R t2 or ⊢ ¬(t1:ℕ) R t2 where R is one
+	of =, ≤, <, ≥ or >
+=SEEALSO
+=INLINEFT
+scale_asm_tac
+=ENDDOC
+\newpage
+\section{TACTICS}
+=DOC
+	val ⦏lin_arith_tac⦎ : TACTIC;
+	val ⦏lin_arith_tac1⦎ : TACTIC;
+=DESCRIBE
+These tactics are primarily intended for use in conjunction with
+the linear arithmetic proof context
+=INLINEFT
+lin_arith
+=TEX
+\ and
+=INLINEFT
+'lin_arith
+=TEX
+, q.v.
+The normal interface to the tactics is via the decision
+procedures in these proof contexts, as in for example:
+=INLINEFT
+PC_T1"lin_arith"prove_tac[]
+=TEX
+.
+
+The tactics do however, have possible applications in specialised
+tactic programming, in which circumstances their
+behaviour may be understood
+from their definition, in terms of
+=INLINEFT
+lin_arith_rule
+=TEX
+\ or
+=INLINEFT
+lin_arith_rule1
+=TEX
+, q.v., essentially as:
+=GFT
+val ⦏lin_arith_tac⦎ = GET_ASMS_T (f_thm_tac o lin_arith_rule o map concl);
+val ⦏lin_arith_tac1⦎ = GET_ASMS_T (f_thm_tac o lin_arith_rule1 o map concl);
+=USES
+The most likely application is in specialised tactic programming in
+situations where it is known that the assumptions are already in
+the normal form produced by the proof context
+=INLINEFT
+lin_arith
+=TEX
+\ and it is important for performance not to restrip them.
+=ENDDOC
+\newpage
+=DOC
+	val ⦏scale_asm_tac⦎ : TERM -> TERM -> TACTIC;
+	val ⦏scale_nth_asm_tac⦎ : TERM -> int -> TACTIC;
+	val ⦏list_scale_nth_asm_tac⦎ : (TERM * int) list -> TACTIC;
+=DESCRIBE
+=INLINEFT
+scale_asm_tac t asm
+=TEX
+\ removes $asm$ from the assumption list and strips in a new assumption
+obtained by ``scaling $asm$ by the factor $t$'' as explained in the
+description of
+=INLINEFT
+scale_rule
+=TEX
+.
+
+=INLINEFT
+scale_nth_asm_tac
+=TEX
+\ is just like
+=INLINEFT
+scale_asm_tac
+=TEX
+\ but allows the assumption to be identified by its number, and
+=INLINEFT
+list_scale_nth_asm_tac
+=TEX
+\ is a list analogue of
+=INLINEFT
+scale_nth_asm_tac
+=TEX
+, allowing several assumptions to be scaled at once (or indeed allowing
+one or more assumptions to be scaled by different factors).
+
+For example,
+=INLINEFT
+scale_asm_tac⌜(1+x)⌝⌜y+1 ≤ z + 1⌝
+=TEX
+\ removes the assumption
+=INLINEFT
+⌜y+1 ≤ z + 1⌝
+=TEX
+\ from the assumption list and strips into the assumptions the new
+assumption:
+=INLINEFT
+⌜(1 + x)*(y + 1) ≤ (1 + x)*(z + 1)⌝
+=TEX
+.
+The scaling tactics are primarily intended for use with the decision
+procedure in the proof context
+=INLINEFT
+lin_arith
+=TEX
+\, or other proof contexts containing
+=INLINEFT
+'lin_arith
+=TEX
+, to adjust a problem which it cannot solve into one it can.
+For example, consider the goal:
+=GFT
+	([], ⌜a*(d+1) = c*(b+1) ∧ c*(f+1) = e*(d+1) ⇒ a*(f+1) = e*(b+1)⌝)
+=TEX
+To prove this, we first use
+=INLINEFT
+contr_tac
+=TEX
+ (say in the proof context
+=INLINEFT
+hol
+=TEX
+)
+to move everything into the assumptions, giving:
+=GFT
+	(*  3 *)  ⌜a * (d + 1) = c * (b + 1)⌝
+	(*  2 *)  ⌜c * (f + 1) = e * (d + 1)⌝
+	(*  1 *)  ⌜¬ a * (f + 1) = e * (b + 1)⌝
+=TEX
+(If this were done in the proof context
+=INLINEFT
+lin_arith
+=TEX
+, we would get an unwanted case split at this point.)
+We now see that, if we multiply assumption $1$ by $d+1$, assumption
+$2$ by $b+1$ and assumption $3$ by $f+1$, then a number of like terms
+will appear which the linear arithmetic decision procedure should be able
+to take advantage of, and indeed the goal may be solved by the following tactic:
+=GFT
+		list_scale_nth_asm_tac[(⌜d+1⌝, 1), (⌜b+1⌝, 2), (⌜f+1⌝, 3)]
+	THEN	PC_T1"lin_arith"asm_prove_tac[]
+=TEX
+N.B. this tactic strengthens the goal in general, i.e. it may lead
+to unprovable subgoals even when the original goal was provable
+(since the scale factor may not be provably non-zero).
+
+=FAILUREC
+\paragraph{Errors}
+as for
+=INLINEFT
+scale_rule
+=TEX
+and
+=INLINEFT
+DROP_ASM_T
+=TEX
+\ and its variants
+=ENDDOC
+=TEX
+
+\section{PROOF CONTEXTS}
+=DOC
+(* Proof Context: ⦏lin_arith⦎ *)
+=DESCRIBE
+This is a proof context whose main purpose is to supply a decision procedure
+for problems in linear arithmetic.
+\paragraph{Contents}
+The rewriting, theorem stripping and conclusion stripping components are
+as for the proof context $predicates$, q.v., each augmented with conversions
+effecting the following transformations, where $a$ and $b$ stand for
+numeric literals and $cncl$ refers to an application of one of
+=INLINEFT
+ℕ_eq_cancel_conv
+=TEX
+\ or
+=INLINEFT
+≤_cancel_conv
+=TEX
+=GFT
+a = b		→	ℕ_eq_conv⌜a = b⌝
+a ≤ b		→	≤_conv⌜a ≤ b⌝
+¬ t1 = t2	→	cncl⌜t1 + 1 ≤ t2⌝ ∨ cncl⌜t2 + 1 ≤ t1⌝
+¬ t1 ≤ t2	→	cncl⌜t2 + 1 ≤ t1⌝
+t1 < t2	→	cncl⌜t1 + 1 ≤ t2⌝
+t1 ≥ t2	→	cncl⌜t2 ≤ t1⌝
+t1 > t2	→	cncl⌜t2 + 1 ≤ t⌝⌝
+¬ t1 < t2	→	cncl⌜t2 ≤ t1⌝
+¬ t1 ≥ t2	→	cncl⌜t1 + 1 ≤ t2⌝
+¬ t1 > t2	→	cncl⌜t1 ≤ t2⌝
+t1 = t2	→	cncl⌜t1 = t2⌝
+t1 ≤ t2	→	cncl⌜t1 ≤ t2⌝
+=TEX
+The automatic proof tactic works by {\em(i)} restripping all the
+assumptions of the goal, {\em(ii)} adding the argument theorems
+to the stock of assumptions using $strip\_asm\_tac$, {\em(iii)} applying
+$contr\_tac$, and {\em(iv)} searching for a linear combination of
+the assumptions which will reduce, by multiplying out and cancelling like terms,
+to a contradiction of the form $a = b$ or
+$a ≤ b$ with $a$ and $b$ numeric literals.
+The automatic proof conversion just tries to prove its argument, $t$ say, using
+the automatic proof tactic and returns $t = T$ if it succeeds.
+
+Other components of the proof context are as for $predicates$.
+
+For example,
+=INLINEFT
+PC_T1"lin_arith"prove_tac[]
+=TEX
+\ will prove any of the following goals:
+=GFT
+	([], ⌜∀a b c⦁a ≤ b ∧ (a + b < c + a) ⇒ a < c⌝)
+	([], ⌜∀a b c⦁a ≥ b ∧ ¬ b < c ⇒ a ≥ c⌝)
+	([], ⌜∀a b c⦁a + 2*b < 2*a ⇒ b + b < a⌝)
+	([], ⌜∀ x y⦁ ¬ (2*x + y = 4 ∧ 4*x + 2*y = 7)⌝)
+=TEX
+In cases where the automatic proof tactic cannot prove the goal,
+it is sometimes possible to use
+=INLINEFT
+scale_asm_tac
+=TEX
+, q.v., or one of its variants to transform the goal into a form it can prove.
+=SEEALSO
+=INLINEFT
+'lin_arith, scale_asm_tac
+=ENDDOC
+=DOC
+(* Proof Context: ⦏'lin_arith⦎ *)
+=DESCRIBE
+This is a component
+proof context whose main purpose is to supply a decision procedure
+for problems in linear arithmetic.
+\paragraph{Contents}
+The rewriting, theorem stripping and conclusion stripping components
+are as for the proof context $lin\_arith$ but without any of the
+material from the proof context $predicates$.
+The automatic proof components are as for $lin\_arith$.
+Other components are blank.
+
+A typical use of the proof context would be to solve problems containing
+a mixture of (linear) arithmetic and set theory. For example,
+=INLINEFT
+MERGE_PCS_T1["sets_ext", "'lin_arith"]prove_tac[]
+=TEX
+will prove any of the following goals:
+=GFT
+	([], ⌜∀m⦁ {i | m ≤ i ∧ i < m+3} = {m; m+1; m+2}⌝)
+	([], ⌜{(i, j) | 30*i = 105*j} = {(i, j) | 2*i = 7*j}⌝)
+	([], ⌜{i | 5*i = 6*i} = {0}⌝)
+=TEX
+
+The automatic proof procedures may give rise to the following error message
+(in which the message from the function which first detected the problem
+is given in brackets):
+=FAILURE
+82200	Could not prove theorem with conclusion ?1 (?0)
+=ENDDOC
+\section{EPILOGUE}
+=SML
+end (* of signature LinearArithmetic *);
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+

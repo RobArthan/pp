@@ -1,0 +1,250 @@
+=IGN
+********************************************************************************
+mdt032.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% mdt032.doc   ℤ $Date: 2002/10/17 16:20:01 $ $Revision: 2.5 $ $RCSfile: mdt032.doc,v $
+
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for the HOL Pretty Printer}
+
+\def\AbstractText{This document contains the module tests for the HOL Pretty Printer of the ICL HOL system.}
+
+\def\Reference{DS/FMU/IED/MDT032}
+
+\def\Author{A.J. Hammon}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % mdt032.doc   ℤ $Date: 2002/10/17 16:20:01 $ $Revision: 2.5 $ $RCSfile: mdt032.doc,v $
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: 
+%% LaTeX2e port: \TPPtitle{Module Tests for the HOL Pretty Printer}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT032}
+%% LaTeX2e port: \def\SCCSissue{$Revision: 2.5 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSissue}
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPproject{FST PROJECT}
+%% LaTeX2e port: 
+%% LaTeX2e port: =IGN
+%% LaTeX2e port: 
+%% LaTeX2e port: Commands to process this document in various ways.
+%% LaTeX2e port: 
+%% LaTeX2e port: doc4errors mdt032
+%% LaTeX2e port: use_file "mdt032.sml";
+%% LaTeX2e port: 
+%% LaTeX2e port: make -f rel001.mkf mdt032.dvi
+%% LaTeX2e port: doc4tex mdt032
+%% LaTeX2e port: tex4dvi mdt032
+%% LaTeX2e port: bibtex mdt032
+%% LaTeX2e port: doc4tex mdt032 ; tex4dvi mdt032
+%% LaTeX2e port: doc4tex mdt032 ; tex4dvi mdt032 ; bibtex mdt032
+%% LaTeX2e port: dvipage mdt032 &
+%% LaTeX2e port: 
+%% LaTeX2e port: doc4errors mdt032
+%% LaTeX2e port: use_file "mdt032.sml";
+%% LaTeX2e port: 
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the module tests for the HOL
+%% LaTeX2e port: 	Pretty Printer of the ICL~HOL system.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: 
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: 
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: 
+\catcode`\_=\active
+\def\_{\kern.06em\vbox{\hrule height.1ex width.3em}\hskip0.1em\relax}
+%% LaTeX2e port: 
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{center}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{center}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{DOCUMENT CONTROL}
+
+%********************************************************************
+
+\subsection{Contents List}
+\tableofcontents
+% \listoftables
+
+%********************************************************************
+
+\subsection{Document Cross References}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+%********************************************************************
+
+\subsection{Changes History}
+
+\begin{description}
+
+\item[Issues 1.1 (1991/08/21) to 1.2 (1991/09/11) ] Initial drafts.
+
+\item[\FormatDate{91/09/12}, issue 2.1 ] First approved version.
+
+\item[Issue 2.2 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 2.3 (1992/04/14) (14th April 1992)]
+Changes required by CR0017.
+\item[Issue 2.4 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.5 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 2.6 (2006/08/09)] Put in some tests for the function {\em escape\_sml\_string}.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%********************************************************************
+
+%\subsection{Changes Forecast} \label{ChangesForecast}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section{GENERAL}
+
+%********************************************************************
+
+\subsection{Scope}
+
+This document contains the module tests for the HOL pretty printer
+for the ICL HOL system which are discussed
+in~\cite{DS/FMU/IED/DTD032}.  The tests use the module testing system
+of~\cite{DS/FMU/IED/DTD013} and~\cite{DS/FMU/IED/IMP013}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{TEST HARNESS INITIALISATION}
+
+=IGN
+Get the test harness files
+sccs -d ~ied get dtd013.doc imp013.doc
+doc4errors dtd013
+doc4errors imp013
+
+doc4errors mdt032
+use_file "mdt032.sml";
+
+=TEX
+
+Load and initialise the module test system.
+
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results ();
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{THE TESTS}
+
+The tests for the
+HOL pretty printing functions are within~\cite{DS/FMU/IED/MDT025}.
+All we need to do is have a little look at {\em escape\_sml\_string}.
+
+
+=SML
+open HOLPrettyPrinter;
+set_flag("use_extended_chars", true);
+store_mt_results_show mt_run[
+("mdt032.1.1", escape_sml_string, "\t", "\\t"),
+("mdt032.1.2", escape_sml_string, " ", " "),
+("mdt032.1.3", escape_sml_string, "ABCDEF\127", "ABCDEF\\127"),
+("mdt032.1.4", escape_sml_string, "ABCDEF∀∃", "ABCDEF∀∃")
+];
+=TEX
+=SML
+set_flag("use_extended_chars", false);
+store_mt_results_show mt_run[
+("mdt032.2.1", escape_sml_string, "\t", "\\t"),
+("mdt032.2.2", escape_sml_string, " ", " "),
+("mdt032.2.3", escape_sml_string, "ABCDEF\127", "ABCDEF\\127"),
+("mdt032.2.4", escape_sml_string, "ABCDEF∀∃", "ABCDEF\\181\\182")
+];
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{SUMMARY OF RESULTS}
+
+=SML
+diag_string(summarize_mt_results());
+=TEX
+
+\end{document}
+
+
+

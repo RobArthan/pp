@@ -1,0 +1,833 @@
+=IGN
+********************************************************************************
+dtd020.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  dtd020.doc  ℤ $Date: 2012/03/17 13:50:43 $ $Revision: 2.16 $ $RCSfile: dtd020.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design for ICL HOL Symbol Table}
+
+\def\AbstractText{This document contains the detailed design for the symbol table module for ICL HOL.}
+
+\def\Reference{DS/FMU/IED/DTD020}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design for ICL HOL Symbol Table}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD020}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 2.16 $%%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2012/03/17 13:50:43 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.B.~Jones & HAT Manager}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the detailed design for the
+%% LaTeX2e port: symbol table module for ICL HOL.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.7 (1991/05/22)-1.12 (1991/07/26) (22 May-12 August 1991)]
+Initial drafts.
+\item [Issue 2.1 (1991/08/13) (\FormatDate{91/08/13%
+})]	First approved issue after deskcheck ID0027.
+
+\item[Issue 2.3 (1992/05/14) (\FormatDate{92/01/20})] Updated to use new fonts.
+	Use correct quotation symbols.
+
+\item[Issue 2.4 (1992/05/21)]
+Clarified description of ``undeclaration'' functions.
+Checks for forms of identifiers now included in $declare\_infix$ etc.
+Allow multiple languages per constant.
+\item[Issue 2.5 (1992/05/21)]
+Added {\it get\_alias\_info}.
+\item[Issue 2.6 (1992/07/07)]
+Improved description of {\it undeclare\_alias}.
+\item[Issue 2.10 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.11 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 2.12 (2005/05/07)] HOL now supports left-associative operators.
+\item[Issues 2.13 (2005/12/14), 2.14 (2005/12/15)] Kernel interface and symbol table reform.
+\item[Issue 2.15 (2005/12/15)] Made documentation for {\em get\_type\_info} self-contained.
+{\em get\_type\_abbrev} redesigned to support use of type abbreviations in the pretty-printer.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the detailed design for the symbol table module for ICL HOL.
+The high level design for this material is given in \cite{DS/FMU/IED/HLD008}.
+Some of what is specified here implements facilities required explicitly in
+\cite{DS/FMU/IED/DEF001}.
+\subsection{Introduction}
+In order to give the parser, type inferrer and pretty printer a uniform
+interface to determine the properties of identifiers we have a symbol table
+module which, in effect, supplies a mapping of identifiers onto
+records encoding the properties of interest. The symbol table module
+also contains the interfaces whereby the user sets certain properties of
+identifiers (namely the interfaces for fixity, terminator, binder and type
+abbreviation declarations).
+
+One of the more important objectives of the symbol table is to protect
+modules it serves from needing to be aware of context changes, including
+updates to the current theory as well as navigation around the current
+theory.
+
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/HLD008}.
+\subsection{Dependencies}
+The symbol table module is dependent on the interface to the
+abstract data type $THM$, \cite{DS/FMU/IED/DTD012}
+and on the lexical analyser module, \cite{DS/FMU/IED/DTD015}.
+\subsection{Possible Enhancements}
+A function for finding the best possible abbreviation for a type (in some
+sense to be decided) could be provided and would support a nicer pretty printing
+option in a future release.
+\subsection{Deficiencies}
+None known.
+\section{DISCUSSION}
+
+\subsection{General Principles}
+The following general principles are followed (and should be respected by
+maintainers and enhancers):
+
+\begin{enumerate}
+\item
+The symbol table reflects a current context determined by the current theory.
+All updates affect the current theory.
+\item
+All special properties of an identifier in one context can be suppressed
+in any descendant context. This sometimes requires the use of undeclaration
+records in the underlying $USER\_DATA$ value which is stored in the theory.
+\item
+The validity of identifiers is only checked when it is necessary to avoid
+the user tying himself in serious knots (e.g. by declaring a space character
+as a terminator).
+Such things as infixes, type abbreviations etc. are completely unrestricted,
+and since the lexis of \cite{DS/FMU/IED/DEF001} allows arbitrary strings
+to be used as identifiers this is a feature not a bug, because, e.g., it allows the
+HOL parser to interface with any other language embedded in HOL.
+\item
+Operations with a side effect have their arguments packaged as a single
+tuple (i.e. they are not curried), so that there is less risk
+of them being entered partially by the interactive user.
+\end{enumerate}
+
+\subsection{Information Stored}
+The symbol table serves the lexical analyser,
+parser, pretty printer and type inferrer
+by supplying a mapping from identifiers onto information
+which they may need.
+Symbol table records are held for the following sorts of identifier:
+
+\begin{enumerate}
+\item
+identifiers of type constructors
+introduced with the interfaces defined in \cite{DS/FMU/IED/DTD012};
+\item
+identifiers of constants
+introduced with the interfaces defined in \cite{DS/FMU/IED/DTD012};
+\item
+identifiers which have been declared as type abbreviations;
+\item
+identifiers which have been declared as aliases;
+\item
+identifiers which have been declared as binders, postfixes, infixes or prefixes;
+\item
+identifiers which have been declared as terminators.
+\end{enumerate}
+
+Also, to permit a descendant theory to override syntactic declarations in its
+ancestors, records are held which serve to suppress the effect of
+records of the last four sorts.
+
+
+\section{PREAMBLE}
+=DOC
+signature ⦏SymbolTable⦎ = sig
+=DESCRIBE
+This is the signature for the structure which contains the symbol
+table and its access functions.
+This structure contains private functions which are invoked as one
+navigates around the theory database.
+These private functions may give rise to error 20001 if the
+theory database user data has been corrupted (e.g. by explicit and incorrect use
+of the lower level interfaces).
+
+Any of the functions in the structure which update the current theory may
+give rise to error 20002
+
+=FAILURE
+20001	A symbol table entry in theory ?0 is corrupt (use restore_defaults to clear)
+20002	The current theory, ?0, is not open for writing
+20003	Internal error: ?0
+=ENDDOC
+
+\section{ACCESS FUNCTIONS}
+\subsection{Terminators}
+Errors in this subsection start with 201.
+
+=DOC
+	val ⦏get_current_terminators⦎ : unit -> string list list;
+=DESCRIBE
+$get\_current\_terminators()$ returns the list of identifiers which have been
+declared as terminators in the current context using $new\_terminator$. The
+names are returned in exploded form, i.e. as a list of strings each containing
+one character.
+=ENDDOC
+=DOC
+	val ⦏declare_terminator⦎ : string -> unit
+=DESCRIBE
+$declare\_terminator\,s$ checks that $s$ is a valid terminator, and if so declares
+that $s$ is to be used as a lexical terminator in the current context.
+\ShowScripts
+=FAILURE
+20101	The string ?0 is not a valid terminator. Terminators must start
+	with a symbolic character, must not contain spaces,
+	and must not end with underscore, ⋏ or ⋎
+20102	The string ?0 is already declared as a terminator
+=ENDDOC
+=DOC
+	val ⦏undeclare_terminator⦎ : string -> unit
+=DESCRIBE
+$undeclare\_terminator\,s$ removes $s$
+from the list of identifiers which act as terminators for parsing purposes
+in the current context.
+=FAILURE
+20103	?0 is not in the list of terminators in the current context
+=ENDDOC
+\subsection{Fixity}
+Errors in this subsection start with 202.
+
+=DOC
+	val ⦏declare_binder⦎ : string -> unit;
+=DESCRIBE
+$declare\_binder\,s$ declares $s$ to have the syntactic status of a binder
+in the current context.
+$s$ must comply with the HOL lexical rules for an identifier and must not
+be the string ``,''.
+=SEEALSO
+$undeclare\_fixity$
+=FAILURE
+20201	A fixity declaration is not allowed for ?0 (which is not an identifier)
+20202	Cannot change the fixity of `,`
+=ENDDOC
+
+=DOC
+	val ⦏declare_left_infix⦎ : (int * string)-> unit;
+	val ⦏declare_right_infix⦎ : (int * string)-> unit;
+	val ⦏declare_infix⦎ : (int * string)-> unit;
+=DESCRIBE
+$declare\_left\_infix\,(p, s)$ declares $s$ to have the syntactic status of an
+left associative infix operator with precedence $p$
+in the current context.
+$s$ must comply with the HOL lexical rules for an identifier.
+
+Similarly, $declare\_right\_infix$ is used to declare right associative operators.
+$declare\_infix$ is provided for compatibility with earlier versions of the system and is the same as $declare\_right\_infix$.
+=SEEALSO
+$undeclare\_fixity$
+=FAILURE
+20201	A fixity declaration is not allowed for ?0 (which is not an identifier)
+=ENDDOC
+
+=DOC
+	val ⦏declare_prefix⦎ : (int * string) -> unit;
+=DESCRIBE
+$declare\_prefix\,(p, s)$ declares $s$ to have the syntactic status of a
+prefix operator with precedence $p$ in the current context.
+$s$ must comply with the HOL lexical rules for an identifier and must not
+be the string ``,''.
+=SEEALSO
+$undeclare\_fixity$
+=FAILURE
+20201	A fixity declaration is not allowed for ?0 (which is not an identifier)
+20202	Cannot change the fixity of `,`
+=ENDDOC
+
+=DOC
+	val ⦏declare_postfix⦎ : (int * string) -> unit;
+=DESCRIBE
+$declare\_postfix\,(p, s)$ declares $s$ to have the syntactic status of a
+postfix operator with precedence $p$ in the current context.
+$s$ must comply with the HOL lexical rules for an identifier and must not
+be the string ``,''.
+=SEEALSO
+$undeclare\_fixity$
+=FAILURE
+20201	A fixity declaration is not allowed for ?0 (which is not an identifier)
+20202	Cannot change the fixity of `,`
+=ENDDOC
+
+=DOC
+	val ⦏declare_nonfix⦎ : string -> unit;
+=DESCRIBE
+$declare\_nonfix\,s$ undoes the effect of a declaration of $s$ to
+have special syntactic status (using $declare\_binder$, $declare\_infix$,
+$declare\_prefix$ or $declare\_postfix$).
+
+The effect of $declare\_nonfix\,s$ depends on the theory in which
+the special status for $s$ was declared: if it was declared in the current
+theory, then the declaration is just removed; if in an ancestor theory
+then a declaration for $s$ as a nonfix is inserted in the current theory.
+(Thus in the first case, the syntactic status for $s$ reverts to what
+it was before the earlier declaration, whereas in the second case the syntactic
+status will be suppressed.)
+
+$s$ must not be the string ``,''.
+=SEEALSO
+$undeclare\_fixity$
+=FAILURE
+20201	A fixity declaration is not allowed for ?0 (which is not an identifier)
+20202	Cannot change the fixity of `,`
+20203	There is no fixity declaration for ?0 in the current context
+=ENDDOC
+
+
+=DOC
+	val ⦏get_fixity⦎ : string -> Lex.FIXITY;
+=DESCRIBE
+$get\_fixity\,s$ returns the syntactic status of $s$ in the current context.
+=ENDDOC
+\subsection{Constants and Aliases}
+Errors in this subsection start with 203.
+
+$get\_const\_info$ is the interface which the type inferrer will use to
+give the type associated with a name in a parsed term. The type it should use
+is the first element of the pair.
+
+$get\_const\_info\,s$ is $Nil$ for an identifier, $s$ which is not the name of a constant
+or an alias in the current context.
+If s is a constant or an alias $get\_const\_info\,s$
+has the form $Value(\tau, [(s_1, \tau_1), \ldots, (s_k, \tau_k)])$.
+Each $s_i$ gives the
+actual constant name to be associated with an occurrence of $s$
+which has type an instance of $\tau_i$.
+$\tau$ is the antiunifier of the $\tau_i$. For a constant which is not an
+alias $k = 1$ and $\tau = \tau_1$.
+
+
+Note that a name may be both an alias and an actual constant name.
+For example, in the supplied system the conjunction
+$get\_const\_info$``∧'' will return something like:
+=GFT Example
+		Value(ⓣBOOL→BOOL→BOOL⌝, [("∧", ⓣBOOL→BOOL→BOOL⌝)])
+=TEX
+The user might wish to overload `∧', e.g., by making it an alias of
+the function `$fand$' defined by the following theorem:
+
+=GFT Example
+	⊢ ∀f g:'a->BOOL⦁fand f g x = f x ∧ g x
+=TEX
+
+The effect of the call
+=GFT Example
+	declare_alias("∧", ⌜fand:('a->BOOL)→('a->BOOL)→('a->BOOL)⌝);
+=TEX
+is to make the symbol table entry for  `∧' something like:
+
+=GFT Example
+	Value(ⓣ'b→'b→'b⌝,
+		[("fand", ⓣ('a->BOOL)→('a->BOOL)→('a->BOOL)⌝),
+					 ("∧", ⓣBOOL→BOOL→BOOL⌝)])
+=TEX
+
+
+=DOC
+	val ⦏get_const_info⦎ : string -> (TYPE * ((string * TYPE)list)) OPT;
+=DESCRIBE
+$get\_const\_info\,a$ returns the information, $(\tau, cs)$, associated with
+the name $a$ used as a constant name or an alias for a constant, if any.
+$cs$ is the list of names and types of constants to which $a$ might refer
+(as an alias or as the actual constant name).
+$\tau$ is the type to use for this name during type inference, namely,
+the antiunifier of the types in $cs$.
+=ENDDOC
+
+
+=DOC
+	val ⦏get_alias_info⦎ : string -> (string * TYPE)list OPT;
+=DESCRIBE
+$get\_alias\_info\,c$ returns the list of aliases for
+the constant with name $c$, or $Nil$ if $c$ is not the name
+of a constant. For each pair $(a, \tau)$ in the
+result, $a$ is an alias for $c$ at instances of the type $\tau$.
+=ENDDOC
+
+=DOC
+	val ⦏declare_alias⦎ : (string * TERM) -> unit;
+=DESCRIBE
+$declare\_alias\,(s, c)$ declares $s$ as an alias for the constant $c$.
+$s$ must comply with the HOL lexical rules for an identifier.
+=FAILURE
+20301	The term ?0 is not a constant
+20302	The string ?0 is already in use as an alias for ?1
+20305	The constant ?0 is not in scope
+20306	The string ?0 is not an identifier
+=ENDDOC
+=DOC
+	val ⦏undeclare_alias⦎ : (string * TERM) -> unit;
+=DESCRIBE
+$undeclare\_alias\,(s, c)$ reverses the effect
+of a declaration of $s$ as an alias for the constant $c$ in the current context.
+This includes the possibility that $s$ is the name of $c$ itself.
+
+The precise effect depends on the theory in which the alias
+was declared: if it was declared in the current
+theory, then the declaration is just removed
+(so that if $s$ is declared as an alias for $c$ in an ancestor
+theory, $s$ will still act as an alias for $c$ in the current theory);
+if in an ancestor theory then arrangements are made in the
+current theory to prevent $s$ acting as an alias for $c$.
+
+If $s$ is the name of $c$ itself, the type inferrer will no longer
+recognise $s$ as a reference to $c$. In this case,
+$c$ may be accessed either via an alias or via an ML quotation.
+This gives a work-around for the potential problem when a theory
+contains a constant whose name is needed as a variable name in
+some application using the theory.
+
+
+=FAILURE
+20301	The term ?0 is not a constant
+20303	The identifier ?0 is not declared as an alias for ?1
+=ENDDOC
+
+=DOC
+	val ⦏resolve_alias⦎ : (string * TYPE) -> TERM;
+=DESCRIBE
+$resolve\_alias(s, \tau)$ returns a term of the form $mk\_const(c, \tau)$ where
+$c$ is the ``best' resolution for the identifier $s$. This best resolution
+will be $s$ if $s$ has been introduced as a constant of type $\tau'$
+where $\tau'$ is an instance of $\tau$.
+If $s$ is an alias then $c$ is taken from the alias declaration for $s$
+in which the aliased constant has a type $\tau'$ which can be instantiated
+to $\tau$. If more than one such declaration is applicable the most recent
+one is used.
+=FAILURE
+20304	The identifier ?0 is not a valid constant name (or alias) at this type
+=ENDDOC
+
+
+=DOC
+	val ⦏get_alias⦎ : (string * TYPE) -> string;
+=DESCRIBE
+$get\_alias(c, \tau)$ returns the most appropriate alias for the constant
+with name $c$ at the type $\tau$.
+If no aliases for the name $c$ have been declared then $c$ is returned
+otherwise the most recent alias $s$ associated with a type $\tau'$ which
+can be instantiated to $\tau$ is returned.
+=ENDDOC
+
+\subsection{Types and Type Abbreviations}
+Errors in this subsection start with 204.
+
+
+=DOC
+	val ⦏get_type_info⦎ : string -> (int * (string list * TYPE) OPT) OPT;
+=DESCRIBE
+$get\_type\_info\,s$ returns information about the identifier $s$ when
+it appears as a type constructor or type abbreviation.
+$get\_type\_info\,s$ is $Nil$ for an identifier
+which is not a type constructor or a type
+abbreviation in the current context.
+Otherwise $get\_type\_info\,s$
+gives the arity of the constructor or abbreviation and
+a field which is $Nil$ for a constructor and which otherwise
+gives the type for which $s$ is an abbreviation
+together with the names of its formal parameters.
+=ENDDOC
+
+Unlike the other declaration interfaces, $declare\_type\_abbrev$ gives
+a warning message if the new type abbreviation would clash with an existing
+type abbreviation or type constructor. This is mainly for the case of
+a clash with a type constructor, where the constructor will become
+inaccessible via the parser if the new type abbreviation is introduced.
+=DOC
+	val ⦏declare_type_abbrev⦎ : (string * string list * TYPE) -> unit;
+=DESCRIBE
+$declare\_type\_abbrev\,(s, [\alpha_1, \ldots, \alpha_k], \tau)$
+declares $(\alpha_1, \ldots, \alpha_k)s$
+as a type abbreviation for the type $\tau$.
+The identifier $s$ may not already have been declared as
+a type abbreviation or be the name of a type constructor defined in
+the present context, in which cases a warning message is issued.
+$s$ must comply with the HOL lexical rules for an identifier.
+=FAILURE
+20401	The identifier ?0 is already declared as a type abbreviation
+20402	The identifier ?0 is already declared as a type constructor
+20407	The formal parameter list ?0 contains duplicate type variable names
+20408	The string ?0 is not an identifier
+=ENDDOC
+It is intended that the type inferrer, \cite{DS/FMU/IED/DTD016},
+will expand type abbreviations
+in a depth-first fashion (using $get\_type\_abbrev$) and will not
+recursively expand type abbreviations in the result.
+Therefore it is permitted, but not very useful, for the type $\tau$ above to
+contain compound types with type constructors which are not defined
+as such, or which are even equal to $s$, the type abbreviation being defined,
+since this cannot result in an infinite recursion. The type will normally
+be entered by the user
+via the usual quotation mechanism, in which case these anomalous
+situations will not arise.
+
+=DOC
+	val ⦏undeclare_type_abbrev⦎ : string -> unit;
+=DESCRIBE
+$undeclare\_type\_abbrev\,(s, [\alpha_1, \ldots, \alpha_k], \tau)$
+reverses the effect of a declaration of $s$ as a type abbreviation.
+
+The precise effect depends on the theory in which the type abbreviation
+was declared: if it was declared in the current
+theory, then the declaration is just removed
+(so that if $s$ is declared as a type abbreviation in an ancestor
+theory, $s$ will revert to whatever that declaration said);
+if in an ancestor theory then arrangements are made in the
+current theory to prevent $s$ being treated as a type abbreviation.
+
+=FAILURE
+20403	The identifier ?0 is not declared as a type abbreviation
+=ENDDOC
+
+=DOC
+	val ⦏is_type_abbrev⦎ : string -> bool;
+=DESCRIBE
+$is\_type\_abbrev\,s$ returns $true$ iff. $s$ is declared as a type abbreviation
+=ENDDOC
+
+=DOC
+	val ⦏get_type_abbrev⦎ : TYPE -> (string * TYPE list) OPT;
+=DESCRIBE
+$get\_type\_abbrev\,ty$ returns a type abbreviation and arguments that expand
+to $ty$ is any suitable type abbreviation exists.
+The type abbreviation returned is the most recent which has $ty$ as an instance.
+$Nil$ is returned if the $ty$ has no suitable abbreviation.
+=FAILURE
+20404	The identifier ?0 is not declared as a type abbreviation
+=ENDDOC
+=DOC
+	val ⦏expand_type_abbrev⦎ : (string * TYPE list) -> TYPE;
+=DESCRIBE
+$expand\_type\_abbrev\,s,[\tau_1, \ldots, \tau_k]$ is the
+expansion of the type abbreviation $s$ with respect to the arguments
+$[\tau_1, \ldots, \tau_k]$.
+=FAILURE
+20404	The identifier ?0 is not declared as a type abbreviation
+20405	The type abbreviation ?0 should have ?1 argument not ?2
+20406	The type abbreviation ?0 should have ?1 arguments not ?2
+=ENDDOC
+\subsection{Languages}
+Errors in this subsection start with 205.
+
+The symbol table stores a language indicator in each theory.
+This determines the language in the symbol table records for the names
+in that theory. The language indicator for a new theory is initially taken
+from its (first) parent. The language indicator for the initial theory
+$MIN$ is set to ``$HOL$''.
+=DOC
+	val ⦏set_current_language⦎ : string -> unit;
+=DESCRIBE
+$set\_current\_language\,s$ sets the language indicator associated with
+the current theory to $s$.
+=ENDDOC
+=DOC
+	val ⦏get_current_language⦎ : unit -> string;
+=DESCRIBE
+$get\_current\_language\,()$ returns the language indicator associated with
+the current theory.
+=ENDDOC
+=DOC
+	val ⦏get_const_language⦎ : string -> string list;
+=DESCRIBE
+$get\_const\_language\,s$ returns the language indicators associated with
+the name $s$ when used as a constant
+in the current context. If there is no constant
+called $s$, then $get\_const\_language\,s$ returns the language indicator associated
+with the current theory. The language indicator is
+``$HOL$'' for all identifiers supplied as part of the ICL HOL system.
+The head element of the list returned is the language indicator associated
+with the constant's declaring theory.
+=ENDDOC
+=DOC
+	val ⦏declare_const_language⦎ : string * string -> unit;
+=DESCRIBE
+$declare\_const\_language\,(s, l)$ adds the language indicator~$l$ to
+those associated with the name~$s$ when used as a constant in the current context.
+=FAILURE
+20501	There is no constant called ?0 in the current context
+=ENDDOC
+
+\subsection{Theory Access Functions}
+Errors in this subsection start with 206.
+
+This section contains functions for accessing the symbol table records in
+a given theory. The main client for these facilities is the theory
+lister \cite{DS/FMU/IED/DTD033}, but they are, potentially, generally
+useful.
+
+=DOC
+	val ⦏get_terminators⦎ : string -> string list;
+=DESCRIBE
+$get\_terminators\,thy$ returns the list of identifiers which have been
+declared as terminators in the theory $thy$.
+The list is in the order of declaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+
+=DOC
+	val ⦏get_undeclared_terminators⦎ : string -> string list;
+=DESCRIBE
+$get\_undeclared\_terminators\,thy$ returns the list of identifiers whose status
+as terminators has been suppressed (with $undeclare\_terminator$)
+in the theory $thy$.
+The list is in the order of declaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+
+=DOC
+	val ⦏get_binders⦎ : string -> string list;
+=DESCRIBE
+$get\_binders\,thy$ returns the list of identifiers which have been
+declared as binders in the theory $thy$.
+The list is in the order of declaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+=DOC
+	val ⦏get_left_infixes⦎ : string -> (int * string) list;
+	val ⦏get_right_infixes⦎ : string -> (int * string) list;
+=DESCRIBE
+$get\_left\_infixes\,thy$
+(resp. $get\_right\_infixes\,thy$)
+returns the list of identifiers (and associated
+precedences) which have been
+declared as left (resp. right) associative infix operators in the theory $thy$.
+The list is in the order of declaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+=DOC
+	val ⦏get_prefixes⦎ : string -> (int * string) list;
+=DESCRIBE
+$get\_prefixes\,thy$ returns the list of identifiers (and associated
+precedences) which have been
+declared as prefix operators in the theory $thy$.
+The list is in the order of declaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+=DOC
+	val ⦏get_postfixes⦎ : string -> (int * string) list;
+=DESCRIBE
+$get\_postfixes\,thy$ returns the list of identifiers (and associated
+precedences) which have been
+declared as postfix operators in the theory $thy$.
+The list is in the order of declaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+
+=DOC
+	val ⦏get_nonfixes⦎ : string -> string list;
+=DESCRIBE
+$get\_nonfixes\,thy$ returns the list of identifiers which are declared
+as binder, infix, prefix or postfix in an ancestor of the theory
+$thy$, but have had that special status suppressed (using $declare\_nonfix$)
+in the theory $thy$ itself.
+The list is in the order of declaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+=DOC
+	val ⦏get_type_abbrevs⦎ : string -> (string * (string list * TYPE))list;
+=DESCRIBE
+$get\_type\_abbrevs\,thy$ returns information about the type abbreviation
+declarations which have been made in the theory $thy$. The return value
+is a list of pairs. Each pair contains the name of the corresponding type
+abbreviation together with its formal arguments and the type for which
+it is an abbreviation.
+The list is in the order of declaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+=DOC
+	val ⦏get_undeclared_type_abbrevs⦎ : string -> string list;
+=DESCRIBE
+$get\_undeclared\_type\_abbrevs\,thy$ returns the list of identifiers which have
+have had their status as type abbreviations suppressed in the theory $thy$.
+The list is in the order of declaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+=DOC
+	val ⦏get_aliases⦎ : string -> (string * TERM) list;
+=DESCRIBE
+$get\_aliases\,thy$ returns information about identifiers which have
+have been declared as aliases in the theory $thy$.
+The return value is a list of pairs. Each pair contains a name and a
+constant for which that name is an alias. The same name may be used as an alias
+for several different constants, and if this happens there will be multiple
+entries for that alias in the list.
+The list is in the order of declaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+
+=DOC
+	val ⦏get_undeclared_aliases⦎ : string -> (string * TERM) list;
+=DESCRIBE
+$get\_undeclared\_aliases\,thy$ returns information about aliases which
+have been suppressed (with $undeclare\_alias$) in the theory $thy$.
+The return value is a list of pairs. Each pair contains a name and a
+constant for which that name is no longer to be used as an alias.
+There may be more than one entry for a given name in the list (since several
+$undeclare\_alias$ commands may apply to one name).
+The list is in the order of undeclaration (oldest first).
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+
+=DOC
+	val ⦏get_language⦎ : string -> string;
+=DESCRIBE
+$get\_language\,thy$ returns the language indicator associated
+with the theory $thy$.
+=FAILURE
+20601	There is no theory called ?0
+=ENDDOC
+
+
+\subsection{Miscellaneous}
+Errors in this subsection start with 207.
+
+
+=DOC
+	val ⦏restore_defaults⦎ : unit -> unit;
+=DESCRIBE
+$restore\_defaults()$ may be used to clear corrupted symbol
+table information in the current theory. It does this by restoring the theory
+to the state it would have if no terminator, fixity, alias, type abbreviations
+or language declarations had been performed. A warning message is issued
+(and the interactive user is prompted as to whether to continue) before the
+operation is performed.
+=FAILURE
+20703	This operation will delete all symbol table information from theory ?0
+=ENDDOC
+
+=SML
+end; (* of signature SymbolTable *)
+=TEX
+\section{TEST POLICY}
+The symbol table functions are to be tested according to the
+general criteria laid down in the quality plan, \cite{DS/FMU/IED/PLN008}.
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
+
+
+

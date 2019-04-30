@@ -1,0 +1,980 @@
+=IGN
+********************************************************************************
+dtd026.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of Rewriting Rules and Tactics}
+
+\def\AbstractText{This document gives the detailed design for the rewriting rules (including conversions) and tactics for ICL HOL. It also describes canonicalisation.}
+
+\def\Reference{DS/FMU/IED/DTD026}
+
+\def\Author{K. Blackburn, R.D.Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: \TPPtitle{Detailed Design of Rewriting Rules and Tactics}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Detailed Design of Rewriting Inference Rules}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD026}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.29 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2011/05/05 15:41:01 $ %
+%% LaTeX2e port: }}  %% Mandatory field
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: %\TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthors{K.~Blackburn & WIN01\\R.D.Arthan & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document gives the detailed design for the
+%% LaTeX2e port: rewriting rules (including conversions) and tactics for ICL HOL.
+%% LaTeX2e port: It also describes canonicalisation.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Project Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/06/03)]
+First version.
+\item [Issue 1.2 (1991/06/19)]
+Moved tautology material to \cite{DS/FMU/IED/DTD027}.
+Some issues clarified in text.
+Introduced $set\_rewrite\-\_convs$.
+\item [Issue 1.3 (1991/06/27)]
+Added failure 26001 to inference rules.
+\item [Issue 1.4 (1991/07/02)]
+Added tactics.
+\item [Issue 1.8 (1991/07/25))]
+Added canonicalisation and basic rewrites.
+\item [Issue 1.9 (1991/07/27)]
+Added theorem tactic formulations of rewriting.
+\item [Issue 1.10 (1991/08/08)]
+Various minor mods as a result of testing canons.
+\item [Issue 1.11 (1991/09/24)]
+All rewrite functions now fail when applying an equation produces no change.
+\item [Issue 1.12 (1991/10/24)]
+Tidying up.
+\item [Issue 1.13 (1991/10/30)]
+Re-implementation to follow ideas of \cite{DS/FMU/IED/DTD051}.
+\item [Issue 1.14 (1991/11/19)]
+Reacting to issue 1.5/6 of \cite{DS/FMU/IED/DTD051}.
+
+\item[Issue 1.15 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.16 (1992/01/30), 1.17 (1992/01/30)]
+Added $(ONCE\_)REWRITE\_MAP\_C$.
+\item [Issue 1.18 (1992/03/11)]
+Correcting typos.
+\item [Issue 1.19 (1992/03/18)]
+Added $f\_rewrite\_canon$.
+\item [Issue 1.20 (1992/03/26) (26th March 1992)]
+Changed to use proof context material of issue 1.13 of \cite{DS/FMU/IED/DTD051}.
+\item [Issue 1.21 (1992/03/31) (31st March 1992)]
+Removed filtered rewrites, added understanding of double negation
+to $simple\-\_¬\-\_rewrite\-\_canon$.
+\item [Issue 1.22 (1992/04/14) (13th April 1992)]
+Changes due to CR0017.
+\item [Issue 1.23 (1992/05/14) (14th May 1992)]
+Tidying up proof contexts.
+\item [Issue 1.24 (1992/05/22) (22nd May 1992)]
+Clarifying descriptions.
+\item [Issue 1.25 (1992/08/20) (20th August 1992)]
+Clarifying descriptions.
+\item[Issue 1.26 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.27 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.28 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.29 (2011/05/05), 1.30 (2011/05/07)] The rewriting tools are now parametrised by an equation
+matcher in the proof context.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\section{GENERAL}
+\subsection{Scope}
+This document contains a detailed design for the
+rewriting rules, conversions and tactics, and some auxiliary material.
+This is called for in section \cite{DS/FMU/IED/HLD009}.
+The design is implemented in \cite{DS/FMU/IED/IMP026}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains a detailed design for the rewriting
+derived rules, conversions and tactics for ICL HOL.
+
+``Rewriting'' is a process of traversing a goal, theorem or term instantiating members of a set of equational theorems to match sub-terms encountered, and using the instantiations to infer a new goal, theorem, or an equational theorem.
+We have enhanced the rewriting facilities in ICL HOL to apply
+conversions.
+In this context a conversion is viewed as a function capable of deriving an equational theorem, which is given
+as an argument the LHS that the resulting equation must have.
+
+An auxiliary topic needs covering to describe
+rewriting.
+It is canonicalisation, which is basically
+the process of taking a theorem and producing equational theorems from it.
+The process is configurable.
+
+All functions require all their arguments to begin evaluation,
+unless otherwise noted.
+
+Note also that the order of declaration given in this document will
+not necessarily reflect the order of implementation in
+\cite{DS/FMU/IED/IMP026}.
+\subsubsection{Dependencies}
+Though this document depends upon \cite{DS/FMU/IED/IMP028}.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+\subsubsection{Terminology}
+A {\em conversion net} is more properly called a conversion discrimination net: discrimination nets are described in
+\cite{DS/FMU/IED/DTD008}.
+\section{INFIX DIRECTIVES}
+The following canonicalisation function combinators are used with
+infix notation:
+=SML
+infix 4 THEN_CAN;
+infix 4 ORELSE_CAN;
+infix 4 THEN_LIST_CAN;
+=TEX
+\section{START OF THE SIGNATURE}
+=DOC
+signature ⦏Rewriting⦎ = sig
+=DESCRIBE
+This provides the derived rewriting rule, conversions and
+tactics for ICL HOL.
+=ENDDOC
+\section{CANONICALISATION}
+\subsection{Discussion}\label{CANONICALISATIONDiscussion}
+We will use the term
+{\em canonicalisation} for an operation which transforms a theorem (or list
+of theorems) into a list of theorems all of which share some property.
+An example of a canonicalisation is the parameter to
+the primitive rewrite conversion which transforms
+lists of theorems into lists of equational theorems.
+Another example might be reduction to clausal form.
+
+For the present example,
+the rewriting canonicalisation might be something like the following:
+
+\begin{enumerate}
+\item
+stripping universal quantifiers;
+\item
+dividing conjunctive theorems into their conjuncts (and then recursively
+transforming these);
+\item
+changing $⊢¬t$ to $t ⇔ F$;
+\item
+if none of the above apply, changing $⊢t$ to $⊢t ⇔ T$.
+\end{enumerate}
+
+however, application-specific transformations might apply, e.g. removing
+universal quantifiers in languages other than HOL. In fact the above is
+a simplification of what we actually propose
+(in section \ref{CanonicalisationForRewriting} below)
+for the rewriting canonicalisation.
+
+To give a simple but general framework for handling canonicalisation, we
+introduce a family of combinators for functions of type
+$THM->THM\,list$. These allow a recursive process like the above-mentioned
+rewriting canonicalisation to be extended piecemeal:
+for instance the code
+for the standard rewriting canonicalisation contains the fragment:
+=GFT
+REPEAT_CAN (FIRST_CAN <list of canonicalisations>)
+=TEX
+
+The canonicalisation combinators are very straightforward to implement; indeed,
+they are even simpler than the combinators for tactics and conversions.
+They may also prove useful in other contexts.
+
+\subsection{The Canonicalisation Combinators}
+
+=DOC
+type ⦏CANON⦎ 		(* 	= THM -> (THM list)	*);
+=DESCRIBE
+This is the type abbreviation for a canonicalisation function; such functions
+are typically used to derive consequences of a theorem meeting some desired
+criteria. An example is the rewriting canonicalisations which are used to transform theorems
+into lists of equational theorems for use in the rewriting conversions, rules
+and tactics.
+
+Combinators are available to assist in the construction of new
+canonicalisation functions from old.
+=SEEALSO
+$THEN\_CAN$, $ORELSE\_CAN$, $REPEAT\-\_CAN$, $FIRST\-\_CAN$,
+$EVERY\-\_CAN$ as combinators,
+$fail\-\_can$ and $id\-\_can$ as building blocks for the combinators.
+=ENDDOC
+
+=DOC
+val ⦏id_canon⦎ 	: CANON
+=DESCRIBE
+This is the identity for the canonicalisation function combinator
+$THEN\_CAN$:
+=GFT
+id_canon thm = [thm]
+=TEX
+=SEEALSO
+$CANON$
+=ENDDOC
+
+=DOC
+val ⦏fail_canon⦎ 	: CANON
+=DESCRIBE
+This is a canonicalisation function which always fails.
+It is the identity for $ORELSE\_CAN$.
+=SEEALSO
+$CANON$
+=FAILURE
+26201	Failed as requested
+=ENDDOC
+
+=DOC
+val ⦏fail_with_canon⦎ :	string -> int -> (unit -> string) list -> CANON
+=DESCRIBE
+This is a canonicalisation function which always fails by passing its
+arguments to $fail$ (q.v.).
+=SEEALSO
+$fail\_can$
+=ENDDOC
+=DOC
+val ⦏THEN_CAN⦎ : (CANON * CANON) -> CANON
+=DESCRIBE
+$THEN\_CAN$ is a canonicalisation function combinator written as an infix
+operator. $(can1\,THEN\_CAN\,can2)thm$ is the result of
+applying $can2$ to each of the theorems in the list $can1\,thm$ and then
+flattening the resulting list of lists.
+=SEEALSO
+$CANON$
+=ENDDOC
+
+=DOC
+val ⦏THEN_LIST_CAN⦎ : (CANON * CANON list) -> CANON
+=DESCRIBE
+$THEN\_LIST\_CAN$ is a canonicalisation function combinator written as an infix
+operator. $(can1\,THEN\_LIST\_CAN\,cans)thm$ is the result of
+applying each element of the list $cans$ to the
+corresponding element of the list $can1\,thm$ and then
+flattening the resulting list of lists.
+=SEEALSO
+$CANON$
+=FAILURE
+26204	wrong number of canonicalisation functions in the list
+=ENDDOC
+
+=DOC
+val ⦏ORELSE_CAN⦎ : (CANON * CANON) -> CANON
+=DESCRIBE
+$ORELSE\_CAN$ is a canonicalisation function combinator written as an infix
+operator. $(can1\,ORELSE\_CAN\,can2)thm$ is the same $can1\,thm$ unless evaluation
+of $can1\,thm$ fails in which case it is the same as $can2\,thm$.
+=SEEALSO
+$CANON$
+=ENDDOC
+
+=DOC
+val ⦏EVERY_CAN⦎ : CANON list -> CANON
+=DESCRIBE
+$EVERY\_CAN$ is a canonicalisation function combinator which combines
+the elements of its argument using $THEN\_CAN$:
+=GFT
+EVERY_CAN [can1, can2, ...] = can1 THEN_CAN can2 THEN_CAN ...
+=TEX
+=SEEALSO
+$CANON$
+=ENDDOC
+
+=DOC
+val ⦏FIRST_CAN⦎ : CANON list -> CANON
+=DESCRIBE
+$FIRST\_CAN$ is a canonicalisation function combinator which combines
+the elements of its argument using $ORELSE\_CAN$:
+=GFT
+FIRST_CAN [can1, can2, ...] = can1 ORELSE_CAN can2 ORELSE_CAN ...
+=TEX
+=SEEALSO
+$CANON$
+=FAILURE
+26202	the list of canonicalisation functions is empty
+=ENDDOC
+
+=DOC
+val ⦏REPEAT_CAN⦎ : CANON -> CANON
+=DESCRIBE
+$REPEAT\_CAN$ is a canonicalisation function combinator which repeatedly
+applies its argument until it fails:
+=GFT
+REPEAT_CAN can thm =
+	((can THEN_CAN REPEAT_CAN can) ORELSE_CAN id_can) thm
+=TEX
+=SEEALSO
+$CANON$
+=ENDDOC
+\subsection{Canonicalisation For Rewriting}\label{CanonicalisationForRewriting}
+The discussion in section \ref{CANONICALISATIONDiscussion}
+of canonicalisation for rewriting actually
+described a simpler process than the one which we adopt for standard use
+(i.e. place $set\_rw\_canon$ in the initial rewriting canonicalisation proof context).
+
+We adopt the following criteria for the rewriting canonicalisations that ICL will supply:
+
+\begin{enumerate}
+\item
+given $⊢a$, they should guarantee that $rewrite\_tac$ will prove a goal
+with conclusion $a$ providing it terminates;
+\item
+they should be relatively efficient (say, linear in the number of connectives
+in the theorem being rewritten);
+\item
+they should generate as many useful equations as can conveniently be done
+within the above constraints.
+\end{enumerate}
+
+Given the basic rewrites discussed in section \ref{BASICREWRITES}
+below, the criteria are met by repeated application of the first applicable
+operation in the following list:
+
+\begin{enumerate}
+\item
+stripping universal quantifiers;
+\item
+dividing conjunctive theorems into their conjuncts;
+\item
+changing $⊢¬(t1 ∨ t2)$ to $¬t1 ∧ ¬t2$;
+\item
+changing $⊢¬∃x⦁t$ to $∀x⦁¬t$;
+\item
+changing $⊢¬¬t$ to $t$;
+\item
+changing $⊢¬t$ to $t ⇔ F$;
+\item
+if none of the above apply, changing $⊢t$ to $⊢t ⇔ T$.
+\end{enumerate}
+
+The point here is that we move negations through disjunctions and existential
+quantifiers because that can increase the number of useful equations we get
+without prejudicing criterion 1 (by dint of the basic rewrites which
+can evaluate disjunctions and existential terms in which the operands or body
+is $T$).
+
+After all this canonicalisation we then universally quantify
+the resulting theorems in all free variables only in the conclusions, other than those
+that were free in the original.
+
+A variant canonicalisation would strip implications
+into the assumption list, as well as adding the unstripped form.
+The effects caused by this could be unfortunate if unconstrained,
+and so it is not adopted as the default action.
+
+=DOC
+val ⦏∧_rewrite_canon⦎ : THM -> THM list
+val ⦏simple_¬_rewrite_canon⦎ : THM -> THM list
+val ⦏⇔_t_rewrite_canon⦎ : THM -> THM list
+val ⦏f_rewrite_canon⦎ : THM -> THM list
+val ⦏simple_∀_rewrite_canon⦎ : THM -> THM list
+=DESCRIBE
+These are some of the standard canonicalisation functions used for breaking theorems up into
+lists of equations for use in rewriting. They perform the following
+transformations:
+=GFT
+∧_rewrite_canon			(Γ ⊢ t1 ∧ t2)		= Γ ⊢ t1 ; Γ ⊢ t2
+simple_¬_rewrite_canon		(Γ ⊢ ¬(t1 ∨ t2))	= (Γ ⊢ ¬t1 ∧ ¬t2)	
+simple_¬_rewrite_canon		(Γ ⊢ ¬∃x⦁t)		= (Γ ⊢ ∀x⦁¬t)	
+simple_¬_rewrite_canon		(Γ ⊢ ¬ ¬t)		= (Γ ⊢ t)	
+simple_¬_rewrite_canon		(Γ ⊢ ¬t)		= (Γ ⊢ t ⇔ F)	
+⇔_t_rewrite_canon		(Γ ⊢ t1 = t2)		= < failure >
+⇔_t_rewrite_canon		(Γ ⊢ t)			= (Γ ⊢ t ⇔ T)
+f_rewrite_canon			(Γ ⊢ F)			= (Γ ⊢ ∀ x ⦁ x)
+simple_∀_rewrite_canon		(Γ ⊢ ∀x⦁t)		= Γ ⊢ t
+=TEX
+
+
+Note that the functions whose names begin with $simple$  do not handle paired quantifiers.
+Versions which do handle these quantifiers are also available.
+=SEEALSO
+$¬\_rewrite\_canon$, $∀\_rewrite\_canon$.
+=FAILURE
+26203	the conclusion of the theorem is already an equation
+=ENDDOC
+=DOC
+val ⦏REWRITE_CAN⦎ : CANON -> CANON;
+=DESCRIBE
+For rewriting, after all other canonicalisation we will usually
+wish to then universally quantify
+the resulting theorems in all free variables that are only in the conclusion, other than those
+that were free anywhere in the original theorem, before
+any canonicalisation.
+A canonicalisation is transformed to work this way by $REWRITE\_CAN$.
+
+When evaluating proof contexts (see, e.g., $commit\_pc$) the list of rewrite canonicalisations
+in the argument (see $get\_rw\_canons$), $arg$, will be converted to a single canonicalisation
+in the result by:
+=GFT
+REWRITE_CAN
+	(REPEAT_CAN(FIRST_CAN (arg @
+		[⇔_t_rewrite_canon])));
+=TEX
+
+=ENDDOC
+=DOC
+val ⦏initial_rw_canon⦎ : CANON;
+=DESCRIBE
+This is the initial rewrite canonicalisation function,
+defined as
+=GFT
+val initial_rw_canon =
+	REWRITE_CAN
+	(REPEAT_CAN(FIRST_CAN [
+	simple_∀_rewrite_canon,
+	∧_rewrite_canon,
+	simple_¬_rewrite_canon,
+	f_rewrite_canon,
+	⇔_t_rewrite_canon]));
+=TEX
+This is the repeated application of the first applicable
+operation in the following list:
+\begin{enumerate}
+\item
+stripping universal quantifiers;
+\item
+dividing conjunctive theorems into their conjuncts;
+\item
+changing $⊢¬(t1 ∨ t2)$ to $¬t1 ∧ ¬t2$;
+\item
+changing $⊢¬∃x⦁t$ to $∀x⦁¬t$;
+\item
+changing $⊢¬¬t$ to $t$;
+\item
+changing $⊢¬t$ to $t ⇔ F$;
+\item
+changing $⊢\ F$ to $⊢\ ∀\ x\ ⦁\ x$;
+\item
+if none of the above apply, changing $⊢t$ to $⊢t = T$.
+
+Finally, after all this canonicalisation we then universally quantify
+the resulting theorems in all free variables other than those
+that were free in the original.
+
+\end{enumerate}
+
+=ENDDOC
+\subsection{Canonicalisation and Equational Contexts}
+We can now express the function that creates an equational context of a theorem canonicalised by the
+other parameter:
+=DOC
+val ⦏cthm_eqn_cxt⦎ : CANON -> THM -> EQN_CXT;
+=DESCRIBE
+This function applies a canonicalisation (see $CANON$) to
+a theorem, and then attempts to convert each of the
+list of resulting theorems into an equational
+context entry using $thm\_eqn\_cxt$ (q.v.).
+The results are composed into an equational context
+(which is only a Standard ML list of equational context entries).
+Canoncalised theorems that cannot be converted by $thm\_eqn\_cxt$ will be discarded.
+=ENDDOC
+\section{THE REWRITING FUNCTIONS}
+\subsection{The Underlying Conversion}
+The following general and powerful conversion is at the heart of all the other
+rewriting functions.
+=DOC
+val ⦏prim_rewrite_conv⦎ : CONV NET -> CANON -> (THM -> TERM * CONV) OPT ->
+	(CONV -> CONV) -> EQN_CXT -> THM list -> CONV;
+=DESCRIBE
+The primitive rewrite conversion.
+=FRULE 1 Conversion
+prim_rewrite_conv
+(initial_net: CONV NET)
+(canon : CANON)
+(eqm_rule : (THM -> TERM * CONV) OPT)
+(traverse : CONV -> CONV)
+(with_eqn_cxt : EQN_CXT)
+(with_thms : THM list) ⌜t⌝
+├
+├
+Γ ⊢ t = t'
+=TEX
+where ⌜t'⌝ is ⌜t⌝, rewritten according to the parameters of the
+conversion, and $Γ$ are the assumptions required to allow the
+rewriting. The failure of the conversion constructed by $prim\_rewrite\_conv$ will not be caught by $prim\_rewrite\_conv$.
+
+The arguments have the following effects:
+\begin{description}
+\item[initial\_net]
+This is a pre-calculated conversion net, that will serve
+as the initial rewriting that may be done.
+\item[canon]
+This canonicalisation function
+will be applied to all of the $with\_thms$ theorems, to produce a list of theorems to be rewritten with from these inputs.
+This will generally involve producing canonical or simplified
+forms of the original theorems.
+
+The resulting theorems are intended to be simply universally
+quantified equations, and theorems which are not of this form are discarded.
+Rewriting attempts to instantiate some or all of the
+universally quantified variables, or any type variables (which do
+not appear in the assumptions), so as to
+to match the left-hand side of an equation to the term being rewritten.
+N.b. free variables are not instantiated.
+An equation whose left-hand side matches the term being rewritten
+in such a way that rewriting would not change the term
+is treated as if it did not match the term.
+\item[eqm\_rule]
+This equation matcher is mapped over the theorems resulting
+from the canonicalisation to convert them into an equation context.
+$thm\_eqn\_cxt$ is used if $Nil$ is supplied.
+\item[traverse]
+This is a conversional, which defines the traversal of term $t$ by the
+rewriting conversion derived from $prim\_rewrite\_conv$'s other arguments.
+\item [with$\_$eqn$\_$cxt]
+This is additional equational context to be
+added directly into the rewriting conversion net.
+\item[with$\_$thms]
+This is an additional set of theorems to be processed by $canon$
+and the results used in added directly into the rewriting conversion net.
+\end{description}
+=USES
+This is the basis of the primary rewriting tools, by varying the first four parameters.
+
+$prim\_rewrite\_conv$ preprocesses its arguments in various ways.
+The preprocessing for an argument
+takes place as soon as that argument is supplied, so, for example,
+the overhead of preprocessing $with\_eqn\_cxt$ need not be incurred in calls with
+the same $with\_eqn\_cxt$ but different $with\_thms$.
+=ENDDOC
+\subsection{Specialised Traversal Functions}
+=DOC
+val ⦏REWRITE_MAP_C⦎ : string -> CONV -> CONV;
+=DESCRIBE
+This conversional is an equivalent to $TOP\_MAP\_C$ (q.v.)
+except that it warns the user if it failed to recompose the theorems from
+the term it just traversed.
+
+$REWRITE\_MAP\_C$ $conv$ $tm$ traverses $tm$ from its root node to its leaves.
+It will repeat the application of $conv$, until failure,
+on each subterm encountered en route.
+It then descends through the sub-term that results from the repeated application of $conv$.
+If the descent causes any change, on ``coming back out'' to the sub-term the conversional will attempt
+to reapply $conv$, and if successful
+will then (recursively) reapply $REWRITE\_MAP\_C$ $conv$
+once more.
+If $conv$ cannot be reapplied then the conversional continues
+to ascend back to the root.
+
+It traverses from left to right, though this should only matter for
+conversions that work by side-effect.
+It fails if the conversion is applied nowhere within the term.
+=FAILURE
+26001	no rewriting occurred
+26003	no successful rewriting occurred, rewriting gave ill-formed results on some subterms
+=TEX
+It issues the following warning message if at any point it fails to recompose the theorems from
+the subterm it just traversed, some successful rewriting occurs, and the flag ``$illformed\-\_rewrite\-\_warning$''
+is true.
+=FAILURE
+26002	rewriting gave ill-formed results on some subterms
+=TEX
+Errors and warnings are from the area indicated by the string argument.
+=ENDDOC
+We must be careful to issue warning 26002 only once, as the problem may occur very many times in one rewriting.
+We also no not mention the subterms involves, as there may be many of them.
+=DOC
+val ⦏ONCE_MAP_WARN_C⦎ : string -> CONV -> CONV;
+=DESCRIBE
+This is an equivalent to $ONCE\_MAP\_C$ (q.v.)
+except that it warns the user if it failed to recompose the theorems from
+the term it just traversed.
+
+This traverses a term from the root node to its leaves,
+attempting to apply its conversion argument.
+If it successfully applies the conversion to any subterm
+then it will not further traverse that subterm,
+but will still continue on other branches.
+If it fails to apply its conversion to a leaf, its functionality is equivalent to then applying $refl\_conv$.
+It traverses from left to right, though this should only matter for
+conversions that work by side-effect.
+It will fail if the conversion succeeds nowhere in the tree,
+or if the results of certain conversion applications are ill-formed.
+=FAILURE
+26001	no rewriting occurred
+26003	no successful rewriting occurred, rewriting gave ill-formed results on some subterms
+=TEX
+It issues the following warning message if at any point it fails to recompose the theorems from
+the subterm it just traversed, some successful rewriting occurs, and the flag ``$illformed\-\_rewrite\-\_warning$''
+is true.
+=FAILURE
+26002	rewriting gave ill-formed results on some subterms
+=TEX
+Errors and warnings are from the area indicated by the string argument.
+=ENDDOC
+We must be careful to issue warning 26002 only once, as the problem may occur very many times in one rewriting.
+We also do not mention the subterms involves, as there may be many of them.
+An example where this message will be given is:
+=GFT Example
+:> push_goal([⌜b:'a = a⌝],⌜T ∧ ∀ a : 'a ⦁ f a (b:'a) ∧ T⌝);
+
+Now 1 goal on the main goal stack
+
+(* *** Goal "" *** *)
+
+(*  1 *)  ⌜b = a⌝
+
+(* ?⊢ *)  ⌜T ∧ (∀ a⦁ f a b ∧ T)⌝
+
+:> a(asm_rewrite_tac[]);
+
+*** WARNING 26002 raised by asm_rewrite_tac: rewriting gave ill-formed results
+ on some subterms
+Do you wish to continue (y/n)? y
+Tactic produced 1 subgoal:
+
+(* *** Goal "" *** *)
+
+(*  1 *)  ⌜b = a⌝
+
+(* ?⊢ *)  ⌜∀ a⦁ f a b ∧ T⌝
+=TEX
+Notice how the inner $... ∧\ T$ was not rewritten: this is
+because rewriting with the assumption $⌜b = a⌝$ worked on the subterm $⌜b⌝$, but later caused a failure when that result was then wrapped with the universal quantifier,
+and so \underline{all} the rewriting on that subterm was discarded.
+=DOC
+(* "⦏illformed_rewrite_warning⦎" *)
+=DESCRIBE
+This flag modifies the behaviour of
+$REWRITE\-\_MAP\-\_C$ and $ONCE\-\_MAP\-\_WARN\-\_C$.
+When false (its default) it will not warn of illformed rewriting in subterms, with message 26002, though if no other rewriting occurs
+then error message 26003 will still be used.
+If true, then the warning will be given if some rewriting
+is successful, but elsewhere it is illformed.
+=ENDDOC
+\subsection{Rules}
+=DOC
+val ⦏prim_rewrite_rule⦎ : CONV NET -> CANON -> (THM -> TERM * CONV) OPT ->
+	(CONV -> CONV) -> EQN_CXT -> THM list -> THM -> THM;
+=DESCRIBE
+This is the inference rule based on $prim\_rewrite\_conv$ (q.v.),
+with the same parameters as that function, except for the last
+argument:
+=FRULE 1 Rule
+prim_rewrite_rule
+(initial_net: CONV NET)
+(canon : CANON)
+(epp : (THM -> TERM * CONV) OPT)
+(traverse : CONV -> CONV)
+(with_eqn_cxt : EQN_CXT)
+(with_thms : THM list)
+├
+Γ ⊢ t
+├
+Γ ∪ Γ1 ⊢ t'
+=TEX
+where ⌜t'⌝ is the result of rewriting ⌜t⌝ in the manner prescribed
+by the arguments, and $Γ1$ are the assumptions required to allow this rewriting.
+=ENDDOC
+=DOC
+val ⦏rewrite_rule⦎ : THM list -> THM -> THM;
+val ⦏pure_rewrite_rule⦎ : THM list -> THM -> THM;
+val ⦏once_rewrite_rule⦎ : THM list -> THM -> THM;
+val ⦏pure_once_rewrite_rule⦎ : THM list -> THM -> THM;
+val ⦏asm_rewrite_rule⦎ : THM list -> THM -> THM;
+val ⦏pure_asm_rewrite_rule⦎ : THM list -> THM -> THM;
+val ⦏once_asm_rewrite_rule⦎ : THM list -> THM -> THM;
+val ⦏pure_once_asm_rewrite_rule⦎ : THM list -> THM -> THM;
+=DESCRIBE
+These are the standard rewriting rules.
+They use the canonicalisation rule held by the proof context (see, e.g, $push\-\_pc$)
+to
+preprocess the theorem list.
+The context is accessed at the point when the rules are given a list of
+theorems.
+
+If a rule is ``pure'' then there is no default rewriting,
+otherwise the default rewriting conversion net
+held by the proof context will be used
+in addition to user supplied material.
+
+If a rule is ``once'' then rewriting will proceed from the root
+of the of the conclusion of the theorem to be rewritten, towards the leaves,
+and will not descend through any rewritten subterm, using $ONCE\-\_MAP\-\_WARN\-\_C$.
+If not, rewriting will continue, moving from the root to the leaves, repeating if any rewriting is successful, until there is no rewriting redex
+anywhere within the rewritten conclusion, using $REWRITE\-\_MAP\-\_C$.
+This may cause non-terminating looping.
+
+If a rule is ``asm'' then the theorems rewritten with will include
+the canonicalised $asm\_rule$d assumptions of the theorem being rewritten.
+=SEEALSO
+$prim\_rewrite\_rule$
+=FAILURE
+26001	no rewriting occurred
+=FAILUREC
+Also as error 26003 and warning 26002 of $REWRITE\_MAP\_C$(q.v.).
+=ENDDOC
+\subsection{Conversions}
+=DOC
+val ⦏rewrite_conv⦎ : THM list -> CONV;
+val ⦏pure_rewrite_conv⦎ : THM list -> CONV;
+val ⦏once_rewrite_conv⦎ : THM list -> CONV;
+val ⦏pure_once_rewrite_conv⦎ : THM list -> CONV;
+=DESCRIBE
+These are the standard rewriting conversions.
+They use the canonicalisation rule held by the proof context (see, e.g, $push\-\_pc$)
+preprocess the theorem list.
+The context is accessed at the point when the rules are given a list of
+theorems.
+
+If a conversion is ``pure'' then there is no default rewriting,
+otherwise the default rewriting conversion net
+held by the proof context will be used
+in addition to user supplied material.
+
+If a conversion is ``once'' then rewriting will proceed from the root
+of the of the conclusion of the theorem to be rewritten, towards the leaves,
+and will not descend through any rewritten subterm, using $ONCE\-\_MAP\-\_WARN\-\_C$.
+If not, rewriting will continue, moving from the root to the leaves, repeating if any rewriting is successful, until there is no rewriting redex
+anywhere within the rewritten conclusion, using $REWRITE\-\_MAP\-\_C$.
+This may cause non-terminating looping.
+=FAILURE
+26001	no rewriting occurred
+=FAILUREC
+Also as error 26003 and warning 26002 of $REWRITE\_MAP\_C$ (q.v.).
+=ENDDOC
+\subsection{Tactics}
+=DOC
+val ⦏prim_rewrite_tac⦎ : CONV NET -> CANON -> (THM -> TERM * CONV) OPT ->
+	(CONV -> CONV) -> EQN_CXT -> THM list -> TACTIC;
+=DESCRIBE
+This is the tactic based on $prim\_rewrite\_conv$ (q.v.),
+with the same parameters as that function, except for the last
+argument:
+=FRULE 2 Tactic
+prim_rewrite_tac
+(initial_net: CONV NET)
+(canon : CANON)
+(epp : (THM -> TERM * CONV) OPT)
+(traverse : CONV -> CONV)
+(with_eqn_cxt : EQN_CXT)
+(with_thms : THM list)
+├
+{ Γ } ⊢ t
+├
+{ Γ } ⊢ t'
+=TEX
+where ⌜t'⌝ is the result of rewriting ⌜t⌝ in the manner prescribed
+by the arguments.
+=ENDDOC
+=DOC
+val ⦏rewrite_tac⦎ : THM list -> TACTIC;
+val ⦏pure_rewrite_tac⦎ : THM list -> TACTIC;
+val ⦏once_rewrite_tac⦎ : THM list -> TACTIC;
+val ⦏pure_once_rewrite_tac⦎ : THM list -> TACTIC;
+val ⦏asm_rewrite_tac⦎ : THM list -> TACTIC;
+val ⦏pure_asm_rewrite_tac⦎ : THM list -> TACTIC;
+val ⦏once_asm_rewrite_tac⦎ : THM list -> TACTIC;
+val ⦏pure_once_asm_rewrite_tac⦎ : THM list -> TACTIC;
+=DESCRIBE
+These are the rewriting tactics.
+They use the canonicalisation rule held by the current proof context (see, e.g., $push\-\_pc$)
+to
+preprocess the theorem list.
+The context is accessed at the point when the rules are given a list of
+theorems.
+
+If a tactic is ``pure'' then there is no default rewriting,
+otherwise the default rewriting conversion net
+held by the current proof context will be used
+in addition to user supplied material.
+
+If a tactic is ``once'' then rewriting will proceed from the root
+of the of the conclusion of the theorem to be rewritten, towards the leaves,
+and will not descend through any rewritten subterm, using $ONCE\-\_MAP\-\_WARN\-\_C$.
+If not, rewriting will continue, moving from the root to the leaves, repeating if any rewriting is successful, until there is no rewriting redex
+anywhere within the rewritten conclusion, using $REWRITE\-\_MAP\-\_C$.
+This may cause non-terminating looping.
+
+If a tactic is ``asm'' then the theorems rewritten with will include
+the canonicalised $asm\_rule$d assumptions of the goal.
+=FAILURE
+26001	no rewriting occurred
+=FAILUREC
+Also as error 26003 and warning 26002 of $REWRITE\_MAP\_C$ (q.v.).
+=ENDDOC
+=DOC
+val ⦏rewrite_thm_tac⦎ : THM -> TACTIC;
+val ⦏pure_rewrite_thm_tac⦎ : THM -> TACTIC;
+val ⦏once_rewrite_thm_tac⦎ : THM -> TACTIC;
+val ⦏pure_once_rewrite_thm_tac⦎ : THM -> TACTIC;
+val ⦏asm_rewrite_thm_tac⦎ : THM -> TACTIC;
+val ⦏pure_asm_rewrite_thm_tac⦎ : THM -> TACTIC;
+val ⦏once_asm_rewrite_thm_tac⦎ : THM -> TACTIC;
+val ⦏pure_once_asm_rewrite_thm_tac⦎ : THM -> TACTIC;
+=DESCRIBE
+These are rewriting tactics parameterised to take only one theorem.
+This parameterisation is convenient to use with the many tactic
+generating functions, such as $LEMMA\_T$, which take a theorem tactic
+as an argument.
+
+See, e.g. $rewrite\_tac$ for the details of the differences
+between these tactics.
+=FAILURE
+26001	no rewriting occurred
+=FAILUREC
+Errors will be reported as if they are from the corresponding $\_tac$:
+e.g. from $rewrite\_tac$ rather than $rewrite\_thm\_tac$.
+This allows a simple implementation, and for there to be
+no functionality change even in errors between
+using singleton lists with the originals, and these functions.
+=FAILUREC
+The following warning indicates the result of, perhaps only some, of the rewriting was discarded.
+=FAILURE
+26002	rewriting gave ill-formed results on some subterms
+=ENDDOC
+\section{BASIC REWRITES}\label{BASICREWRITES}
+The following portmanteau box contains the basic rewriting theorems which
+are to be proved and set up as the basic rewrites in the implementation
+of this module.
+=DOC
+val ⦏eq_rewrite_thm⦎ : THM
+val ⦏⇔_rewrite_thm⦎ : THM
+val ⦏¬_rewrite_thm⦎ : THM
+val ⦏∧_rewrite_thm⦎ : THM
+val ⦏∨_rewrite_thm⦎ : THM
+val ⦏⇒_rewrite_thm⦎ : THM
+val ⦏if_rewrite_thm⦎ : THM
+val ⦏∀_rewrite_thm⦎ : THM
+val ⦏∃_rewrite_thm⦎ : THM
+val ⦏β_rewrite_thm⦎ : THM
+=DESCRIBE
+These are some of the default list of theorems used by those rewriting
+rules, conversions and tactics whose names do not begin with `$pure\_$':
+=GFT
+eq_rewrite_thm ⊢ ∀ x⦁(x = x) ⇔ T
+
+⇔_rewrite_thm ⊢ ∀ t⦁((T ⇔ t) = t) ∧ ((t ⇔ T) = t) ∧
+		((F ⇔ t) = (¬ t)) ∧ (t ⇔ F) = (¬ t)
+
+¬_rewrite_thm ⊢ ∀ t⦁(¬¬t) = t ∧ ((¬ T) = F) ∧ (¬ F) = T
+
+∧_rewrite_thm ⊢ ∀ t⦁((T ∧ t) = t) ∧ ((t ∧ T) = t) ∧
+		(¬ (F ∧ t)) ∧ (¬ (t ∧ F)) ∧ (t ∧ t) = t
+
+∨_rewrite_thm ⊢ ∀ t⦁(T ∨ t) ∧ (t ∨ T) ∧ ((F ∨ t) = t) ∧ ((t ∨ F) = t) ∧ (t ∨ t) = t
+
+⇒_rewrite_thm ⊢ ∀ t⦁((T ⇒ t) = t) ∧ ((F ⇒ t) = T) ∧ ((t ⇒ T) = T) ∧ ((t ⇒ t) = T)
+  ∧ (t ⇒ F) = (¬ t)
+
+if_rewrite_thm ⊢ ∀ t1 t2:'a⦁((if T then t1 else t2) = t1) ∧ (if F then t1 else t2) = t2
+
+∀_rewrite_thm ⊢ ∀ t⦁(∀ x⦁t) = t
+∃_rewrite_thm ⊢ ∀ t⦁(∃ x⦁t) = t
+
+β_rewrite_thm ⊢ ∀ t1:'a; t2:'b⦁((λ x⦁t1)t2) = t1
+=TEX
+The theorems are saved in the theory ``misc'',
+and given their design in the design for that theory.
+=SEEALSO
+$fst\_rewrite\_thm$, $snd\_rewrite\_thm$, $fst\_snd\_rewrite\_thm$.
+=ENDDOC
+\section{EVALUATION OF PROOF CONTEXTS}
+The implementation of this signature will, as a side effect,
+set the evaluation of rewriting conversions
+(see $pp'set\-\_eval\-\_rw\-\_canon$)
+to
+=GFT
+fun f canons = (
+	REWRITE_CAN
+	 (REPEAT_CAN(FIRST_CAN (canons @
+	  [⇔_t_rewrite_canon])))
+);
+=TEX
+\section{END OF THE SIGNATURE}
+=SML
+end; (* signature of Rewriting *)
+=TEX
+\section{TEST POLICY}
+The functions in this document should be tested as described in
+\cite{DS/FMU/IED/PLN008}.
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+

@@ -1,0 +1,574 @@
+=IGN
+********************************************************************************
+dtd046.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  dtd046.doc  ℤ $Date: 2002/10/17 16:20:01 $ $Revision: 1.18 $ $RCSfile: dtd046.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of Constant Specification Tools}
+
+\def\AbstractText{This document contains the detailed design of the tools supporting specification of constants in ICL HOL.}
+
+\def\Reference{DS/FMU/IED/DTD046}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design of Constant Specification Tools}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD046}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.18 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D. Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design
+%% LaTeX2e port: of the tools supporting specification of constants in ICL HOL.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item[Issue 1.1 (1991/08/21)]
+First experimental version.
+\item [Issue 1.2 (1991/11/20)]
+First ``real'' design.
+\item [Issue 1.3 (1991/11/22)]
+Changes after RDA comments, and during implementation.
+
+\item[Issue 1.4 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.5 (1992/01/27)]
+Changed $req\_defn$, etc.
+\item[Issue 1.6 (1992/02/12)]
+Added future work section.
+\item [Issue 1.7 (1992/03/26) (26th March 1992)]
+Changed to use proof context material of issue 1.13 of \cite{DS/FMU/IED/DTD051}.
+\item [Issue 1.8 (1992/04/14) (13th April 1992)]
+Changes due to CR0017.
+\item [Issue 1.9 (1992/05/13) (13th May 1992)]
+Changed signature of $get\_spec$.
+\item[Issue 1.10 (1992/05/14) (14 May 1992)] Use correct quotation symbols.
+\item[Issue 1.12 (1992/06/04) (3rd June 1992)]
+Changed native theory.
+\item [Issue 1.13 (1992/07/24) (24th July 1992)]
+Extended $get\_spec$.
+\item [Issue 1.14 (1992/12/03),1.15 (1992/12/03) (3rd December 1992)]
+Enhanced $get\_spec$ for language processing.
+\item [Issue 1.16 (1993/01/07) (7th January 1993)]
+Typos.
+\item[Issue 1.17 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.18 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.19 (2014/04/14)] Tidied up error handling.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+$HOL\_term\_recogniser$ may change elsewhere, causing a
+change in $HOL\-\_axiomatic\-\_recogniser$.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+Tools supporting specification of constants will be required in ICL HOL
+and are called for in \cite{DS/FMU/IED/HLD010}.This document provides a detailed design for these tools.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains a detailed design for the
+tools supporting specification of constants.
+\subsubsection{Dependencies}
+This document depends upon the paired-abstraction inference rules of
+\cite{DS/FMU/IED/DTD027}.
+The theory design given in this document refers to material to be  added into theory ``basic$\_$hol'' (See \cite{DS/FMU/IED/DTD023})
+this document cannot be processed to give a complete
+theory design.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+\subsubsection{Conventions}
+The tools described in this document work best when certain conventions are obeyed.
+All ICL supplied material will follow these conventions, though
+the user may choose to break convention, though we would advise against it.
+
+These conventions are that:
+\begin{itemize}
+\item
+Any definition will be saved under at least the keys that are the
+defined constant's names, and that additional keys are not, and will not be the names
+of other constants.
+\item
+If a predicate used in $const\_spec$ is proven
+consistent by hand then the result is of the form `$⊢$ $Consistent$
+$(λ (x1,...,xn)\ ⦁\ p$', and is saved under the keys
+$x1\_consistent$, ..., $xn\_consistent$
+(with the case of the constant within the key remaining unchanged).
+\end{itemize}
+\section{METHODS AND ISSUES}
+
+There are some theoretical and practical
+issues to be taken into account in designing tools
+to support specification.
+
+Ideally we would like to let the user define object
+language constants by giving arbitrary
+predicates.
+The resulting theories would, in general, be inconsistent.
+(i.e. it would be possible to prove $F$ in them).
+Moreover, there is no decision procedure to determine
+whether or not an arbitrary predicate gives
+rise to a consistent (or conservative)
+extension.
+The conservative extension mechanism $new\_spec$,
+of \cite{DS/FMU/IED/DTD012},
+therefore, imposes a restriction on the predicates which
+may be used and require the user to supply a theorem
+of a certain form, which can be viewed as justifying
+the consistency of the definition.
+(In an appendix (\ref{COUNTEREXAMPLES} below) we give
+some examples which show the need for the restrictions
+on the predicates).
+
+The main concern in this document is to enable the
+user to defer the task of proving the consistency
+of his specification until the specification is
+complete. To do this we turn each defining
+predicate supplied by the user into one which
+can automatically be proved consistent and which is
+coextensive with the user's predicate
+provided that is consistent.
+We also
+try to prove the consistency automatically by a tool indicated by the current proof context (see \cite{DS/FMU/IED/DTD051}), so as to
+simplify the definition which is actually stored
+on the theory.
+
+The details of the conservative extension interfaces
+prevent us from making the defining theorems for
+constants in the precise forms usually
+required by the user. As an expedient we supply an
+interface function, $get\-\_spec$,
+(analagous to $get\-\_defn$),
+which derives a theorem in a convenient form from
+the defining theorem.
+\section{FUTURE WORK}
+The ``fast'' mode of the constant specification tool,
+with an always failing function is both a bit crude, and not
+necessarily sufficiently fast.
+Two further modes of use could be implemented.
+The first uses only $new\_const$ on the appropriate names, saving no theorems at all.
+This only has use when no reasoning at all is intended
+about the constants
+(e.g. in a type-checking only mode).
+The second uses $new\_const$ and $new\_axiom$ to introduce the
+defining property, rather than relying on an assumption
+or automated proof tool.
+It would allow all the reasoning that could be done
+with a discharged proof obligation, at the cost of possible
+inconsistency due to the introduction of an axiom.
+
+\section{PREAMBLE}
+=DOC
+signature ⦏ConstantSpecification⦎  = sig
+=DESCRIBE
+This is the signature of a structure supporting specification of
+constants.
+=ENDDOC
+\section{THE DESIGN}
+\subsection{Specification of Constants by Terms}
+=DOC
+val ⦏HOL_const_recogniser⦎ : string * string * Lex.INPUT list * string
+	-> THM;
+=DESCRIBE
+From the argument (which will be supplied by the reader/writer)
+this function will derive a list of varstructs, and a predicate.
+These will then be passed to $const\_spec$ (q.v.)
+which will attempt the requested specification.
+The keys under which the result will be saved are just the names
+of the variables concerned.
+=USES
+As an interface between the HOL reader/writer and $const\-\_spec$ - it is not intended for
+direct use.
+It is used to process text of the form
+=GFT Example Constant Specification
+	decls
+├
+	pred
+=TEX
+=FAILURE
+46000	Input not of right form
+=FAILUREC
+Errors from $const\_spec$ may also occur: the messages area of origin will not be changed.
+=ENDDOC
+=THDOC
+req_const("Consistent",ⓣ('a → BOOL) → BOOL⌝);
+req_defn(["Consistent", "consistent_def"],([],⌜∀ p:'a → BOOL ⦁ Consistent p ⇔ ∃ x ⦁ p x⌝));
+=DESCRIBE
+The constant $⦏Consistent⦎$ is used to express the fact that
+a predicate is satisfiable.
+=ENDDOC
+=THDOC
+req_const("ConstSpec",ⓣ('a → BOOL) → 'a → BOOL⌝);
+req_defn(["ConstSpec","const_spec_def"],([],
+	⌜∀ (p:'a → BOOL) (c:'a) ⦁
+	ConstSpec p c ⇔ (Consistent p ⇒ p c)⌝);
+=DESCRIBE
+The constant $⦏ConstSpec⦎$ applied to $p$ and $c$ is used to express the fact that
+if the predicate $p$ is consistent (see $Consistent$)
+then $c$ satisfies the predicate.
+=ENDDOC
+=THDOC
+req_thm("const_spec_thm",([],
+	⌜∀ (p:'a → BOOL) ⦁ ∃ x : 'a ⦁ ConstSpec p x⌝));
+=DESCRIBE
+The theorem ``$⦏const\_spec\_thm⦎$'' expresses the fact that
+there always exists something that satisfies $ConstSpec$ applied to any predicate (whether consistent or not).
+=ENDDOC
+=DOC
+val ⦏consistent_def⦎: THM;
+val ⦏const_spec_def⦎:THM;
+val ⦏const_spec_thm⦎: THM;
+=DESCRIBE
+These theorems are ML variables bound to the definition of $Consistent$, the definition of $ConstSpec$ and the theorem saved with key $const\_spec\_thm$
+in theory ``basic$\_$hol''.
+=GFT
+val consistent_def = ⊢ ∀ p ⦁ Consistent p ⇔ ∃ x ⦁ p x
+val const_spec_def = ⊢ ∀ p c⦁ ConstSpec p c ⇔ (Consistent p ⇒ p c)
+val const_spec_thm = ⊢ ∀ p ⦁ ∃ x : 'a ⦁ ConstSpec p x
+=TEX
+=ENDDOC
+In the following we allow a list of arbitrary variable structures
+just for the convenience of calling functions and the user.
+A list of variables would be sufficient, pushing pre-processing elsewhere.
+=DOC
+val ⦏const_spec⦎ : string list * TERM list * TERM -> THM;
+=DESCRIBE
+$const\_spec$ is used to introduce new constants that satisfy some predicate.
+$const\_spec$ $(keys$, $varstructs$, $predicate)$
+declares constants matching the names and types of those in $varstructs$, with the property that, if $predicate$
+holds for some list of values, then it holds for the constants
+in question,
+with the definition saved under each of $keys$.
+In addition, if the existence prover held in the current proof context, and accessed by $current\_cs\_∃\_conv$, can
+prove the predicate is satisfied for some witness
+(i.e. $⇔\ T$), the
+specification will instead be made without the caveat.
+In more detail, if the list of free variables in $varstructs$ is
+$c_1$ $...$ $c_n$, and the predicate is of the form $P[$ $c_1$ $...$ $c_n$ $]:BOOL$, then the specification of constants $c_1$ $...$ $c_n$
+(with same names and types as the variables)
+will be:
+=GFT
+⊢ ConstSpec (λ (x_1, ..., x_n) ⦁ P[x1,...,xn]) (c1,...,cn)
+=TEX
+where each $x_i$ is a variant (see $list\_variant$) of $c_i$, not present in the original list of variables, or the predicate,
+and the $c_i$ become constants.
+However, if we can automatically prove:
+=INLINEFT
+∃ c1 ... cn ⦁ P[c1,...,cn]
+=TEX
+{} then instead the specification will be:
+=INLINEFT
+⊢ P [c1,...,cn]
+=TEX
+{}.
+There are a number of caveats on the production of the specification:
+there must be no duplicates in $varstructs$;
+all the constant's types must have the same set of type variables;
+there must be no type variables in the body of $predicate$ other
+than those already in the constant's types;
+and there must be at least one key.
+=SEEALSO
+$HOL\_axiomatic\_recogniser$,
+$get\_spec$.
+=FAILURE
+3031	?0 is not of type ⓣBOOL⌝
+6031	Key list may not be empty
+6037	Theory ?0 is locked
+6044	Must define at least one constant
+6049	There is a constant called ?0 already in scope
+6051	Key ?0 has already been used for a definition in theory ?1
+6061	the body of ?0 contains type variables not found in type
+	of constants to be defined, the variables being: ?1
+6063	There is a constant called ?0 in the descendants of the current theory
+6071	Theory ?0 is a read-only ancestor
+6081	Sets of type variables in ?0 and ?1 differ
+46003	Variable name ?0 is repeated in varstructs
+46004	?0 is not a varstruct
+46014	The term ?0 contains the following free variable?1: ?2
+=ENDDOC
+=DOC
+val ⦏get_spec⦎ : TERM -> THM;
+=DESCRIBE
+$get\_spec$ $⌜const⌝$ will find the (first) definition or axiom in scope
+stored under key ``name of $const$'', in the theory in which the in-scope constant named $const$ was defined.
+A definition will be taken in preference to an axiom in the same theory.
+It it cannot find such a theorem it will determine the list of languages of the constant (e.g. ``HOL'' and ``Z'').
+It will then attempt to strip a language name plus a prime, in a case-insensitive manner, from the constant name.
+If there is one such stripped name
+it will then search in the same theory for a definition or axiom using this stripped name as a key.
+If there is no such name it will fail with message 46005, or if more than one such stripped name with matching theorem (a very rare circumstance), it will fail with
+message 46013.
+If there is no such constant in scope then the function fails.
+
+$get\_spec$ $⌜const\ t1\ t2\ ...⌝$ (i.e. a constant applied
+to an arbitrary number of arguments)
+will act as $get\_spec$ $⌜const⌝$.
+If ICL conventions have been followed, then a definition (or axiom) found as above should be the definition of the constant named $const$.
+In addition, there can only be one definition of a particular constant in scope (though the conventional key might be used elsewhere, or not at all).
+Further, under such conventions, two constants of different languages but with the same name should not be saved in the same theory.
+
+If the definitional theorem is not of the form:
+=GFT
+⊢ ConstSpec p c
+=TEX
+then the theorem is returned un-processed - if properly saved then it either comes from
+$(simple\_)$ $new\-\_defn$ , $new\-\_spec$, or predicate $p$ was automatically proven
+consistent by $const\-\_spec$.
+
+Otherwise, the function will seek for a theorem or axiom stored with key
+$const$ $\verb"^"$ ``$\_consistent$'', starting at the theory in which the definition was found, and working ``out'' to the current theory.
+If conventions have been followed this theorem should be of the form:
+=GFT
+Γ ⊢ Consistent p
+=TEX
+(Ideally there should be no assumptions in the theorem, but
+the function caters for their presence.)
+If a theorem of this form is found then the function returns:
+=GFT
+β_rule `Γ ⊢ p c`
+=TEX
+If not, then the function returns a theorem of the form:
+=GFT
+β_rule `Consistent p ⊢ p c`
+=TEX
+No language-based key name stripping will be attempted for consistency theorem names.
+=SEEALSO
+$push\_consistency\_goal$ to set the appropriate consistency goal, $(Γ,\ ⌜Consistent\ p⌝)$, for a given constant name.
+=FAILURE
+46005	There is no constant with name ?0 in scope
+46006	There is no definition or axiom with key ?0 in
+	the declaration theory of the constant
+46009	?0 is not a constant, or a constant applied to some arguments
+46013	?0 has more than one possible definition: ?1
+=ENDDOC
+\subsection{Supporting the Conventions}
+To help follow the conventions on consistency theorems we provide
+the following two functions:
+=DOC
+val ⦏push_consistency_goal⦎: TERM -> unit;
+=DESCRIBE
+$push\_consistency\_goal$ $⌜const⌝$ will
+first determine the specification theorem of $const$,
+by executing $get\_spec$.
+The $const$ may either be a constant, or a constant applied to a list of arguments.
+If this theorem has an assumption,
+it will then push that specification assumption onto the stack of subgoals (using $push\_subgoal$, q.v.), as a goal with no assumptions.
+By how $get\_spec$ is designed, this (single) assumption
+will be of the form
+=GFT
+⌜Consistent (λ vs[x1,...,xn]⦁p[x1,...,xn])⌝
+=TEX
+or the consistency has already been proven, and saved, under some assumptions.
+Only in the former case will the function continue:
+it will apply a tactic (that may be undone by $undo$) which
+rewrites the goal to precisely:
+=GFT
+([], ⌜∃ vs[x1,...,xn]⦁p[x1,...,xn]⌝)
+=TEX
+If not, the function fails.
+=SEEALSO
+$save\_consistency\_thm$ to save the result in a conventional manner.
+=FAILURE
+46005	There is no constant with name ?0 in scope
+46006	There is no definition or axiom with key ?0 in
+	the declaration theory of the constant
+46007	Specification of ?0 is not of the form: `Consistent (λ vs[x1,...,xn]⦁p[x1,...,xn]) ⊢ ...`
+46009	?0 is not a constant, or a constant applied to some arguments
+=ENDDOC
+=DOC
+val ⦏save_consistency_thm⦎ : TERM -> THM -> THM;
+=DESCRIBE
+$save\_consistency\_thm$ $const$ $thm$ expects $thm$ to be of the form
+=GFT
+Γ ⊢ Consistent (λ vs[x1,...,xn]⦁p[x1,...,xn])
+=TEX
+where $vs$ forms a varstruct from the simple variables $x_i$.
+The predicate proven consistent is then expected to be the same
+as predicate in the $const\_spec$ definition of $const$.
+If so, the theorem will be saved under the keys
+$c1\_consistent$, ..., $cn\_consistent$,
+where the $c_i$ are the names of all the constants defined in the
+definition in question.
+The $const$ may either be a constant, or a constant applied to a list of arguments.
+
+Ideally there should be no assumptions in the theorem, but
+the function caters for their presence.
+=SEEALSO
+$push\_consistency\_goal$ to set a goal suitable for saving with this theorem.
+=FAILURE
+6037	Theory ?0 is locked
+6039	Key ?0 has already been used for a theorem in theory ?1
+6071	Theory ?0 is a read-only ancestor
+46005	There is no constant with name ?0 in scope
+46006	There is no definition or axiom with key ?0 in
+	the declaration theory of the constant
+46008	?0 is not of the form: ⌜Consistent (λ vs[x1,...,xn]⦁p[x1,...,xn])⌝
+46009	?0 is not a constant, or a constant applied to some arguments
+46011	?0 does not match definition of ?1
+46012	?0 is not of the form: ⌜ConstSpec p c⌝
+=FAILUREC
+If even one key causes a failure, the theorem will not be saved at all (the behaviour of $list\_save\_thm$).
+=ENDDOC
+\section{EPILOGUE}
+=SML
+end; (* of signature ConstantSpecification *)
+=TEX
+=THSML
+diag_string(summarize_td_results ());
+=TEX
+\appendix
+\section{COUNTEREXAMPLES} \label{COUNTEREXAMPLES}
+The conditions imposed by the primitive
+conservative extension mechanisms.
+lead to restrictions on the forms of predicates
+allowed in constant specifications. Examples showing the need for these
+restrictions are given in this appendix.
+
+The restrictions which are imposed on constant
+specifications are that no types appear in the predicate
+which do not appear in the type of each new constant
+and that the predicate contains no free variables other
+than those corresponding to the new constants (this latter
+restriction being taken to mean that the universal
+closure over any such variables is used if necessary).
+
+To understand the restrictions on the types consider
+the following:
+=GFT Example of Restriction on Types in Constant Specification
+	c : BOOL,
+├
+	c ⇔ (∃x y:'a⦁¬(x = y)
+
+If this were allowed, then there would be no
+difficulty in proving the consistency proposition and
+the defining theorem resulting would be:
+=GFT Example Defining Theorem
+⊢	c ⇔ (∃x y:'a⦁¬(x = y)
+=TEX
+By instantiating ``$:'a$'' to the one element type ``$:ONE$'
+and the two element type ``$:BOOL$'', we could
+could infer the following theorems
+=GFT Example Theorems
+⊢	c ⇔ (∃x y:ONE⦁¬(x = y)
+⊢	c ⇔ F
+⊢	¬c
+=TEX
+and
+=GFT Example Theorems
+⊢	c ⇔ (∃x y:BOOL⦁¬(x = y)
+⊢	c ⇔ T
+⊢	c
+=TEX
+Thus the resulting theory is inconsistent.
+
+To understand the restrictions on the free variables consider
+the following:
+=GFT Example of Restriction on Types in Constant Specification
+	d : BOOL,
+├
+	d ⇔ x
+
+(where x is a variable). Again the consistency
+proposition would be easy to prove and this would lead to the following
+defining theorem:
+=GFT Example Defining Theorem
+⊢	d ⇔ x
+=TEX
+By instantiating $x$ here to $T$ and then $F$ we may
+derive the contradictory theorems:
+=GFT Example Theorems
+⊢	d
+⊢	¬d
+=TEX
+and again we have an inconsistent theory.
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+

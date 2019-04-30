@@ -1,0 +1,452 @@
+=IGN
+********************************************************************************
+imp013.doc: this file is part of the PPDev system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% imp013.doc   ℤ $Date: 2002/10/17 16:08:07 $ $Revision: 2.10 $ $RCSfile: imp013.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation of the Module Test Harness}
+
+\def\AbstractText{This document implements the module test harness described in document DS/FMU/IED/DTD013.}
+
+\def\Reference{DS/FMU/IED/IMP013}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % imp013.doc   ℤ $Date: 2002/10/17 16:08:07 $ $Revision: 2.10 $ $RCSfile: imp013.doc,v $
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation of the Module Test Harness}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP013}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 2.10 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:08:07 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document implements the module test harness
+%% LaTeX2e port: described in document DS/FMU/IED/DTD013.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1 (1991/04/26)-1.3 (1991/09/13) ]
+Initial drafts.
+
+\item[Issue 2.1 (1991/09/17) (17 September 1991)]
+This is an approved version of issue 1.3
+
+\item[Issue 2.2 (1991/12/09) (9 December 1991)]
+Add check for duplicated test identities in $summarize_mt_results$.
+
+
+\item[Issue 2.3 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+	Make exception handler in $mt_runf$ have the correct scope.
+	Improve performance of $summarize_mt_results$.
+\item[Issue 2.4 (1992/06/17) (12th January 1993)]
+Made $gen\_fail\_msg$ much more careful.
+\item[Issue 2.6 (1993/02/23) (23rd February 1993)]
+Highlighted error messages.
+\item[Issue 2.7 (1993/02/23) (23rd February 1993)]
+Use commas.
+\item[Issue 2.8 (1999/02/22) (22nd February 1999)]
+Removed unnecessary dependence on PolyML and update for SML97.
+\item[Issue 2.9 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.10 (2002/10/17)] PPDev-specific updates for open source release
+\item[Issue 2.11 (2006/02/08)] Made results summary include a warning if no test cases were reported.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+
+This document contains Standard ML code for implementing the
+module test harness. It corresponds to the detailed
+design of the module test harness as specified
+in \cite{DS/FMU/IED/DTD013}.
+
+\subsection{Introduction}
+
+\subsubsection{Background and Purpose}
+
+The purpose of this document is to provide an implementation
+of the module test harness for use in testing Standard ML code
+developed in the FST project. The harness described here
+requires testing. The tests for the harness are specified
+in \cite{DS/FMU/IED/MDT013}.
+
+\subsubsection{Dependencies}
+
+The Standard ML code in this document depends on the
+literate script contained in  the document \cite{DS/FMU/IED/DTD013} for the
+signature $ModuleTest$.
+
+\subsubsection{Possible Enhancements}
+
+None known.
+
+\subsubsection{Deficiencies}
+
+None.
+
+\section{THE STRUCTURE $ModuleTest$}
+
+This section introduces the structure $ModuleTest$ which
+has the signature $ModuleTest$ specified in \cite{DS/FMU/IED/DTD013}.
+The functions in this section are described in detail in that
+document. Description in this document is provided only
+where important design decisions have been made at the
+implementation level.
+
+=SML
+structure ⦏ModuleTest⦎ : ModuleTest = struct
+=TEX
+
+\section{GENERATING ERROR MESSAGES FOR TEST DATA}
+
+The following function is used for generating error messages
+for test data.
+
+Note how it gives ``$UNKNOWN\_MESSAGE\_...$'' if the
+message number doesn't exist,
+and how it adds additional strings to the supplied list
+to check for unfilled argument slots.
+=SML
+local
+	val bad_values=map (fn f => (fn () => f))
+		["BAD1","BAD2","BAD3","BAD4","BAD5","BAD6",
+		 "BAD7","BAD8","BAD9","BAD10"];
+in
+fun ⦏gen_fail_msg⦎ (s : string) (n : int) (us : string list) : string = (
+let	val dummy = get_error_message n [];
+in
+	((fail s n ((map (fn f => (fn () => f)) us) @ bad_values))
+	handle	Fail msg => get_message msg)
+end
+handle (Error _) => ("UNKNOWN_MESSAGE_"^s^"_"^string_of_int n)
+);
+end;
+=TEX
+
+\section{FUNCTIONS FOR RUNNING TESTS}
+
+If any exceptions are raised during the execution of a
+test case, then the exception is handled and the result
+is recorded as an failed test case.
+
+=SML
+fun ⦏mt_runf⦎ (compare : ('b * 'c) -> bool)
+	(nil : (string * ('a -> 'b) * 'a * 'c) list)
+		: (string * bool) list = nil
+  | mt_runf compare ((tcase, f, arg, res)::rest) = (
+	(if compare(f arg,res)
+	then
+		(tcase,true)::mt_runf compare rest
+	else
+		(tcase,false)::mt_runf compare rest
+	)
+	handle	ANY => (tcase,false)::mt_runf compare rest);
+=TEX
+
+This function is implemented using $mt\_runf$ with the
+comparison function provided as $=$.
+=SML
+fun ⦏mt_run⦎ (x : (string * ('a -> ''b) * 'a * ''b) list) :
+   (string * bool) list = (
+	mt_runf (op =) x
+);
+=TEX
+
+This function will always fail test cases unless an
+exception with the constructor ``Fail'' is raised.
+
+=SML
+fun ⦏mt_run_fail⦎ (nil : (string * ('a -> 'b) * 'a * string) list)
+	: (string * bool) list = nil
+  | mt_run_fail ((tcase, f, arg, ex_str)::rest) = (
+	let fun aux msg =
+		(if ex_str = get_message msg
+		then
+			(tcase,true)::mt_run_fail rest
+		else
+			(tcase,false)::mt_run_fail rest)
+	in
+		let val res = f arg
+		in
+			(tcase,false)::mt_run_fail rest
+		end
+
+		handle	Fail msg => aux msg
+		|	ANY => (tcase,false)::mt_run_fail rest
+	end);
+=TEX
+
+=SML
+fun ⦏mt_run_error⦎ (nil : (string * ('a -> 'b) * 'a * string) list)
+	: (string * bool) list = nil
+  | mt_run_error ((tcase, f, arg, ex_str)::rest) = (
+	let fun aux msg =
+		(if ex_str = get_message msg
+		then
+			(tcase,true)::mt_run_error rest
+		else
+			(tcase,false)::mt_run_error rest)
+	in
+		let val res = f arg
+		in
+			(tcase,false)::mt_run_error rest
+		end
+
+		handle	Error msg => aux msg
+		|	ANY => (tcase,false)::mt_run_error rest
+	end);
+=TEX
+
+\section{FUNCTIONS FOR STORING AND PRINTING RESULTS}
+
+All test results are of the type $string * bool$. The
+results are stored in a place called $accumulator$ which
+refers to a list of test results. $accumulator$ is used
+by the rest of the functions in this structure for
+storing and subsequently retreiving results. $accumulator$
+is the implementation of the $results store$ notion introduced
+in \cite{DS/FMU/IED/DTD013}.
+
+=SML
+val ⦏accumulator⦎ : ((string * bool) list) ref = ref [];
+=TEX
+
+=SML
+fun ⦏init_mt_results⦎ (() : unit) : unit = (accumulator := []);
+=TEX
+
+=SML
+fun ⦏store_mt_results_show⦎ (f : 'a -> (string * bool) list) (x : 'a) : (string * bool) list = (
+let
+	val res = f x
+in
+	accumulator := (!accumulator) @ res;
+	res
+end);
+=TEX
+
+=SML
+fun ⦏store_mt_results⦎ (f : 'a -> (string * bool) list) (x : 'a) : unit = (
+	store_mt_results_show f x;
+	()
+);
+=TEX
+
+=SML
+fun ⦏get_mt_results⦎ (() : unit) : (string * bool) list  = !accumulator;
+=TEX
+
+The results are held in an unsorted list of `(label * result)' pairs,
+we want to find if there are any duplicated labels.  To do this we sort
+the list counting occurances of items, then we discard any single
+occurance entries.  This task could be done in stages, namely:
+(1)~sort, (2)~count and discard.  A disadvantage is that, for large
+lists, these create large data structures.  Function $get_multiples$
+avoids this problem by doing every thing in one go, it avoids creating
+unnecessary large data structures.
+
+=SML
+fun ⦏get_multiples⦎ (what : string list) : string list = (
+	let
+		fun strcmp x y =
+			if x = y
+			then 0
+			else if x < y
+			then ~1
+			else 1;
+
+		datatype TREE
+			= SLeaf
+			| SNode of string * int * TREE * TREE;
+
+		fun enter (item, SLeaf) = SNode(item, 1, SLeaf, SLeaf)
+		|   enter (item, SNode(x, c, l, r)) = (
+			let
+				val rel = strcmp item x;
+			in
+				if rel > 0
+				then SNode(x, c, l, enter(item, r))
+				else if rel < 0
+				then SNode(x, c, enter(item, l), r)
+				else SNode(x, c+1, l, r)
+			end
+		);
+
+		fun flatten SLeaf = []
+		|   flatten (SNode(x, c, l, r)) =
+			flatten l
+			@
+			(	if c>1
+				then x :: flatten r
+				else flatten r
+			);
+	in
+		flatten (fold enter what SLeaf)
+	end
+);
+=TEX
+
+$summarize\_results$ is more complicated because it returns
+a string made from various pieces.  First either a null or a list of
+duplicated test identities.  Second, a fixed string if the tests all
+passed, otherwise it has to construct a string comprising the test case
+identifiers of all the tests that failed. Various local functions are
+provided to do this work.
+
+=SML
+fun ⦏summarize_mt_results⦎ (() : unit) : string = (
+	let
+		fun mt_failed(nil:(string * bool) list) : string list = nil
+		| mt_failed ((tcase,true)::xs) = mt_failed xs
+		| mt_failed ((tcase,false)::xs) = tcase::mt_failed xs;
+
+		fun space_pad_list1(nil:string list) : string list = " ++++\n\n" :: nil
+		| space_pad_list1 (x::xs) = ", " :: x :: (space_pad_list1 xs);
+
+		fun space_pad_list (x::xs) = " " :: x :: (space_pad_list1 xs)
+		| space_pad_list nil = space_pad_list1 nil;
+
+		val results = get_mt_results ();
+	in
+		implode(
+			(case get_multiples(map fst(get_mt_results()))
+			of nil => nil
+			| dup_names => "++++ Duplicated test identities:"
+				:: space_pad_list dup_names
+			) @ (
+			case results
+			of  _::_ => []
+			| nil => ["The module test produced a warning: no test results were reported\n"]
+			) @ (
+			case mt_failed results
+			of nil =>
+				["All module tests passed."]
+			| ff =>
+				"++++ The following module tests failed:"
+				:: space_pad_list ff
+			)
+		)
+	end);
+=TEX
+
+=SML
+end; (* of structure ModuleTest *)
+=TEX
+
+=SML
+open ModuleTest;
+=TEX
+
+\newpage
+\twocolumn[\section{INDEX OF DEFINED TERMS}]
+\printindex
+\end{document}
+
+
+

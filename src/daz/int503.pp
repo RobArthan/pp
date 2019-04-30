@@ -1,0 +1,894 @@
+=IGN
+********************************************************************************
+int503.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ $Date: 2006/09/18 16:09:35 $ $Revision: 1.33 $ $RCSfile: int503.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Soundness Checks Test Material}
+
+\def\AbstractText{This document gives a Compliance Notation script with examples of each kind of check which needs to be applied.}
+
+\def\Reference{ISS/HAT/DAZ/INT503}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: 
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Soundness Checks Test Material}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Soundness Checks Test Material}
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/INT503}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.33 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/09/18 16:09:35 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Informal}
+%% LaTeX2e port: %\TPPstatus{Informal}
+%% LaTeX2e port: \TPPtype{Technical}
+%% LaTeX2e port: %\TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & HAT Team}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & WIN01}
+%% LaTeX2e port: \TPPabstract{%
+%% LaTeX2e port: This document gives a Compliance Notation script with examples of each kind of check which needs to be applied.
+%% LaTeX2e port: }
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: \def\TPPheadlhs{Lemma 1 Ltd.}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\newpage
+
+\section{DOCUMENT CONTROL}
+
+\subsection{Contents List}
+\tableofcontents
+\pagebreak
+
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issues 1.1 (1994/11/29)-1.9 (1995/04/04)] Initial Drafts.
+\item[Issue 1.10 (1995/11/07)] Correction for enhanced error message.
+\item[Issue 1.11 (1996/01/22)] Minor clarification of diagnostic output.
+\item[Issue 1.12 (1996/02/16)] added till-clause to accommodate fixed checking (bug 12 V0.6).
+\item[Issue 1.13 (1997/05/22)] Changed to one compilation unit per script.
+\item[Issue 1.15 (1997/06/05)] To reflect more detail in $check\_1\_d$.
+\item[Issue 1.16 (1997/06/18), 1.17 (2000/06/24)] Fixed tests for error messages that have been slightly changed.
+\item[Issue 1.18 (2000/07/01)] Corrected illegal use of informal function in context that is now
+checked properly.
+\item[Issue 1.19 (2000/10/25)] CTLE II R2/1: global variable unsoundness.
+\item[Issue 1.20 (2001/11/07)] R0003: record and array components as exported parameters.
+\item[Issue 1.21 (2002/03/11)] R0065: duplicates are now allowed in context clauses.
+\item[Issue 1.22 (2002/03/21)] Adjusted for slight change to error texts.
+\item[Issue 1.23 (2002/05/08)] Removed tests for checks that have be dropped.
+\item[Issue 1.24 (2002/08/23)] Removed use of ICL logo font.
+\item[Issue 1.25 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issues 1.26 (2002/10/17), 1.27 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.28 (2003/07/17)] Allowed for stricter early type-checking of specification statements.
+\item[Issue 1.29 (2004/02/07)] The SPARK program is now referred to as the Ada program.
+\item[Issue 1.30 (2005/05/28)] Compliance Notation reserved words are now prefixed by a dollar sign.
+\item[Issue 1.31 (2006/03/28)] Allowed for automated state management.
+\item[Issue 1.34 (2006/09/19)] Allowed for enhancement 165.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+\subsection{Changes Forecast}
+None.
+\pagebreak
+
+\section{GENERAL}
+
+\subsection{Scope}
+This document contains test data for the Compliance Tool as specified in \cite{ISS/HAT/DAZ/HLD501}.
+
+\subsection{Introduction}
+To test the correct application of checks it is useful to have a set of examples which exercise the checks, i.e., exercising each check in volume I of \cite{DRA/CIS/CSE3/TR/94/27/1.2}
+
+=SML
+diag_line "These tests will generate loading, warning and error messages that can be ignored.";
+diag_line "Only messages from the test harness should be considered.";
+use_file "dtd013";
+use_file "imp013";
+=TEX
+=SML
+fun clean_up () = (
+        let     val thys = (get_descendants "cn" less "cn")
+                                        diff get_cache_theories();
+                fun del_thy thy = (force_delete_theory thy handle Fail _ => ());
+        in      map del_thy thys
+        end;    ()
+);
+=TEX
+
+=SML
+open_theory"cn";
+clean_up();
+=TEX
+
+=SML
+init_mt_results();
+=TEX
+
+\section{THE LITERATE SCRIPTS}
+\subsection{Check 1 (a)}
+
+The variables that may change in $st$ must be a subset of the frame in the $Spec$ of $Speclab$.
+=SML
+new_script {name="proc1A", unit_type="PROC"};
+ⓈCN
+procedure proc1a (x, y : in out integer) is
+   z : integer;
+begin
+   Δ X,Y [X=0 ∧ Y=1]		(1)
+end proc1a;
+■
+
+=SML
+fun ⦏check1a⦎ () =
+ⓈCN
+(1) ⊑
+	Δ Z [X=0 ∧ Y=1]
+■
+
+=TEX
+=SML
+store_mt_results mt_run_fail [
+("check1a", check1a, (), gen_fail_msg "check_1_a" 505064 ["x, y", "z"])
+];
+=TEX
+
+\subsection{Check 1 (b)}
+If $st$ contains a $return$ statement then $formal\_body\_flag$ $fun\_flag$ must both be $True$.
+Moreover, the statement should return or not return a value according as it occurs in the body of a function or a procedure.
+
+=SML
+clean_up();
+new_script {name="FUNC1B", unit_type="func"};
+ⓈCN
+function func1b (x : integer) return integer
+is
+   z : integer;
+begin
+   Δ { X = 0 }	(2)
+end;
+■
+
+=SML
+fun ⦏check1b⦎ () =
+ⓈCN
+(2) ⊑ return 0;
+■
+
+=TEX
+=SML
+store_mt_results mt_run_fail [
+("check1b.1", check1b, (), gen_fail_msg "check_1_b" 505061 [])
+];
+
+=SML
+clean_up();
+new_script {name="proc1B", unit_type="PROC"};
+ⓈCN
+procedure proc1b (x : integer)
+is
+   z : integer;
+begin
+   Δ { X = 0 }	(2)
+end;
+■
+
+=TEX
+=SML
+store_mt_results mt_run_fail [
+("check1b.2", check1b, (), gen_fail_msg "check_1_b" 505061 [])
+];
+=TEX
+
+=SML
+clean_up();
+new_script {name="FUNC2B", unit_type="func"};
+fun ⦏check2b_1⦎ () =
+ⓈCN
+function func2b (x : integer) return integer
+   Ξ [FUNC2B X = 0]
+is
+begin
+   return;
+end;
+■
+
+=TEX
+=SML
+store_mt_results mt_run_fail [
+("check2b.1", check2b_1, (), gen_fail_msg "check_1_b" 505058 [])
+];
+
+=SML
+clean_up();
+new_script {name="proc1B", unit_type="PROC"};
+fun check2b_2 () =
+ⓈCN
+procedure proc1b (x : in out integer)
+Δ X[X = 0]
+is
+begin
+   return 0;
+end;
+■
+
+=TEX
+=SML
+store_mt_results mt_run_fail [
+("check2b.2", check2b_2, (), gen_fail_msg "check_1_b" 505059 [])
+];
+=TEX
+
+\subsection{Check 1 (c)}
+If $st$ contains an $exit$ statement then $till\_flag$ must be $True$.
+
+=SML
+new_script {name="FUNC1C", unit_type="func"};
+ⓈCN
+function func1c (x : integer) return integer is
+   z : integer;
+begin
+   Δ Z [Z = 0]	(3)
+end func1c;
+■
+
+=SML
+fun ⦏check1c⦎ () =
+ⓈCN
+(3) ⊑ exit;
+■
+
+=TEX
+=SML
+store_mt_results mt_run_fail [
+("check1c", check1c, (), gen_fail_msg "check_1_c" 505062 [])
+];
+=TEX
+
+\subsection{Check 1 (d)}
+Any procedure call in $st$ must have a corresponding $Formal\_Proc$ in the $Speclab$.
+
+=SML
+new_script {name="MAIN", unit_type="proc"};
+fun ⦏check1d⦎ () =
+ⓈCN
+procedure main (v : out integer)
+Δ V [V = 0]
+is
+	procedure proc1d (x : in out integer) is
+	begin
+		x := 0;
+	end proc1d;
+begin
+	proc1d (v);
+end main;
+■
+
+=TEX
+
+=SML
+store_mt_results mt_run_fail [
+("check1d", check1d, (), gen_fail_msg "check_1_d" 505063 ["PROC1D"])
+];
+=TEX
+
+\subsection{Check 2}
+This check is performed in the tests for checking the generated SPARK output and the generated Z document.
+
+\subsection{Check 3}
+See section \ref{CheckSO}
+
+\subsection{Check 12}
+=TEX
+\subsection{Anti-Aliasing Check 1}
+=SML
+new_script {name="AA1A", unit_type="proc"};
+
+ⓈCN
+procedure aa1a is
+   a, b : integer;
+   procedure p (x : in integer; y : out integer)
+   Δ Y Ξ B[Y = B + 7]
+   is
+   begin
+      y := b + 7;
+   end p;
+begin
+   Δ A, B [B = 29]	(11)
+end aa1a;
+■
+
+The following is reported during anti-aliasing check 1.
+It is the error when something that isn't a variable or
+a component of a variable is offered as an actual parameter
+of mode OUT or IN OUT.
+=SML
+fun ⦏check_a1a⦎ () =
+ⓈCN
+(11) ⊑	a := 1;
+	b := 2;
+	p(a, a+b);
+■
+
+=TEX
+=SML
+store_mt_results_show mt_run_fail [
+("check_a1a", check_a1a, (), gen_fail_msg "anti_aliasing_check_1"
+				505070 ["P"])
+];
+=TEX
+=SML
+new_script {name="AA1B", unit_type="proc"};
+
+ⓈCN
+procedure aa1b is
+   a : integer;
+   procedure p (y : out integer)
+   Δ Y Ξ A [Y = A + 9]
+   is
+   begin
+      y := a + 9;
+   end p;
+begin
+   Δ A [A = 25]	(12)
+end aa1b;
+■
+This is anti-aliasing check 1 proper --- the variable A is in the global
+dependencies of P and is passed as an actual parameter of mode OUT (or IN OUT).
+=SML
+fun ⦏check_a1b⦎ () =
+ⓈCN
+(12) ⊑	a := 1;
+	p(a);
+■
+
+=TEX
+=SML
+store_mt_results_show mt_run_fail [
+("check_a1b", check_a1b, (), gen_fail_msg "anti_aliasing_check_1"
+				505071 ["", "a","p"])
+];
+=TEX
+
+\subsection{Anti-Aliasing Check 2}
+
+=SML
+new_script {name="AA2", unit_type="proc"};
+
+ⓈCN
+procedure aa2 is
+   a : integer;
+   procedure p (x : in integer)
+   Δ A [A = X + 9]
+   is
+   begin
+      a := x + 8;
+   end p;
+begin
+   Δ A [A = 40]	(13)
+end aa2;
+■
+
+=SML
+fun ⦏check_a2a⦎ () =
+ⓈCN
+(13) ⊑	a := 1;
+	p(a);
+■
+=SML
+fun ⦏check_a2b⦎ () =
+ⓈCN
+(13) ⊑	A := 1;
+	P(A);
+■
+
+=TEX
+=SML
+store_mt_results_show mt_run_fail [
+("check_a2a", check_a2a, (), gen_fail_msg "anti_aliasing_check_2"
+				505072 ["", "a", "p"]),
+("check_a2b", check_a2b, (), gen_fail_msg "anti_aliasing_check_2"
+				505072 ["", "a", "p"])
+];
+=TEX
+
+\subsection{Anti-Aliasing Check 3}
+
+=SML
+new_script {name="AA3", unit_type="proc"};
+
+ⓈCN
+procedure aa3 is
+   type arr is array (integer) of integer;
+   a : integer;
+   b : arr;
+   c1, c2, c3, c4, c5 : integer;
+   procedure p (x : in integer; y : out integer)
+   Δ Y [Y = X + 16]
+   is
+   begin
+      y := x + 16;
+   end p;
+   procedure q (x1, x2, x3, x4, x5 : in integer; y1, y2, y3, y4, y5 : out integer)
+   Δ Y1, Y2, Y3, Y4, Y5 [Y1 = Y2 = Y3 = Y4 = Y5 = X1 + X2 + X3 + X4 + X5]
+   is
+     t: integer;
+   begin
+      t := x1 + x2 + x3 + x4 + x5;
+      y1 := t; y2 := t; y3 := t; y4 := t; y5 := t;
+   end q;
+begin
+   Δ A, B [A = 100]	(14)
+end aa3;
+■
+
+=SML
+fun ⦏check_a3a⦎ () =
+ⓈCN
+(14) ⊑	a := 1;
+	p(a, a);
+■
+
+=SML
+fun ⦏check_a3b⦎ () =
+ⓈCN
+(14) ⊑	b(1) := 1;
+	p(a, b(b(1)));
+■
+=SML
+fun ⦏check_a3c⦎ () =
+ⓈCN
+(14) ⊑	q(x1 => a, x2 => a, x3 => a, x4 => a, x5 => a,
+           y1 => c1, y2 => c2, y3 => c3, y4 => c4, y5 => b(c2));
+■
+=SML
+fun ⦏check_a3d⦎ () =
+ⓈCN
+(14) ⊑	q(x1 => a, x2 => a, x3 => a, x4 => a, x5 => c2,
+           y1 => c1, y2 => c2, y3 => c3, y4 => c4, y5 => b(a));
+■
+=TEX
+=SML
+store_mt_results_show mt_run_fail [
+("check_a3a", check_a3a, (), gen_fail_msg "anti_aliasing_check_3"
+				505073 ["a", "p"]),
+("check_a3b", check_a3b, (), gen_fail_msg "anti_aliasing_check_3"
+				505073 ["b", "p"]),
+("check_a3c", check_a3c, (), gen_fail_msg "anti_aliasing_check_3"
+				505073 ["c2", "q"]),
+("check_a3d", check_a3d, (), gen_fail_msg "anti_aliasing_check_3"
+				505073 ["c2", "q"])
+];
+=TEX
+
+\subsection{Variable Capture Checks --- SPARK Identifiers}
+=SML
+new_script {name="VCC1", unit_type="proc"};
+
+=SML
+fun ⦏check_vcc1⦎ () =
+ⓈCN
+procedure vcc1 is
+   i, i : integer;
+begin
+	null;
+end vcc1;
+■
+=SML
+store_mt_results mt_run_fail [
+("check_vcc1", check_vcc1, (), gen_fail_msg "check_new_spark_ids"
+					505075 [])
+];
+=TEX
+
+=TEX
+
+=SML
+new_script {name="VCC2", unit_type="proc"};
+fun ⦏check_vcc2⦎ () =
+ⓈCN
+procedure vcc2 is
+   i : integer;
+   i : integer;
+begin
+	null;
+end vcc2;
+■
+=SML
+store_mt_results mt_run_fail [
+("check_vcc2", check_vcc2, (), gen_fail_msg "check_new_z_id"
+					505074 ["I"])
+];
+=TEX
+
+=TEX
+
+=SML
+new_script {name="VCC3", unit_type="proc"};
+fun ⦏check_vcc3⦎ () =
+ⓈCN
+procedure vcc3 is
+   X : integer;
+begin
+	$CON X : ℤ ⦁ Δ [I = X]
+	null;
+end vcc3;
+■
+=SML
+store_mt_results mt_run_fail [
+("check_vcc3", check_vcc3, (), gen_fail_msg "check_new_z_id"
+					505074 ["X"])
+];
+=TEX
+
+=SML
+new_script {name="PACK_VCC4", unit_type="spec"};
+fun ⦏check_vcc4⦎ () =
+ⓈCN
+package pack_vcc4 is
+   x : integer;
+   $auxiliary X:ℤ;
+end pack_vcc4;
+■
+
+=TEX
+
+=SML
+store_mt_results mt_run_fail [
+("check_vcc4", check_vcc4, (), gen_fail_msg "check_new_z_id"
+					505074 ["X"])
+];
+=TEX
+
+\subsection{Checks during Spark Output}\label{CheckSO}
+
+The check that the closest-containing compound statement of an EXIT WHEN G statement is be a loop statement
+has effectively been dropped.
+
+=SML
+CNZGenerator.restart_cn_z_generator();
+=TEX
+
+=SML
+new_script {name="CHECK3A1", unit_type="proc"};
+ⓈCN
+procedure check3a1
+is
+	X : integer;
+begin
+   $till  ⟦X = 25⟧
+   loop
+	Δ X [true]	(5)
+   end loop;
+end check3a1;
+■
+
+ⓈCN
+(5) ⊑	exit when ⟦X eq 25⟧;
+■
+
+=SML
+CNZGenerator.restart_cn_z_generator();
+=TEX
+
+\subsection{Check 4}
+This check has been dropped so we only retain the cases which were not intended to fail.
+=SML
+new_script {name="CHECK4A1", unit_type="func"};
+ⓈCN
+function check4a1 (x : in integer) return integer
+is
+begin
+   return 0;
+end check4a1;
+■
+
+=SML
+store_mt_results_show mt_run [
+("check_4a1", print_ada_program, "-", ())];
+CNZGenerator.restart_cn_z_generator();
+=TEX
+
+=SML
+CNZGenerator.restart_cn_z_generator();
+=TEX
+
+
+=SML
+new_script {name="CHECK4B2", unit_type="func"};
+ⓈCN
+function check4b2 (x : in integer) return integer
+is
+   y : integer;
+begin
+   case x is
+      when 0 =>	return 0;
+      when 1 =>	return 10;
+      when others =>
+		return 99;
+   end case;
+end check4b2;
+■
+
+=SML
+store_mt_results_show mt_run [
+("check_4b2", print_ada_program, "-", ())];
+CNZGenerator.restart_cn_z_generator();
+=TEX
+
+\subsection{Check 5}
+=GFT
+package check5_1
+is
+   type coord is
+   record
+      x : integer;
+      y : integer;
+      z : integer;
+   end record;
+   procedure home (c : out coord)
+   Δ C [C.X = 0 ∧ C.Y = 0 ∧ C.Z = 0];
+end check5_1;
+=TEX
+
+=GFT
+package body check5_1 is
+   procedure home (c : out coord)
+   Δ C [C.X = 0 ∧ C.Y = 0 ∧ C.Z = 0] is
+   begin
+       c := coord'(x|y|z => 0);
+   end home;
+end check5_1;
+=TEX
+
+=GFT
+package check5_2
+is
+   type coord is
+   record
+      x : integer;
+      y : integer;
+      z : integer;
+   end record;
+   procedure home (c : out coord)
+   Δ C [C.X = 0 ∧ C.Y = 0 ∧ C.Z = 0];
+end check5_2;
+=TEX
+
+=GFT
+package body check5_2 is
+   procedure home (c : out coord)
+   Δ C [C.X = 0 ∧ C.Y = 0 ∧ C.Z = 0] is
+   begin
+       c := coord'(x => 0, others => 0);
+   end home;
+end check5_2;
+=TEX
+
+
+\subsection{Checks 6 - 8}
+Checks not implemented in the tool.
+
+\subsection{Check 9}
+TBS
+
+\subsection{Check 10}
+Checks not implemented in the tool.
+
+\subsection{Check 11}
+
+\subsection{Check 12}
+See above.
+
+\subsection{Check 13}
+Checks not implemented in the tool.
+\subsection{Abstract Syntax Rules}
+These are the rules from section 3 of volume 2 of the specification.
+
+1) The body of a loop must be a specification statement, without initial variables:
+=SML
+new_script {name="AS1", unit_type="proc"};
+fun ⦏check_as1⦎ () =
+ⓈCN
+procedure as1(x : in out INTEGER)
+   Δ X [ true ]
+is
+begin
+	for i in INTEGER range 1 .. 20
+	loop
+		Δ X [X = X⋎0 + 1] (1000)
+	end loop;
+end as1;
+■
+=SML
+store_mt_results mt_run_fail [
+("check_as1", check_as1, (), gen_fail_msg "adjust_statement"
+					505091 [])
+];
+=TEX
+2) A specification statement with initial variables must be the first statement in the sequence:
+=SML
+new_script {name="AS2", unit_type="proc"};
+fun ⦏check_as2⦎ () =
+ⓈCN
+procedure as2(x : in out INTEGER)
+   Δ X [ true ]
+is
+begin
+	x := 1;
+	Δ X [X = X⋎0 + 1] (1001)
+end as2;
+■
+=SML
+store_mt_results mt_run_fail [
+("check_as2", check_as2, (), gen_fail_msg "adjust_statement"
+					505091 [])
+];
+=TEX
+3) A for loop with non-static bounds must be the first statement in the sequence:
+=SML
+new_script {name="AS3", unit_type="proc"};
+fun ⦏check_as3⦎ () =
+ⓈCN
+procedure as3(x : in out INTEGER)
+   Δ X [ true ]
+is
+begin
+	x := 1;
+	for i in INTEGER range X .. 20
+	loop
+		Δ X [true] (1005)
+	end loop;
+end as3;
+■
+=SML
+store_mt_results mt_run_fail [
+("check_as3", check_as3, (), gen_fail_msg "adjust_statement"
+					505092 [])
+];
+=TEX
+4) A logical constant must be the first in its sequence:
+=SML
+new_script {name="AS4", unit_type="proc"};
+fun ⦏check_as4⦎ () =
+ⓈCN
+procedure as4(x : in out INTEGER)
+   Δ X [ true ]
+is
+begin
+	x := 1;
+	$con A : ℤ ⦁ Δ X [true]
+end as4;
+■
+=SML
+store_mt_results mt_run_fail [
+("check_as4", check_as4, (), gen_fail_msg "adjust_statement"
+					505094 [])
+];
+=TEX
+5) A call to a procedure with initial variables in its specification
+statement must be the first in its sequence:
+=SML
+new_script {name="AS5", unit_type="proc"};
+fun ⦏check_as5⦎ () =
+ⓈCN
+procedure as5(x : in out INTEGER)
+    Δ X [ true ]
+is
+  procedure as5a (y : in out INTEGER)
+	Δ Y [ Y = Y⋎0 + 1]
+   is
+   begin
+       y := y + 1;
+   end as5a;
+begin
+	x := 1;
+	as5a(x);
+end as5;
+■
+
+
+=SML
+store_mt_results mt_run_fail [
+("check_as5", check_as5, (), gen_fail_msg "adjust_statement"
+					505093 [])
+];
+=TEX
+
+\section{EPILOGUE}
+
+=SML
+diag_line (summarize_mt_results());
+=TEX
+
+\twocolumn[
+\section{INDEX OF DEFINED TERMS}]
+\printindex
+\end{document}
+=IGN

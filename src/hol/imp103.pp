@@ -1,0 +1,483 @@
+=IGN
+********************************************************************************
+imp103.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  imp103.doc  ℤ $Date: 2006/01/26 12:19:36 $ $Revision: 1.10 $ $RCSfile: imp103.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation for Conjecture Database}
+
+\def\AbstractText{This document contains the implementation for the facilities for managing conjectures.}
+
+\def\Reference{DS/FMU/IED/IMP103}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation for Conjecture Database}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP103}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.10 $%%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/01/26 12:19:36 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.B.~Jones & HAT Manager}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the implementation for the
+%% LaTeX2e port: facilities for managing conjectures.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issues 1.1 (1994/10/28)-1.3 (1994/10/31)]
+First drafts.
+\item[Issue 1.4 (1994/11/07)]
+Level numbers now stored with the conjectures.
+\item[Issue 1.5 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.6 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.7 (2005/12/14)] Allowed for kernel interface and symbol table reform.
+\item[Issue 1.8 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.9 (2006/01/17)] Added the new conjecture management facilities.
+\item[Issue 1.10 (2006/01/26)] Fixed silly duplication of work in {\em cull\_conjectures}.
+\item[Issue 1.11 (2006/09/18)] {\em is\_proved\_conjecture} etc. now fail if theory is not in scope rather than giving wronng answers.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation for the Conjectures Database module for ICL HOL.
+The detailed design for this material is given in \cite{DS/FMU/IED/DTD103}.
+
+\subsection{Introduction}
+See \cite{DS/FMU/IED/DTD103}.
+
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD103}.
+\subsection{Dependencies}
+See \cite{DS/FMU/IED/DTD103}.
+\subsection{Possible Enhancements}
+See \cite{DS/FMU/IED/DTD103}.
+\subsection{Deficiencies}
+None known.
+\section{DISCUSSION}
+The implementation is very straightforward.
+It is not expected that the conjectures database will be used in places where performance is critical.
+Simple algorithms have therefore been used throughout.
+
+\section{CONJECTURE FUNCTIONS}
+
+\label{Conjectures}
+=SML
+structure ⦏Conjectures⦎ : Conjectures = struct
+=TEX
+=SML
+val ⦏current_level⦎ : unit -> int = (
+	#current_level o
+	#contents o
+	get_theory_info o
+	get_current_theory_name
+);
+=TEX
+=SML
+fun ⦏encode_conjecture⦎ (keys : string list, (lv : int, t : TERM))
+			: USER_DATUM = (
+	let	fun aux [] = UD_Int(lv, [UD_Term (t, [])])
+		|   aux (k :: ks) = UD_String(k, [aux ks]);
+	in	aux keys
+	end
+);
+=TEX
+=SML
+fun ⦏decode_conjecture⦎ (caller : string) (thyn : string) (ud : USER_DATUM)
+		: string list * (int * TERM) = (
+	case ud of
+		UD_Int(lv, [UD_Term (t, _)]) => ([], (lv, t))
+	|	UD_String (k, [ud']) => (
+			let	val (ks, lvt) = decode_conjecture caller thyn ud'
+			in	(k :: ks, lvt)
+			end
+	) |	_ => fail caller 103803 [fn () => thyn]
+);
+=TEX
+=SML
+fun ⦏conjecture_key_check⦎ (key : string) (ud : USER_DATUM) : bool = (
+	case ud of
+		UD_String (k, [ud']) => (
+			k = key orelse conjecture_key_check key ud'
+	) |	_ => false
+);
+=SML
+val conjecture_ud_key = "pp'cnj";
+=TEX
+=SML
+fun ⦏get_conjecture_uds⦎ (caller : string)
+		( thy : string ) : USER_DATUM list = (
+	if thy mem theory_names () orelse thy = "-"
+	then	(case get_user_datum thy conjecture_ud_key of
+		UD_Int (0, uds) => uds
+	|	_ => fail caller 103803 [fn () => thy])
+		handle Fail _ => []
+	else	fail caller 20601 [fn()=>thy]
+);
+=TEX
+=SML
+fun ⦏set_conjecture_uds⦎ (caller : string) (uds : USER_DATUM list) : unit = (
+	set_user_datum (conjecture_ud_key, UD_Int(0, uds))
+	handle ex => reraise ex caller
+);
+=TEX
+
+=SML
+fun ⦏thm_proves_conjecture⦎ (thm : THM) (tm : TERM) : bool = (
+	let	val (asms, conc) = dest_thm thm;
+	in	is_nil asms andalso conc =$ tm
+	end
+);
+=TEX
+=SML
+fun ⦏check_new_conjecture⦎ (keys : string list) (tm : TERM) : unit = (
+	let	fun aux [] = Nil
+		|   aux (key::keys) = (
+			(if	thm_proves_conjecture (get_thm "-" key) tm
+			then	aux keys
+			else	Value key)
+			handle Fail _ => aux keys
+		);
+	in	case aux keys of
+			Nil => ()
+		|	Value key => fail "new_conjecture" 103102 [fn()=>key]
+	end
+);
+=SML
+fun ⦏new_conjecture⦎ ([] : string list, tm : TERM) : unit = (
+	fail "new_conjecture" 6031 []
+) | ⦏new_conjecture⦎ (keys : string list, tm : TERM) : unit = (
+	let	val _ = (
+			if	not(type_of tm =: BOOL)
+			then	term_fail "new_conjecture" 3031 [tm]
+			else	check_new_conjecture keys tm
+		);
+		val uds = get_conjecture_uds "new_conjecture" "-";
+		fun chk [] = ()
+		|   chk (k :: ks) = (
+			if	any uds (conjecture_key_check k)
+			then	fail "new_conjecture" 103801 [fn () => k]
+			else	chk ks
+		);	
+		val _ = chk keys;
+		val lv = current_level();
+		val new_uds = encode_conjecture (keys, (lv, tm)) :: uds
+	in	set_conjecture_uds "new_conjecture" new_uds
+	end
+);
+=TEX
+=SML
+fun ⦏get_conjecture⦎ (thy : string) (key : string) : TERM = (
+	let	val uds = get_conjecture_uds "get_conjecture" thy;
+		val ud = find uds (conjecture_key_check key)
+			handle Fail _ =>
+			fail "get_conjecture" 103802
+				[fn()=>key, fn()=>
+						if thy = "-"
+						then get_current_theory_name()
+						else thy];
+	in	snd(snd(decode_conjecture "get_conjecture" thy ud))
+	end
+);
+=TEX
+=SML
+fun ⦏get_conjectures⦎ (thy : string) : (string list * (int * TERM)) list = (
+	let	val uds = get_conjecture_uds "get_conjectures" thy;
+	in	map (decode_conjecture "get_conjectures" thy) uds
+	end
+);
+=TEX
+=SML
+fun ⦏delete_conjecture⦎ (key : string) : TERM = (
+	let	val uds = get_conjecture_uds "delete_conjecture" "-";
+		fun prune [] = (
+			fail "get_conjecture" 103802
+			[fn()=>key, get_current_theory_name]
+		) | prune (ud :: more) = (
+			if	conjecture_key_check key ud
+			then	(ud, more)
+			else	let	val (xx, pruned) = prune more;
+				in	(xx, ud :: pruned)
+				end
+		);
+		val (ud, pruned) = prune uds;
+	in	set_conjecture_uds "delete_conjecture" pruned;
+		snd(snd
+		(decode_conjecture "delete_conjecture"
+				(get_current_theory_name()) ud))
+	end
+);
+=TEX
+=SML
+fun ⦏delete_all_conjectures⦎ (() : unit) : unit = (
+	set_conjecture_uds "delete_all_conjectures" []
+);
+=TEX
+=SML
+fun ⦏check_proves_ok⦎ (caller : string) (thy : string) (key : string)
+	(thm : THM) (tm : TERM) : unit = (
+	if	thm_proves_conjecture thm tm
+	then	()
+	else	fail caller 103803
+		[fn () => thy, fn () => key]
+);
+=TEX
+=SML
+fun ⦏check_in_scope⦎ (caller : string) (thy : string) : unit = (
+	if	#inscope(get_theory_info thy)
+		handle ex as (Fail _) => reraise ex caller
+	then	()
+	else	fail caller 103103 [fn () => thy]
+);
+=TEX
+=SML
+fun ⦏is_proved_conjecture⦎ (thy : string) (key : string) : bool = (
+	check_in_scope "is_proved_conjecture" thy;
+	let	val tm = get_conjecture thy key
+			handle (ex as Fail _) =>
+				pass_on ex
+				"get_conjecture"
+				"is_proved_conjecture";
+	in	case (Value(get_thm thy key) handle Fail _ => Nil) of
+			Value thm => (
+			check_proves_ok "is_proved_conjecture"
+				thy key thm tm;
+			true
+		) |	Nil => false
+	end
+);
+=TEX
+=SML
+fun ⦏get_selected_conjectures⦎ (caller : string)
+		(sel : string -> TERM -> bool)
+		(thy : string) : string list = (
+	let	val triples = get_conjectures thy
+			handle (ex as Fail _) =>
+				pass_on ex
+				"get_conjectures"
+				caller;
+		fun aux acc [] = rev acc
+		|   aux acc (([], _)::more) = aux acc more
+		|   aux acc ((key::keys, (i, tm)) :: more) = (
+			aux
+			(if sel key tm then key::acc else acc)
+			((keys, (i, tm)) :: more)
+		);
+	in	aux [] triples
+	end
+);
+=TEX
+=SML
+fun ⦏get_proved_conjectures⦎ (thy : string) : string list = (
+	check_in_scope "get_proved_conjectures" thy;
+	let	fun sel key tm = (
+			case (Value (get_thm thy key) handle Fail _ => Nil) of
+				Value thm => (
+				check_proves_ok "get_proved_conjectures" thy key thm tm;
+				true
+			) |	Nil => false
+		);
+	in	get_selected_conjectures "get_proved_conjectures" sel thy
+	end
+);
+=TEX
+=SML
+fun ⦏get_unproved_conjectures⦎ (thy : string) : string list = (
+	check_in_scope "get_unproved_conjectures" thy;
+	let	fun sel key tm = (
+			case (Value (get_thm thy key) handle Fail _ => Nil) of
+				Value thm => (
+				check_proves_ok "get_unproved_conjectures" thy key thm tm;
+				false
+			) |	Nil => true
+		);
+	in	get_selected_conjectures "get_unproved_conjectures" sel thy
+	end
+);
+=TEX
+=SML
+fun ⦏cull_conjectures⦎ (what : string) (p : (int * TERM) -> bool) : unit = (
+	let	val uds = get_conjecture_uds "cull_conjectures" "-";
+		fun prune [] = ([], [])
+		  | prune (ud :: more) = (
+			let	val (keys, tm) =
+					decode_conjecture "cull_conjectures"
+						(get_current_theory_name()) ud;
+				val (togo, tostay) = prune more;
+			in	if	p tm
+				then	(keys @ togo, tostay)
+				else	(togo, ud :: tostay)
+			end
+		);
+	in	case prune uds of
+		 	([], _) => ()
+		|	(togo, tostay) => (
+			comment "cull_conjectures" 103804
+			[(fn () => what),
+			(fn () => case togo of [_] => "" | _ => "s"),
+			(fn ()=> format_list(Combinators.I) togo ", ")];
+			set_conjecture_uds "cull_conjectures" tostay
+		)
+	end
+);
+=TEX
+=SML
+fun ⦏check_thm⦎ (caller : string) (keys : string list) (thm : THM) : unit = (
+	let	fun aux [] = Nil
+		|   aux (key::keys) = (
+			(if	thm_proves_conjecture thm (get_conjecture "-" key)
+			then	aux keys
+			else	Value key)
+			handle Fail _ => aux keys
+		);
+	in	case aux keys of
+			Nil => ()
+		|	Value key => fail caller 103101 [fn()=>key]
+	end
+);
+=TEX
+=SML
+fun ⦏check_thm_trap⦎
+	(ksc : KERNEL_STATE_CHANGE) : unit = (
+	case ksc of
+		SaveThm (key, thm) => (
+			check_thm "save_thm" [key] thm
+	) |	ListSaveThm (keys, thm) => (
+			check_thm "list_save_thm" keys thm
+	) |	_ => ()
+);
+=TEX
+=SML
+fun ⦏conjecture_culling_trap⦎
+	(ksc : KERNEL_STATE_CHANGE) : unit = (
+	case ksc of
+		DeleteConst c => (
+			let	val n = fst (dest_const c);
+				fun p (_, t) = n mem (map fst (term_consts t));
+			in	cull_conjectures "constant" p
+			end
+	) |	DeleteType n => (
+			let	fun p (_, t) = n mem (map fst (term_tycons t));
+			in	cull_conjectures "type" p
+			end
+	) |	_ => ()
+);
+val _ = before_kernel_state_change check_thm_trap;
+val _ = on_kernel_state_change conjecture_culling_trap;
+=TEX
+=SML
+end	(* of structure Conjectures *);
+open Conjectures;
+=TEX
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
+
+

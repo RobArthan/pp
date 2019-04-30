@@ -1,0 +1,539 @@
+=IGN
+********************************************************************************
+int523.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,12pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+
+%%%%% YOU WILL USUALLY WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{ Compliance Tool --- 2.7.1 Enhancement Tests}
+
+\def\Abstract{\begin{center}
+{\bf Abstract}\par\parbox{0.7\hsize}
+{\small This document provides integration tests to support the enhancements developed
+under the programme of enhancements to version 2.7.1 of the Compliance Tool carried out during 2003.}
+\end{center}}
+
+\def\Reference{LEMMA1/DAZ/INT523}
+
+\def\Author{R.D. Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 118 958 4409}
+
+\def\Fax{+44 118 956 1920}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+\begin{centering}
+
+
+
+\end{centering}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
+
+\begin{document}
+\underscoreoff
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+%%%%% STANDARD RED-TAPE SECTIONS (MAY WANT TO INTERLEAVE SOME \newpage COMMANDS IN THESE)
+
+%%%%% CONTENTS:
+
+\subsection{Contents}
+
+\tableofcontents
+
+%%%%% REFERENCES:
+
+\subsection{References}
+
+\bibliographystyle{fmu}
+
+%%%%% CHANGE THE FOLLOWING AS NECESSARY (E.G., TO PICK UP daz.bib):
+h{\raggedright
+\bibliography{fmu,daz}
+}
+%%%%% CHANGES HISTORY:
+\subsection{Changes History}
+\begin{description}
+\item[Issues 1.1 (2003/05/20)-\Version] First drafts
+\item[Issue 1.6 (2004/02/07)] The SPARK program is now referred to as the Ada program.
+\item[Issue 1.7 (2005/05/28)] Compliance Notation reserved words are now prefixed by a dollar sign.
+\item[Issue 1.8 (2006/03/24)] Allowed for enhancement 117.
+\item[Issue 1.9 (2006/03/28)] Allowed for automated state management.
+\item[Issue 1.11 (2006/06/01)] accommodated enhancement 139 - 1-theory-per-subprogram.
+\item[Issue 1.12 (2006/09/18)] {\em case\_of\_ada\_keywords} is now {\em cn\_case\_of\_ada\_keywords}.
+\item[Issue 1.13 (2006/09/19)] Allowed for enhancement 165.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+\item[2014/09/07]
+Now uses ``.sml'' suffix for temporary ML source files.
+
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%%%%%  CHANGES FORECAST:
+
+\subsection{Changes Forecast}
+
+None.
+
+%%%%% DISTRIBUTION LIST
+
+\subsection{Distribution}
+\begin{center}
+\begin{tabular}{ll}
+Rob Arthan & Lemma 1
+\end{tabular}
+\end{center}
+
+
+\section{INTRODUCTION}\label{INTRODUCTION}
+This document is intended to provide integration tests to cover
+the enhancements undertaken under the programme
+of enhancements carried out in Spring 2002. See \cite{LEMMA1/DAZ/HLD509}
+for the detailed specification of the enhancements.
+
+The interim releases of the Compliance Tool have been
+fully regression-tested and the new features have been module-
+and integration-tested to a certain extent by the existing tests.
+This document provides specific integration tests to
+complete the coverage.
+\section{PREAMBLE}
+Load the test harness.
+
+=SML
+use_file "dtd013";
+use_file "imp013";
+=TEX
+Function to clean up before doing a test.
+
+=SML
+fun clean_up () = (
+        let     val thys = (get_descendants "cn" less "cn"
+                                        diff get_cache_theories())
+                fun del_thy thy = (force_delete_theory thy handle Fail _ => ());
+	val err_scrs =map fst (CNZGenerator.get_exception_logs());
+        in      map del_thy thys;
+	map delete_exception_log err_scrs;
+	open_theory"cn";
+	set_pc "cn1"
+        end;    ()
+);
+=TEX
+For batch use turn off subgoal package output:
+=SML
+set_flag("subgoal_package_quiet", not(ExtendedIO.is_term_in std_in));
+=TEX
+\section{THE TESTS}
+\subsection{R0085: Omitted Else Parts etc.} \label{R0085}
+INT511 tests that the Ada output is valid. Here we check that
+the``nothing'' statement form suppresses else parts etc., and that the VC generation
+for it is as expected.
+=SML
+clean_up();
+new_script{name = "P", unit_type="proc"};
+
+set_string_control("cn_case_of_ada_keywords", "upper");
+
+ⓈCN
+ procedure p
+ is
+ x, y :  integer;
+ begin
+   if x > y
+  then x := y;
+  else Δ X, Y[true]
+  end if;
+ end p;
+■
+
+ⓈCN
+  ⊑ $nothing;
+■
+=SML
+print_ada_program"-";
+output_ada_program{script="-", out_file = "int522.tmp"};
+store_mt_results
+mt_run
+ [(	"R0085.1",
+	ExtendedIO.system,
+	"test  `egrep \"ELSE\" int522.tmp | wc -l `  = 0",
+	true)];
+
+=TEX
+=SML
+clean_up();
+new_script{name="P", unit_type="proc"};
+
+ⓈCN
+ procedure p
+ is
+ x, y :  integer;
+ begin
+   if x > y
+  then x := y;
+  else Δ X, Y[true]
+  end if;
+ end p;
+■
+
+
+ⓈCN
+  ⊑ $nothing; $nothing; Δ X, Y [ true]
+■
+
+ⓈCN
+  ⊑ $nothing; $nothing;
+■
+=SML
+print_ada_program"-";
+output_ada_program{script="-", out_file = "int522.tmp"};
+store_mt_results
+mt_run
+ [(	"P'proc",
+	ExtendedIO.system,
+	"test  `egrep \"ELSE\" int522.tmp | wc -l `  = 0",
+	true)];
+
+=TEX
+=SML
+clean_up();
+new_script{name="P", unit_type="proc"};
+
+ⓈCN
+ procedure p
+ is
+ x, y :  boolean;
+ begin
+  Δ X, Y [ Y = not X ]
+ end p;
+■
+ⓈCN
+  ⊑  case x  is
+    when true => y := false;
+    when false => y := true;
+    when others => Δ[false, false]
+  end case;
+■
+
+
+ⓈCN
+  ⊑ $nothing; $nothing; Δ [ false, false]
+■
+
+ⓈCN
+  ⊑ $nothing; $nothing;
+■
+=SML
+print_ada_program"-";
+output_ada_program{script="-", out_file = "int522.tmp"};
+store_mt_results
+mt_run
+ [(	"R0085.3.1",
+	ExtendedIO.system,
+	"test  `egrep \"OTHERS\" int522.tmp | wc -l `  = 0",
+	true)];
+=TEX
+=SML
+set_pc"cn1";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc_1_1");
+a(REPEAT strip_tac THEN all_var_elim_asm_tac1);
+a(cn_vc_simp_tac[]);
+store_mt_results
+mt_run
+ [("R0085.3.2.1", fun_true o pop_thm , (), true)];
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc_1_2");
+a(REPEAT strip_tac THEN all_var_elim_asm_tac1);
+a(cn_vc_simp_tac[]);
+store_mt_results
+mt_run
+ [("R0085.3.2.2", fun_true o pop_thm , (), true)];
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc_1_3");
+a(REPEAT strip_tac THEN all_fc_tac[cn_boolean_cases_thm]);
+store_mt_results
+mt_run
+ [("R0085.3.2.3", fun_true o pop_thm , (), true)];
+
+fun R0085_others s = (
+	let	val gl = ([], get_conjecture "-" s);
+	in	tac_proof(gl, taut_tac); true
+	end	handle Fail _ => false
+);
+
+store_mt_results
+mt_run
+ [
+	("R0085.3.2.4", R0085_others , "vc_2_1", true),
+	("R0085.3.2.5", R0085_others , "vc_2_2", true),
+	("R0085.3.2.6", R0085_others , "vc_3_1", true)
+];
+=TEX
+\subsection{R0086: Compliance Notation keywords as Ada identifiers.} \label{R0086}
+INT511 tests that the Ada output is valid. Here we check the error behaviour and
+check that the Z names are as they should be.
+=SML
+clean_up();
+new_script{name = "P", unit_type="proc"};
+
+ⓈCN
+ procedure p
+ is
+ con :  integer;
+ begin
+  Δ CON [ CON = 0]
+ end p;
+■
+ⓈCN
+  ⊑ con := 0;
+■
+=TEX
+=SML
+set_pc"cn1";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc_1_1");
+a(REPEAT strip_tac);
+store_mt_results
+mt_run
+ [("R0086.1.1", fun_true o pop_thm , (), true)];
+=TEX
+=SML
+clean_up();
+new_script{name = "p", unit_type = "proc"};
+fun do_it() =
+ⓈCN
+ procedure p
+ is
+ $const :  integer;
+ begin
+  Δ CONST [ CONST = 0]
+ end p;
+■
+=SML
+store_mt_results
+mt_run_fail
+[
+	("T0086.2.1", do_it, (),  gen_fail_msg "CN-Parser" 501004 [])
+];
+=TEX
+\subsection{R0091: Context Clauses on Package Specifications.} \label{R0091}
+
+=SML
+clean_up();
+new_script{name = "P1", unit_type="spec"};
+
+ⓈCN
+package p1 is
+  x : integer;
+end p1;
+■
+
+
+=SML
+new_script{name = "P2", unit_type="spec"};
+ⓈCN
+with p1;
+use p1;
+package p2 is
+  procedure reset_x
+Δ P1oX [P1oX = 0];
+end p2;
+■
+
+=SML
+new_script{name = "P2", unit_type="body"};
+ⓈCN
+package body p2 is
+  procedure reset_x
+ Δ P1oX [P1oX = 0]
+  is
+  begin
+   x := 0;
+ end reset_x;
+end p2;
+■
+=TEX
+=SML
+set_pc"cn1";
+=TEX
+=SML
+set_goal([], get_conjecture"-""vcP2_1");
+a(REPEAT strip_tac);
+store_mt_results
+mt_run
+ [("R0091.1.1", fun_true o pop_thm , (), true)];
+=TEX
+=SML
+set_goal([], get_conjecture"-""vcP2_2");
+a(REPEAT strip_tac);
+store_mt_results
+mt_run
+ [("R0091.1.2", fun_true o pop_thm , (), true)];
+=TEX
+=SML
+open_theory "P2oRESET_X'proc";
+set_pc "cn1";
+set_goal([], get_conjecture"-""vcP2oRESET_X_1");
+a(REPEAT strip_tac);
+store_mt_results
+mt_run
+ [("R0091.1.3", fun_true o pop_thm , (), true)];
+=TEX
+\subsection{R0092: Indentation etc. in SPARK output API} \label{R0092}
+=SML
+open CNTypes;
+open CNAdaOutput;
+val cond1 = EId "test1";
+val cond2 = EId "test2";
+val cond = EBinExp{bop = BOSparkAnd, left = cond1, right = cond2};
+val var = EId "x";
+val value1 = EIntReal "4.5E1";
+val value2 = EIntReal "-4.5E1";
+val assign1 = STAssign {name = var, e = value1};
+val assign2 = STAssign {name = var, e = value2};
+val if_stmt = STIfThenElse {g = cond, p = assign1, q = assign2, elsif = false};
+reset_int_control("cn_left_margin");
+reset_int_control("cn_automatic_line_splitting");
+reset_int_control("cn_tab_width");
+val res1 = strings_from_fmt1 fmt_statement if_stmt;
+set_int_control("cn_left_margin", 2);
+val res2 = strings_from_fmt1 fmt_statement if_stmt;
+store_mt_results
+mt_run
+ [("R0092.1.1", Combinators.I , size (implode res2) - size(implode res1) - 4*length res1, 0)];
+set_int_control("cn_left_margin", 5);
+set_int_control("cn_automatic_line_splitting", 20);
+set_int_control("cn_tab_width", 4);
+val res3 = strings_from_fmt1 fmt_statement if_stmt;
+store_mt_results
+mt_run
+ [("R0092.1.2", Combinators.I, length res3 > length res1, true)];
+reset_int_control("cn_left_margin");
+reset_int_control("cn_automatic_line_splitting");
+reset_int_control("cn_tab_width");
+=TEX
+\subsection{R0096: {\tt nothing} statement form in formatted web clauses} \label{R0096}
+=SML
+clean_up();
+new_script{name = "P", unit_type="proc"};
+val old_cn_recogniser = WebClauses.cn_recogniser;
+val web_clauses : WEB_CLAUSE list ref = ref [];
+fun cn_recogniser x = (
+	old_cn_recogniser x;
+	web_clauses := !CNZGenerator.diag_web_clause :: !web_clauses
+);
+set_string_control("cn_case_of_ada_keywords", "as input");
+ⓈCN
+ procedure p
+ is
+ x, y : integer;
+ ⟨ declarations ⟩ (100)
+ begin
+   if x > y
+  then x:= 100_000;
+ ⟨labelled informal statement ⟩			( 1 )
+  else Δ X, Y[X = Y]
+  end if;
+ end p;
+■
+
+ⓈCN
+ (100) ≡ auxiliary :  constant integer := 99;
+■
+
+ⓈCN
+  ⊑ $nothing;
+  x := auxiliary;
+  y := auxiliary;
+  Γ {X = Y}
+ Δ [X = Y, Y = X] (xx)
+■
+ⓈCN
+ (xx)  ⊑ $nothing;
+■
+ⓈCN
+ (1)  !⊑ x := y;
+ ⟨ labelled arbitrary statement ⟩			( 2 )
+ ⟨ unlabelled informal statement ⟩
+■
+ⓈCN
+ (2) !≡   access1 := null;
+■
+ⓈCN
+  !⊑  ⟨ unlabelled arbitrary statement ⟩
+■
+ⓈCN
+  !≡   access2 := null;
+■
+=SML
+output_ada_program{script="-", out_file = "int523a.ada"};
+val vcs1 = map (fn (x, (_, y)) => (x, y)) (get_conjectures"-");
+val _ = web_clauses := rev (!web_clauses);
+val strm = open_out "int523a.sml";
+open CNAdaOutput;
+val fmt_info ={outf = make_output_fun1(curry output strm), fmt_repl = Nil} : PP_FMT_INFO;
+fun output_web_clause wc = (
+	output(strm, "ⓈCN\n");
+	fmt_web_clause fmt_info wc;
+	output(strm, "■\n")
+);
+val _ = map output_web_clause (!web_clauses);
+val _ = close_out strm;
+val cn_recogniser = old_cn_recogniser;
+clean_up();
+new_script{name = "P", unit_type="proc"};
+use_file"int523a.sml";
+val vcs2 = map (fn (x, (_, y)) => (x, y)) (get_conjectures"-");
+val oks = map (fn ((n1, t1), (n2, t2)) => n1 = n2 andalso t1 =$ t2) (combine vcs1 vcs2);
+store_mt_results
+mt_run
+ [("R0096.1.1", all oks, Combinators.I, true)];
+output_ada_program{script="-", out_file = "int523b.ada"};
+store_mt_results
+mt_run
+ [(	"R0096.1.2",
+	ExtendedIO.system,
+	"diff int523a.ada int523b.ada",
+	true)];
+=TEX
+\section{EPILOGUE}
+=SML
+diag_line(summarize_mt_results());
+=TEX
+\end{document}

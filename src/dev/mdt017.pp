@@ -1,0 +1,731 @@
+=IGN
+********************************************************************************
+mdt017.doc: this file is part of the PPDev system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  mdt017.doc  ℤ $Date: 2003/03/05 15:27:08 $ $Revision: 2.15 $ $RCSfile: mdt017.doc,v $
+=TEX
+% TQtemplate.tex
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=10000
+\def\Slrp{{\bf SLRP}}
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Module Tests for SLRP Parser Generator}  %% Mandatory field
+\TPPref{DS/FMU/IED/MDT017}  %% Mandatory field
+\def\SCCSversion{$Revision: 2.15 $%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+%\TPPdate{}  %% Mandatory field (with sensible default)
+\TPPdate{\FormatDate{$Date: 2003/03/05 15:27:08 $
+}}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+%\TPPstatus{Approved}			%% Mandatory field
+\TPPtype{Test Script}
+\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.B.~Jones & HAT Manager}
+\TPPabstract{
+The module tests for the SLRP parser generator.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.3 (1991/09/30)-1.4 (1991/10/07) (30 September - 7 October 1991)]
+Initial  drafts for comment.
+\item[Issue 2.1 (1991/10/07) (7 October 1991)]
+First approved issue after deskcheck ID0087.
+\item[Issue 2.2 (1992/02/04) (4 Febrary 1992)]
+Added test case SLRP.4.
+\item [Issue 2.3 (1992/04/09) (8th April 1992)]
+Put SCCS keywords back in.
+\item [Issue 2.4 (1999/02/08) (8th February 1999)] Update for SML'97. (Note: it is
+still PolyML-specific in places, but the tests can be run by hand on NJML).
+\item [Issue 2.5 (1999/04/21) (21st April 1999)] Update for Linux. (Note: still run tests by hand for NJML).
+\item [Issue 2.6 (1999/04/21) (1st August 1999)] Now the {\tt slrp} shell script, can run tests automatically
+in a portable way.
+\item[Issue 2.8 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.9 (2002/10/17)] PPDev-specific updates for open source release
+\item[Issue 2.10 (2003/02/22)] Added test for LALR(1) parsing.
+\item[Issue 2.11 (2003/02/23)] Added tests for {\it quote\_con} feature.
+\item[Issue 2.12 (2003/02/23)] Added a {\it -t} option to check that it works.
+\item[Issue 2.13 (2003/02/25)] {\it -c} option renamed as {\it -q}.
+\item[Issue 2.14 (2003/02/28)] Added test with inherently ambiguous grammar.
+\item[Issue 2.15 (2003/03/05)] Added test with non-terminals generating an empty language.
+\item[Issue 2.16 (2003/03/20)] Allowed for new type for error routines.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+\item[2014/11/25]
+Adjusted boiler-plate so that everything is compiled from scratch.
+\item[2015/11/26]
+Now works with MLton as well as Poly/ML and SML/NJ.
+
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document gives the module test script for the SLR parser generator,
+called \Slrp, defined in \cite{DS/FMU/IED/DTD017}.
+
+\subsection{Introduction}
+Since the parser generator is not included as part of the system,
+but rather is used to build parts of it, the test coverage deliberately
+aims only to check out the basic sanity of \Slrp\ on the simple examples
+given in \cite{DS/FMU/IED/DTD017}. The parsers for the object languages which are constructed
+by the program are to be comprehensively tested.
+
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD017}.
+\section{TEST CASES}
+We consider six test cases:
+
+\begin{description}
+\item[SLRP.1]
+The most trivial grammar, with one production having an empty list of
+alternatives, which generates the empty language;
+\item[SLRP.2]
+the first pocket calculator example from \cite{DS/FMU/IED/DTD017}
+\item[SLRP.3]
+the second pocket calculator example from \cite{DS/FMU/IED/DTD017}
+(exhibiting dynamic shift/reduce conflict resolution)
+\item[SLRP.4]
+the same example as SLRP.3 but with an error routine
+which permits  partial parsing of an input stream.
+\item[SLRP.5]
+the grammar which is neither SLR(1) or NQLALR(1) from \cite{Bermudez}.
+\item[SLRP.6]
+Like SLRP.2 but using the {\it quote\_con} feature.
+\item[SLRP.7]
+Grammar that provoked detection of an error in FIRST.
+\item[SLRP.8]
+Grammar with duplicated alternatives and non-terminals generating an empty language.
+\end{description}
+
+\subsection{Test Environment}
+
+The tests are intended to be run using the shell script {\tt slrp}
+to invoke the parser generator.
+Note that when the code is stripped from this document, using
+the parser generator is run to generate auxiliary files
+which are included in the resulting file $mdt017.sml$. $mdt017.sml$
+is then to be loaded on the parser generator database to execute
+the tests and check the results.
+
+
+N.b. the run generates several
+screenfuls of output from the compiler and from the parser generator. The latter
+output includes some of the error messages printed by the generated parsers when
+syntax errors are detected. The format of these error messages should
+be checked against the description given in
+\cite{DS/FMU/IED/DTD017}, if it is desired to check that aspect of
+the parser generator functionality.
+\section{TEST DATA AND TEST CODE}
+\subsection{Preamble}
+The instructions of \cite{DS/FMU/IED/PLN007} are to use $usefile$;
+however we do not have a Reader/Writer module in the parser generator,
+and so we must use the portability module facilities (\cite{DS/FMU/IED/DTD108})
+to load the test harness.
+Also, it is sometimes necessary, and never harmful, to reopen the
+error handling structure so that the correct value is accessed
+by the name $Error$ when we load the test harness (i.e. not the
+constructor $Error$ from \cite{DS/FMU/IED/DTD018}).
+=DUMP run-mdt017.sml
+app use [
+	"dtd108.sml",
+	"imp108.sml",
+	"dtd002.sml",
+	"imp002.sml",
+	"dtd001.sml",
+	"imp001.sml",
+	"dtd018.sml",
+	"imp018.sml",
+	"dtd013.sml",
+	"imp013.sml",
+	"dtd118.sml",
+	"imp118.sml",
+	"mdt017.sml"
+	];
+=DUMP run-mdt017.mlb
+	$(SML_LIB)/basis/basis.mlb
+	dtd108.sml
+	imp108.sml
+	dtd002.sml
+	imp002.sml
+	dtd001.sml
+	imp001.sml
+	dtd018.sml
+	imp018.sml
+	dtd013.sml
+	imp013.sml
+	dtd118.sml
+	imp118.sml
+	mdt017.sml
+=SML
+init_mt_results();
+=TEX
+\subsection{SLRP.1}
+=TEX
+First of all we set up the environment required in all cases:
+=SML
+open SlrpDriver;
+=TEX
+\subsection{CASE SLRP.1}
+=DUMP mdt017a.grm.txt
+(* Module Test mdt017 Case 1: Grammar for empty language *)
+	E	=	();
+=TEX
+=SML
+datatype SLRP_1_CLASS = Something | Eos;
+=TEX
+Now we invoke SLRP:
+=SH
+slrp -e Eos -f mdt017a.grm.txt | tee mdt017a.grm.run 1>&2
+cat mdt017a.grm.sml
+=TEX
+The parser is essentially a recogniser for empty strings.
+=SML
+fun slrp_1_error x = default_error (fn s => s) x;
+val slrp_1_classify = (fn "" => Eos | _ => Something);
+fun slrp_1_reader s = (
+	case explode s of
+		(ch :: more) => (ch, implode more)
+	|	[] => ("", "")
+);
+=TEX
+=SML
+fun slrp_1_parser x = slrp'gen_parser default_resolver
+			slrp_1_classify slrp_1_error slrp_1_reader x;
+=TEX
+=SML
+fun check_1 f  "" = (f ""; "OK")
+|   check_1 f x = (f x; "Wrong") handle SYNTAX_ERROR =>  "OK";
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.1.1", check_1 slrp_1_parser, "", "OK"),
+ ("SLRP.1.2", check_1 slrp_1_parser, "X", "OK")];
+=TEX
+\subsection{SLRP.2}
+=TEX
+We define the actions for the first pocket calculator parser:
+=SML
+fun add (Parsed (x:int)) (Parsed (y:int)) = x + y
+|   add _ _ = raise PARSER_ERROR "corrupt stack";
+fun mul (Parsed (x:int)) (Parsed (y:int)) = x * y
+|   mul _ _ = raise PARSER_ERROR "corrupt stack";
+fun fetch (Parsed (x:int)) = x
+|   fetch _= raise PARSER_ERROR "corrupt stack";
+fun conv (Token (n:string, _)) = nat_of_string n
+|   conv _ = raise PARSER_ERROR "corrupt stack";
+=TEX
+=SML
+=DUMP mdt017b.grm.txt
+(* Grammar for a Pocket Calculator *)
+	E	=	E, `Plus`, T			(add x1 x3)
+		|	T 				(fetch x1);
+
+	T	=	T, `Times`, F			(mul x1 x3)
+		|	F				(fetch x1);
+
+	F	=	`Lbrack`, E, `Rbrack`		(fetch x2)
+		|	Num				(conv x1);
+=TEX
+We use the following datatype for the lexical classes here:
+=SML
+datatype SLRP_2_CLASS = Plus | Times | Lbrack | Rbrack | Num | Eos | Wrong;
+=TEX
+Now we invoke SLRP:
+=SH
+slrp -e Eos -f mdt017b.grm.txt | tee mdt017b.grm.run 1>&2
+cat mdt017b.grm.sml
+=TEX
+
+=SML
+fun slrp_2_classify "*" = Times
+|   slrp_2_classify "+" = Plus
+|   slrp_2_classify "(" = Lbrack
+|   slrp_2_classify ")" = Rbrack
+|   slrp_2_classify "<end-of-input>" = Eos
+|   slrp_2_classify Other = if is_all_decimal Other then Num else Wrong;
+=SML
+fun slrp_2_error x = default_error (fn s => s) x;
+=TEX
+=SML
+fun slrp_2_reader (ip : string list) : string * string list = (
+	case ip of
+		(h :: more) => (h, more)
+	|	[] => ("<end-of-input>", [])
+);
+=TEX
+=SML
+fun slrp_2_parser x = slrp'gen_parser default_resolver
+			slrp_2_classify slrp_2_error slrp_2_reader x;
+=TEX
+
+=SML
+fun slrp_2_lex (s : string) : string list = (
+	let	val chars = explode s;
+		fun get_num acc (x :: more) = (
+			if is_all_decimal x
+			then get_num (acc ^ x) more
+			else (acc, x :: more)
+		)  | get_num acc [] = (acc, []);
+		fun get_tok (x :: more) = (
+			if is_all_decimal x
+			then let val (num, rest) = get_num x more
+			in	num :: get_tok rest
+			end else if x = " "
+			then get_tok more
+			else x :: get_tok more
+		) | get_tok [] = []
+	in	get_tok chars
+	end
+);
+=TEX
+=SML
+val slrp_2: string -> int = slrp_2_parser o slrp_2_lex;
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.2.1", slrp_2, "1", 1),
+ ("SLRP.2.2", slrp_2, "2+2", 4),
+ ("SLRP.2.3", slrp_2, "(2)+2", 4),
+ ("SLRP.2.4", slrp_2, "(2+3)*6", (2+3)*6),
+ ("SLRP.2.5", slrp_2, "(2*3)*6", 2*3*6),
+ ("SLRP.2.6", slrp_2, "2*(3*6)", 2*3*6),
+ ("SLRP.2.7", slrp_2, "2*((((( ((((( ((((( 3*6 ))))) ))))) )))))", 2*3*6),
+ ("SLRP.2.8", slrp_2, "2+2", 4)];
+=TEX
+=SML
+fun check_2 f s = (f s; "Wrong") handle SYNTAX_ERROR => "OK";
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.2a.1", check_2 slrp_2, "1)", "OK"),
+ ("SLRP.2a.2", check_2 slrp_2, "", "OK"),
+ ("SLRP.2a.3", check_2 slrp_2, "(2+2", "OK"),
+ ("SLRP.2a.4", check_2 slrp_2, "(2++3)*6", "OK"),
+ ("SLRP.2a.5", check_2 slrp_2, "(2*3)**6", "OK"),
+ ("SLRP.2a.6", check_2 slrp_2, "2*3*6)", "OK"),
+ ("SLRP.2a.7", check_2 slrp_2, "2*((((( (( (( ((((( 3*6 ))))) ))))) )))))", "OK"),
+ ("SLRP.2a.8", check_2 slrp_2, "2+", "OK")];
+=TEX
+\subsection{SLRP.3}
+=TEX
+First we define the new action routine we will need:
+=SML
+fun apply (Token("+", _)) (Parsed (x:int)) (Parsed (y:int)) = x + y
+|   apply (Token("*", _)) (Parsed (x:int)) (Parsed (y:int)) = x * y
+|   apply (Token(s, _)) _ _ = raise PARSER_ERROR ("operator " ^ s  ^ " not recognised")
+|   apply _ _ _ = raise PARSER_ERROR "corrupt stack";
+=SML
+=DUMP mdt017c.grm.txt
+(* Module Test mdt017 Case 3: Grammar for a Pocket Calculator *)
+E	=	 E, Op, E			(apply x2 x1 x3)
+	|	 `Lbrack`, E, `Rbrack`		(fetch x2)
+	|	 Num 				(conv x1);
+=TEX
+
+=SML
+datatype SLRP_3_CLASS = Op | Lbrack | Rbrack | Num | Eos | Wrong;
+=TEX
+Now we invoke SLRP:
+=SH
+slrp -t -e Eos -f mdt017c.grm.txt | tee mdt017c.grm.run 1>&2
+cat mdt017c.grm.sml
+=TEX
+=TEX
+=SML
+fun slrp_3_classify "*" = Op
+|   slrp_3_classify "+" = Op
+|   slrp_3_classify "(" = Lbrack
+|   slrp_3_classify ")" = Rbrack
+|   slrp_3_classify "<end-of-input>" = Eos
+|   slrp_3_classify Other = if is_all_decimal Other then Num else Wrong;
+=TEX
+=SML
+fun slrp_3_compare ((s1, _), (s2, _)) = (
+	case (s1, s2) of
+		("+", "+") => DoReduce
+	|	("+", "*") => DoShift
+	|	("*", "+") => DoReduce
+	|	("*", "*") => DoReduce
+	|	_ => raise PARSER_ERROR "unrecognised operator"
+);
+=TEX
+
+=SML
+val slrp_3_parser = slrp'gen_parser
+    (simple_resolver slrp_3_compare) slrp_3_classify slrp_2_error slrp_2_reader;
+val slrp_3: string -> int = slrp_3_parser o slrp_2_lex;
+=TEX
+
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.3.1", slrp_3, "1", 1),
+ ("SLRP.3.2", slrp_3, "2+2", 4),
+ ("SLRP.3.3", slrp_3, "(2)+2", 4),
+ ("SLRP.3.4", slrp_3, "(2+3)*6", (2+3)*6),
+ ("SLRP.3.5", slrp_3, "(2*3)*6", 2*3*6),
+ ("SLRP.3.6", slrp_3, "2*(3*6)", 2*3*6),
+ ("SLRP.3.7", slrp_3, "2*((((( ((((( ((((( 3*6 ))))) ))))) )))))", 2*3*6),
+ ("SLRP.3.8", slrp_3, "2+2", 4)];
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.3.11", check_2 slrp_3, "1)", "OK"),
+ ("SLRP.3.12", check_2 slrp_3, "", "OK"),
+ ("SLRP.3.13", check_2 slrp_3, "(2+2", "OK"),
+ ("SLRP.2.14", check_2 slrp_3, "(2++3)*6", "OK"),
+ ("SLRP.3.15", check_2 slrp_3, "(2*3)**6", "OK"),
+ ("SLRP.3.16", check_2 slrp_3, "2*3*6)", "OK"),
+ ("SLRP.3.17", check_2 slrp_3, "2*((((( (( (( ((((( 3*6 ))))) ))))) )))))", "OK"),
+ ("SLRP.3.18", check_2 slrp_3, "2+", "OK")];
+=TEX
+\subsection{SLRP.4}
+=SML
+val instream : string list ref = ref [];
+fun slrp_4_lex s = (instream := slrp_2_lex s);
+fun slrp_4_reader () : string * unit = (
+	case (!instream) of
+		(h :: more) => (instream := more;(h, ()))
+	|	[] => ("<end-of-input>", ())
+);
+=TEX
+=SML
+fun slrp_4_error (tok, _ , _ , _) = (
+	(case tok of
+	"<end-of-input>" =>
+		(output(std_out, "*** ERROR Syntax error ***");
+		raise SYNTAX_ERROR)
+	| _ => ("<end-of-input>",(), 0)
+	)
+);
+
+=TEX
+$slrp\_4$ is a simple top-down parser which parses
+valid sentences in the grammar separated by an
+unrecognised symbol. The grammar is
+
+=GFT BNF Syntax
+SEN	=	E
+	|	E, Un, E
+=TEX
+where $Un$ is an unexpected symbol in the pocket
+calculator grammar.
+=SML
+val slrp_4_parser = slrp'gen_parser
+    (simple_resolver slrp_3_compare) slrp_3_classify slrp_4_error slrp_4_reader;
+
+fun slrp_4 (s : string) : int list =
+let	val sd = slrp_4_lex s;
+	fun aux res =
+	case (!instream) of
+	[] => res
+	|Other => (aux (res@[slrp_4_parser()]));
+in
+	aux []
+end;
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.4.1", slrp_4, "1+1|2+1", [2,3]),
+ ("SLRP.4.2", slrp_4, "2+2|3", [4,3]),
+ ("SLRP.4.3", slrp_4, "(2)+2|4+(3)", [4,7]),
+ ("SLRP.4.4", slrp_4, "(2+3)*6|1", [(2+3)*6,1]),
+ ("SLRP.4.5", slrp_4, "(2*3)*6|2", [2*3*6,2]),
+ ("SLRP.4.6", slrp_4, "2*(3*6)", [2*3*6]),
+ ("SLRP.4.7", slrp_4, "2*((((( ((((( ((((( 3*6 ))))) ))))) )))))|1", [2*3*6,1]),
+ ("SLRP.4.8", slrp_4, "2+2", [4])];
+
+fun check_4 f s = (f s; "Wrong") handle SYNTAX_ERROR => "OK";
+store_mt_results
+mt_run
+[("SLRP.4.11", check_4 slrp_4, "1more", "OK"),
+ ("SLRP.4.12", check_4 slrp_4, "|", "OK"),
+ ("SLRP.4.13", check_4 slrp_4, "(2+2||", "OK"),
+ ("SLRP.4.14", check_4 slrp_4, "(2++3)*6", "OK"),
+ ("SLRP.4.15", check_4 slrp_4, "(2*3)**6", "OK"),
+ ("SLRP.4.16", check_4 slrp_4, "2*3*)6", "OK"),
+ ("SLRP.4.17", check_4 slrp_4, "2*((((( (((( (( ((((( 3*6 ))))) ))))) )))))", "OK"),
+ ("SLRP.4.18", check_4 slrp_4, "2+", "OK")];
+=TEX
+=TEX
+\subsection{SLRP.5}
+=TEX
+=SML
+=DUMP mdt017e.grm.txt
+(* Module Test mdt017 Case 5:  non-SLR(1) grammar*)
+S = LetterA, LetterG, LetterD;
+S = LetterA, A, LetterC;
+S = LetterB, A, LetterD;
+S = LetterB, LetterG, LetterC;
+A = B;
+B = LetterG;
+=TEX
+
+=SML
+datatype SLRP_5_CLASS = LetterA | LetterB | LetterC | LetterD | LetterG | S5Eos | S5Wrong;
+=TEX
+Now we invoke SLRP:
+=SH
+slrp -e S5Eos -f mdt017e.grm.txt | tee mdt017e.grm.run 1>&2
+cat mdt017e.grm.sml
+=TEX
+=TEX
+=SML
+fun slrp_5_classify "a" = LetterA
+|   slrp_5_classify "b" = LetterB
+|   slrp_5_classify "c" = LetterC
+|   slrp_5_classify "d" = LetterD
+|   slrp_5_classify "g" = LetterG
+|   slrp_5_classify "<end-of-input>" = S5Eos
+|   slrp_5_classify _ = S5Wrong;
+=TEX
+
+=SML
+val slrp_5_parser = slrp'gen_parser
+    default_resolver slrp_5_classify slrp_2_error slrp_2_reader;
+val slrp_5: string -> unit = slrp_5_parser o slrp_2_lex;
+=TEX
+
+=TEX
+The tests are the cases where the SLR(1) parser would complain at parse-time shift/reduce conflict.
+=SML
+store_mt_results
+mt_run
+[("SLRP.5.1", slrp_5, "agd", ()),
+("SLRP.5.2", slrp_5, "bgc", ())
+];
+=TEX
+\subsection{SLRP.6}
+=TEX
+=SML
+=DUMP mdt017f.grm.txt
+(* Grammar for a Pocket Calculator with ⊕ meaning addition and tab meaning multiplication! *)
+	E	=	E, `⊕`, T				(add x1 x3)
+		|	T 				(fetch x1);
+
+	T	=	T, `	`, F			(mul x1 x3)
+		|	F				(fetch x1);
+
+	F	=	`(`, E, `)`			(fetch x2)
+		|	Num				(conv x1);
+=TEX
+We use the following datatype for the lexical classes here:
+=SML
+datatype SLRP_6_CLASS = MkLit of string | Num | Eos | Wrong;
+=TEX
+Now we invoke SLRP:
+=SH
+slrp -e Eos -q MkLit -f mdt017f.grm.txt | tee mdt017f.grm.run 1>&2
+cat mdt017f.grm.sml
+=TEX
+
+=SML
+fun slrp_6_classify "\t" = MkLit "\t"
+|   slrp_6_classify "\171" = MkLit "\171"
+|   slrp_6_classify "(" = MkLit "("
+|   slrp_6_classify ")" = MkLit ")"
+|   slrp_6_classify "<end-of-input>" = Eos
+|   slrp_6_classify Other = if is_all_decimal Other then Num else Wrong;
+=SML
+fun slrp_6_parser x = slrp'gen_parser default_resolver
+			slrp_6_classify slrp_2_error slrp_2_reader x;
+=TEX
+=TEX
+=SML
+val slrp_6: string -> int = slrp_6_parser o slrp_2_lex;
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.6.1", slrp_6, "1", 1),
+ ("SLRP.6.2", slrp_6, "2\1712", 4),
+ ("SLRP.6.3", slrp_6, "(2)\1712", 4),
+ ("SLRP.6.4", slrp_6, "(2\1713)\t6", (2+3)*6),
+ ("SLRP.6.5", slrp_6, "(2\t3)\t6", 2*3*6),
+ ("SLRP.6.6", slrp_6, "2\t(3\t6)", 2*3*6),
+ ("SLRP.6.7", slrp_6, "2\t((((( ((((( ((((( 3\t6 ))))) ))))) )))))", 2*3*6),
+ ("SLRP.6.8", slrp_6, "2\1712", 4)];
+=TEX
+=SML
+fun check_6 f s = (f s; "Wrong") handle SYNTAX_ERROR => "OK";
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.6a.1", check_6 slrp_6, "1)", "OK"),
+ ("SLRP.6a.2", check_6 slrp_6, "", "OK"),
+ ("SLRP.6a.3", check_6 slrp_6, "(2\1712", "OK"),
+ ("SLRP.6a.4", check_6 slrp_6, "(2\171\1713)\t6", "OK"),
+ ("SLRP.6a.5", check_6 slrp_6, "(2\t3)\t\t6", "OK"),
+ ("SLRP.6a.6", check_6 slrp_6, "2\t3\t6)", "OK"),
+ ("SLRP.6a.7", check_6 slrp_6, "2\t((((( (( (( ((((( 3\t6 ))))) ))))) )))))", "OK"),
+ ("SLRP.6a.8", check_6 slrp_6, "2\171", "OK")];
+=TEX
+=TEX
+\subsection{SLRP.7}
+=TEX
+=SML
+=DUMP mdt017g.grm.txt
+(* Grammar for an inherently ambigous language, made unambiguous! *)
+(*
+not:
+	S	= AB, C | A, BC;
+	AB	= | a, AB, b;
+	C	= | C, c;
+	A	= | A, a
+	BC	= b, BC, c;
+but rather:
+*)
+	S	= A, B, C		((fn Parsed  m => fn Parsed n => fn Parsed p =>
+					if	m <> n andalso n <> p
+					then	raise SYNTAX_ERROR
+					else	0) x1 x2 x3);
+	A	= 		( 0 )
+		|   A, a		((fn Parsed m => m + 1) x1);
+	B	=		( 0 )
+		|   B, b		((fn Parsed n => n + 1) x1);
+	C	=		( 0 )
+		|   C, c		((fn Parsed p => p + 1) x1);
+
+=TEX
+We use the following datatype for the lexical classes here:
+=SML
+datatype SLRP_7_CLASS = a | b | c | Eos;
+=TEX
+Now we invoke SLRP:
+=SH
+slrp -e Eos -q MkLit -f mdt017g.grm.txt | tee mdt017g.grm.run 1>&2
+cat mdt017g.grm.sml
+=TEX
+=SML
+fun slrp_7_reader (abc::more) = (abc, more)
+|   slrp_7_reader [] = (Eos, []);
+fun fmt_class a = "a"
+| fmt_class b = "b"
+| fmt_class c = "c"
+| fmt_class Eos = "<end-of-input";
+
+fun slrp_7 x = slrp'gen_parser default_resolver
+			Combinators.I (default_error fmt_class) slrp_7_reader x;
+=TEX
+=TEX
+=SML
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.7.1", slrp_7, [a, b, c], 0),
+ ("SLRP.7.2", slrp_7,[a, b], 0),
+ ("SLRP.7.3", slrp_7,[], 0),
+ ("SLRP.7.4", slrp_7,[b, c], 0),
+ ("SLRP.7.5", slrp_7,[b, b, b, c, c, c], 0)
+];
+=TEX
+=SML
+fun check_7 f s = (f s; "Wrong") handle SYNTAX_ERROR => "OK";
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.7a.1", check_7 slrp_7, [a, b, b], "OK"),
+ ("SLRP.7a.2", check_7 slrp_7, [b, c, c], "OK"),
+ ("SLRP.7a.3", check_7 slrp_7, [a, c], "OK"),
+ ("SLRP.7a.4", check_7 slrp_7, [a, b, b, c], "OK")
+];
+=TEX
+\subsection{SLRP.8}
+=TEX
+=SML
+=DUMP mdt017h.grm.txt
+S	= e | A | B | C;
+
+A = A;
+
+B = A | b;
+
+C = |  C;
+=TEX
+Now we invoke SLRP:
+=SH
+slrp -l 2 -f mdt017h.grm.txt | tee mdt017h.grm.run 1>&2
+=TEX
+=SML
+store_mt_results
+mt_run
+ [(	"SLRP.8.1",
+	ExtendedIO.system,
+	"test  `egrep \"empty language\" mdt017h.grm.log | wc -l `  = 1",
+	true)];
+=TEX
+\subsection{Epilogue}
+=SML
+raw_diag_string (summarize_mt_results()^"\n");
+=TEX
+\end{document}
+S = X, Y | X, y;
+X = x | xx;
+Y = y | yy;
+
+Slrp.slrp{	in_file = "t.grm",
+	out_file = "t.grm.sml",
+	log_file = "",
+	eos = "Eos",
+	log_level = 3};
+
