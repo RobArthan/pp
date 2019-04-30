@@ -299,7 +299,7 @@ void text_verify_cb(
 	wchar_t *p = cbs->text->wcsptr;
 	Boolean has_crs = False, has_controls = False;
 	for(i = 0; i < cbs->text->length; ++i) {
-		if((p[i] & 0xff) == '\r') {
+		if(p[i] == L'\r') {
 			has_crs = True;
 		} else if(0 <= p[i] && p[i] <= 0xff && control_chars[p[i]]) {
 			has_controls = True;
@@ -308,7 +308,7 @@ void text_verify_cb(
 	}
 	if(has_crs) {
 		for(i = 0, j = 0; j < cbs->text->length; ++i, ++j) {
-			if((p[j] & 0xff) == '\r') {
+			if(p[j] == L'\r') {
 				if(j + 1 < cbs->text->length && p[j+1] == L'\n') {
 					j += 1;
 				} else {
