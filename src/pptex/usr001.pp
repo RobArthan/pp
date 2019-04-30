@@ -4041,7 +4041,6 @@ Octal value are used in {\tt xpp} applications defaults files (see \XPPUSERGUIDE
     \SHOWIT{88}{210}{II}{\PrII}
     \SHOWIT{89}{211}{IJ}{\PrIJ}
     \SHOWIT{8A}{212}{IK}{\PrIK}
-    \SHOWIT{8B}{213}{IL}{\PrIL}
     \SHOWIT{8C}{214}{IM}{\PrIM}
     \SHOWIT{8D}{215}{IN}{\PrIN}
     \SHOWIT{8E}{216}{IO}{\PrIO}
@@ -4290,7 +4289,6 @@ The following table shows the ASCII keyword corresponding to each of the extende
 \SHOWIT{\%dsub\%}{⩤}
 \SHOWIT{\%dres\%}{◁}
 \SHOWIT{\%cat\%}{⁀}
-\SHOWIT{\%dcat\%}{}
 \SHOWIT{\%filter\%}{↾}
 \SHOWIT{\%extract\%}{↿}
 \SHOWIT{\%overwrite\%}{⊕}

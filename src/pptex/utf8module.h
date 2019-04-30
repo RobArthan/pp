@@ -48,18 +48,11 @@
 #ifndef UTF8MODULE
 #define UTF8MODULE
 
-typedef int unicode;
+typedef wchar_t unicode;
 #define UNICODE_TO_PP_LEN 128
 
 typedef char bool;
 enum {False = 0, True = 1};
-
-/*
-#define bool short
-
-#define true True
-#define false False
-*/
 
 /* String Utilities */
 
@@ -69,15 +62,17 @@ int copy_keyword(
 	char *dest,
 	int max,
 	int suppress);
+int copy_keyword_uni(
+	unicode *kw,
+	int kwlen,
+	char *dest,
+	int max,
+	int suppress);
 int copy_string(char *source, char *dest, int max);
 char * find_space(char *str);
 char * skip_space(char *str);
 char * split_at_space(char *str);
 void string_n_copy(char *dest, char *source, int n);
-
-/* not used?
-int str_match(char *prefix, char *str);
-*/
 
 /* find file */
 
@@ -97,6 +92,7 @@ char * read_link(char *name);
 /* error reporting */
 
 #define MAX_LINE_LEN 1024
+#define LINE_LEN_WCHAR_FMT "%1024ls"
 
 struct file_data{
   char *name;
@@ -191,6 +187,11 @@ int get_hol_kw(char *str,
 	       int warn,
 	       struct file_data *file_F);
 
+int get_hol_kw_uni(unicode *str,
+	       int * len,
+	       int warn,
+	       struct file_data *file_F);
+
 int simple_read_line(char *line, int max_len, struct file_data *file_F);
 int read_line_as_ext(struct file_data *file_F);
 
@@ -198,15 +199,6 @@ char *find_steering_file(char *name, char *file_type);
 void read_steering_line(char *line, struct file_data *file_F);
 
 int find_keyword(char *kw);
-
-/* Not used? 
-void show_kw_kind(int kind);
-void show_one_keyword(struct keyword_information *ki);
-void show_one_indexed_keyword(int kwindex);
-void show_keywords(void);
-int compare_keyword_information(const void *vp1, const void *vp2);
-void initialise_keyword_information(void);
-*/
 
 /*
 ------------------
@@ -247,16 +239,6 @@ extern unsigned char character_flags[256];
 
 extern char *program_name;
 
-/* not used?
-const char unicode2pp(unicode cp);
-void do_unicode_to_pp(void);
-void do_pp_to_unicode(void);
-unicode get_code_point(void);
-unicode invalid_unicode(void);
-int unicode_to_pp_entry_cmp(const void *buf1, const void *buf2);
-const char *unicode2ppk(unicode cp);
-*/
-
 /*
 ------------------
 utf8_line_to_codes
@@ -271,6 +253,11 @@ The return value is the number of code points resulting.
 */
 
 int utf8_line_to_codes(char line[], unicode codes[]);
+
+/* Translate a unicode code point to the corresponding pp ext char (if there is one),
+otherwise, return 0 */
+
+const unsigned char unicode_to_ext(unicode cp);
 
 /*
 ---------------
@@ -288,16 +275,25 @@ in that order of priority.
 char *unicode_to_aekw(unicode code_point);
 
 /*
+--------------
+unicode_to_kwi
+--------------
+Find the keyword information for a unicode code point (if any).
+*/
+
+struct keyword_information *unicode_to_kwi(unicode cp);
+
+/*
 ----------------
 code_line_to_ext
 ----------------
 This procedure takes a line of input which has been translated into unicode
 code points into the ProofPower extended character set.
 The source and destination are buffers in a file_data parameter.
+The result is the length of the ext line.
 */
 
-void code_line_to_ext(struct file_data *file_F);
-
+int code_line_to_ext(struct file_data *file_F);
 
 /*
 --------------------------
@@ -339,6 +335,36 @@ array of unicode code points.
 */
 
 void ext_kw_seq_to_unicode(char *line, unicode codes[]);
+
+/*
+----------------------
+unicode_to_utf8
+----------------------
+This procedure takes a unicode code point and returns a utf8 string.
+If unicode point > 0x10ffffu it will be an empty string.
+*/ 
+
+char *unicode_to_utf8(unicode u);
+
+/*
+-------------
+unicode_to_kw
+-------------
+Convert a unicode code point to a keyword in percents
+(named if possible. otherwise hex).
+*/
+
+char *unicode_to_kw(unicode code_point);
+
+/*
+---------
+uni_to_pp
+---------
+converts a unicode code point to either an ascii character
+(if < 128) or a ProofPower extended character (128-255) if possible.
+Otherwise returns -1.
+*/
+const int uni_to_pp(unicode cp);
 
 void output_ext_as_utf8(char *line, FILE *file_F);
 

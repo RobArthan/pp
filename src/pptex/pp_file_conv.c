@@ -57,9 +57,7 @@ system~\cite{DS/FMU/IED/USR001}.
 #include <regex.h>
 #include <unistd.h>
 #include "utf8module.h"
-#ifdef __CYGWIN__
 #include <locale.h>
-#endif
 
 #define NOT_FOUND (-1)
 #define KEYWORD_FILE "sievekeyword"
@@ -307,6 +305,8 @@ main(int argc, char **argv)
   
   read_keyword_files(keyword_files);
   
+  if (main_F.utf8) setlocale(LC_ALL, "en_GB.UTF-8");
+
   if(keyword_F.grumbles > 0) {
     FPRINTF(stderr, "\n%s: %d fault%s reported on the keyword file.\n",
 	    program_name,
