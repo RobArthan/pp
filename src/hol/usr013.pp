@@ -25,15 +25,17 @@ set_pc"hol2";
 
 % COPYRIGHT (c) Lemma 1 Ltd.
 
-\documentstyle[11pt,hol1,fleqn,USR]{book}
+% \documentstyle[11pt,hol1,fleqn,USR]{book}
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
 
 \ftlmargin 0.5in
 \ftrmargin 0.5in
 
-\def\SCCSversion{$Revision: 2.9 $%
-}
-\def\SCCSdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
-}}
+\def\SCCSversion{\VCVersion}
+\def\SCCSdate{\VCDate}
 
 \USRmanual{HOL Tutorial}
 \USRref{USR013}

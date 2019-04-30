@@ -2,25 +2,12 @@
 ********************************************************************************
 usr022S.doc: this file is part of the PPHol system
 
-Copyright (c) 2002 Lemma 1 Ltd.
+Copyright (c) 2002-Present Lemma 1 Ltd.
 
 See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-# usr022S.doc,v 1.8 2002/10/17 16:20:01 rda Exp
-# The following ex script is intended to generate the work file
-# in which students can do the exercises
-# N.B. This file is not intended to be typeset
-=SH
-if	test -f usr022S.doc
-then
-ed usr022S.doc <<!DONE
-1,/^=TEX/-1d
-w hol_course_work.doc
-Q
-!DONE
-fi >/dev/null 2>&1
 =TEX
 \documentclass[a4paper,12pt]{article}
 \usepackage{A4}

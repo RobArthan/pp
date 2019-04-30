@@ -14,13 +14,16 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %
 %%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
 %\documentclass[a4paper,12pt]{article}
-\documentstyle[11pt,hol1,fleqn,USR,epsf]{book}
+% \documentstyle[11pt,hol1,fleqn,USR,epsf]{book}
 
-%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{epsf}
+\usepackage{fleqn}
+
 %\usepackage{A4}
 %\usepackage{Lemma1}
-%\usepackage{ProofPower}
-%\usepackage{epsf}
 %\usepackage{float}
 \makeindex
 

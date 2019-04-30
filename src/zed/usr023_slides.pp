@@ -41,6 +41,7 @@ with\\
 
 \vfill
 
+{\tiny Copyright \copyright\ : Lemma 1 Ltd. 1992-\number\year}%
 \end{center}
 
 \end{slide}

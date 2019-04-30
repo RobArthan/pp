@@ -30,9 +30,8 @@ cp "$DOC"/usr004.pp "$DOC"/usr013* .
 cp "$DOC"/usr022_slides.pp .
 cp "$DOC"/wrk022.pp "$DOC"/wrk043.pp "$DOC"/wrk044.pp "$DOC"/wrk046.pp .
 cp "$DOC"/usr022S.pp .
-sieve sml <usr022S.pp >/dev/null
-mv hol_course_work.pp "$DOC"
-sieve sml < wrk051.pp
+cp "$DOC"/usr022S.pp "$DOC"/hol_course_work.pp
+sieve -u sml < wrk051.pp
 make -f wrk051.mkf all_hol
 
 mv example_hol.* "$DB"

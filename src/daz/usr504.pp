@@ -12,66 +12,19 @@ Lemma 1 Ltd.% $Date: 2008/03/24 15:07:06 $ $Revision: 1.74 $ $RCSfile: usr504.do
 =TEX
 % TQtemplate.tex
 % sed -n "/^=DOC/,/^=ENDDOC/p" <dtd516.doc | sieve tex > usr501E.tex
-\documentstyle[11pt,hol1,fleqn,USR,epsf]{book}
-% temporary measure while waiting for LaTeXe to come along
-\def\LaTeXe{\LaTeX$2_{\varepsilon}$}
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+\def\SCCSversion{\VCVersion}
+\def\SCCSdate{\VCDate}
+
 \def\Hide#1{}
 \def\daztool{Compliance Tool}
 % just useful macros
 \def\ltm{$^{\rm TM}$}
 \def\Note#1{{\small\bf[ #1 ]}}
-=IGN
-\makeindex
-\TPPproject{DAZ PROJECT}  %% Mandatory field
-%\TPPvolume{}
-%\TPPpart{}
-\TPPtitle{Compliance Tool Language Description}  %% Mandatory field
-\TPPref{ISS/HAT/DAZ/USR504}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.74 $
-}
-\TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2008/03/24 15:07:06 $%
-}}
-\TPPstatus{Approved}			%% Mandatory field
-\TPPtype{Specification}
-\TPPkeywords{Compliance Notation}
-\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
-\TPPauthorisation{D.J.~King & Project Manager}
-\TPPabstract{
-This document is the Language Description Manual for the Compliance Tool.}
-%\TPPabstractB{}
-%\TPPabstractC{}
-%\TPPabstractD{}
-%\TPPabstractE{}
 %\TPPabstractF{}
-\TPPdistribution{\parbox[t]{4.0in}{%
-\begin{tabular}[t]{lr}
-C.O"Halloran & DRA\\
-DAZ Project Library & WIN01\\
-\end{tabular}}}
-
-%\TPPclass{CLASSIFICATION}
-%\def\TPPheadlhs{}
-%\def\TPPheadcentre{}
-%def\TPPheadrhs{}
-%\def\TPPfootlhs{}
-%\def\TPPfootcentre{}
-%\def\TPPfootrhs{}
-\def\TPPheadlhs{Lemma 1 Ltd.}
-%\def\TPPheadcentre{}
-%\def\TPPheadcentreproject{}
-%\def\TPPheadrhs{}
-\let\TPPfootlhs=\TPPfootrhs
-\def\TPPfootcentre{$\vcenter{\halign{\hfil\strut##\hfil\cr
-COPYRIGHT  \copyright\ Lemma 1 Ltd.\cr}}$}
-=TEX
-\ftlmargin 0.0in
-\ftrmargin 0.0in
-
-\def\SCCSversion{$Revision: 1.74 $%
-}
-\def\SCCSdate{\FormatDate{$Date: 2008/03/24 15:07:06 $%
-}}
 
 \USRmanual{Compliance Tool Language Description}
 \USRref{USR504}

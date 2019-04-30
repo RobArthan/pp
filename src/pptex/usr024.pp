@@ -12,11 +12,17 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 =TEX
 % usr024.doc   ℤ $Date: 2003/04/03 15:41:57 $ $Revision: 1.40 $ $RCSfile: usr024.doc,v $
-\documentstyle[hol1,11pt,TQ]{article}
+% \documentstyle[hol1,11pt,TQ]{article}
+\documentclass[a4paper,11pt]{article}
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+\makeindex
 
-\TPPtitle{Standard \LaTeX Document Style for \Product\ User Documentation}
+\def\Title{Standard \LaTeX Document Style for \Product\ User Documentation}
 %\def\TPPheadtitle{}
-\TPPref{DS/FMU/IED/USR024}
+\def\Reference{DS/FMU/IED/USR024}
 
 =IGNORE
 Commands to process this document:
@@ -29,20 +35,23 @@ bibtex usr024
 dvipage usr024 &
 
 =TEX
-\makeindex
-\TPPissue{\VCVersion}
-\TPPdate{\FormatDate{\VCDate}}
-\TPPproject{FST PROJECT}
-\TPPstatus{Draft}
-\TPPtype{Literate Script}
-\TPPkeywords{HOL}
-\TPPauthor{R.B.Jones & WIN01}
-\TPPauthorisation{R.B.~Jones & FMU Manager}
-\TPPabstract{This document contains the \LaTeX{} document style
+\def\Version{\VCVersion}
+\def\Date{\VCDate}
+\def\Author{R.B.Jones}
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+\def\Phone{C/O +44 7497 030682}
+
+\def\AbstractText{This document contains the \LaTeX{} document style
 	{\tt USR.sty} which is used for typesetting user documentation for \Product.}
-\TPPdistribution{\parbox[t]{4.0in}{%
-	Library
-}}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -53,18 +62,14 @@ dvipage usr024 &
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{document}
-\makeTPPfrontpage
+\headsep=0mm
+\FrontPage
+\headsep=10mm
 
 \vfill
-\begin{centering}
-
-\bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
-
-\end{centering}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\newpage
 \section{DOCUMENT CONTROL}
 
 \subsection{Contents List}

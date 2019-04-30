@@ -11,7 +11,12 @@ Contact: Rob Arthan < rda@lemma-one.com >
 Lemma 1 Ltd.% $Date: 2006/09/16 13:43:11 $ $Revision: 1.26 $ $RCSfile: usr503.doc,v $
 =TEX
 % TQtemplate.tex
-\documentstyle[11pt,hol1,fleqn,USR,epsf]{book}
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+\def\SCCSversion{\VCVersion}
+\def\SCCSdate{\VCDate}
 % change depth of section numbering
 \setcounter{secnumdepth}{4}
 \setcounter{tocdepth}{3}
@@ -30,59 +35,10 @@ Lemma 1 Ltd.% $Date: 2006/09/16 13:43:11 $ $Revision: 1.26 $ $RCSfile: usr503.do
 % just useful macros
 \def\ltm{$^{\rm TM}$}
 \def\Note#1{{\small\bf[ #1 ]}}
-=IGN
-\makeindex
-\TPPproject{DAZ PROJECT}  %% Mandatory field
-%\TPPvolume{}
-%\TPPpart{}
-\TPPtitle{Compliance Tool Proof Tutorial}  %% Mandatory field
-\TPPref{ISS/HAT/DAZ/USR503}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.26 $
-}
-\TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/09/16 13:43:11 $%
-}}
-\TPPstatus{Draft}			%% Mandatory field
-\TPPtype{Specification}
-\TPPkeywords{Compliance Notation}
-\TPPauthor{G.M.~Prout & HAT Team\\R.D.~Arthan & HAT Team}  %% Mandatory field
-\TPPauthorisation{R.D.~Arthan & Project Manager}
-\TPPabstract{
-This document is a Tutorial Guide for the {\daztool} Proof Facilities.}
-%\TPPabstractB{}
-%\TPPabstractC{}
-%\TPPabstractD{}
-%\TPPabstractE{}
-%\TPPabstractF{}
-\TPPdistribution{\parbox[t]{4.0in}{%
-\begin{tabular}[t]{lr}
-A. Smith & DRA\\
-Library & WIN01\\
-\end{tabular}}}
-
-%\TPPclass{CLASSIFICATION}
-%\def\TPPheadlhs{}
-%\def\TPPheadcentre{}
-%def\TPPheadrhs{}
-%\def\TPPfootlhs{}
-\def\Hide#1{}
-%\def\TPPfootcentre{}
-%\def\TPPfootrhs{}
-\def\TPPheadlhs{Lemma 1 Ltd.}
-%\def\TPPheadcentre{}
-%\def\TPPheadcentreproject{}
-%\def\TPPheadrhs{}
-\let\TPPfootlhs=\TPPfootrhs
-\def\TPPfootcentre{$\vcenter{\halign{\hfil\strut##\hfil\cr
-COPYRIGHT  \copyright\ Lemma 1 Ltd.\cr}}$}
 =TEX
 \ftlmargin 0.0in
 \ftrmargin 0.0in
 
-\def\SCCSversion{$Revision: 1.26 $%
-}
-\def\SCCSdate{\FormatDate{$Date: 2006/09/16 13:43:11 $%
-}}
 
 \USRmanual{Compliance Tool Proof Tutorial}
 \USRref{USR503}

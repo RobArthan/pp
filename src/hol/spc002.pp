@@ -13,7 +13,12 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %	hol_list -d play spc002 >spc002.thy.doc
 %	doctex spc002.thy.doc
 % TQtemplate.tex
-\documentstyle[hol1,11pt,TQa4]{article}
+% \documentstyle[hol1,11pt,TQa4]{article}
+\documentclass[a4paper,11pt]{article}
+\usepackage{A4}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+
 \ftlinepenalty=9999
 \def\Hide#1{}
 \def\Bool{``$\it{:}bool\,$''}
@@ -43,7 +48,7 @@ An index to the formal material is provided at the end of the document.
 \begin{centering}
 
 \bf Copyright \copyright\ : Lemma 1 Ltd \number\year \\
-Reference: DS/FMU/IED/SPC002; issue $Revision: 2.17 $%
+Reference: DS/FMU/IED/SPC001; Git revision: {\VCVersion}
 
 
 \end{centering}
@@ -899,10 +904,11 @@ e(ONCE_ASM_REWRITE_TAC[] THEN REWRITE_TAC[specification"-""1⋎s", specification
 e(EXISTS_TAC⌜∅⋎s:'U⌝ THEN REWRITE_TAC[thm2]);
 val thm3 = show(top_thm());
 
+=IGN
+\input{\jobname.thy.tex}
 =TEX
-{\twocolumn[\section{INDEX OF DEFINED TERMS}]
-{\makeatletter
-\printindex}}
+\twocolumn[\section{INDEX OF DEFINED TERMS}]
+\printindex
 \end{document}
 
 
