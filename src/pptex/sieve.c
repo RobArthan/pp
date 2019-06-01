@@ -2704,10 +2704,16 @@ main_convert_uni(
 	      }
 	      
 	      else if (opt_do_char){/* DO CHAR */
-		if (opt_utf8out && kwlen != 2) {
-		/* output as utf8 */
-		  outp += copy_string(unicode_to_utf8(ch), &out_line[outp],
-				      lenout_line-outp);
+		if (opt_utf8out && kwlen != 2){
+		  if (curkw->macro == NULL) {
+		    /* output as utf8 */
+		    outp += copy_string(unicode_to_utf8(ch), &out_line[outp],
+					lenout_line-outp);
+		  } else {
+		    /* Convert it to LaTeX form */
+		    outp += copy_string(curkw->macro,
+					&out_line[outp], lenout_line-outp);
+		  }
 		} else if (curkw->macro != NULL && kwlen != 2) {
 		  /* Convert it to LaTeX form using macro */
 		  outp += copy_string(curkw->macro, &out_line[outp], lenout_line-outp);

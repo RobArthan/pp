@@ -18,7 +18,14 @@ texdvi usr001 ; texdvi usr001 ; texdvi usr001 ; texdvi usr001
 dvipage usr001 &
 
 =TEX
-\documentstyle[hol1,11pt,fleqn,USR]{book}
+%\documentstyle[hol1,11pt,fleqn,USR]{book}
+\documentclass[a4paper,11pt]{book}
+%\usepackage{fontspec}
+%\setmainfont{ProofPowerSerif.ttf}[Path=/Users/rbj/.fonts/]
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+
 \USRmanual{Document Preparation}
 \USRref{USR001}
 \USRisbnl{978-1514276501}

@@ -1981,7 +1981,7 @@ store_mt_results
 mt_run
  [(	"r18.1",
 	ExtendedIO.system,
-	"test  `egrep \"Δ\" int522.tmp | wc -l `  = 1",
+	"test  `LC_ALL=C egrep \"Δ\" int522.tmp | wc -l `  = 1",
 	true)];
 ExtendedIO.system "rm int522.tmp";
 =TEX
