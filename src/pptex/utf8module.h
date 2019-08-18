@@ -48,6 +48,18 @@
 #ifndef UTF8MODULE
 #define UTF8MODULE
 
+#define FPRINTF (void)fprintf
+#define PRINTF (void)printf
+#define PUTC (void)putc
+#define WFPRINTF (void)fwprintf
+#define WPRINTF (void)wprintf
+#define PUTWC (void)putwc
+#define MAX_LINE_LEN 1024
+#define CHARSIZE (sizeof(wchar_t))
+#define MAX_LINE_LEN_BYTES (MAX_LINE_LEN * CHARSIZE)
+#define NOT_FOUND (-1)
+#define U_NOT_FOUND 0xFFFFFF
+
 typedef wchar_t unicode;
 #define UNICODE_TO_PP_LEN 128
 
@@ -57,37 +69,35 @@ enum {False = 0, True = 1};
 /* String Utilities */
 
 int copy_keyword(
-	char *kw,
+	wchar_t *kw,
 	int kwlen,
-	char *dest,
+	wchar_t *dest,
 	int max,
 	int suppress);
 int copy_keyword_uni(
 	unicode *kw,
 	int kwlen,
-	char *dest,
+	wchar_t *dest,
 	int max,
 	int suppress);
 int copy_string(char *source, char *dest, int max);
+int wcopy_string(wchar_t *source, wchar_t *dest, int max);
 char * find_space(char *str);
+wchar_t * wfind_space(wchar_t *str);
+int wcount_to_space(wchar_t *str);
 char * skip_space(char *str);
+wchar_t * wskip_space(wchar_t *str);
 char * split_at_space(char *str);
+wchar_t * wsplit_at_space(wchar_t *str);
 void string_n_copy(char *dest, char *source, int n);
+void wstring_n_copy(wchar_t *dest, wchar_t *source, int n);
 
 /* find file */
 
 int file_exists(char *name, int is_reg);
 char * get_real_name (char * name);
 char * tilde_expand(char *name);
-
-/* not used ?
-
-int is_sym_link(char *name);
-int is_dir(char *name);
-void split_file_name(char *name, char **dir, char **base);
-char * read_link(char *name);
-
-*/
+wchar_t * wtilde_expand(wchar_t *name);
 
 /* error reporting */
 
@@ -100,7 +110,7 @@ struct file_data{
   int line_no;
   int grumbles;
   FILE *fp;
-  char cur_line[MAX_LINE_LEN+1];
+  wchar_t cur_line[MAX_LINE_LEN+1];
   bool utf8;
   unicode code_line[MAX_LINE_LEN+1];
 };
@@ -109,23 +119,32 @@ void
 grumble1(char *msg,
 	struct file_data *file_F,
 	int show_line);
-
 void
 grumble(char *fmt,
 	char *msg,
 	struct file_data *file_F,
 	int show_line);
+void
+wgrumble(wchar_t *fmt,
+	 wchar_t *msg,
+	 struct file_data *file_F,
+	 int show_line);
 void message1(char *msg);
 void message(char *fmt, char *msg);
+void wmessage1(wchar_t *msg);
+void wmessage(wchar_t *fmt, wchar_t *msg);
 
 void EXIT(int n);
 void error_top(void);
 void error1(char *msg);
 void error(char *fmt, char *msg);
+void werror(wchar_t *fmt, wchar_t *msg);
 void internal_error(char *fmt, char *msg);
+void winternal_error(wchar_t *fmt, wchar_t *msg);
 void print_unix_error1(int eno);
 void unix_error1(char *msg);
 void unix_error(char *fmt, char *msg);
+void wunix_error(wchar_t *fmt, wchar_t *msg);
 void *malloc_and_check(unsigned size, int err);
 
 /* debug information */
@@ -160,10 +179,10 @@ struct keyword_information{
 #define KW_START_DIR 6
 #define KW_VERB_ALONE 7
 #define KW_WHITE 8
-  char *name;		/* The keyword */
-  char *macro;		/* Equivalent macro, or NULL */
+  wchar_t *name;		/* The keyword */
+  wchar_t *macro;      	/* Equivalent macro, or NULL */
   regex_t *tex_arg;	/* R.E. defining the TeX argument of this keyword, if non-null */
-  char tex_arg_sense;	/* How to interpret the R.E. */
+  wchar_t tex_arg_sense;	/* How to interpret the R.E. */
 #define KW_RE_MATCH 0		/* The argument must match the R.E. */
 #define KW_RE_DELIMITER 1	/* The argument is delimited by something that matches the R.E. */
   short seq;   /* sequence number */
@@ -182,7 +201,7 @@ struct kw_information kwi;
 
 bool utf8_stdin;
 
-int get_hol_kw(char *str,
+int get_hol_kw(wchar_t *str,
 	       int * len,
 	       int warn,
 	       struct file_data *file_F);
@@ -193,12 +212,13 @@ int get_hol_kw_uni(unicode *str,
 	       struct file_data *file_F);
 
 int simple_read_line(char *line, int max_len, struct file_data *file_F);
+int simple_wread_line(wchar_t *line, int max_len, struct file_data *file_F);
 int read_line_as_ext(struct file_data *file_F);
 
 char *find_steering_file(char *name, char *file_type);
-void read_steering_line(char *line, struct file_data *file_F);
+void read_steering_line(wchar_t *line, struct file_data *file_F);
 
-int find_keyword(char *kw);
+int find_keyword(wchar_t *kw);
 
 /*
 ------------------
@@ -250,14 +270,16 @@ It should be passed the address of the utf8, which is required
 to be a null terminated string, and the address of a unicode array,
 which will also be null terminated when the procedure exits.
 The return value is the number of code points resulting.
+
+(this procedure should no longer be in use)
 */
 
-int utf8_line_to_codes(char line[], unicode codes[]);
+int utf8_line_to_codes(wchar_t line[], unicode codes[]);
 
 /* Translate a unicode code point to the corresponding pp ext char (if there is one),
 otherwise, return 0 */
 
-const unsigned char unicode_to_ext(unicode cp);
+const wchar_t unicode_to_ext(unicode cp);
 
 /*
 ---------------
@@ -272,7 +294,7 @@ Convert a unicode code point to either:
 in that order of priority.
 */
 
-char *unicode_to_aekw(unicode code_point);
+wchar_t *unicode_to_aekw(unicode code_point);
 
 /*
 --------------
@@ -310,7 +332,7 @@ The *len parameter will in that case be set to the length of the keyword
 even though no unicode code point is returned.
 */
   
-unicode ext_or_kw_to_unicode(char *line, int *len);
+unicode ext_or_kw_to_unicode(wchar_t *line, int *len);
 
 /*
 --------------------------
@@ -321,7 +343,7 @@ or ProofPower extended characters and converts them to a null terminated
 array of unicode code points. 
 */
 
-void ext_seq_to_unicode(char *line, unicode codes[]);
+void ext_seq_to_unicode(wchar_t *line, unicode codes[]);
 
 /*
 --------------------------
@@ -334,7 +356,7 @@ hexadecimal unicode code points and converts them to a null terminated
 array of unicode code points. 
 */
 
-void ext_kw_seq_to_unicode(char *line, unicode codes[]);
+void ext_kw_seq_to_unicode(wchar_t *line, unicode codes[]);
 
 /*
 ----------------------
@@ -345,6 +367,29 @@ If unicode point > 0x10ffffu it will be an empty string.
 */ 
 
 char *unicode_to_utf8(unicode u);
+wchar_t *unicode_to_wutf8(unicode u);
+
+/*
+-------------------
+unicode_seq_to_utf8
+-------------------
+Unicode sequence to utf8.
+This function takes a null terminated unicode sequence and translates it into a null
+terminated utf8 char sequence (allocated my malloc).
+*/
+
+char *unicode_seq_to_utf8(unicode *useq);
+
+/*
+-------------------
+utf8_seq_to_unicode
+-------------------
+utf8 sequence to unicode.
+This function takes a null terminated utf8 (char) sequence and translates it into a null
+terminated unicode (wchar_t) sequence (allocated my malloc).
+*/
+
+unicode *utf8_seq_to_unicode(char *useq);
 
 /*
 -------------
@@ -354,7 +399,7 @@ Convert a unicode code point to a keyword in percents
 (named if possible. otherwise hex).
 */
 
-char *unicode_to_kw(unicode code_point);
+wchar_t *unicode_to_kw(unicode code_point);
 
 /*
 ---------
@@ -364,9 +409,10 @@ converts a unicode code point to either an ascii character
 (if < 128) or a ProofPower extended character (128-255) if possible.
 Otherwise returns -1.
 */
+
 const int uni_to_pp(unicode cp);
 
-void output_ext_as_utf8(char *line, FILE *file_F);
+void output_ext_as_utf8(wchar_t *line, FILE *file_F);
 
 /*
 These high levek transcription procedures are used by pp_file_conv
@@ -379,3 +425,9 @@ void transcribe_file_to_ext(struct file_data *input_F, FILE *output_F);
 void transcribe_file_to_ascii(struct file_data *input_F, FILE *output_F);
 
 #endif
+
+/* from psearch.c */
+
+int sv_regwcomp(regex_t *preg, const wchar_t *widepat, int cflags);
+int sv_regwexec(const regex_t *preg, const wchar_t *widestr,
+		       size_t nmatch, regmatch_t pmatch[], int eflags);

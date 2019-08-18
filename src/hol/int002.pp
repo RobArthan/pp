@@ -1594,9 +1594,9 @@ accessible from $x$. The HOL definition of this is as follows
 The possibility operator, $\Diamond$, is defined in terms of
 necessitation and negation as follows:
 ⓈHOLCONST
-	⦏⋄⦎: ('W)FRAME → ('W)VALUATION → ('W)VALUATION
+	⦏%Diamond%⦎: ('W)FRAME → ('W)VALUATION → ('W)VALUATION
 ├
-	∀R A⦁ ⋄ R A = ¬(%Box%R(¬A))
+	∀R A⦁ %Diamond% R A = ¬(%Box%R(¬A))
 ■
 =TEX
 
@@ -1736,7 +1736,7 @@ val ⦏axiom2_thm⦎ = save_thm("axiom2_thm", pop_thm());
 \subsubsection{Axiom 3}
 This axiom holds for symmetric accessibility relations:
 =SML
-push_goal([], ⌜∀R⦁ Symmetric R ⇒ ∀A⦁ Valid(A ⇒ %Box%R (⋄ R A))⌝);
+push_goal([], ⌜∀R⦁ Symmetric R ⇒ ∀A⦁ Valid(A ⇒ %Box%R (%Diamond% R A))⌝);
 =TEX
 =SML
 a(rewrite_tac modal_rewrites);
@@ -1750,7 +1750,7 @@ val ⦏axiom3_thm⦎ = save_thm("axiom3_thm", pop_thm());
 \subsubsection{Axiom 4}
 This axiom holds for euclidean accessibility relations:
 =SML
-push_goal([], ⌜∀R⦁ Euclidean R ⇒ ∀A⦁ Valid(⋄ R A ⇒ %Box%R (⋄ R A))⌝);
+push_goal([], ⌜∀R⦁ Euclidean R ⇒ ∀A⦁ Valid(%Diamond% R A ⇒ %Box%R (%Diamond% R A))⌝);
 =TEX
 =SML
 a(rewrite_tac modal_rewrites);
@@ -1823,7 +1823,7 @@ using $strip_tac$ to prove the resulting proposition.
 local
 	val rw_thms =
 	(map(get_defn"-")
-		["⋄", "∧_modal", "∨_modal", "¬_modal",
+		["%Diamond%", "∧_modal", "∨_modal", "¬_modal",
 		 "⇒_modal", "Valid"]);
 in
 fun ⦏modal_taut_rule⦎ (tm : TERM) : THM = (
@@ -1866,8 +1866,8 @@ two results are given as theorem 6 in chapter 1 of \cite{Boolos79} and
 the proofs we give follow the ones give there.
 
 =GFT Informal Example
-	⊢ A ⇒ ⋄ A
-	⊢ %Box% A ⇒ ⋄ A
+	⊢ A ⇒ %Diamond% A
+	⊢ %Box% A ⇒ %Diamond% A
 =TEX
 For expository purposes, we have written the proof out step by step.
 In actual use, the main purpose of the sort of rules we have implemented
@@ -1892,22 +1892,22 @@ val ⦏lemma1⦎ = axiom1_rule ⌜Valid(%Box% R (¬A) ⇒ ¬A)⌝;
 val lemma1 = Reflexive R ⊢ Valid (%Box% R (¬ A) ⇒ ¬ A) : THM
 =TEX
 =SML
-val ⦏lemma2⦎ = modal_taut_rule⌜Valid((%Box% R(¬A) ⇒ ¬A) ⇒ (A ⇒ ⋄ R A))⌝;
+val ⦏lemma2⦎ = modal_taut_rule⌜Valid((%Box% R(¬A) ⇒ ¬A) ⇒ (A ⇒ %Diamond% R A))⌝;
 =TEX
 =GFT HOL Output
-val lemma2 = ⊢ Valid ((%Box% R (¬ A) ⇒ ¬ A) ⇒ A ⇒ ⋄ R A) : THM
+val lemma2 = ⊢ Valid ((%Box% R (¬ A) ⇒ ¬ A) ⇒ A ⇒ %Diamond% R A) : THM
 =TEX
 =SML
 val ⦏result1⦎ = save_thm("result1", modal_mp_rule lemma2 lemma1);
 =TEX
 =GFT HOL Output
-val result1 = Reflexive R ⊢ Valid (A ⇒ ⋄ R A) : THM
+val result1 = Reflexive R ⊢ Valid (A ⇒ %Diamond% R A) : THM
 =TEX
 =SML
-val ⦏lemma3⦎ = modal_taut_rule⌜Valid((%Box% R A ⇒ A) ⇒ (A ⇒ ⋄ R A) ⇒ (%Box% R A ⇒ ⋄ R A))⌝;
+val ⦏lemma3⦎ = modal_taut_rule⌜Valid((%Box% R A ⇒ A) ⇒ (A ⇒ %Diamond% R A) ⇒ (%Box% R A ⇒ %Diamond% R A))⌝;
 =TEX
 =GFT HOL Output
-val lemma3 = ⊢ Valid ((%Box% R A ⇒ A) ⇒ (A ⇒ ⋄ R A) ⇒ %Box% R A ⇒ ⋄ R A) : THM
+val lemma3 = ⊢ Valid ((%Box% R A ⇒ A) ⇒ (A ⇒ %Diamond% R A) ⇒ %Box% R A ⇒ %Diamond% R A) : THM
 =TEX
 =SML
 val ⦏lemma4⦎ = axiom1_rule ⌜Valid(%Box%R A ⇒ A)⌝;
@@ -1919,13 +1919,13 @@ val lemma4 = Reflexive R ⊢ Valid (%Box% R A ⇒ A) : THM
 val ⦏lemma5⦎ = modal_mp_rule lemma3 lemma4;
 =TEX
 =GFT HOL Output
-val lemma5 = Reflexive R ⊢ Valid ((A ⇒ ⋄ R A) ⇒ %Box% R A ⇒ ⋄ R A) : THM
+val lemma5 = Reflexive R ⊢ Valid ((A ⇒ %Diamond% R A) ⇒ %Box% R A ⇒ %Diamond% R A) : THM
 =TEX
 =SML
 val ⦏result2⦎ = save_thm("result2", modal_mp_rule lemma5 result1);
 =TEX
 =GFT HOL Output
-val result2 = Reflexive R ⊢ Valid (%Box% R A ⇒ ⋄ R A) : THM
+val result2 = Reflexive R ⊢ Valid (%Box% R A ⇒ %Diamond% R A) : THM
 =TEX
 \pagebreak
 \subsection{Practical Systems}

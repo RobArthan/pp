@@ -162,7 +162,7 @@ None.
 \section{PREAMBLE}
 =TEX
 =SH
-sieve -u -f hol.svf imp <dtd514.pp | \
+sieve -u -f holutf8.svf imp <dtd514.pp | \
 	sed \
 	-e '/^signature/d' \
 	-e '/^include/d' \

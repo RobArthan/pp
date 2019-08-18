@@ -237,7 +237,7 @@ function 0 if _? then _! else _!
 function 0 rightassoc _ ⦂ _
 ■
 ⓈZ
-│ function 0 ≪ _! ≫
+│ function 0 %ll% _! %gg%
 ■
 ⓈZ
 function 0 Π _?
@@ -363,9 +363,9 @@ the use of the {\ProductZ} language as discussed in \cite{DS/FMU/IED/DEF007}.
 These are not part of the Standard Z Library, but are required to support
 the use of the {\ProductZ} language as discussed in \cite{DS/FMU/IED/DEF007}.
 ╒[X]═══════════
-│ ≪ _! ≫ : X → X
+│ %ll% _! %gg% : X → X
 ├──────
-│ ∀x:X⦁ ≪x≫ = x
+│ ∀x:X⦁ %ll%x%gg% = x
 └──────────────
 
 
@@ -649,7 +649,7 @@ The defining property of the conditional instantiate to 𝕌.
 
 =THDOC
 req_thm(⦏"z_guillemets_thm"⦎,([], ⓩ
-	∀ x : 𝕌 ⦁ ≪ x ≫ = x
+	∀ x : 𝕌 ⦁ %ll% x %gg% = x
 	⌝));
 =DESCRIBE
 Rewrite rule to eliminate the guillemet brackets.

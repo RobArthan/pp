@@ -933,7 +933,6 @@ Maths symbols.
 	([	"bij"],		Value "⤖",			Simple),
 	([	"bottom"],	Value "⊥",			Simple),
 	([	"cat"],		Value "⁀",			Simple),
-	([	"dcat"],	Value "",			Simple),
 	([	"def"],		Value "≜",			Simple),
 	([	"dintersect"],	Value "⋂",			Simple),
 	([	"dres"],	Value "◁",			Simple),

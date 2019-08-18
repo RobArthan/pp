@@ -321,10 +321,13 @@ main(int argc, char **argv)
   if (main_F.utf8)
     if (ascii_out) transcribe_file_to_ascii(&main_F, stdout);
     else transcribe_file_to_ext(&main_F, stdout);
-  else if (nokw) {transcribe_file_nkw_to_utf8(&main_F, stdout);}
-  else {transcribe_file_to_utf8(&main_F, stdout);}
-  if(debug) message1("Sieving completed");
-  
+  else {
+    setlocale(LC_ALL, "C.ISO88591");
+    if (nokw) {transcribe_file_nkw_to_utf8(&main_F, stdout);}
+    else {transcribe_file_to_utf8(&main_F, stdout);}
+    if(debug) message1("Sieving completed");
+  };
+
   if(limits.opt_list) list_limits();
   
   if(main_F.grumbles > 0) {

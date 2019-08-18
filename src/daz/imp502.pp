@@ -152,7 +152,7 @@ None.
 \section{GENERATING THE STRUCTURE}
 =TEX
 =SH
-sieve -u -f hol.svf imp <dtd502.pp | \
+sieve -u -f holutf8.svf imp <dtd502.pp | \
 	sed \
 	-e '/^signature/s/signature\(.*\)=[ 	]*sig/structure\1:\1= struct/' \
 	-e '/^end.*signature/s/signature/structure/' \

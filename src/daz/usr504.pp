@@ -2757,7 +2757,7 @@ The following command is used to list one of these theories.
 =SML
 fun zo (thy : string, fstem : string) : unit = (
 	open_theory thy;
-	z_output_theory{out_file=fstem ^".th.doc", theory = thy}
+	z_output_theory{out_file=fstem ^".th.pp", theory = thy}
 );
 =TEX
 The following package introduces functions which we will need.

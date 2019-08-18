@@ -1,3 +1,17 @@
+/* utf8module.c
+ * 
+ * extracted from what sieve during the transition to support for utf8 so that more than one program 
+ * could use the features herein.   Initially intended to be findfioe, sieve, pp_file_conv and xpp.
+ * xpp was later transitioned independently.
+ *
+ * A late starting change history starts here.
+ *
+ * 9/7/2019 A wholesale transition to wchar_t is undertaken. Boundary initially envisaged as excluding
+ * findfile and anything exclusively concerned with filenames, and including everything else.
+ * Not immediately obvious which string utilities 
+ *
+ */
+
 #include <stdio.h>
 #include <ctype.h>
 #include <pwd.h>
@@ -29,8 +43,14 @@
 ================
 String Utilities
 ================
+*/
 
- Return a pointer to the first non space like character in "str" */
+/*
+----------
+skip_space
+----------
+ Return a pointer to the first non space-like character in "str"
+*/
 
 char *
 skip_space(char *str)
@@ -39,7 +59,7 @@ skip_space(char *str)
 
 	if(p != NULL) {
 		while( isascii(*p) && isspace(*p) ) {
-			++p;
+			p = &p[1];
 		}
 	}
 	return(p);
@@ -47,9 +67,50 @@ skip_space(char *str)
 
 /*
 ----------
+wskip_space
+----------
+ Return a pointer to the first non space-like character in "str"
+*/
+
+wchar_t *
+wskip_space(wchar_t *str)
+{
+	wchar_t *p = str;
+
+	if(p != NULL) {
+		while( iswascii(*p) && iswspace(*p) ) {
+		  p = &p[1];
+		}
+	}
+	return(p);
+}
+
+/*
+-------------
+wcount_spaces
+-------------
+ Counts the number of space-like characters at the beginning of "str"
+*/
+
+int
+wcount_spaces(wchar_t *str)
+{
+	wchar_t *p = str;
+	int count = 0;
+
+	if(p != NULL) {
+		while( iswascii(*p) && iswspace(*p) ) {
+		  p = &p[1]; ++count;
+		}
+	}
+	return(count);
+}
+
+/*
+----------
 find_space
 ----------
-Return a pointer to the first space like character in "str".
+Return a pointer to the first space-like character in "str".
 */
 		     
 char *
@@ -59,10 +120,50 @@ find_space(char *str)
 
 	if(p != NULL) {
 		while( (*p) && !(isascii(*p) && isspace(*p)) ) {
-			++p;
+			p = &p[1];
 		}
 	}
 	return(p);
+}
+/*
+----------
+wfind_space
+----------
+Return a pointer to the first space-like character in "str".
+*/
+		     
+wchar_t *
+wfind_space(wchar_t *str)
+{
+	wchar_t *p = str;
+
+	if(p != NULL) {
+		while( (*p) && !(iswascii(*p) && iswspace(*p)) ) {
+			p = &p[1];
+		}
+	}
+	return(p);
+}
+
+/*
+---------------
+wcount_to_space
+---------------
+Count characters to the first space-like character in "str".
+*/
+		     
+int
+wcount_to_space(wchar_t *str)
+{
+	wchar_t *p = str;
+	int count = 0;
+
+	if(p != NULL) {
+		while( (*p) && !(iswascii(*p) && iswspace(*p)) ) {
+		  p = &p[1]; ++count;
+		}
+	}
+	return(count);
 }
 
 bool is_uc_hexit(char ch)
@@ -70,13 +171,29 @@ bool is_uc_hexit(char ch)
 	return ('0' <= ch && ch <= '9') || ('A' <= ch && ch <= 'F');
 }
 
+bool wis_uc_hexit(wchar_t ch)
+{
+	return (L'0' <= ch && ch <= L'9') || (L'A' <= ch && ch <= L'F');
+}
+
 bool is_percent(char ch)
 {
 	return ch == '%';
 }
+
+bool wis_percent(wchar_t ch)
+{
+	return ch == L'%';
+}
+
 bool is_x(char ch)
 {
 	return ch == 'x';
+}
+
+bool wis_x(wchar_t ch)
+{
+	return ch == L'x';
 }
 
 /*
@@ -99,6 +216,27 @@ string_n_copy(char *dest, char *source, int n)
 		*(dest++) = *(source++);
 	}
 	*dest = '\0';
+}
+/*
+-------------
+wstring_n_copy
+-------------
+Copy a string of at most {\tt n} characters, but
+stop at an earlier null character.  Append a null character to the
+resultant string.  Thus the result string may occupy {\tt n+1}
+characters.  This routine is very similar to the library routine {\tt
+strncpy} but: (1)~it does not pad the result string with nulls; (2)~it
+guarantees the result is null terminated; and, (3)~it does not return
+any value.
+*/
+
+void
+wstring_n_copy(wchar_t *dest, wchar_t *source, int n)
+{
+	while((n--)>0 && *source) {
+		*(dest++) = *(source++);
+	}
+	*dest = L'\0';
 }
 
 /*
@@ -127,6 +265,31 @@ split_at_space(char *str)
 }
 
 /*
+--------------
+wsplit_at_space
+--------------
+Split the given string into two by overwriting
+the first white space character in the argument with a null,
+effectively leaving the argument as the first word of string.  Then,
+skip further white space characters returning a pointer to the first
+non-space character.  If the argument does not have any spaces then
+nothing is overwritten and the value returned is a pointer to the null
+character at the end of the string.
+*/
+
+wchar_t *
+wsplit_at_space(wchar_t *str)
+{
+	wchar_t *p = wfind_space(str);
+
+	if(p != NULL && *p) {
+		*p = L'\0';
+		p = wskip_space(p+1);
+	}
+	return(p);
+}
+
+/*
 ---------
 str_match
 ---------
@@ -146,6 +309,150 @@ str_match(char *prefix, char *str)
 
 	return( prefix[i] == '\0' ? i : 0 );
 }
+
+/*
+---------
+wstr_match
+---------
+Compares the two strings.  If the first string is a prefix of
+the second string then the length of the first string is returned.
+Otherwise 0 is returned.
+*/
+
+int
+wstr_match(wchar_t *prefix, wchar_t *str)
+{
+	int i = 0;
+
+	while(prefix[i] != L'\0' && str[i] != L'\0' && prefix[i] == str[i]) {
+		i++;
+	}
+
+	return( prefix[i] == L'\0' ? i : 0 );
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Support for regular expression searches in wide character strings.
+ * In their wisdom, the POSIX people only defined the regex facilities
+ * for multi-byte strings. Free BSD has the obvious extensions 
+ * regwcomp and regwexec, but the GNU implementation is pedantically
+ * POSIX compliant. At the expense of some memory, we simulate
+ * the wide character interface,
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+#define INITCHUNK 4
+#define REGEXEC sv_regwexec
+/* If we don't have REG_INVARG use the glibc non-standard error code instead */
+#ifndef REG_INVARG
+#define REG_INVARG REG_EEND
+#endif
+
+int sv_regwcomp(regex_t *preg, const wchar_t *widepat, int cflags)
+{
+	char *pattern;
+	size_t cr;
+	int len, rcr;
+	len = wcslen(widepat) * MB_CUR_MAX;
+	pattern = malloc(len + 1);
+	if(pattern == 0) return REG_ESPACE;
+	cr = wcstombs(pattern, widepat, len + 1);
+	if(cr == (size_t)-1) return REG_INVARG;
+	rcr = regcomp(preg, pattern, cflags);
+	free(pattern);
+	return rcr;
+}
+/*
+ * Some implementations of regexec call strlen on the text: if the
+ * text has length N, say, this introduces an O(N) overhead that can
+ * make replace-all operations into an N^2*K operation (where K is some
+ * factor dependent on the average length of the matches and on the
+ * complexity of the regular expression. Moreover as we have to
+ * convert the wide character string into a multi-byte string 
+ * the conversion would involve a similar O(N) overhead. To avoid
+ * this, we use a "double-and-conquer" approach that makes the cost N*K.
+ *
+ * An earlier version of this just did two malloc calls for enough
+ * memory to accommodate all of widestr before the the main loop.
+ * On big files this resulted in very poor  performance on replace_all
+ * operations. The approach that allocates just enough for the
+ * current chunk is 3 or 4 orders of magnitude faster on a 10Mb file.
+ * 
+ */
+int sv_regwexec(const regex_t *preg, const wchar_t *widestr,
+	size_t nmatch, regmatch_t pmatch[], int eflags)
+{
+	char *str;
+	const wchar_t *pwc;
+	int *offset_to_woffset, i, str_i, curr_chunk, len, cr, rer;
+	len = INITCHUNK  * MB_CUR_MAX;
+	str = malloc(len + 1);
+	if(str == 0) return REG_ESPACE;
+	offset_to_woffset = (int*)malloc(sizeof(int)*(len + 1));
+	if(offset_to_woffset == 0) { free(str); return REG_ESPACE; }
+	for(	curr_chunk = INITCHUNK,
+		pwc = widestr,
+		str_i = 0,
+		rer = REG_NOMATCH;
+		*pwc != 0;
+		curr_chunk *= 2) {
+/* convert up to curr_chunk elements from widestr into str */
+		len = curr_chunk * MB_CUR_MAX;
+		str = realloc(str, len + 1);
+		if(str == 0) return REG_ESPACE;
+		offset_to_woffset = (int*)realloc((char*)offset_to_woffset,
+							sizeof(int)*(len + 1));
+		if(offset_to_woffset == 0) { free(str); return REG_ESPACE; }
+		while(pwc - widestr < curr_chunk && *pwc !=0) {
+			cr = wctomb(str + str_i, *pwc);
+			if(cr == -1) {
+				free(str);
+				free((char*)offset_to_woffset);
+				return REG_INVARG;
+			}
+/* record offset of current element of widestr against this index in str */
+			offset_to_woffset[str_i] = pwc - widestr;
+/* mark remaining chars in this multi-byte char as invalid offsets */
+			for(i = 1; i < cr; i += 1) {
+				offset_to_woffset[str_i + i] = -1;
+			}
+			str_i += cr;
+			pwc += 1;
+		}
+		str[str_i] = 0;
+		offset_to_woffset[str_i] = pwc - widestr;
+/* try to match */
+		rer = regexec(preg, str, nmatch, pmatch, eflags);
+		if(rer == 0 && (pmatch[0].rm_eo < str_i || *pwc == L'\0')) {
+			/* match */
+			break;
+		} else if (rer != 0 && rer != REG_NOMATCH) {
+			/* error */
+			break;
+		} /* else not matched yet; go round for more */
+	}
+	if(rer != 0) {
+		free(str);
+		free((char*)offset_to_woffset);
+		return rer;
+	}
+	for(i = 0; i < nmatch; i += 1) {
+		if(0 <= pmatch[i].rm_so && pmatch[i].rm_so < len + 1 && offset_to_woffset[pmatch[i].rm_so] >= 0) {
+			pmatch[i].rm_so = offset_to_woffset[pmatch[i].rm_so];
+		}
+		if(0 <= pmatch[i].rm_eo && pmatch[i].rm_eo < len + 1 && offset_to_woffset[pmatch[i].rm_eo] >= 0) {
+			pmatch[i].rm_eo = offset_to_woffset[pmatch[i].rm_eo];
+		}
+		if((pmatch[i].rm_so < 0) != (pmatch[i].rm_eo < 0)) {
+			free(str);
+			free((char*)offset_to_woffset);
+			return REG_INVARG;
+		}
+	}
+	free(str);
+	free((char*)offset_to_woffset);
+	return 0;
+}
+
 
 /*
 ========
@@ -178,7 +485,7 @@ tilde_expand(char *name)
 	int res_len, insert_len;
 	struct passwd *pw;
 	if(*name != '~') {
-	    return(Strcpy((char*)malloc((unsigned)strlen(name)+1), name));
+	    return(strcpy((char*)malloc((unsigned)strlen(name)+1), name));
 	};
 	for(q = uname, p=name+1; p - name < 8 && *p && *p != '/'; ++p) {
 	    *q++ = *p;
@@ -259,6 +566,7 @@ is_sym_link(char *name)
 	}
 	return S_ISLNK(st.st_mode);
 }
+
 /*
 ------
 is_dir
@@ -275,6 +583,7 @@ is_dir(char *name)
 	}
 	return S_ISDIR(st.st_mode);
 }
+
 /*
 ---------------
 split_file_name
@@ -311,12 +620,14 @@ split_file_name(char *name, char **dir, char **base)
 	*base = (char*) malloc(name_len + 1);
 	strcpy(*base, name);
 }
+
 /*
 ---------
 read_link
 ---------
 like the system call readlink, but handling the memory allocation.
 */
+
 char *
 read_link(char *name)
 {
@@ -336,6 +647,7 @@ read_link(char *name)
 	buf[count] = 0;
 	return buf;
 }
+
 /*
 -------------
 get_real_name
@@ -518,13 +830,6 @@ int debug = 0;
 #define D_EXPAND 2048
 */
 
-#define FPRINTF (void)fprintf
-#define PRINTF (void)printf
-#define PUTC (void)putc
-#define MAX_LINE_LEN 1024
-#define NOT_FOUND (-1)
-#define U_NOT_FOUND 0xFFFFFF
-
 struct file_data dummy_F = {"dummy file", NULL, 0, 0, NULL, {0, 0, 0}};
 
 /*
@@ -585,8 +890,8 @@ grumble1(char *msg,
 		FPRINTF(stderr, ": line %d of %s", file_F->line_no, file_F->name);
 		if(file_F->file_name != 0) FPRINTF(stderr, " %s", file_F->file_name);
 	}
-	FPRINTF(stderr, ": %s\n", msg);
-	if(show_line) FPRINTF(stderr, "\t%s\n", file_F->cur_line);
+	WFPRINTF(stderr, L": %s\n", msg);
+	if(show_line) FPRINTF(stderr, "\t%S\n", file_F->cur_line);
 
 	file_F->grumbles ++;
 }
@@ -606,7 +911,27 @@ grumble(char *fmt,
 	PUTC(' ', stderr);
 	FPRINTF(stderr, fmt, msg);
 	PUTC('\n', stderr);
-	if(show_line) FPRINTF(stderr, "\t%s\n", file_F->cur_line);
+	if(show_line) FPRINTF(stderr, "\t%S\n", file_F->cur_line);
+
+	file_F->grumbles ++;
+}
+
+void
+wgrumble(wchar_t *fmt,
+	wchar_t *msg,
+	struct file_data *file_F,
+	int show_line)
+{
+	WFPRINTF(stderr, L"%s", program_name);
+	if(show_line) {
+		WFPRINTF(stderr, L": line %d of %s", file_F->line_no, file_F->name);
+		if(file_F->file_name != 0) WFPRINTF(stderr, L" %s", file_F->file_name);
+	}
+	PUTWC(L':', stderr);
+	PUTWC(L' ', stderr);
+	WFPRINTF(stderr, fmt, msg);
+	PUTWC(L'\n', stderr);
+	if(show_line) WFPRINTF(stderr, L"\t%S\n", file_F->cur_line);
 
 	file_F->grumbles ++;
 }
@@ -626,10 +951,26 @@ error1(char *msg)
 }
 
 void
+werror1(wchar_t *msg)
+{
+	error_top();
+	WFPRINTF(stderr, L"%S", msg);
+	PUTC('\n', stderr);
+}
+
+void
 error(char *fmt, char *msg)
 {
 	error_top();
 	FPRINTF(stderr, fmt, msg);
+	PUTC('\n', stderr);
+}
+
+void
+werror(wchar_t *fmt, wchar_t *msg)
+{
+	error_top();
+	WFPRINTF(stderr, fmt, msg);
 	PUTC('\n', stderr);
 }
 
@@ -640,6 +981,15 @@ internal_error(char *fmt, char *msg)
 	FPRINTF(stderr, fmt, msg);
 	PUTC('\n', stderr);
 }
+
+void
+winternal_error(wchar_t *fmt, wchar_t *msg)
+{
+	FPRINTF(stderr, "%s: possible internal error\n  ", program_name);
+	WFPRINTF(stderr, fmt, msg);
+	PUTC('\n', stderr);
+}
+
 void
 print_unix_error1(int eno)
 {
@@ -665,6 +1015,18 @@ unix_error1(char *msg)
 }
 
 void
+wunix_error1(wchar_t *msg)
+{
+	extern int errno;
+	int save_errno = errno;
+
+	error_top();
+	WFPRINTF(stderr, L"%S", msg);
+
+	print_unix_error1(save_errno);
+}
+
+void
 unix_error(char *fmt, char *msg)
 {
 	extern int errno;
@@ -675,10 +1037,31 @@ unix_error(char *fmt, char *msg)
 
 	print_unix_error1(save_errno);
 }
+
+void
+wunix_error(wchar_t *fmt, wchar_t *msg)
+{
+	extern int errno;
+	int save_errno = errno;
+
+	error_top();
+	WFPRINTF(stderr, fmt, msg);
+
+	print_unix_error1(save_errno);
+}
+
 void
 message1(char *msg)
 {
 	(void)fputs(msg, stdout);
+	(void)fputs("\n", stdout);
+	if(debug) fflush(stdout);
+}
+
+void
+wmessage1(wchar_t *msg)
+{
+	(void)fputws(msg, stdout);
 	(void)fputs("\n", stdout);
 	if(debug) fflush(stdout);
 }
@@ -690,6 +1073,15 @@ message(char *fmt, char *msg)
 	(void)fputs("\n", stdout);
 	if(debug) fflush(stdout);
 }
+
+void
+wmessage(wchar_t *fmt, wchar_t *msg)
+{
+	(void)wprintf(fmt, msg);
+	(void)fputs("\n", stdout);
+	if(debug) fflush(stdout);
+}
+
 void *
 malloc_and_check(unsigned size, int err)
 {
@@ -734,6 +1126,31 @@ copy_string(char *source, char *dest, int max)
 	return(i);
 }
 
+/*
+-----------
+wcopy_string
+-----------
+Copies the {\tt source} string into the {\tt dest}
+string for up to {\tt max} characters.  Does not add a null character
+after the copied characters if the length is exceeded.  Return the
+number of characters copied.  This differs from the C library routines
+{\tt strcpy} and {\tt strncpy} which return the address of the output
+string.
+*/
+
+int
+wcopy_string(wchar_t *source, wchar_t *dest, int max)
+{
+	int i = 0;
+
+	if(source != NULL) {
+		while((*(dest++) = *(source++)) != '\0' && i < max) {
+			i++;
+		}
+	}
+	return(i);
+}
+
 
 /*
 =======================
@@ -760,8 +1177,8 @@ struct keyword_information{
 #define KW_START_DIR 6
 #define KW_VERB_ALONE 7
 #define KW_WHITE 8
-	char *name;		
-	char *macro;	
+	wchar_t *name;		
+	wchar_t *macro;	
 	regex_t *tex_arg;
 	char tex_arg_sense;
 #define KW_RE_MATCH 0	
@@ -785,9 +1202,9 @@ Return the number of characters written to {\tt dest}.  The keyword is
 
 int
 copy_keyword(
-	char *kw,
+	wchar_t *kw,
 	int kwlen,
-	char *dest,
+	wchar_t *dest,
 	int max,
 	int suppress)
 {
@@ -821,7 +1238,7 @@ int
 copy_keyword_uni(
 	unicode *kw,
 	int kwlen,
-	char *dest,
+	wchar_t *dest,
 	int max,
 	int suppress)
 {
@@ -851,16 +1268,16 @@ This procedure adds a new entry into the keyword table.
 
 void
 add_new_keyword(
-	char *name,
+	wchar_t *name,
 	int ech,
 	unicode uni,
 	int kind,
-	char *macro,
+	wchar_t *macro,
 	regex_t * tex_arg,
 	char tex_arg_sense)
 {
 	struct keyword_information *ki;
-	int len = strlen(name);
+	int len = wcslen(name);
 	int orig_kind = kind;
 	
 	if(kwi.num_keywords >= MAX_KEYWORDS) {
@@ -877,7 +1294,7 @@ add_new_keyword(
 	ki = &kwi.keyword[kwi.num_keywords];
 
 	if(kind == KW_SAMEAS_UNKNOWN) {
-	  int len2 = strlen(macro);
+	  int len2 = wcslen(macro);
 	  orig_kind = KW_SAMEAS;
 	  
 	  if(len2 > MAX_KW_LEN) {
@@ -897,10 +1314,10 @@ add_new_keyword(
 	ki->seq = kwi.num_keywords++;
 	
 	if (debug & D_SHOW_KEYWORD_TABLE) {
-	   PRINTF("add_new_keyword: %s ext: %d uni %x\n", name, ki->ech, uni);
+	   PRINTF("add_new_keyword: %S ext: %d uni %x\n", name, ki->ech, uni);
 	};
 	
-	if(kwi.num_keywords>1 && strcmp(kwi.keyword[kwi.num_keywords-1].name,
+	if(kwi.num_keywords>1 && wcscmp(kwi.keyword[kwi.num_keywords-1].name,
 				name) < 0) {
 		grumble1("keywords unsorted", &keyword_F, True);
 	}
@@ -923,7 +1340,7 @@ compare_keyword_information(
 	const struct keyword_information *kw1 = vp1;
 	const struct keyword_information *kw2 = vp2;
 	if (kw1->name == NULL || kw2->name == NULL) return -1;
-	int res = strcmp(kw1->name, kw2->name);
+	int res = wcscmp(kw1->name, kw2->name);
 	if (res == 0) return (kw1->seq - kw2->seq);
 	return res;
 }
@@ -937,14 +1354,14 @@ given a reference to a keyword this function finds the keyword informatino
 */
 
 int
-find_keyword(char *kw)
+find_keyword(wchar_t *kw)
 {
 	int lower_end = 0;
 	int top_end = kwi.num_keywords - 1;
 
 	while (lower_end <= top_end) {
 		int middle = (lower_end + top_end) / 2;
-		int posn = strcmp(kw, kwi.keyword[middle].name);
+		int posn = wcscmp(kw, kwi.keyword[middle].name);
 
 		if(posn == 0) return(middle);
 
@@ -989,9 +1406,9 @@ show_one_keyword(struct keyword_information *ki)
 		show_kw_kind(ki->orig_kind);
 		PUTC(')', stdout);
 	}
-	PRINTF("  name=(%2ld)",       	(long)strlen(ki->name));
-	PRINTF("'%s'",			ki->name);
-	PRINTF("  macro='%s'\n",	ki->macro ? ki->macro : "(None)");
+	PRINTF("  name=(%2ld)",       	(long)wcslen(ki->name));
+	PRINTF("'%S'",			ki->name);
+	PRINTF("  macro='%S'\n",	ki->macro ? ki->macro : L"(None)");
 }
 
 void
@@ -1076,8 +1493,7 @@ void initialise_keyword_information(void) {
 		kwi.char_code[i] = NULL;
 
 	/*	add_new_keyword("%%", NOT_FOUND, 37, KW_SIMPLE, "\\%", NULL, 0); */
-	add_new_keyword("%%", NOT_FOUND, U_NOT_FOUND, KW_SIMPLE, "\\%", NULL, 0);
-
+	add_new_keyword(L"%%", NOT_FOUND, U_NOT_FOUND, KW_SIMPLE, L"\\%", NULL, 0);
 };
 
 /*
@@ -1098,16 +1514,16 @@ The -1 is not a unicode code but is used in keyword files to designate "no unico
 */
 
 int
-get_char_unicode(char *line, unicode *value)
+get_char_unicode(wchar_t *line, unicode *value)
 {
 	int ch = -1;		/* -1 ==> not a valid code */
 
 	int scan_ans;
 	int len;
 
-	scan_ans = sscanf(line, "%i%n", &ch, &len);
+	scan_ans = swscanf(line, L"%i%n", &ch, &len);
 
-	if(scan_ans != 1 || len != strlen(line))
+	if(scan_ans != 1 || len != wcslen(line))
 		ch = -1;
 
 	if(ch >= -1 && ch <= 0x10FFFF) {
@@ -1132,11 +1548,11 @@ the return value is the unicode value.
 */
 
 unicode
-percent_hex_to_unicode(char *line, int *len)
+percent_hex_to_unicode(wchar_t *line, int *len)
 {
 	int ch = -1;		/* -1 ==> not a valid code */
 	int scan_ans;
-	scan_ans = sscanf(line, "%%#x%X%%%n", &ch, len);
+	scan_ans = swscanf(line, L"%%#x%X%%%n", &ch, len);
 	if(scan_ans != 1) ch = -1;
 	if(ch >= 1 && ch <= 0x10FFFF) return(ch);
 	*len = 0;
@@ -1155,10 +1571,10 @@ value is a pointer to the compiled regular expression or null, if there is no {\
 */
 
 void
-get_tex_arg(char *macro, regex_t **tex_arg, char *tex_arg_sense)
+get_tex_arg(wchar_t *macro, regex_t **tex_arg, char *tex_arg_sense)
 {
-	char *p = macro;
-	char escaped = False;
+	wchar_t *p = macro;
+	wchar_t escaped = False;
 	int error_code;
 	int cflags = REG_EXTENDED;
 	while(*p) {
@@ -1181,7 +1597,7 @@ get_tex_arg(char *macro, regex_t **tex_arg, char *tex_arg_sense)
 			*tex_arg_sense = KW_RE_MATCH;
 		}
 		*tex_arg = malloc_and_check(sizeof(regex_t), 108);
-		error_code = regcomp(*tex_arg, p, cflags);
+		error_code = sv_regwcomp(*tex_arg, p, cflags);
 		if(error_code != 0) {
 			char *errbuf;
 			int errbufsize = regerror(error_code, *tex_arg, 0, 0);
@@ -1246,10 +1662,10 @@ find_steering_file(char *name, char *file_type)
 }
 
 /*
-----------------
-simple_read_line
-----------------
-Reads a line into a buffer, checking that the line
+---------------------
+simple_wread_ext_line
+---------------------
+Reads a line into a wchar_t buffer using getc, checking that the line
 isn't too long and returning the number of characters read, i.e., the
 number of characters stored in argument {\tt line} but excluding the
 trailing null.
@@ -1262,13 +1678,24 @@ will be terminated if it is exceeded.
 */
 
 int
-simple_read_line(char *line, int max_len, struct file_data *file_F)
+simple_wread_ext_line(wchar_t *line, int max_len, struct file_data *file_F)
 {
-	int whatgot;
+	wchar_t whatgot;
 	int i = 0;
 
-	while(i < max_len && (whatgot = getc(file_F->fp)) != '\n' && whatgot != EOF) {
-	  line[i++] = whatgot;
+	/*	if(debug & D_UTF8) {
+	  (void)printf("simple_wread_ext_line: ");
+	}
+	*/
+
+	while(i < max_len
+	      && (whatgot = getc(file_F->fp)) != '\n'
+	      && whatgot != WEOF){
+	  /*   if(debug & D_UTF8) {
+	    (void)printf("%02X ", whatgot);
+	  }
+	  */
+	  line[i++] = ((wchar_t)whatgot & 0xFF);
 	}
 
 	if(i >= max_len) {
@@ -1277,8 +1704,12 @@ simple_read_line(char *line, int max_len, struct file_data *file_F)
 			file_F->line_no, file_F->name);
 		EXIT(4);
 	}
-	line[i] = '\0';
+	line[i] = L'\0';
 	file_F->line_no++;
+	/* if(debug & D_UTF8) {
+	    (void)printf("\n");
+	  }
+	*/
 	return(i);
 }
 
@@ -1295,7 +1726,6 @@ The line is the sequence of characters up to the next newline character,
 which is read but not placed in the output string.
 The maximum length is specified by the second parameter, and the program
 will be terminated if it is exceeded.
-
 */
 
 int
@@ -1304,9 +1734,14 @@ simple_wread_line(wchar_t *line, int max_len, struct file_data *file_F)
 	int whatgot;
 	int i = 0;
 
-	while(i < max_len && (whatgot = fgetwc(file_F->fp)) != L'\n' && whatgot != WEOF) {
+	/*	if(debug & D_UTF8) (void)printf("simple_wread_line"); */
+
+	while(i < max_len && (whatgot = getwc(file_F->fp)) != L'\n' && whatgot != WEOF) {
+	  /*	  if(debug & D_UTF8)(void)printf(":%06x", whatgot); */
 	  line[i++] = whatgot;
 	}
+
+	/*	if(debug & D_UTF8) (void)printf("!%06x\n", whatgot); */
 
 	if(i >= max_len) {
 		error_top();
@@ -1316,39 +1751,36 @@ simple_wread_line(wchar_t *line, int max_len, struct file_data *file_F)
 	}
 	line[i] = L'\0';
 	file_F->line_no++;
+	if (i == 0 & whatgot == WEOF) i = WEOF;
 	return(i);
 }
-
 
 /*
 ------------------
 read_steering_line
 ------------------
-Read a steering file line, possibly escaped
-over several input lines.  The argument {\tt line_no} is incremented
-for each line read.
+Read a steering file line, possibly escaped over several input lines.
+The argument {\tt line_no} is incremented for each line read.
 */
 
 void
-read_steering_line(char *line, struct file_data *file_F)
+read_steering_line(wchar_t *line, struct file_data *file_F)
 {
 	int len_so_far = 0;
 	int len_read = 0;
 	do{
-		(file_F->line_no) ++;
-		len_read = simple_read_line(line + len_so_far,
+		len_read = simple_wread_line(&line[len_so_far],
 			MAX_LINE_LEN - len_so_far, file_F) - 1;
 		len_so_far += len_read;
-	} while( (len_read > 0) && (line[len_so_far] == '\\') );
+	} while( (len_read > 0) && (line[len_so_far] == L'\\') );
 
-	(void)strcpy(file_F->cur_line, line);
+	(void)wcscpy(file_F->cur_line, line);
 
 	if(debug & D_READ_STEER_LINE) {
-		(void)printf("%s %d: %s\n", file_F->name,
+		(void)printf("%s %d: %S\n", file_F->name,
 			file_F->line_no, file_F->cur_line);
 	}
 }
-
 
 int uni_to_pp_entry_cmp(const void *buf1, const void *buf2)
 {
@@ -1386,7 +1818,7 @@ Read a keyword file creating from it the keyword_information in kwi.
 void
 read_keyword_file(char *name)
 {
-	char line[MAX_LINE_LEN+1];
+	wchar_t line[MAX_LINE_LEN+1];
 	char * actname;
 
 	actname = find_steering_file(name, "keyword file");
@@ -1400,34 +1832,34 @@ read_keyword_file(char *name)
 	keyword_F.line_no = 0;
 
 	while( (!feof(keyword_F.fp)) && (!ferror(keyword_F.fp)) ) {
-		char * def_kw;
-		char * kind_str;
+		wchar_t * def_kw;
+		wchar_t * kind_str;
 		int kind, icode /* , kwindex */;
-		char * code_kw_str;
+		wchar_t * code_kw_str;
 		unicode code;
 		int ech;
-		char * macro;
+		wchar_t * macro;
 		regex_t * tex_arg;
 		char tex_arg_sense;
 
 		read_steering_line(line, &keyword_F);
 
 		if(limits.opt_list) {
-			int len = strlen(line);
+			int len = wcslen(line);
 			if(len > limits.keyword_file)
 				limits.keyword_file = len;
 		}
 
-		def_kw = skip_space(line);
+		def_kw = wskip_space(line);
 
-		if(def_kw == NULL || def_kw[0] == '\0' || def_kw[0] == '#') {
+		if(def_kw == NULL || def_kw[0] == L'\0' || def_kw[0] == L'#') {
 			/* Comment line, ignore it */
 			continue;						/* CONTINUE */
 		}
 
-		kind_str = split_at_space(def_kw);
+		kind_str = wsplit_at_space(def_kw);
 
-		{	int len_m_1 = strlen(def_kw)-1;
+		{	int len_m_1 = wcslen(def_kw)-1;
 
 			if(def_kw[len_m_1] == '"') def_kw[len_m_1] = '%';
 
@@ -1442,38 +1874,38 @@ read_keyword_file(char *name)
 			continue;						/* CONTINUE */
 		}
 
-		code_kw_str = split_at_space(kind_str);
+		code_kw_str = wsplit_at_space(kind_str);
 
 		if(code_kw_str == NULL) {
 			grumble1("no code or second keyword", &keyword_F, True);
 			continue;						/* CONTINUE */
 		}
 
-		macro = split_at_space(code_kw_str);
+		macro = wsplit_at_space(code_kw_str);
 
-		if	(strcmp(kind_str, "simple") == 0) kind = KW_SIMPLE;
-		else if	(strcmp(kind_str, "index") == 0) kind = KW_INDEX;
-		else if	(strcmp(kind_str, "directive") == 0) kind = KW_DIRECTIVE;
-		else if	(strcmp(kind_str, "startdirective") == 0) kind = KW_START_DIR;
-		else if	(strcmp(kind_str, "sameas") == 0) kind = KW_SAMEAS;
-		else if	(strcmp(kind_str, "verbalone") == 0) kind = KW_VERB_ALONE;
-		else if	(strcmp(kind_str, "white") == 0) kind = KW_WHITE;
+		if	(wcscmp(kind_str, L"simple") == 0) kind = KW_SIMPLE;
+		else if	(wcscmp(kind_str, L"index") == 0) kind = KW_INDEX;
+		else if	(wcscmp(kind_str, L"directive") == 0) kind = KW_DIRECTIVE;
+		else if	(wcscmp(kind_str, L"startdirective") == 0) kind = KW_START_DIR;
+		else if	(wcscmp(kind_str, L"sameas") == 0) kind = KW_SAMEAS;
+		else if	(wcscmp(kind_str, L"verbalone") == 0) kind = KW_VERB_ALONE;
+		else if	(wcscmp(kind_str, L"white") == 0) kind = KW_WHITE;
 		else {
-			grumble("unknown keyword kind: %s",
+			wgrumble(L"unknown keyword kind: %S",
 				kind_str, &keyword_F, True);
 			continue;						/* CONTINUE */
 		}
 
 		if(kind == KW_SAMEAS) {
-			if(macro == NULL || macro[0] == '\0') {
+			if(macro == NULL || macro[0] == L'\0') {
 				/* OK */
 			} else {
-				grumble("unexpected text \"%s\" with sameas keyword", macro,
+				wgrumble(L"unexpected text \"%S\" with sameas keyword", macro,
 					&keyword_F, True);
 				continue;					/* CONTINUE */
 			}
 
-			{	int len_m_1 = strlen(code_kw_str)-1;
+			{	int len_m_1 = wcslen(code_kw_str)-1;
 	
 				if(code_kw_str[len_m_1] == '"') code_kw_str[len_m_1] = '%';
 	
@@ -1484,8 +1916,8 @@ read_keyword_file(char *name)
 				}
 			}
 
-			add_new_keyword(strdup(def_kw), NOT_FOUND, U_NOT_FOUND, KW_SAMEAS_UNKNOWN,
-				strdup(code_kw_str), NULL, 0);
+			add_new_keyword(wcsdup(def_kw), NOT_FOUND, U_NOT_FOUND, KW_SAMEAS_UNKNOWN,
+				wcsdup(code_kw_str), NULL, 0);
 		} else {
 
 			if(!get_char_unicode(code_kw_str, &icode)) {
@@ -1532,10 +1964,10 @@ read_keyword_file(char *name)
 
 			get_tex_arg(macro, &tex_arg, &tex_arg_sense);
 
-			add_new_keyword(strdup(def_kw), ech, code, kind,
-				macro != NULL && macro[0] != '\0'
-			?	strdup(macro)
-			:	(char*)NULL,
+			add_new_keyword(wcsdup(def_kw), ech, code, kind,
+				macro != NULL && macro[0] != L'\0'
+			?	wcsdup(macro)
+			:	(wchar_t *)NULL,
 				tex_arg,
 				tex_arg_sense);
 		}
@@ -1577,6 +2009,8 @@ This includes:
    the keyword referred to.
 2. filling in the index by extended character code, rejecting multiple keywords
    for any single extended character.
+3. Seting the "character flags" used to test for directive characters and verb alone characters,
+   flagging any such keywords which do not have an extended character code.
 
 */
 
@@ -1610,14 +2044,14 @@ conclude_keywordfile(void)
   prev_ki = NULL;
   for(i=1; i<kwi.num_keywords; i++) {
     struct keyword_information *cur_ki = &kwi.keyword[i];
-    if (prev_ki != NULL && (strcmp(prev_ki->name, cur_ki->name) == 0)) {
+    if (prev_ki != NULL && (wcscmp(prev_ki->name, cur_ki->name) == 0)) {
       if (prev_ki->orig_kind != KW_SIMPLE || cur_ki->orig_kind != KW_SIMPLE)
-	grumble("Multiple keyword file entries for keyword %s, not all SIMPLE\n",
+	wgrumble(L"Multiple keyword file entries for keyword %S, not all SIMPLE\n",
 		prev_ki->name, &keyword_F, False);
       else {
 	if (prev_ki->ech != NOT_FOUND && cur_ki->uni != U_NOT_FOUND
 	    && cur_ki->uni != prev_ki->uni)
-	  grumble("Second keyword file entry for keyword %s, not permitted to change unicode for ext char\n",
+	  wgrumble(L"Second keyword file entry for keyword %S, not permitted to change unicode for ext char\n",
 		  prev_ki->name, &keyword_F, False);
 	else {
 	  if (cur_ki->uni != U_NOT_FOUND) {
@@ -1649,7 +2083,7 @@ conclude_keywordfile(void)
       int copy_from_index = find_keyword(cur_ki->macro);
       
       if(copy_from_index == NOT_FOUND) {
-	grumble("undeclared keyword '%s' referred to by sameas",
+	wgrumble(L"undeclared keyword '%S' referred to by sameas",
 		cur_ki->macro, &keyword_F, False);
 	dump_keywords = 1;
       } else {
@@ -1667,7 +2101,7 @@ conclude_keywordfile(void)
 	if(cur_ki->act_kind == KW_SAMEAS ||
 	   cur_ki->act_kind ==
 	   KW_SAMEAS_UNKNOWN) {
-	  grumble("unresolved 'sameas' for keyword '%s' (keyword referred to is also 'sameas')",
+	  wgrumble(L"unresolved 'sameas' for keyword '%S' (keyword referred to is also 'sameas')",
 		  cur_ki->name, &keyword_F, False);
 	  dump_keywords = 1;
 	}
@@ -1735,10 +2169,10 @@ conclude_keywordfile(void)
       if(cur_ki->ech != -1)
 	SET_DIRECTIVE_CHAR(cur_ki->ech);
       else
-	grumble("no extended char with directive keyword '%s'",
+	wgrumble(L"no extended char with directive keyword '%S'",
 		cur_ki->name, &keyword_F, False);
       
-      if(cur_ki->name[1] != '\0' && cur_ki->name[1] != '%')
+      if(cur_ki->name[1] != L'\0' && cur_ki->name[1] != L'%')
 	SET_SND_CHAR_DIR_KW(cur_ki->name[1]);
       break;
       
@@ -1746,7 +2180,7 @@ conclude_keywordfile(void)
       if(cur_ki->ech != -1)
 	SET_VERB_ALONE_CH(cur_ki->ech);
       else
-	grumble("no extended char with directive keyword '%s'",
+	wgrumble(L"no extended char with directive keyword '%S'",
 		cur_ki->name, &keyword_F, False);
       break;
       
@@ -1834,7 +2268,7 @@ It grumbles if the keyword is malformed or unknown.
 */
 
 int
-get_hol_kw(char *str,
+get_hol_kw(wchar_t *str,
 	int * len,
 	int warn,
 	struct file_data *file_F)
@@ -1843,35 +2277,35 @@ get_hol_kw(char *str,
 	int ch;
 	int ans;
 
-	char kw[MAX_KW_LEN+1];
+	wchar_t kw[MAX_KW_LEN+1];
 
-	kw[kwlen++] = '%';
+	kw[kwlen++] = L'%';
 	while(			kwlen<=MAX_KW_LEN
-			&&	(ch = str[kwlen]) != '\0'
-			&&	ch != '%'
-			&&	isascii(ch)
-			&&	isgraph(ch)
+			&&	(ch = str[kwlen]) != L'\0'
+			&&	ch != L'%'
+			&&	iswascii(ch)
+			&&	iswgraph(ch)
 	) {
 	  kw[kwlen++] = ch;
 	}
 
-	kw[kwlen] = '\0';
+	kw[kwlen] = L'\0';
 
-	if(ch != '%') {
+	if(ch != L'%') {
 		*len = 0;
 		ans = NOT_FOUND;
-		kw[MAX_KW_LEN / 4] = '\0';
+		kw[MAX_KW_LEN] = L'\0'; /* was MAX_KW_LEN/4 */
 
 		if(warn) {
-			grumble("mal-formed keyword starting with %s", kw, file_F, True);
+			wgrumble(L"mal-formed keyword starting with %S", kw, file_F, True);
 		}
 	} else {
-		kw[kwlen++] = '%';
-		kw[kwlen] = '\0';
+		kw[kwlen++] = L'%';
+		kw[kwlen] = L'\0';
 		if(kwlen>kwi.max_kw_len) {
 			*len = 0;
 			ans = NOT_FOUND;
-			kw[MAX_KW_LEN / 4] = '\0';
+			kw[MAX_KW_LEN] = L'\0'; /* was MAX_KW_LEN/4 */
 		} else {
 			int kwindex = find_keyword(kw);
 			*len = kwlen;
@@ -1879,12 +2313,12 @@ get_hol_kw(char *str,
 		}
 
 		if(ans<0 && warn) {
-grumble("unknown keyword: %s", kw, file_F, True);
+wgrumble(L"unknown keyword: %S", kw, file_F, True);
 		}
 	}
 
 	if(debug & D_GET_KW) {
-		(void)printf("get_hol_kw: index=%d  len=%d  anslen=%d  kw=\"%s\"\n",
+		(void)printf("get_hol_kw: index=%d  len=%d  anslen=%d  kw=\"%S\"\n",
 			ans, kwlen, *len, kw);
 	}
 
@@ -1915,35 +2349,35 @@ get_hol_kw_uni(unicode *str,
 	unicode ch;
 	int ans;
 
-	char kw[MAX_KW_LEN+1];
+	wchar_t kw[MAX_KW_LEN+1];
 
-	kw[kwlen++] = '%';
+	kw[kwlen++] = L'%';
 	while(			kwlen<=MAX_KW_LEN
 			&&	(ch = str[kwlen]) != 0
 			&&	ch != L'%'
 			&&	iswascii(ch)
 			&&	iswgraph(ch)
 	) {
-	  kw[kwlen++] = (ch & 0xFF);
+	  kw[kwlen++] = ch;
 	}
 
-	kw[kwlen] = '\0';
+	kw[kwlen] = 0;
 
 	if(ch != L'%') {
 		*len = 0;
 		ans = NOT_FOUND;
-		kw[MAX_KW_LEN / 4] = '\0';
+		kw[MAX_KW_LEN] = 0;
 
 		if(warn) {
-			grumble("mal-formed keyword starting with %s", kw, file_F, True);
+			wgrumble(L"mal-formed keyword starting with %S", kw, file_F, True);
 		}
 	} else {
-		kw[kwlen++] = '%';
-		kw[kwlen] = '\0';
+		kw[kwlen++] = L'%';
+		kw[kwlen] = 0;
 		if(kwlen>kwi.max_kw_len) {
 			*len = 0;
 			ans = NOT_FOUND;
-			kw[MAX_KW_LEN / 4] = '\0';
+			kw[MAX_KW_LEN] = 0;
 		} else {
 			int kwindex = find_keyword(kw);
 			*len = kwlen;
@@ -1951,12 +2385,12 @@ get_hol_kw_uni(unicode *str,
 		}
 
 		if(ans<0 && warn) {
-grumble("unknown keyword: %s", kw, file_F, True);
+wgrumble(L"unknown keyword: %S", kw, file_F, True);
 		}
 	}
 
 	if(debug & D_GET_KW) {
-		(void)printf("get_hol_kw: index=%d  len=%d  anslen=%d  kw=\"%s\"\n",
+		(void)printf("get_hol_kw: index=%d  len=%d  anslen=%d  kw=\"%S\"\n",
 			ans, kwlen, *len, kw);
 	}
 
@@ -1975,10 +2409,10 @@ Unicode <-> ext mapping
 
 Convert a unicode code point to a 6-digit hexadecimal in percents */
 
-char *unicode_to_hex(unicode code_point)
+wchar_t *unicode_to_hex(unicode code_point)
 {
-	static char buf[11];
-	sprintf(buf, "%%#x%06X%%", code_point);
+	static wchar_t buf[11];
+	swprintf(buf, 11, L"%%#x%06X%%", code_point);
 	return buf;
 }
 
@@ -2024,36 +2458,27 @@ struct keyword_information *unicode_to_kwi(unicode cp)
   return *search_result;
 }
 
-/* Translate a unicode code point to the corresponding pp ext char (if there is one),
+/*
+Translate a unicode code point to the corresponding pp ext char (if there is one),
 otherwise, return 0.  Codes <128 are returned unchanged.
-
-const char unicode_to_ext(unicode cp)
-{	
-	unicode_to_pp_entry key, *search_result;
-	if (cp <128) return (cp & 0xFF);
-	key.code_point = cp;
-	search_result = bsearch(&key, unicode_to_pp,
-		UNICODE_TO_PP_LEN, sizeof(unicode_to_pp_entry), uni_to_pp_entry_cmp);
-	return (search_result == NULL) ? (char) 0 : (unsigned char)(search_result -> pp_char & 0xFF);
-}
-
 */
 
-const unsigned char unicode_to_ext(unicode code_point){
+const wchar_t unicode_to_ext(unicode code_point){
   struct keyword_information *kwi;
-  if (code_point <= 0x7F) return (unsigned char) code_point;
+  if (code_point <= 0x7F) return (wchar_t) code_point;
   kwi = unicode_to_kwi(code_point);
-  if (kwi == NULL) return (unsigned char) 0;
-  else return kwi->ech;
+  if (kwi == NULL) return (wchar_t) 0;
+  else return (wchar_t)kwi->ech;
 };
 
 /* Translate a unicode code point to pp ext char or else to hex in percents */
 
-const char *unicode_to_ppk(unicode cp)
+const wchar_t *unicode_to_ppk(unicode cp)
 {
-  static char s[2];
+  static wchar_t s[2];
   s[0] = unicode_to_ext(cp);
   s[1]=0;
+  wprintf(L"unicode_to_ppk: cp=#x%06X, s[0]=#x%02X\n", cp, s[0]);
   return (s[0]>0) ? s : unicode_to_hex(cp);
 }
 
@@ -2069,7 +2494,7 @@ Convert a unicode code point to a keyword in percents
 (named if possible. otherwise hex).
 */
 
-char *unicode_to_kw(unicode code_point)
+wchar_t *unicode_to_kw(unicode code_point)
 {
   struct keyword_information *kwi = unicode_to_kwi(code_point);
   return (kwi == NULL) ? unicode_to_hex(code_point) : kwi->name;
@@ -2088,11 +2513,11 @@ Convert a unicode code point to either:
 in that order of priority.
 */
 
-char *unicode_to_aekw(unicode code_point){
+wchar_t *unicode_to_aekw(unicode code_point){
   struct keyword_information *kwi;
-  static char ascext[2];
+  static wchar_t ascext[2];
   if (code_point <= 0x7F) {
-    ascext[0] = (unsigned char) code_point;
+    ascext[0] = (wchar_t) code_point;
     ascext[1] = 0;
     return ascext;
   };
@@ -2104,9 +2529,9 @@ char *unicode_to_aekw(unicode code_point){
 	    "internal error unicode_to_aekw code mismatch, code_point=%06x, kwi->uni=%06x",
 	    code_point, kwi->uni);
     EXIT(41);
-    return "";}
+    return L"";}
   else if (kwi->ech>0) {
-    ascext[0] = (unsigned char) kwi->ech;
+    ascext[0] = (wchar_t) kwi->ech;
     ascext[1] = 0;
     return ascext;
   }
@@ -2121,10 +2546,10 @@ Convert unicode code point to ascii string which is either a single character
 (if < 128) a percent named keyword or a percent hex code.
 */ 
 
-char *unicode_to_kwa(unicode code_point){
-  static char ascii[2];
+wchar_t *unicode_to_kwa(unicode code_point){
+  static wchar_t ascii[2];
   if (code_point <= 0x7F) {
-    ascii[0] = (unsigned char) code_point;
+    ascii[0] = (wchar_t) code_point;
     ascii[1] = 0;
     return ascii;
   }
@@ -2145,7 +2570,7 @@ Returns the number of characters in the result.
 int code_line_to_ext(struct file_data *file_F){
   int op=0;
   unicode *codes;
-  char *line, *r;
+  wchar_t *line, *r;
   codes = file_F->code_line;
   line = file_F->cur_line;
   while (*codes !=0 && op < MAX_LINE_LEN){
@@ -2174,8 +2599,8 @@ The source and destination are buffers in a file_data parameter.
 int code_line_to_ascii(struct file_data *file_F){
   int opc=0;
   unicode *codes;
-  char *line;
-  char *r;
+  wchar_t *line;
+  wchar_t *r;
   codes = file_F->code_line;
   line = file_F->cur_line;
   while (*codes !=0 && opc < MAX_LINE_LEN){
@@ -2200,14 +2625,14 @@ unicode invalid_unicode(void)
 	int whatgot;
 	FPRINTF(stderr, "%s: line %d: invalid utf-8 input\n", program_name, line);
 	unicodepp_error = 1;
-	whatgot = getchar();
-	while(whatgot != '\n' && whatgot != EOF) {
-		whatgot = getchar();
+	whatgot = getwchar();
+	while(whatgot != L'\n' && whatgot != EOF) {
+		whatgot = getwchar();
 	}
-	if(whatgot == '\n') {
+	if(whatgot == L'\n') {
 		line += 1;
 	}
-	return whatgot & 0xff;
+	return whatgot;
 }
 
 
@@ -2228,7 +2653,48 @@ The value returned is the unicode code point or else zero.
    int r, l;
    int whatgot = buff[(*pos)++];
    
-   r = whatgot & 0xff;
+   /*   if (debug & D_UTF8) {PRINTF("extract_code_point: whatgot = %i\n", whatgot);}; */
+ 
+   r = whatgot;
+
+   if(r <= 0x7f) {return r;};
+   l = 0;
+   while(r & 0x80) {
+     r = (r & 0x7f) << 1;
+     l++;
+   };
+   if(l > 4) {message1("extract_code_point 3 l>4"); (*pos)--; return invalid_unicode();};
+   r = r >> l;
+   while(--l) {
+     whatgot = buff[(*pos)++];
+     if((whatgot & 0xc0) != 0x80) {
+       return invalid_unicode();
+     };
+     r = (r << 6) | (whatgot & 0x3f);
+   };
+   /*  if (debug & D_UTF8) {PRINTF("extract_code_point: r = %i\n", r);}; */
+   return r;
+ }
+
+
+/*
+-------------------
+wextract_code_point
+-------------------
+
+Read a single unicode code point from a buffer in utf8.
+The parameters are the address of the buffer and a pointer to a displacement,
+which will be updated to point after the unicode character provided that
+there is valid utf8 encoded unicode character at that point.
+
+The value returned is the unicode code point or else zero.
+*/
+
+ unicode wextract_code_point(wchar_t *buff, int *pos){
+   int r, l;
+   int whatgot = buff[(*pos)++];
+   
+   r = whatgot;
 
    if(r <= 0x7f) { return r; };
    l = 0;
@@ -2236,7 +2702,7 @@ The value returned is the unicode code point or else zero.
      r = (r & 0x7f) << 1;
      l += 1;
    };
-   if(l > 4) { message1("extract_code_point 3 l>4"); return invalid_unicode(); };
+   if(l > 4) { message1("wextract_code_point 3 l>4"); return invalid_unicode(); };
    r = r >> l;
    while(--l) {
      whatgot = buff[(*pos)++];
@@ -2249,9 +2715,9 @@ The value returned is the unicode code point or else zero.
  }
 
 /*
-------------------
-utf8_line_to_codes
-------------------
+-------------------
+wutf8_line_to_codes
+-------------------
 This procedure, given a line of utf8 encoded unicode will
 convert the line into an array of unicode code points.
 
@@ -2261,13 +2727,13 @@ which will also be null terminated when the procedure exits.
 The return value is the number of code points resulting.
 */
 
-int utf8_line_to_codes(char line[], unicode codes[]){
+int wutf8_line_to_codes(wchar_t line[], unicode codes[]){
   int ip = 0;
   int op = 0;
   unicode code = 0;
   codes[op]=1;
   while(ip < MAX_LINE_LEN && line[ip] != 0){
-    code = extract_code_point(line, &ip);
+    code = wextract_code_point(line, &ip);
     if (code > 0) codes[op++] = code;
     else {return invalid_unicode();}
   };
@@ -2275,32 +2741,22 @@ int utf8_line_to_codes(char line[], unicode codes[]){
   return op;
 };
 
-
 /*
 --------------------
 read_utf8_as_unicode
 --------------------
-Read a line into file_F.cur_line, then transcribe
-from utf8 to unicode code points.
+Read a line into file_F.cur_line.
+This might be ascii, ext or unicode.
 
-int read_utf8_as_unicode(struct file_data *file_F){
-  int r;
-  setlocale(LC_ALL, "en_GB.UTF8");
-  r = fgets(file_F->code_line, LINE_LEN_WCHAR_FMT, file_F->fp);
-  printf(LINE_LEN_WCHAR_FMT, file_F->code_line);
-  return r;
-};
-
-****    Now changed to read unicode using simple_wread_line.  ****
-
+name's a bit odd!
 */
 
 int read_utf8_as_unicode(struct file_data *file_F){
   int r;
   r = simple_wread_line(file_F->code_line, MAX_LINE_LEN, file_F);
-  /*  if(debug & D_UTF8)
+    if(debug & D_UTF8)
     (void)printf("read_utf8_as_unicode: r=%d line=%ls\n", r, file_F->code_line); 
-  */
+  
   return r;
 };
 
@@ -2328,8 +2784,12 @@ int read_line_as_ext(struct file_data *file_F){
   if (file_F->utf8){
     read_utf8_as_unicode(file_F);
     r = code_line_to_ext(file_F);
+    if(debug & D_UTF8)(void)printf("read_line_as_ext: r=%d eof=%s line=%S\n",
+				   r,
+				   feof(file_F->fp)?"Y":"N",
+				   file_F->code_line); 
   }
-  else {r = simple_read_line(file_F->cur_line, MAX_LINE_LEN, file_F);};
+  else {r = simple_wread_ext_line(file_F->cur_line, MAX_LINE_LEN, file_F);};
   return r;
 };
 
@@ -2365,6 +2825,105 @@ char *unicode_to_utf8(unicode u)
     buf[0] = 0;
   };
   return buf;
+}
+
+/*
+----------------
+unicode_to_wutf8
+----------------
+This procedure takes a unicode code point and returns a utf8 string.
+If unicode point > 0x10ffffu it will be an empty string.
+*/ 
+
+wchar_t *unicode_to_wutf8(unicode u)
+{ static wchar_t buf[5];
+  if(u <= 0x7f) {
+    buf[0]=u;
+    buf[1]=0;
+  } else if (u <= 0x7ff) {
+    buf[0] = 0xc0u | (u >> 6u);
+    buf[1] = 0x80u | (u & 0x3fu);
+    buf[2]=0;
+  } else if (u <= 0xffff) {
+    buf[0] = 0xe0u | (u >> 12u);
+    buf[1] = 0x80u | ((u & 0xfc0u) >> 6u);
+    buf[2] = 0x80u | (u & 0x3fu);
+    buf[3] = 0;
+  } else if (u <= 0x10ffffu) {
+    buf[0] = 0xf0u | (u >> 18u);
+    buf[1] = 0x80u | ((u & 0x3f000u) >> 12u);
+    buf[2] = 0x80u | ((u & 0xfc0u) >> 6u);
+    buf[3] = 0x80u | (u & 0x3fu);
+    buf[4] = 0;
+  } else {
+    buf[0] = 0;
+  };
+  return buf;
+}
+
+/*
+-------------------
+unicode_seq_to_utf8
+-------------------
+
+This function takes a null terminated unicode sequence and translates it into a null
+terminated utf8 char sequence (allocated my malloc).
+*/
+
+char* unicode_seq_to_utf8(unicode *useq)
+{ int len = 0;
+  unicode *ip = useq;
+  char *op, *mop;
+  if (debug & D_UTF8) {
+    PRINTF("unicode_seq_to_utf8: wcslen(useq)=%lu\n", wcslen(useq));
+    PRINTF("unicode_seq_to_utf8: useq = %S\n", useq);
+  }; 
+  while (*ip >0) {
+    len += strlen(unicode_to_utf8(*ip));
+    ip++;
+  };
+  ip = useq;
+  op = mop = malloc_and_check(len+1, 110);
+  while (*ip >0) {
+    strcpy(mop, unicode_to_utf8(*ip));
+    mop += strlen(mop);
+    ip++;
+  };
+  *mop = L'\0';
+  if (debug & D_UTF8) {
+   PRINTF("unicode_seq_to_utf8: strlen(op)=%lu\n", strlen(op));
+   PRINTF("unicode_seq_to_utf8: op = %s\n", op);
+  }; 
+  return op;
+}
+
+/*
+-------------------
+utf8_seq_to_unicode
+-------------------
+
+This function takes a null terminated utf8 sequence (char) and translates it into a null
+terminated unicode sequence (allocated my malloc).
+*/
+
+unicode* utf8_seq_to_unicode(char *utf8seq)
+{ int len = 0, pos = 0, op = 0;
+  unicode *out;
+  if (debug & D_UTF8) {PRINTF("utf8_seq_to_unicode: utf8seq = %s, pos = %i\n", utf8seq, pos);}; 
+  while (utf8seq[pos] >0) {
+    (void)extract_code_point(utf8seq, &pos); len++;
+    /*  if (debug & D_UTF8) {PRINTF("utf8_seq_to_unicode: pos = %i, len = %i\n", pos, len);}; */
+  };
+  /*  if (debug & D_UTF8) {PRINTF("utf8_seq_to_unicode, len: %i\n", len);}; */
+  out = malloc_and_check(sizeof(unicode)*(len+1), 110);
+  pos = 0;
+  while (utf8seq[pos] >0) {
+    out[op] = extract_code_point(utf8seq, &pos);
+    op++;
+  };
+  out[op] = 0;
+  if (debug & D_UTF8) {WPRINTF(L"utf8_seq_to_unicode: out = %S\n", out);};
+  return out;
 }
 
 /*
@@ -2410,6 +2969,22 @@ Outputs to a file in utf8 a zero terminated sequence of unicode code points.
 */
 
 void output_unicode_sequence(unicode *line, FILE *file){
+  /*
+  fwprintf(file, L"%S\n", line);
+  */
+  char *utf8 = unicode_seq_to_utf8(line);
+  fprintf(file, "%s\n", utf8);
+  free(utf8);
+}
+
+/*
+-------------------------------
+output_unicode_sequence_as_utf8
+-------------------------------
+Outputs to a file in utf8 a zero terminated sequence of unicode code points.
+*/
+
+void output_unicode_sequence_as_utf8(unicode *line, FILE *file){
   unicode *p;
   p = line;
   while (*p != 0){
@@ -2429,7 +3004,7 @@ in the current keyword file(s), also setting a parameter to the length
 of the keyword (inluding percents).
 */
 
-unicode named_kw_to_unicode(char *line, int *len){
+unicode named_kw_to_unicode(wchar_t *line, int *len){
   unicode val;
   int kw_index;
   kw_index = get_hol_kw(line, len, False, &dummy_F);
@@ -2450,7 +3025,7 @@ at the beginning of the string, setting a parameter to the length of the
 percent enclosed name.
 */
 
-unicode kw_to_unicode(char *line, int *len){
+unicode kw_to_unicode(wchar_t *line, int *len){
   unicode val;
   val = percent_hex_to_unicode(line, len);
   if (*len>0) return val;
@@ -2465,7 +3040,7 @@ ext_to_unicode
 --------------
 */
 
-unicode ext_to_unicode(unsigned char ch){
+unicode ext_to_unicode(wchar_t ch){
   struct keyword_information *ki = kwi.char_code[ch];
   if (ki == NULL) {
     message1("unknown ext code in input file");
@@ -2495,10 +3070,10 @@ The *len parameter will in that case be set to the length of the keyword
 even though no unicode code point is returned.
 */
   
-unicode ext_or_kw_to_unicode(char *line, int *len){
+unicode ext_or_kw_to_unicode(wchar_t *line, int *len){
   unicode val;
   *len = 0;
-  if (line[0] != '%'){
+  if (line[0] != L'%'){
     if (line[0] == 0) return U_NOT_FOUND; 
     *len = 1;
     if (line[0] & 0x80) return (ext_to_unicode(*line));
@@ -2518,7 +3093,7 @@ or ProofPower extended characters and converts them to a null terminated
 array of unicode code points. 
 */
 
-void ext_seq_to_unicode(char *line, unicode codes[]){
+void ext_seq_to_unicode(wchar_t *line, unicode codes[]){
   int ip = 0, op = 0;
   unicode res;
   while (line[ip] != 0){
@@ -2545,7 +3120,7 @@ hexadecimal unicode code points and converts them to a null terminated
 array of unicode code points. 
 */
 
-void ext_kw_seq_to_unicode(char *line, unicode codes[]){
+void ext_kw_seq_to_unicode(wchar_t *line, unicode codes[]){
   int ip = 0, op = 0, len = 0;
   unicode res;
   while (line[ip] != 0){
@@ -2588,7 +3163,7 @@ int read_line_as_ascii(struct file_data *file_F){
     else {return r;};    
   }
   else {
-    r = simple_read_line(file_F->cur_line, MAX_LINE_LEN, file_F);
+    r = simple_wread_line(file_F->cur_line, MAX_LINE_LEN, file_F);
     ext_kw_seq_to_unicode(file_F->cur_line, file_F->code_line);
     code_line_to_ascii(file_F);
   };
@@ -2601,7 +3176,7 @@ output_ext_as_utf8
 ------------------
 */
 
-void output_ext_as_utf8(char *line, FILE *file_F){
+void output_ext_as_utf8(wchar_t *line, FILE *file_F){
   static unicode codes[MAX_LINE_LEN+1];
   ext_seq_to_unicode(line, codes);
   output_unicode_sequence(codes, file_F);
@@ -2613,7 +3188,7 @@ output_ext_kw_as_utf8
 ---------------------
 */
 
-void output_ext_kw_as_utf8(char *line, FILE *file_F){
+void output_ext_kw_as_utf8(wchar_t *line, FILE *file_F){
   static unicode codes[MAX_LINE_LEN+1];
   ext_kw_seq_to_unicode(line, codes);
   output_unicode_sequence(codes, file_F);
@@ -2671,7 +3246,7 @@ transcribe_file_to_utf8(struct file_data *input_F, FILE *output_F){
 ----------------------
 transcribe_file_to_ext
 ----------------------
-This procedure transcribes data from a utf8 encoded unicoden input stream,
+This procedure transcribes data from a utf8 encoded unicode input stream,
  to an output stream using the ProofPower extended character set.
 
 The input stream is to be supplied as a "file_data*", but the output
@@ -2680,11 +3255,18 @@ stream as FILE*.
 
 void
 transcribe_file_to_ext(struct file_data *input_F, FILE *output_F){
-  int r;
+  int r,s;
   while (!feof(input_F->fp)) {
     r=read_line_as_ext(input_F);
     if(!(feof(input_F->fp) && r==0)){
-      FPRINTF(output_F, "%s\n", input_F->cur_line);};
+      char c;
+      s = 0;
+      while((c = input_F->cur_line[s]) != 0){
+	putc(c, output_F);
+	s++;
+      };
+      putc('\n', output_F);
+    };
     if (debug) fflush(NULL);
   };
   return;
@@ -2707,7 +3289,7 @@ transcribe_file_to_ascii(struct file_data *input_F, FILE *output_F){
   while (!feof(input_F->fp)) {
     r=read_line_as_ascii(input_F);
     if(!(feof(input_F->fp) && r==0)){
-      FPRINTF(output_F, "%s\n", input_F->cur_line);};
+      WFPRINTF(output_F, L"%s\n", input_F->cur_line);};
   };
   return;
 }

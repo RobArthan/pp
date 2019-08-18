@@ -159,7 +159,7 @@ files of:
 (4)     usr013A.pp usr013B.pp usr013C.pp usr013D.pp usr013E.pp
 (5)     usr013F.pp usr013G.pp usr013H.pp usr013S.pp usr013X.pp
 (6)     usr022_slides.pp usr023_slides.pp
-(7)     wrk022.pp wrk043.pp wrk044.pp
+(7)     wrk022.pp wrk043.pp wrk044.pp wrk046.pp
 (8)     wrk051.pp (this file)
 =TEX
 These should all be present in the subdirectory $docs$ of the \Product{}
@@ -176,7 +176,7 @@ cp usr004.pp  usr011A.pp usr011B.pp usr011C.pp usr011D.pp \
       usr013A.pp usr013B.pp usr013C.pp usr013D.pp usr013E.pp \
       usr013F.pp usr013G.pp usr013H.pp usr013S.pp usr013X.pp \
       usr022_slides.pp usr023_slides.pp wrk022.pp wrk043.pp \
-      wrk044.pp wrk051.pp $PPINSTALLDIR/examples
+      wrk044.pp wrk046.pp wrk051.pp $PPINSTALLDIR/examples
 =TEX
 Then create the makefile {\tt wrk051.mkf} by :
 =GFT csh
@@ -276,6 +276,7 @@ rm -f wrk051.mkf \
 	wrk051_delete_theories_wrk022.sml \
 	wrk051_delete_theories_wrk043.sml \
 	wrk051_delete_theories_wrk044.sml \
+	wrk051_delete_theories_wrk046.sml \
 	wrk051_delete_theories_wrk050.sml
 =TEX
 
@@ -333,6 +334,37 @@ default :
 
 =TEX
 
+\subsection{File Group Definitions}
+
+Groups of files which are processed in similar ways are defined as make variables in the following.
+
+Note that, pro-tem. the HOL tutorial is run using ext and the zed using unicode, and this determines different processing of the various files by the makefile.
+
+=DUMPMORE wrk051.mkf
+
+SPCPPS=	   ⦏spc001.pp⦎ ⦏spc002.pp⦎ ⦏spc003.pp⦎ ⦏spc004.pp⦎ ⦏spc005.pp⦎
+USR011PPS= ⦏usr011A.pp⦎ ⦏usr011B.pp⦎ ⦏usr011C.pp⦎ ⦏usr011D.pp⦎ ⦏usr011E.pp⦎ ⦏usr011T.pp⦎ \
+	   ⦏usr011S.pp⦎ ⦏usr011X.pp⦎ ⦏usr023_slides.pp⦎ ⦏wrk050.pp⦎ ⦏wrk051.pp⦎
+USR013PPS= ⦏usr013A.pp⦎ ⦏usr013B.pp⦎ ⦏usr013C.pp⦎ ⦏usr013D.pp⦎ ⦏usr013E.pp⦎ ⦏usr013F.pp⦎ \
+	   ⦏usr013G.pp⦎ ⦏usr013H.pp⦎ ⦏usr013X.pp⦎ ⦏usr013S.pp⦎
+OTHERUSRPPS= ⦏usr004.pp⦎ ⦏usr022_slides.pp⦎
+USRPPS=	   $(USR011PPS) $(USR013PPS) $(OTHERUSRPPS)
+WRKPPS=  ⦏wrk022.pp⦎ ⦏wrk043.pp⦎ ⦏wrk044.pp⦎ ⦏wrk046.pp⦎
+X11PPS= $(SPCPPS) $(USR013PPS) $(OTHERUSRPPS) $(WRKPPS)
+ALLPPS= $(SPCPPS) $(USRPPS) $(WRKPPS)
+
+USRPPSMLS=  $(SPCPPS:.pp=.ppsml) $(USR013PPS:.pp=.ppsml) $(OTHERUSRPPS:.pp=.ppsml) $(WRKPPS:.pp=.ppsml)
+USRXSMLS=   $(USR011PPS:.pp=.sml)
+
+USR011SMLS= $(USR011PPS:.pp=.sml)
+USR013SMLS= $(USR013PPS:.pp=.sml)
+USRSMLS=    $(USR011SMLS) $(USR013SMLS)
+WRKSMLS=    $(WRKPPS:.pp=.sml)
+X11PPSMLS=  $(X11PPS:.pp=.ppsml)
+X11SMLS=    $(X11PPS:.pp=.sml)
+ALLSMLS=$(ALLPPS:.pp=.sml)
+
+=TEX
 \subsection{Pattern Matching Rules} \label{PatternMatchingRules}
 See {\tt make} documentation for how the following work.  They provide
 the ``standard'' processing rules for:
@@ -359,8 +391,15 @@ dummy files, used to invoke printing.
 	texdvi $*
 	texdvi $*
 
-%.sml: %.pp
-	ppsml $*
+$(X11PPSMLS): %.ppsml: %.pp
+	ppsml -f holutf8.svf $*
+	mv $*.sml $*.ppsml
+
+$(X11SMLS): %.sml: %.ppsml
+	pp_file_conv -u <$*.ppsml >$*.sml
+
+$(USR011SMLS): %.sml: %.pp
+	ppsml -f holutf8.svf $*
 
 %.prt: %.dvi
 	pstex $*
@@ -369,20 +408,7 @@ dummy files, used to invoke printing.
 
 The following .pp files are supplied in a release of \Product.
 =DUMPMORE wrk051.mkf
-⦏usr011A.pp⦎ \
-⦏usr011B.pp⦎ \
-⦏usr011C.pp⦎ \
-⦏usr011D.pp⦎ \
-⦏usr011E.pp⦎ \
-⦏usr011T.pp⦎ \
-⦏usr013A.pp⦎ \
-⦏usr013B.pp⦎ \
-⦏usr013C.pp⦎ \
-⦏usr013D.pp⦎ \
-⦏usr013E.pp⦎ \
-⦏usr013F.pp⦎ \
-⦏usr013G.pp⦎ \
-⦏usr013H.pp⦎:
+$(USRPPS):
 	@echo Missing $@, which should have been present in release
 	exit 1
 
@@ -712,11 +738,11 @@ an execution of this makefile:
 	rm -f usr004.tutorial usr022.tutorial usr023.tutorial
 	rm -f usr011.tutorial usr011.zexercises usr011.zsolutions
 	rm -f usr013.tutorial usr013.exercises usr013.solutions
-	rm -f spc001.th spc002.th
+	rm -f spc001.th spc002.th spc001.sml spc002.sml spc001.ppsml spc002.ppsml
 	rm -f wrk022.th wrk043.th wrk044.th wrk046.th wrk050.th
 	rm -f usr022_slides.sml usr023_slides.sml usr004.sml
-	rm -f usr011X.sml usr011S.sml
-	rm -f usr013X.sml usr013S.sml wrk050.sml
+	rm -f $(ALLSMLS) $(USRPPSMLS)
+	rm -f wrk050.sml
 
 =TEX
 

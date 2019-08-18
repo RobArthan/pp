@@ -226,7 +226,7 @@ Get the definitions out:
 	val z_⦂_def = get_spec ⌜$"z'_ ⦂ _"⌝;
 	val z'Π_def = get_spec ⌜$"z'Π _?"⌝;
 	val z'if_def = get_spec ⌜$"z'if _? then _! else _!"⌝;
-	val z'guillemets_def = get_spec ⌜$"z'≪ _! ≫"⌝;
+	val z'guillemets_def = get_spec ⌜$"z'%ll% _! %gg%"⌝;
 	val z'underlining_brackets_def = get_spec ⌜$"z'_ ⨽ _ ⨼ _"⌝;
 =TEX
 \section{THE CODE}
@@ -597,7 +597,7 @@ val ⦏z_pred_if_thm⦎ =
 =SML
 val ⦏z_guillemets_thm⦎ = save_thm ("z_guillemets_thm",
 	inst_type_rule[(ⓣ'a⌝, ⓣ'X⌝)]
-	(∧_right_elim(z_gen_pred_u_elim(z_get_spec ⓩ(≪ _! ≫)⌝))));
+	(∧_right_elim(z_gen_pred_u_elim(z_get_spec ⓩ(%ll% _! %gg%)⌝))));
 =TEX
 =SML
 val ⦏z_underlining_brackets_thm⦎ = save_thm ("z_underlining_brackets_thm",
