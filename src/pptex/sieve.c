@@ -122,7 +122,6 @@ and the first part of that is changing the data structures so that they can hold
 #define MAX_ACTION 20
 #define NOT_FOUND (-1)
 
-#define STEER_FILE "sieveview"
 #define KEYWORD_FILE "sievekeyword"
 
 #define PPHOME "PPHOME"
@@ -3817,7 +3816,7 @@ int
 main(int argc, char **argv)
 {
 	int option;
-	char *steering_file = STEER_FILE;
+	char *steering_file = "";
 	char *keyword_files[MAX_KEYWORD_FILES];
 
 	limits.num_keyword_files = 0;
@@ -3867,6 +3866,9 @@ main(int argc, char **argv)
 	    }
 	}
 
+	if(*steering_file == 0)
+	  steering_file = view_F.utf8 ? "utf8svf" : "sieveview";
+	
 	if(debug) {
 		int i;
 		PRINTF("Debug options set:\n");
