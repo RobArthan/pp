@@ -21,7 +21,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 =IGNORE
 
-sieve sml < imp100.doc
+sieve -e sml < imp100.doc
 mv docsml doctex texdvi doctch doctds sun4bin
 
 doctex imp100 ; texdvi imp100
@@ -107,6 +107,8 @@ Now defines macros \verb"\VCVersion" and \verb"\VCDate".
 \verb"\VCDate" is now formatted with slashes for compatibility with \verb"\FormatDate".
 \item[2015/04/17]
 Worked around oddity in {\tt git log}.
+\item[] Versions of programs which read utf8 input files are added (these use the -u option in sieve).
+\item[2019/08/19] The "-e" flag is added to all invocations of sieve which are to read and write utf8 files.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -170,7 +172,7 @@ This file contains a number of shell scripts.  These scripts are
 extracted by using the sieve program as follows.
 
 =GFT Shell commands
-sieve sml < imp100.doc
+sieve -e sml < imp100.doc
 =TEX
 
 A side effect of this sieving action is the creation of the programs
@@ -315,7 +317,7 @@ do
 		EXITSTATUS=1
 	else
 		vcdefs $docfile > $outfile
-		eval sieve "$OPT_K" "$KEYFILE" "$SIEVEFILE" tex < "$docfile" >> "$outfile"
+		eval sieve -e "$OPT_K" "$KEYFILE" "$SIEVEFILE" tex < "$docfile" >> "$outfile"
 		if test "$?" -ne 0
 		then	EXITSTATUS=1
 		elif test ! -s "$outfile"
@@ -532,9 +534,9 @@ do
 		diag "$PROGNAME:" $docfile "does not exist or cannot be read"
 		EXITSTATUS=1
 	else
-		eval sieve "$OPT_K" "$KEYFILE" "$SIEVEFILE" \""$DOCSMLVIEW"\" < "$docfile" > "$outfile"
+		eval sieve -e "$OPT_K" "$KEYFILE" "$SIEVEFILE" \""$DOCSMLVIEW"\" < "$docfile" > "$outfile"
 
-		eval sieve "$OPT_K" "$KEYFILE" "$SIEVEFILE" errors < "$docfile" \
+		eval sieve -e "$OPT_K" "$KEYFILE" "$SIEVEFILE" errors < "$docfile" \
 		| sed \
 		-e '1,1s/^\([0-9][0-9]*\)		*\(.*\)/'\
 '(new_error_message {id= \1, text = "\2\\/'\
@@ -728,7 +730,7 @@ do
 			echo 'use_file "imp035";'
 			echo 'req_flag := Check;'
 			echo 'initialise_td_results ();'
-			eval sieve "$OPT_K" "$KEYFILE" "$SIEVEFILE" thydoc < "$docfile"
+			eval sieve -e "$OPT_K" "$KEYFILE" "$SIEVEFILE" thydoc < "$docfile"
 			echo 'summarize_td_results ();'
 		) > "$outfile"
 	fi
@@ -904,7 +906,7 @@ do
 			echo 'use_file "imp035";'
 			echo 'req_flag := Declare;'
 			echo 'initialise_td_results ();'
-			eval sieve "$OPT_K" "$KEYFILE" "$SIEVEFILE" thydoc < "$docfile"
+			eval sieve -e "$OPT_K" "$KEYFILE" "$SIEVEFILE" thydoc < "$docfile"
 			echo 'summarize_td_results ();'
 		) > "$outfile"
 	fi
@@ -1604,7 +1606,7 @@ EXITSTATUS=0
 
 convert(){
 	{ echo '=CONVERT_FORMAT' ; sed -e '1,$s/^/ /' $2 ; echo '=IGN' ; } |
-		eval sieve "$OPT_K" "$KEYFILE" "$1" | sed -e '1,$s/ //'
+		eval sieve -e "$OPT_K" "$KEYFILE" "$1" | sed -e '1,$s/ //'
 }
 
 for FILE

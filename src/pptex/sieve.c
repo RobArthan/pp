@@ -3818,6 +3818,8 @@ main(int argc, char **argv)
 	int option;
 	char *steering_file = "";
 	char *keyword_files[MAX_KEYWORD_FILES];
+	char *ppcharset=getenv("PPCHARSET");
+	short eu_flags = 0;
 
 	limits.num_keyword_files = 0;
 	keyword_files[limits.num_keyword_files++] = KEYWORD_FILE;
@@ -3828,10 +3830,13 @@ main(int argc, char **argv)
 	check_program_initializations();
 
 	main_F.utf8 = False;
-	while((option = getopt(argc, argv, "d:f:Kk:luv")) != -1) {
+	while((option = getopt(argc, argv, "d:ef:Kk:luv")) != -1) {
 	    switch(option) {
 		case 'd':
 		    debug |= atoi(optarg);
+		    break;							/* BREAK */
+		case 'e':
+		    eu_flags = 1;
 		    break;							/* BREAK */
 		case 'f':
 		    steering_file = optarg;
@@ -3852,8 +3857,7 @@ main(int argc, char **argv)
 		    limits.opt_list = 1;
 		    break;							/* BREAK */
 		case 'u':
-		    main_F.utf8 = True;
-		    view_F.utf8 = True;
+		    eu_flags = 2;
 		    break;							/* BREAK */
 		case 'v':
 		    FPRINTF(stderr, "%s: version %s\n", program_name,
@@ -3866,6 +3870,30 @@ main(int argc, char **argv)
 	    }
 	}
 
+/*
+
+The choice of view file is as follows:
+
+1) if the -f option is used it determines the view file
+otherwise
+2) if the e or u flags are used they determine a default view file for ext or utf8 esp.
+otherwise
+3) if the PPCHARSET environment variable is "utf8" then the default view for utf8 is selected.
+otherwise
+
+The defaults are, for ext: sieveview, for utf8: utf8svf.
+
+The character set for reading and writing is determined by the command line flags or,
+if not thus determined, by the $PPCHARSET environment,
+and failing that defaults at present to ext.
+
+*/	
+	if (eu_flags > 0) main_F.utf8 = (eu_flags == 2);
+	else if (!strcmp(ppcharset,"utf8"))  main_F.utf8 = True;
+	else main_F.utf8 = False;
+	
+	view_F.utf8 = main_F.utf8;
+	
 	if(*steering_file == 0)
 	  steering_file = view_F.utf8 ? "utf8svf" : "sieveview";
 	
