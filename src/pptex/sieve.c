@@ -3889,8 +3889,8 @@ and failing that defaults at present to ext.
 
 */	
 	if (eu_flags > 0) main_F.utf8 = (eu_flags == 2);
-	else if (!strcmp(ppcharset,"utf8"))  main_F.utf8 = True;
-	else main_F.utf8 = False;
+	else if (ppcharset == NULL || !strcmp(ppcharset,"utf8"))  main_F.utf8 = False;
+	else main_F.utf8 = True;
 	
 	view_F.utf8 = main_F.utf8;
 	
