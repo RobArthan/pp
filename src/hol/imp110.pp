@@ -291,6 +291,8 @@ Added {\it use\_utf8\_string}.
 
 \item[2015/04/17]
 Ported to Lemma 1 document template.
+\item[2019/08/25]
+(\it find\_name} now constructs a PRETTY_NAME for any unicode hex literal even if not in te dictionary (but does not insert it), instead of failing if the literal does not match anything in the dictinary.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -683,7 +685,7 @@ We simulate the effect of the user adding the Unicode keyword form for each pret
 using the following function.
 It does no harm if the user actually does add the Unicode keyword form as well.
 =SML
-fun ⦏char_of_unicode_keyword⦎ (s : string) : string OPT = (
+fun ⦏char_of_unicode_keyword⦎ (s : string) : (bool * string) OPT = (
 	if	size s <> 7
 	orelse	String.sub (s, 0) <> #"x"
 	then	Nil
@@ -693,8 +695,8 @@ fun ⦏char_of_unicode_keyword⦎ (s : string) : string OPT = (
 				if	cp <= 0wx7f
 				then	Nil
 				else	case basic_unicode_to_pp cp of
-						Value c => Value((chr o SML97BasisLibrary.Char.ord) c)
-					|	Nil => Nil
+						Value c => Value(true, (chr o SML97BasisLibrary.Char.ord) c)
+					|	Nil => Value(false, s) 
 );
 =TEX
 =SMLPLAIN SML
@@ -755,7 +757,8 @@ fun ⦏find_name⦎ (name:string) : PRETTY_NAME OPT = (
 	case e_lookup name (!name_dict) of
 		pn as Value _ => pn
 	|	Nil => case char_of_unicode_keyword name of
-				Value c => find_char c
+				Value (true, c) => find_char c
+			|	Value (false, s) => Value ([s], Nil, Simple)
 			|	Nil => Nil
 );
 

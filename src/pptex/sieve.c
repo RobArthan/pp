@@ -252,7 +252,7 @@ void
 usage(void)
 {
     FPRINTF(stderr,
-	"usage: %s [-l|v] [-d debug-level] [-f steering_file] [-K] [-k keyword_file] view\n",
+	"usage: %s [-u|-e] [-l|v] [-d debug-level] [-f steering_file] [-K] [-k keyword_file] view\n",
 	program_name);
     FPRINTF(stderr, "%s version: %s\n", program_name, coprlemma1);
 }
@@ -2854,18 +2854,14 @@ main_convert_uni(
 				       &out_line[outp], lenout_line-outp);
 		  tex_arg = curkw->tex_arg;
 		  tex_arg_sense = curkw->tex_arg_sense;
-		}
+		} else out_line[outp++] = ch;
 	      } else if (opt_do_latex) {
 		  if(curkw->name != NULL) {
 		    /* Convert it to LaTeX form */
 		    outp += wcopy_string(curkw->name,
 					 &out_line[outp], lenout_line-outp);
-		  } else {
-		    out_line[outp++] = ch;
-		  }
-	      } else {
-		out_line[outp++] = ch;
-	      }
+		  } else out_line[outp++] = ch;
+	      } else out_line[outp++] = ch;
 	      inp++;
 	      break;							/* BREAK */
 	    } else {
@@ -3835,7 +3831,7 @@ main(int argc, char **argv)
 		case 'd':
 		    debug |= atoi(optarg);
 		    break;							/* BREAK */
-		case 'e':
+	    case 'e': /* ext i/o */
 		    eu_flags = 1;
 		    break;							/* BREAK */
 		case 'f':
@@ -3856,7 +3852,7 @@ main(int argc, char **argv)
 		case 'l':
 		    limits.opt_list = 1;
 		    break;							/* BREAK */
-		case 'u':
+	    case 'u': /* utf8 i/o */
 		    eu_flags = 2;
 		    break;							/* BREAK */
 		case 'v':
@@ -3876,7 +3872,7 @@ The choice of view file is as follows:
 
 1) if the -f option is used it determines the view file
 otherwise
-2) if the e or u flags are used they determine a default view file for ext or utf8 esp.
+2) if the e or u flags are used they determine a default view file for ext or utf8 resp.
 otherwise
 3) if the PPCHARSET environment variable is "utf8" then the default view for utf8 is selected.
 otherwise
