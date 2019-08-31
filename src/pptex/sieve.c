@@ -3386,16 +3386,17 @@ decode_directive_line(
 
 	  curkw = (view_F.utf8 ? unicode_to_kwi(first_char) : kwi.char_code[first_char]);
 	  
-	  if (curkw != NULL) {
-	    if(curkw->ech == -1 || !IS_DIRECTIVE_CHAR(curkw->ech)) return 0;
-	    if(curkw->act_kind == KW_DIRECTIVE) {
+	  if (curkw == NULL) return 0;                                       /* RETURN */
+	  
+	  if(curkw->ech == -1 || !IS_DIRECTIVE_CHAR(curkw->ech)) return 0;   /* RETURN */
+
+	  /* Must be a directive line */
+
+	  if(curkw->act_kind == KW_DIRECTIVE) {
 	      di->dl_line[1] = L' ';
 	      start_copy_dest = 2;
 	    };
-	  };
-
-	  /* Must be a directive line */
-	  
+	  	  
 	  if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line directive\n", line);};
 	  
 	  /*  copy it into "dl_line" ready to be chopped up */
@@ -3554,8 +3555,8 @@ main_sieve(void)
 		/*		main_F.line_no ++; */
 
 		if(debug & D_READ_SOURCE_LINE) {
-			(void)printf("%s %d: %S\n", main_F.name,
-				main_F.line_no, main_F.cur_line);
+			(void)printf("%s %d(%ld): %S\n", main_F.name,
+				     main_F.line_no, wcslen(main_F.cur_line), main_F.cur_line);
 		}
 
 		if(limits.opt_list) {
