@@ -1162,30 +1162,6 @@ bool utf8_stdin = False; /* this is set True by -u flag in sieve */
 
 struct file_data keyword_F = 	{ "keyword file", 0, 0, 0 };
 
-/*
-struct keyword_information{
-	unicode uni;		
-	short ech;		
-	short orig_kind;	
-	short act_kind;
-#define KW_NOT_SET 0
-#define KW_SIMPLE 1
-#define KW_INDEX 2
-#define KW_SAMEAS 3
-#define KW_SAMEAS_UNKNOWN 4
-#define KW_DIRECTIVE 5
-#define KW_START_DIR 6
-#define KW_VERB_ALONE 7
-#define KW_WHITE 8
-	wchar_t *name;		
-	wchar_t *macro;	
-	regex_t *tex_arg;
-	char tex_arg_sense;
-#define KW_RE_MATCH 0	
-#define KW_RE_DELIMITER 1
-};
-*/
-
 #define MAX_KEYWORDS 4000
 #define MAX_KW_LEN 50
 
@@ -1317,10 +1293,12 @@ add_new_keyword(
 	   PRINTF("add_new_keyword: %S ext: %d uni %x\n", name, ki->ech, uni);
 	};
 	
+	/* (broken and unnecessary)
 	if(kwi.num_keywords>1 && wcscmp(kwi.keyword[kwi.num_keywords-1].name,
 				name) < 0) {
 		grumble1("keywords unsorted", &keyword_F, True);
 	}
+	*/
 }
 
 
@@ -1994,7 +1972,7 @@ In a limited number of cases a second entry is permitted to override parts of th
 and is then discarded.
 in other cases the second entry is discarded without effect (apart from a warning or error message)
 A second entry for a keyword will be discarded unless both it and the original have kind KW_SIMPLE.
-It the second supplies a new unicode code point then this will override the first unless the first
+If the second supplies a new unicode code point then this will override the first unless the first
 is a code point associated with a ProofPower extended character (since that correspondence is
 hard wired elsewhere and cannot be overridden by the keyword file).
 If the second supplies a macro then it, and any parameter info, will replace the original.
@@ -2009,7 +1987,7 @@ This includes:
    the keyword referred to.
 2. filling in the index by extended character code, rejecting multiple keywords
    for any single extended character.
-3. Seting the "character flags" used to test for directive characters and verb alone characters,
+3. Setting the "character flags" used to test for directive characters and "verb alone" characters,
    flagging any such keywords which do not have an extended character code.
 
 */
