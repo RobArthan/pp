@@ -3305,7 +3305,7 @@ decode_directive_line(
 	  return(0);							/* RETURN */
 	}
 
-	if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line[A]: line = %S\n",line);};
+	if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line[A]: line = %S",line);};
 
 	init_directive_line(di);
 	    
@@ -3381,28 +3381,35 @@ decode_directive_line(
 	     So we just need to check whether it is a directive in that case.
 	  */
 	  wchar_t first_char = line[0];
+	  short first_char_ech;
 	  
 	  di->dl_line[0] = first_char;
 
-	  curkw = (view_F.utf8 ? unicode_to_kwi(first_char) : kwi.char_code[first_char]);
+	  /* establish the ext code if there is one */
 	  
-	  if (curkw == NULL) return 0;                                       /* RETURN */
+	  if (view_F.utf8 && first_char > 127) {
+	      curkw = unicode_to_kwi(first_char);
+	      first_char_ech = (curkw == NULL) ? -1 : curkw->ech;
+	  } else first_char_ech = first_char;
+
+	  /* then check if it is a directive character */
 	  
-	  if(curkw->ech == -1 || !IS_DIRECTIVE_CHAR(curkw->ech)) return 0;   /* RETURN */
+	  if (first_char_ech == -1 || !IS_DIRECTIVE_CHAR(first_char_ech)) return 0;    /* RETURN */
 
-	  /* Must be a directive line */
-
-	  if(curkw->act_kind == KW_DIRECTIVE) {
-	      di->dl_line[1] = L' ';
-	      start_copy_dest = 2;
-	    };
-	  	  
-	  if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line directive\n", line);};
+	  /* adjustments for single character directives */
+	    
+	  if(kwi.char_code[first_char_ech] != NULL &&
+				kwi.char_code[first_char_ech]->act_kind == KW_DIRECTIVE) {
+	    di->dl_line[1] = L' ';
+	    start_copy_dest = 2;
+	  };
+	  
+	  if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line: directive = %S", line);};
 	  
 	  /*  copy it into "dl_line" ready to be chopped up */
-	  	  
+	
 	  start_copy_source = 1;
-	}
+	};
 
 	/* Now we have in the first character of "di->dl_line" the extended
 		character that starts the directive.  If we have "KW_DIRECTIVE"
