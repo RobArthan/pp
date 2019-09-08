@@ -643,6 +643,7 @@ A token is taken to be an initial string of spaces, followed by exclusively non-
 =SEEALSO
 $list\_diag\_string$, $diag\_line$, $raw\_diag\_string$.
 =ENDDOC
+
 =DOC
 val ⦏list_diag_string⦎ : string list -> unit;
 =DESCRIBE
@@ -668,6 +669,26 @@ will have included new lines within the string if
 necessary).
 =SEEALSO
 $diag\_string$, $raw\_diag\_line$.
+=ENDDOC
+
+=DOC
+val ⦏input_next⦎ : (string * int * string * int) -> instream -> string list;
+val ⦏input_to_end_of_line⦎ : (string * int * string * int) -> instream -> string;
+=DESCRIBE
+$input_next$ inputs more characters from an input stream.
+If we are not processing a UTF-8 input stream, one character is input.
+If we are processing a UTF-8 input stream, we input one Unicode code point
+from the stream and convert it into the ProofPower representation (which
+will either be a single character or a keyword representing a code point that
+has no ProofPower single character equivalent).
+If invalid UTF-8 is encountered it raises an exception.
+Caller may choose to catch this exception and try again with the rest of the stream.
+The strings in the list returned each comprise exactly one character:
+end of stream is signalled by an empty list.
+
+$input_to_end_of_line$ uses $input_next$ to read to the end of the line on the input stream, returning a single string.
+
+=SEEALSO
 =ENDDOC
 
 =SML

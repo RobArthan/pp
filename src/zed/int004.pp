@@ -452,7 +452,7 @@ val returned : (int * TERM) list ref = ref [];
 fun loopback (file : string) (tcs : (int * TERM) list)
 	: (int * TERM) list = (
 	let	val strm = open_out file;
-		fun fmt1 (i, t) = "(" ^ string_of_int i ^ ", " ^ string_of_term t ^ ")";
+		fun fmt1 (i, t) = "(" ^ string_of_int i ^ ", " ^ (translate_for_output(string_of_term t)) ^ ")";
 		fun do1 p = (
 			output(strm, "returned := ");
 			output(strm, fmt1 p);
