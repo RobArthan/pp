@@ -1653,6 +1653,9 @@ which is read but not placed in the output string.
 The maximum length is specified by the second parameter, and the program
 will be terminated if it is exceeded.
 
+The return value is the number of characters unless no characters are
+read and end-of-file is reached, in which case WEOF is returned.
+
 */
 
 int
@@ -1688,7 +1691,7 @@ simple_wread_ext_line(wchar_t *line, int max_len, struct file_data *file_F)
 	    (void)printf("\n");
 	  }
 	*/
-	return(i);
+	return(i > 0 || whatgot != WEOF ? i : WEOF);
 }
 
 /*
@@ -1699,6 +1702,7 @@ Reads a line into a buffer, checking that the line
 isn't too long and returning the number of characters read, i.e., the
 number of characters stored in argument {\tt line} but excluding the
 trailing null.
+If no characters are read and getwc returns WEOF then WEOF (-1) is returned. 
 
 The line is the sequence of characters up to the next newline character,
 which is read but not placed in the output string.
@@ -2742,19 +2746,21 @@ int read_utf8_as_unicode(struct file_data *file_F){
 ----------------
 read_line_as_ext
 ----------------
-Reads a line into a the file cur_line buffer, and then,
-if the file is flagged as utf8, converts from utf8 to
+Reads a line into the file cur_line buffer in
 the ProofPower extended character encoding.
 
 If the utf8 flag is set in the file_data, the line is read first as
-utf8 characters into cur_line, then decoded into unicode code points 
-into file_data.code_line and is then translated back
+unicode code points into file_data.code_line and is then translated
 into cur_line using ProofPower extended character set where possible,
 then named percent keywords, then hexadecimal percent keywords as a
 last resort.
 
 If the file is not in utf8, the line as read is returned, no translation
-from keywords to ext chars is undertaken. 
+from keywords to ext chars is undertaken.
+
+The end-of-line character is not stored, the line is terminated by zero.
+The value returned is the number of characters read, or WEOF,
+if none read and end-of-file reached.
 */
 
 int read_line_as_ext(struct file_data *file_F){

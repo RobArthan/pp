@@ -949,9 +949,9 @@ fun output_results (strm : outstream) = (
 		fun do1 (""::strs) = (
 			app outln strs
 		) | do1 strs = (
-			outln "ⓈCN";
+			outln (translate_for_output "ⓈCN");
 			app outln strs;
-			outln "■"
+			outln (translate_for_output "■")
 		);
 	in	map do1 (rev (!results))
 	end
@@ -3780,10 +3780,10 @@ open CNZGenerator;
 fun output_web_clause ostream wc = (
 	let
 		val outf = make_output_fun ostream;
-
-	in	outf "ⓈCN"; outf "\n";
+		val outft = outf o translate_for_output
+	in	outft "ⓈCN"; outf "\n";
 		fmt_web_clause {outf = outf, fmt_repl = Nil} wc;
-		outf "■";
+		outft "■";
 		outf "\n";
 		outf "\n"
 	end
