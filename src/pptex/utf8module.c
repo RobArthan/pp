@@ -1162,30 +1162,6 @@ bool utf8_stdin = False; /* this is set True by -u flag in sieve */
 
 struct file_data keyword_F = 	{ "keyword file", 0, 0, 0 };
 
-/*
-struct keyword_information{
-	unicode uni;		
-	short ech;		
-	short orig_kind;	
-	short act_kind;
-#define KW_NOT_SET 0
-#define KW_SIMPLE 1
-#define KW_INDEX 2
-#define KW_SAMEAS 3
-#define KW_SAMEAS_UNKNOWN 4
-#define KW_DIRECTIVE 5
-#define KW_START_DIR 6
-#define KW_VERB_ALONE 7
-#define KW_WHITE 8
-	wchar_t *name;		
-	wchar_t *macro;	
-	regex_t *tex_arg;
-	char tex_arg_sense;
-#define KW_RE_MATCH 0	
-#define KW_RE_DELIMITER 1
-};
-*/
-
 #define MAX_KEYWORDS 4000
 #define MAX_KW_LEN 50
 
@@ -1317,10 +1293,12 @@ add_new_keyword(
 	   PRINTF("add_new_keyword: %S ext: %d uni %x\n", name, ki->ech, uni);
 	};
 	
+	/* (broken and unnecessary)
 	if(kwi.num_keywords>1 && wcscmp(kwi.keyword[kwi.num_keywords-1].name,
 				name) < 0) {
 		grumble1("keywords unsorted", &keyword_F, True);
 	}
+	*/
 }
 
 
@@ -1675,6 +1653,9 @@ which is read but not placed in the output string.
 The maximum length is specified by the second parameter, and the program
 will be terminated if it is exceeded.
 
+The return value is the number of characters unless no characters are
+read and end-of-file is reached, in which case WEOF is returned.
+
 */
 
 int
@@ -1710,7 +1691,7 @@ simple_wread_ext_line(wchar_t *line, int max_len, struct file_data *file_F)
 	    (void)printf("\n");
 	  }
 	*/
-	return(i);
+	return(i > 0 || whatgot != WEOF ? i : WEOF);
 }
 
 /*
@@ -1721,6 +1702,7 @@ Reads a line into a buffer, checking that the line
 isn't too long and returning the number of characters read, i.e., the
 number of characters stored in argument {\tt line} but excluding the
 trailing null.
+If no characters are read and getwc returns WEOF then WEOF (-1) is returned. 
 
 The line is the sequence of characters up to the next newline character,
 which is read but not placed in the output string.
@@ -1994,7 +1976,7 @@ In a limited number of cases a second entry is permitted to override parts of th
 and is then discarded.
 in other cases the second entry is discarded without effect (apart from a warning or error message)
 A second entry for a keyword will be discarded unless both it and the original have kind KW_SIMPLE.
-It the second supplies a new unicode code point then this will override the first unless the first
+If the second supplies a new unicode code point then this will override the first unless the first
 is a code point associated with a ProofPower extended character (since that correspondence is
 hard wired elsewhere and cannot be overridden by the keyword file).
 If the second supplies a macro then it, and any parameter info, will replace the original.
@@ -2009,7 +1991,7 @@ This includes:
    the keyword referred to.
 2. filling in the index by extended character code, rejecting multiple keywords
    for any single extended character.
-3. Seting the "character flags" used to test for directive characters and verb alone characters,
+3. Setting the "character flags" used to test for directive characters and "verb alone" characters,
    flagging any such keywords which do not have an extended character code.
 
 */
@@ -2764,19 +2746,21 @@ int read_utf8_as_unicode(struct file_data *file_F){
 ----------------
 read_line_as_ext
 ----------------
-Reads a line into a the file cur_line buffer, and then,
-if the file is flagged as utf8, converts from utf8 to
+Reads a line into the file cur_line buffer in
 the ProofPower extended character encoding.
 
 If the utf8 flag is set in the file_data, the line is read first as
-utf8 characters into cur_line, then decoded into unicode code points 
-into file_data.code_line and is then translated back
+unicode code points into file_data.code_line and is then translated
 into cur_line using ProofPower extended character set where possible,
 then named percent keywords, then hexadecimal percent keywords as a
 last resort.
 
 If the file is not in utf8, the line as read is returned, no translation
-from keywords to ext chars is undertaken. 
+from keywords to ext chars is undertaken.
+
+The end-of-line character is not stored, the line is terminated by zero.
+The value returned is the number of characters read, or WEOF,
+if none read and end-of-file reached.
 */
 
 int read_line_as_ext(struct file_data *file_F){

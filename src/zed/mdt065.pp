@@ -189,10 +189,10 @@ open ExtendedIO Sort ListerSupport;
 fun my_diff (ignore_order : bool)
 	 (file : string, expected : string) : bool = (
 	let	val chan = open_in file;
-		fun read_all () = (
-			case input_line chan of
+		fun read_all line () = (
+			case ReaderWriter.input_to_end_of_line ("my_diff", 5040, file, line) chan of
 				"" => [""]
-			|	some => some :: read_all()
+			|	some => some :: (read_all (line+1) ())
 		);
 		fun is_space ch = ch = " " orelse ch = "\t" orelse ch = "\n";
 		fun compare (ch1 :: more1) (ch2 :: more2) = (
@@ -214,7 +214,7 @@ fun my_diff (ignore_order : bool)
 			diag_line ("expected: <end-of-file>");
 			false
 		);
-		val contents = implode (read_all());
+		val contents = implode (read_all 0 ());
 		val s = if ignore_order then sort string_order else Combinators.I;
 		val ok = compare
 			(s(explode contents drop is_space))

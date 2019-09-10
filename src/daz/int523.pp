@@ -507,11 +507,12 @@ val vcs1 = map (fn (x, (_, y)) => (x, y)) (get_conjectures"-");
 val _ = web_clauses := rev (!web_clauses);
 val strm = open_out "int523a.sml";
 open CNAdaOutput;
-val fmt_info ={outf = make_output_fun1(curry output strm), fmt_repl = Nil} : PP_FMT_INFO;
+fun output_translated text = output (strm, translate_for_output text);
+val fmt_info = {outf = make_output_fun1 (curry output strm), fmt_repl = Nil} : PP_FMT_INFO;
 fun output_web_clause wc = (
-	output(strm, "ⓈCN\n");
+	output_translated "ⓈCN\n";
 	fmt_web_clause fmt_info wc;
-	output(strm, "■\n")
+	output_translated "■\n"
 );
 val _ = map output_web_clause (!web_clauses);
 val _ = close_out strm;

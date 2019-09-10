@@ -1581,9 +1581,9 @@ fun ⦏fmt_k_slot⦎ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) ({content, labe
     case fmt_repl of
     Value f =>    (f outf label; ())
     |Nil =>    (
-	outf "⟨";
+	outf (translate_for_output "⟨");
 	outf (translate_for_output content);
-	outf " ⟩   ";
+	outf (translate_for_output " ⟩   ");
 	(fmt_label fmtinfo false label);
 	outf "\n"
 	)

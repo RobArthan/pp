@@ -430,7 +430,7 @@ Alternatively they may be encoded using the \Product\ extended character set, in
 They may also be encoded using their UNICODE code in a utf-8 file.
 In the former two cases the file should have a {\tt .doc} suffix, in the latter a {\tt .pp} suffix.
 
-Conversion between these formats is done by chosing the command with the appropriate name, i.e. $conv\_ascii$ to ASCII, $conv\_extended$ to convert to the \Product\ extended character set, and $conv\_utf8$ to convert to {\tt utf-8}.
+Conversion between these formats is done by chosing the command with the appropriate name, i.e. $conv\_ascii$ to ASCII, $conv\_extended$ to convert to the \Product\ extended character set.
 
 The $filename$ arguments may be just the base-name, perhaps with a directory name prefix, or may include a {\tt.doc} suffix or a {\tt .pp} suffix.
 If more than one is present and the suffix is not given on the command line, then the program will fail.
@@ -440,25 +440,20 @@ If the check is successful, the source file is deleted and the destination file 
 If the check is not successful then the source file is not deleted, and if the output file would have had the same suffix (i.e. in conversions to and from ASCII and the \Product\ extended character set) then the output file will be saved with the suffix {\it .asc} or {\it .ext} as appropriate.
 
 If $-r$ is specified no check is made and the output of the conversion is placed
-in a file with suffix {\tt.asc}, {\tt.ext} or {\tt .pp}, as appropriate.
+in a file with suffix {\tt.asc}, {\tt.ext}, as appropriate.
 
 Note that the check will always fail on a file containing a mixture of extended
 characters and ASCII keywords for the extended characters (not necessarily if the file contains keywords for unicode code points not corresponding to extended characters).
 Use $-r$ and then, if all is well, overwrite the {\tt.doc} file with the {\tt.asc} or {\tt.ext} file using $mv(1)$ or $cp(1)$ to convert a such file into a homogeneous one.
-Also note that {\tt conv\_utf8} assumes that its input file is in the extended character set.
-If if is in ASCII then the conversion will be correct, but the check will fail.
-In this case, either use the {\tt -r} option or apply {\tt conv\_ext} before {\tt conv\_utf8}.
 
 The check will also fail if the file is already in the desired format,
 in which case there is no need to re-run the conversion program.
-
-In the case of conversion to utf-8, extended characters or their corresponding keyword will be replaced by the corresponding unicode code point encoded in utf-8.
-Any other keyword which has been assigned a code point will be converted to that uncode code point, and any explicit unicode code point (in the form \%\#x\emph{HHHHHH}\%) will also be converted to that code point.
 
 The $-K$ and $-k$ options indicate the keyword files to be used to determine the mapping of keywords to UNICODE code points.
 
 =SEEALSO
 {\it docpr}
+{\it pp\_file\_conv}
 
 %doc2man_extra:.I "USR001: ProofPower - Document Preparation"
 

@@ -252,7 +252,7 @@ void
 usage(void)
 {
     FPRINTF(stderr,
-	"usage: %s [-l|v] [-d debug-level] [-f steering_file] [-K] [-k keyword_file] view\n",
+	"usage: %s [-u|-e] [-l|v] [-d debug-level] [-f steering_file] [-K] [-k keyword_file] view\n",
 	program_name);
     FPRINTF(stderr, "%s version: %s\n", program_name, coprlemma1);
 }
@@ -2854,18 +2854,14 @@ main_convert_uni(
 				       &out_line[outp], lenout_line-outp);
 		  tex_arg = curkw->tex_arg;
 		  tex_arg_sense = curkw->tex_arg_sense;
-		}
+		} else out_line[outp++] = ch;
 	      } else if (opt_do_latex) {
 		  if(curkw->name != NULL) {
 		    /* Convert it to LaTeX form */
 		    outp += wcopy_string(curkw->name,
 					 &out_line[outp], lenout_line-outp);
-		  } else {
-		    out_line[outp++] = ch;
-		  }
-	      } else {
-		out_line[outp++] = ch;
-	      }
+		  } else out_line[outp++] = ch;
+	      } else out_line[outp++] = ch;
 	      inp++;
 	      break;							/* BREAK */
 	    } else {
@@ -3309,7 +3305,7 @@ decode_directive_line(
 	  return(0);							/* RETURN */
 	}
 
-	if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line[A]: line = %S\n",line);};
+	if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line[A]: line = %S",line);};
 
 	init_directive_line(di);
 	    
@@ -3385,27 +3381,35 @@ decode_directive_line(
 	     So we just need to check whether it is a directive in that case.
 	  */
 	  wchar_t first_char = line[0];
+	  short first_char_ech;
 	  
 	  di->dl_line[0] = first_char;
 
-	  curkw = (view_F.utf8 ? unicode_to_kwi(first_char) : kwi.char_code[first_char]);
+	  /* establish the ext code if there is one */
 	  
-	  if (curkw != NULL) {
-	    if(curkw->ech == -1 || !IS_DIRECTIVE_CHAR(curkw->ech)) return 0;
-	    if(curkw->act_kind == KW_DIRECTIVE) {
-	      di->dl_line[1] = L' ';
-	      start_copy_dest = 2;
-	    };
-	  };
+	  if (view_F.utf8 && first_char > 127) {
+	      curkw = unicode_to_kwi(first_char);
+	      first_char_ech = (curkw == NULL) ? -1 : curkw->ech;
+	  } else first_char_ech = first_char;
 
-	  /* Must be a directive line */
+	  /* then check if it is a directive character */
 	  
-	  if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line directive\n", line);};
+	  if (first_char_ech == -1 || !IS_DIRECTIVE_CHAR(first_char_ech)) return 0;    /* RETURN */
+
+	  /* adjustments for single character directives */
+	    
+	  if(kwi.char_code[first_char_ech] != NULL &&
+				kwi.char_code[first_char_ech]->act_kind == KW_DIRECTIVE) {
+	    di->dl_line[1] = L' ';
+	    start_copy_dest = 2;
+	  };
+	  
+	  if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line: directive = %S", line);};
 	  
 	  /*  copy it into "dl_line" ready to be chopped up */
-	  	  
+	
 	  start_copy_source = 1;
-	}
+	};
 
 	/* Now we have in the first character of "di->dl_line" the extended
 		character that starts the directive.  If we have "KW_DIRECTIVE"
@@ -3558,8 +3562,8 @@ main_sieve(void)
 		/*		main_F.line_no ++; */
 
 		if(debug & D_READ_SOURCE_LINE) {
-			(void)printf("%s %d: %S\n", main_F.name,
-				main_F.line_no, main_F.cur_line);
+			(void)printf("%s %d(%ld): %S\n", main_F.name,
+				     main_F.line_no, wcslen(main_F.cur_line), main_F.cur_line);
 		}
 
 		if(limits.opt_list) {
@@ -3835,7 +3839,7 @@ main(int argc, char **argv)
 		case 'd':
 		    debug |= atoi(optarg);
 		    break;							/* BREAK */
-		case 'e':
+	    case 'e': /* ext i/o */
 		    eu_flags = 1;
 		    break;							/* BREAK */
 		case 'f':
@@ -3856,7 +3860,7 @@ main(int argc, char **argv)
 		case 'l':
 		    limits.opt_list = 1;
 		    break;							/* BREAK */
-		case 'u':
+	    case 'u': /* utf8 i/o */
 		    eu_flags = 2;
 		    break;							/* BREAK */
 		case 'v':
@@ -3876,7 +3880,7 @@ The choice of view file is as follows:
 
 1) if the -f option is used it determines the view file
 otherwise
-2) if the e or u flags are used they determine a default view file for ext or utf8 esp.
+2) if the e or u flags are used they determine a default view file for ext or utf8 resp.
 otherwise
 3) if the PPCHARSET environment variable is "utf8" then the default view for utf8 is selected.
 otherwise
