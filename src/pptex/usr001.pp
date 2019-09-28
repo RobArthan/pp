@@ -346,9 +346,12 @@ many mathematical symbols, particularly those of~Z, plus the Greek
 letters.
 
 Within formal text segments UNICODE characters are available plus
-a number of percent keywords.  Each supported non-ascii character has a
-corresponding percent keyword, but not vice versa.  The percent
-keywords give access to further symbols.
+a number of percent keywords, each of which is associated with a
+particular UNICODE code point in a keyword file.  UNICODE characters
+can be used even if not assigned a keyword, but production of
+latex documents from documents containing such characters will
+depend on the use of a \LaTeX{} variant which accepts utf-8 input,
+such as {\bf XeTeX} or {]bf LuaTeX}.
 
 To use percent keywords to get symbols in text that is to be typeset in
 a paragraph, also to get the same formatting style as is used in formal
@@ -427,10 +430,9 @@ and `\EndIndex' respectively.
 
 \subsection{Indexing Non-Ascii Characters}
 
-Most of the supported non-ascii characters (which are shown in
-section~\ref{ExtCharSet}) may be used in names to be indexed, these
-characters may be the whole name.  Characters that cannot be indexed
-are described in section~\ref{ExtCharSet}.
+Most non-ascii UNICODE characters may be used in names to be indexed,
+these characters may be the whole name.  Characters that cannot be
+indexed are described in section~\ref{ExtCharSet}.
 
 %--------------------------------------------------------------------
 
@@ -523,7 +525,7 @@ A source document is divided into a number of segments of text of
 various categories.  Each segment starts with a directive line whose
 first letter is an equals~`{\tt=}' sign or is one of a small number
 of non-ascii characters.  These characters are used for
-categories such as Z~schemas and they are discused later, see
+categories such as Z~schemas and are discused later, see
 section~\ref{ZLanguageMaterial}.
 
 In the rest of this document we will refer to categories and directive
@@ -550,8 +552,9 @@ Text to be processed by the normal rules of \LaTeX{} is introduced by a
 directive line containing the four characters \index{=TEX } `{\tt=TEX}',
 this text is copied into the {\tt.tex} file by {\tt pptex} but
 discarded by {\tt ppsml}.  Program {\tt pptex} additionally converts
-all extended characters in this category into calls of \LaTeX{} macros
-that, in most cases, will print the image of the extended character.
+non-ascii characters in this category into calls of \LaTeX{} macros
+if a keyword has been assigned to the character and asuitable LaTeX
+macro has been supplied in a keyword file.
 
 %--------------------------------------------------------------------
 
@@ -640,11 +643,8 @@ first directive line is ignored, thus this area may be used to include
 version information about the document including keywords understood by
 the UNIX {\tt sccs} program.
 
-{\catcode`\!=\active
-\def!{\%}% This is to stop SCCS messing up the real example
 =GFTSHOW Document example
 	File: myfile.pp
-	SCCS version: !Z! !E! !I! !M!
 
 	=TEX
 	\documentstyle[hol1,11pt]{article}
@@ -654,7 +654,7 @@ the UNIX {\tt sccs} program.
 	to calculate factorials and Fibonacci numbers.
 
 	=SML
-	fun %SX%factorial%EX% (n:int) : int = (
+	fun ⦏factorial⦎ (n:int) : int = (
 		if n > 0
 		then	n * factorial(n-1)
 		else	1
@@ -676,7 +676,6 @@ the UNIX {\tt sccs} program.
 	\printindex
 	\end{document}
 =TEX
-}
 
 Notice the keywords and extended characters used for creating an index
 of defined names.  In particular notice how they are interchangeable
@@ -1651,11 +1650,7 @@ For the formal text categories (of which only the `{\tt=SML}' and
 as `\verb|\|', `\verb|$|', `\verb|&|', `\verb|#|', `\verb|$|' and
 `\verb|_|' are not to be treated specially, they are just to be
 printed.  The intention is that the formal text categories give a
-verbatim representation of their contents including any supported
-non-ascii UNICODE characters which are supported.
-The set of supported non-ascii UNICODE characters is determined
-by the {\tt sievekeyword} file, which shows how these characters are to be
-rendered by \LaTeX{}.
+verbatim representation of their contents.
 
 The package has also been designed on the assumption
 that if you use the \LaTeX\ \verb"\begin{...}" command
@@ -2257,7 +2252,7 @@ left to be reported by \LaTeX{} or other parts of the documentation
 system.
 Some of these errors may include translations of extended characters
 into their \index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal NN$\verb|{}|' form, see
-section~\ref{ConvertExtended}, which is used internally by the document
+section~\ref{ConvertUNICODE}, which is used internally by the document
 processing system.  To assist the user in understanding these error
 messages the translations are shown in
 section~\ref{ExtendedCharImages}.
@@ -2487,7 +2482,7 @@ manual pages.
 \subsection{Synopsis}
 
 =GFT
-	sieve [-l] [-v] [-d number] [-f view_file_name] [-K] [-k keyword_file_name] [-u][-a] view
+	sieve [-l] [-v] [-d number] [-f view_file_name] [-K] [-k keyword_file_name] [-u][-e][-a] view
 =TEX
 
 Multiple `{\tt-k}~$\ldots$' options may be given.
@@ -2540,15 +2535,13 @@ discarded.
 \item{\tt-v } Shows the program version in addition to the other
 	actions of the program.
 
-\item{\tt-u } If this flag is set the standard input is treated as a
-        {\tt utf-8} file.  The input is translated from {\tt utf-8} into the
-	\Product{} extended character set. UNICODE code points greater
-	than 127 but not corresponding to any of the \Product{} extended
-	characters will be translated into a named keyword (if
-	any keyword is declared in the {\tt sievekeyword} file as corresponding
-	to that UNICODE code point), or into the hexadecimal value
-	of the UNICODE code point in the form \%\#x\emph{HHHHHH}\% if no
-	corresponding keyword has been declared.
+\item{\tt-u } If this flag is set the all inputs and outputs are treated as
+        {\tt utf-8} files.
+
+\item{\tt-e } If this flag is set then input and output files are treated as coded
+	using the extended character set, not as utf-8 UNICODE.
+	This is the default interpretation, if no other indication is given,
+	but if the environment variable PPCHARSET is set this will override the default.
 
 \item{\tt-a } If this flag is set then output is in ascii, using percent keywords
 	rather than extended characters or utf8 encoded UNICODE codes, except where
@@ -2623,31 +2616,20 @@ directive lines are processed.
 
 %--------------------------------------------------------------------
 
-\subsection{Conversion of Extended Characters} \label{ConvertExtended}
+\subsection{Conversion of non-ascii characters} \label{ConvertUNICODE}
 
 In some of the copying actions extended characters are converted to
-\LaTeX{} macro calls of the form
-\index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal NN$\verb|{}|' where
-the `$\cal N$' are derived from the hexadecimal value of the
-character: $0$ is converted to `{\tt A}', $1$ to `{\tt B}' and so on,
-up to $15\sb{10}$ which is converted
-to `{\tt P}'. {} The call is completed by a pair of curly brackets so
-that space characters in the source text are preserved.  The
-non-standard encoding for the hexadecimal numbers is chosen so that
-conventional \LaTeX{} macro names may be used.  These names should
-never need to be typed by a user of the document processing system and
-they should only be seen when examining the contents of a {\tt.tex}
-file to determine the cause and location of \LaTeX{} error messages.
+\LaTeX{} macro calls as specified in keyword steering file.
+Each such specification is associated with a keyword assigned to
+a specific unicode character, optionally assigned a \LaTeX{} expression.
+If a unicode character is used for which no \LaTeX{} macro has been
+assigned, then the unicode character will be passed through to the
+output unchanged.  It will then be necessary to process the file
+though software which will accept unicode characters, such as
+{\it XeLaTex} or {\it LuaLaTeX}.
 
-The full set of extended characters are shown in section~\ref{ExtendedCharImages}.
-
-In some of the copying actions the extended characters are converted
-into {\tt utf-8} encoding of the corresponding UNICODE code point.
-The mapping between the extended character codes and their designated
-UNICODE code point is built in to the {\tt sieve} program.
-
-In some of the copying actions the extended characters are converted
-to theit assigned \%$\ldots$\% keyword.
+In some of the copying actions non-ascii UNICODE characters are converted
+to their assigned \%$\ldots$\% keyword (if there is one).
 
 %--------------------------------------------------------------------
 
@@ -2761,7 +2743,7 @@ following words.
 	cat} action with the {\tt latex} option set.  If it is not
 	provided then the character or keyword is output in
 	the \index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal NN$\verb|{}|' form
-	(see section~\ref{ConvertExtended}).  If both a character code
+	(see section~\ref{ConvertUNICODE}).  If both a character code
 	and a \LaTeX{} macro are given then the macro element is output
 	rather than the \index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal
 	NN$\verb|{}|' form of the extended character code.
@@ -3491,7 +3473,7 @@ percent keywords to their \LaTeX{} equivalents must be less than
 approximately 2036 bytes.  In the case of a line containing only
 extended characters which are converted to the
 \index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal
-NN$\verb|{}|' form (see section~\ref{ConvertExtended}) this limit means
+NN$\verb|{}|' form (see section~\ref{ConvertUNICODE}) this limit means
 a worst case where the input line must have no more than about
 $2036/7\approx290$ characters.
 
@@ -4009,7 +3991,7 @@ The  table below shows all of the available extended characters.  Each character
 its hexadecimal value using conventional hexadecimal digits, its octal value and
 its hexadecimal value using \index{\BS Pr$\cal NN$ }
 the `$\cal NN$' letters used in its `\verb|\Pr|$\cal NN$\verb|{}|' form
-(see section~\ref{ConvertExtended}).  User documents should not normally
+(see section~\ref{ConvertUNICODE}).  User documents should not normally
 need to give the numerical forms of the characters.
 The `\verb|\Pr|$\cal NN$\verb|{}|'  form may sometimes be seen in {\LaTeX} error messages.
 Octal value are used in {\tt xpp} applications defaults files (see \XPPUSERGUIDE).

@@ -2694,8 +2694,7 @@ main_convert_uni(
 		struct keyword_information *curkw
 		  = &kwi.keyword[kwindex];
 		
-		if((opt_del_index && curkw->act_kind == KW_INDEX)
-		   ) {
+		if((opt_del_index && curkw->act_kind == KW_INDEX)) {
 		  /* Suppress it */
 		  /* I.e., do nothing. */
 		} else if(opt_do_white && curkw->act_kind
@@ -2718,10 +2717,10 @@ main_convert_uni(
 				    curkw->ech);
 		  tex_arg = curkw->tex_arg;
 		  tex_arg_sense = curkw->tex_arg_sense;
-		} else if(opt_conv_kw && curkw->ech != -1) {
-		  /* Replace with the extended character */
-		  out_line[outp++] = curkw->ech;
-		} else if(opt_do_latex && curkw->ech == -1) {
+		} else if(opt_conv_kw && curkw->uni != -1) {
+		  /* Replace with the unicode character */
+		  out_line[outp++] = curkw->uni;
+		} else if(opt_do_latex && curkw->uni == -1) {
 		  /* Replace with latex macro of same name */
 		  out_line[outp++] = L'{';
 		  {
@@ -2754,21 +2753,21 @@ main_convert_uni(
 		  out_line[outp++] = L'%';
 		  
 		  outp += copy_keyword_uni(&in_line[inp], kwlen,
-					   &out_line[outp], lenout_line-outp, 1);
+			  &out_line[outp], lenout_line-outp, 1);
 		  
 		  out_line[outp++] = L'\\';
 		  out_line[outp++] = L'%';
 		} else {
-		  /* Just copy the keyword */
-		  outp += copy_keyword_uni(&in_line[inp], kwlen,
-					   &out_line[outp], lenout_line-outp, 0);
+		        /* Just copy the keyword */
+		        outp += copy_keyword_uni(&in_line[inp], kwlen,
+				&out_line[outp], lenout_line-outp, 0);
 		}
 		inp += kwlen;
 	      } else {
 		/* Mall-formed keyword */
 		if(opt_flag_kw) {
-		  outp += wcopy_string(L"\\MalFormedKeyword",
-				      &out_line[outp], lenout_line-outp);
+		        outp += wcopy_string(L"\\MalFormedKeyword",
+				&out_line[outp], lenout_line-outp);
 		}
 		if(opt_do_latex) out_line[outp++] = L'\\';
 		out_line[outp++] = L'%';
@@ -2822,19 +2821,15 @@ main_convert_uni(
 	    if (curkw != NULL) {
 	      /* 
 		 We have a unicode character which is assigned to a keyword.
-		 For the most part we treat it as if the keyword had been used,
-		 but not for opt_do_ml_char.
 	      */
 	      size_t kwlen = wcslen(curkw->name);
 	      if(opt_del_index && curkw->act_kind == KW_INDEX) {
-		/* Suppress it */
-		/* I.e., do nothing. */
+		/* Suppress it, i.e., do nothing. */
 	      } else if(opt_do_white && curkw->act_kind == KW_WHITE) {
 		/* Replace with a space */
 		out_line[outp++] = L' ';
 	      } else if(ch < 128) {out_line[outp++] = ch;
-	      } else if(opt_do_ml_char){/* DO ML CHAR */
-		if(chext >127){
+	      } else if(opt_do_ml_char && chext >12){/* DO ML CHAR */
 		  int dig_unit = chext % 10;
 		  int tens = (chext - dig_unit) / 10;
 		  int dig_ten = tens % 10;
@@ -2845,9 +2840,7 @@ main_convert_uni(
 		  out_line[outp++] = dig_hun + L'0';
 		  out_line[outp++] = dig_ten + L'0';
 		  out_line[outp++] = dig_unit + L'0';
-		}
-	      }
-	      else if (opt_do_char){/* DO CHAR */
+	      } else if (opt_do_char){/* DO CHAR */
 		if(curkw->macro != NULL) {
 		  /* Convert it to LaTeX form */
 		  outp += wcopy_string(curkw->macro,

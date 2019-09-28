@@ -3069,7 +3069,10 @@ fun ⦏get_use_extended_chars_flag⦎ (():unit) : bool = (
 
 The user can ask for non-ASCII symbols to be translated into UTF-8.
 =SML
-val ⦏output_in_utf8⦎ = ref false;
+val ⦏output_in_utf8⦎ = ref (
+    case ExtendedIO.get_env "PPCHARSET" of
+    	 	"ext" => false
+	 |      "utf8" => true);
 val _ = new_flag {name = "output_in_utf8",  control = output_in_utf8,
 			check = fun_true, default = fn () => false};
 =TEX
@@ -3337,7 +3340,10 @@ fun ⦏my_string_of_exn⦎ (ex : exn) : string = (
 
 The user can ask for the input stream to be treated as UTF-8.
 =SML
-val ⦏input_in_utf8⦎ = ref false;
+val ⦏input_in_utf8⦎ = ref (
+    case ExtendedIO.get_env "PPCHARSET" of
+    			    "ext" => false
+		|	    "utf8" => true);
 val _ = new_flag {name = "input_in_utf8",  control = input_in_utf8,
 			check = fun_true, default = fn () => false};
 
