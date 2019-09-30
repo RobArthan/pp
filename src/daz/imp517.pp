@@ -144,6 +144,10 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported daz source documents onto the Lemma 1 document template
+
+\item[2019/09/30]
+Allowed for UTF-8 input and output.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -180,7 +184,13 @@ structure ⦏CNTheoryProofSupport⦎ : CNTheoryProofSupport = struct
 \subsection{Common Tools}
 Protect uses of the systems $use\_string$ against mishaps with Q's.
 =SML
-fun use_string1 (s : string) = use_string (translate_for_output s);
+fun use_string1 (s : string) = (
+	let	val us =
+			if get_flag "output_in_utf8"
+			then use_utf8_string else use_string;
+	in	us (translate_for_output s)
+	end
+);
 =TEX
 =SML
 fun ⦏override_save_thm⦎ (nm : string, thm : THM) : THM = (
