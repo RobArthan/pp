@@ -4,7 +4,7 @@
  *
  * diag.c - debugging tools for the X/Motif ProofPower Interface
  *
- * diag.c: this file is part of the PPTex system
+ * diag.c: this file is part of the PPXpp system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

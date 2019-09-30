@@ -5,7 +5,7 @@
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
  *
- * xmisc.c: this file is part of the PPTex system
+ * xmisc.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

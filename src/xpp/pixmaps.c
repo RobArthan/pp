@@ -5,7 +5,7 @@
  * pixmaps.c -  creation of pixmaps for the X/Motif ProofPower
  * Interface
  *
- * pixmaps.c: this file is part of the PPTex system
+ * pixmaps.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

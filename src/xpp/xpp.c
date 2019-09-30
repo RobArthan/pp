@@ -3,7 +3,7 @@
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
- * xpp.c: this file is part of the PPTex system
+ * xpp.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

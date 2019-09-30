@@ -4,7 +4,7 @@
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
- * files.c: this file is part of the PPTex system
+ * files.c: this file is part of the PPXpp system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

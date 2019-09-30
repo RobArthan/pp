@@ -4,7 +4,7 @@
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
  *
- * undo.c: this file is part of the PPTex system
+ * undo.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

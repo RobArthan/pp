@@ -4,7 +4,7 @@
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
  *
- * pterm.c: this file is part of the PPTex system
+ * pterm.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *
