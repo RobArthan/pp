@@ -293,6 +293,9 @@ Added {\it use\_utf8\_string}.
 Ported to Lemma 1 document template.
 \item[2019/08/25]
 (\it find\_name} now constructs a PRETTY_NAME for any unicode hex literal even if not in te dictionary (but does not insert it), instead of failing if the literal does not match anything in the dictinary.
+\item[2019/09/29]
+Change the initial and default values of the flags {\it input\_in\_utf8} and {output\_in\_utf8} to be "utf8" if the value of shell variable PPCHARSET is "utf8" and otherwise ext (at the time the default is re-instated).
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -3069,12 +3072,13 @@ fun ⦏get_use_extended_chars_flag⦎ (():unit) : bool = (
 
 The user can ask for non-ASCII symbols to be translated into UTF-8.
 =SML
-val ⦏output_in_utf8⦎ = ref (
-    case ExtendedIO.get_env "PPCHARSET" of
-    	 	"ext" => false
-	 |      "utf8" => true);
-val _ = new_flag {name = "output_in_utf8",  control = output_in_utf8,
-			check = fun_true, default = fn () => false};
+local
+	val use_utf8 = fn () => if ExtendedIO.get_env "PPCHARSET" = "utf8" then true else false;
+in
+	val ⦏output_in_utf8⦎ = ref (use_utf8());
+	val _ = new_flag {name = "output_in_utf8",  control = output_in_utf8,
+			check = fun_true, default = use_utf8};
+end;
 =TEX
 
 The user can selectively disable support for some Unicode code points:
@@ -3340,13 +3344,13 @@ fun ⦏my_string_of_exn⦎ (ex : exn) : string = (
 
 The user can ask for the input stream to be treated as UTF-8.
 =SML
-val ⦏input_in_utf8⦎ = ref (
-    case ExtendedIO.get_env "PPCHARSET" of
-    			    "ext" => false
-		|	    "utf8" => true);
-val _ = new_flag {name = "input_in_utf8",  control = input_in_utf8,
-			check = fun_true, default = fn () => false};
-
+local
+	val use_utf8 = fn () => if ExtendedIO.get_env "PPCHARSET" = "utf8" then true else false;
+in
+	val ⦏input_in_utf8⦎ = ref (use_utf8 ());
+	val _ = new_flag {name = "input_in_utf8",  control = input_in_utf8,
+			check = fun_true, default = use_utf8};
+end;
 =TEX
 The following function inputs more characters from an input stream.
 If we are not processing a UTF-8 input stream, one character is input.

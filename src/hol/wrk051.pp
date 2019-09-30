@@ -82,6 +82,8 @@ Augmented old RCS version numbers in the changes history with dates.
 Dates will be used in place of version numbers in future.
 \item[2015/04/15]
 Now uses new date and version macros from doctex
+\item[2019/09/30]
+Adjustments for utf8 working.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -391,15 +393,8 @@ dummy files, used to invoke printing.
 	texdvi $*
 	texdvi $*
 
-$(X11PPSMLS): %.ppsml: %.pp
-	ppsml -f holutf8.svf $*
-	mv $*.sml $*.ppsml
-
-$(X11SMLS): %.sml: %.ppsml
-	pp_file_conv -u <$*.ppsml >$*.sml
-
-$(USR011SMLS): %.sml: %.pp
-	ppsml -f holutf8.svf $*
+$(X11SMLS) $(USR011SMLS): %.sml: %.pp
+	ppsml $*
 
 %.prt: %.dvi
 	pstex $*
