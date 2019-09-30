@@ -4,7 +4,7 @@
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
- * palette.c: this file is part of the PPTex system
+ * palette.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

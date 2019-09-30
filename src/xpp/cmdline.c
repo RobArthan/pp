@@ -5,7 +5,7 @@
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
  *
- * cmdline.c: this file is part of the PPTex system
+ * cmdline.c: this file is part of the PPXpp system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

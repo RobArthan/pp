@@ -4,7 +4,7 @@
  *
  * options.c -  tools for setting up global option variables
  *
- * options.c: this file is part of the PPTex system
+ * options.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

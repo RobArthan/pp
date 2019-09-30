@@ -6,7 +6,7 @@
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
  *
- * menus.c: this file is part of the PPTex system
+ * menus.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

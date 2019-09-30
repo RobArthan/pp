@@ -138,7 +138,8 @@ Reinstated some tests that had accidentally been commented out.
 \item[2014/07/23]
 Augmented old RCS version numbers in the changes history with dates.
 Dates will be used in place of version numbers in future.
-
+\item[2019/09/22]
+Made r18.1 work with UTF-8 input and output.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -1980,7 +1981,7 @@ output_ada_program{script="-", out_file = "int522.tmp"};
 store_mt_results
 mt_run
  [(	"r18.1",
-	ExtendedIO.system,
+	ExtendedIO.system o translate_for_output,
 	"test  `LC_ALL=C egrep \"Δ\" int522.tmp | wc -l `  = 1",
 	true)];
 ExtendedIO.system "rm int522.tmp";

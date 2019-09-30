@@ -4,7 +4,7 @@
  *
  * xpp.h - main include file for the X/Motif ProofPower Interface
  *
- * xpp.h: this file is part of the PPTex system
+ * xpp.h: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *
