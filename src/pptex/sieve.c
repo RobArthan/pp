@@ -94,6 +94,14 @@ So now all the rest of code has to be changed for utf8 processing, not just cat.
 The first step in this which I am now engaged in is the reading of utf8 .svf files,
 and the first part of that is changing the data structures so that they can hold unicode.
 
+9/2019
+
+Correction to mlchar mode in utf8 mode.
+
+03/10/2019
+
+Changing to default utf8 rather than ext (see {\it main}).
+
 \section{SIEVE PROGRAM}
 
 \subsection{Initial Declarations}
@@ -3833,7 +3841,7 @@ main(int argc, char **argv)
 		    debug |= atoi(optarg);
 		    break;							/* BREAK */
 	    case 'e': /* ext i/o */
-		    eu_flags = 1;
+		    eu_flags += 1;
 		    break;							/* BREAK */
 		case 'f':
 		    steering_file = optarg;
@@ -3854,7 +3862,7 @@ main(int argc, char **argv)
 		    limits.opt_list = 1;
 		    break;							/* BREAK */
 	    case 'u': /* utf8 i/o */
-		    eu_flags = 2;
+		    eu_flags += 2;
 		    break;							/* BREAK */
 		case 'v':
 		    FPRINTF(stderr, "%s: version %s\n", program_name,
@@ -3875,19 +3883,19 @@ The choice of view file is as follows:
 otherwise
 2) if the e or u flags are used they determine a default view file for ext or utf8 resp.
 otherwise
-3) if the PPCHARSET environment variable is "utf8" then the default view for utf8 is selected.
-otherwise
+3) if the PPCHARSET environment variable is "ext" then the default view for ext is selected.
+otherwise that for utf8
 
 The defaults are, for ext: sieveview, for utf8: utf8svf.
 
 The character set for reading and writing is determined by the command line flags or,
 if not thus determined, by the $PPCHARSET environment,
-and failing that defaults at present to ext.
+and failing that defaults to utf8.
 
 */	
 	if (eu_flags > 0) main_F.utf8 = (eu_flags == 2);
-	else if (ppcharset == NULL || !strcmp(ppcharset,"utf8"))  main_F.utf8 = False;
-	else main_F.utf8 = True;
+	else if (ppcharset == NULL || !strcmp(ppcharset,"ext"))  main_F.utf8 = True;
+	else main_F.utf8 = False;
 	
 	view_F.utf8 = main_F.utf8;
 	

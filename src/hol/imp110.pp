@@ -294,8 +294,9 @@ Ported to Lemma 1 document template.
 \item[2019/08/25]
 (\it find\_name} now constructs a PRETTY_NAME for any unicode hex literal even if not in te dictionary (but does not insert it), instead of failing if the literal does not match anything in the dictinary.
 \item[2019/09/29]
-Change the initial and default values of the flags {\it input\_in\_utf8} and {output\_in\_utf8} to be "utf8" if the value of shell variable PPCHARSET is "utf8" and otherwise ext (at the time the default is re-instated).
-
+Change the initial and default values of the flags {\it input\_in\_utf8} and {output\_in\_utf8} to be true if the value of shell variable PPCHARSET is "utf8" and otherwise false (at the time the default is re-instated).
+\item[2019/09/29]
+Change the initial and default values of the flags {\it input\_in\_utf8} and {output\_in\_utf8} to be false if the value of shell variable PPCHARSET is "ext" and otherwise true (at the time the default is re-instated).
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -3073,7 +3074,7 @@ fun ⦏get_use_extended_chars_flag⦎ (():unit) : bool = (
 The user can ask for non-ASCII symbols to be translated into UTF-8.
 =SML
 local
-	val use_utf8 = fn () => if ExtendedIO.get_env "PPCHARSET" = "utf8" then true else false;
+	val use_utf8 = fn () => if ExtendedIO.get_env "PPCHARSET" = "ext" then false else true;
 in
 	val ⦏output_in_utf8⦎ = ref (use_utf8());
 	val _ = new_flag {name = "output_in_utf8",  control = output_in_utf8,
@@ -3345,7 +3346,7 @@ fun ⦏my_string_of_exn⦎ (ex : exn) : string = (
 The user can ask for the input stream to be treated as UTF-8.
 =SML
 local
-	val use_utf8 = fn () => if ExtendedIO.get_env "PPCHARSET" = "utf8" then true else false;
+	val use_utf8 = fn () => if ExtendedIO.get_env "PPCHARSET" = "ext" then false else true;
 in
 	val ⦏input_in_utf8⦎ = ref (use_utf8 ());
 	val _ = new_flag {name = "input_in_utf8",  control = input_in_utf8,
