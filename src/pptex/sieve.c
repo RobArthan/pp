@@ -3654,6 +3654,7 @@ read_view_file(char *name)
 
 		if(debug & D_UTF8) {
 		  WPRINTF(L"read_view_file: line = '%S', length = %i\n", line, wcslen(line));
+		  fflush(stdout);
 		};
 
 		if(limits.opt_list) {

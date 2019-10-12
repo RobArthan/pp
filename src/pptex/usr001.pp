@@ -21,7 +21,7 @@ dvipage usr001 &
 %\documentstyle[hol1,11pt,fleqn,USR]{book}
 \documentclass[a4paper,11pt]{book}
 %\usepackage{fontspec}
-%\setmainfont{ProofPowerSerif.ttf}[Path=/Users/rbj/.fonts/]
+%\setmainfont{ProofPowerSerif.ttf}
 \usepackage{ppusr}
 \usepackage{ProofPower}
 \usepackage{fleqn}
@@ -137,13 +137,13 @@ aspects are oriented towards \LaTeX, but some are suitable for use with
 other typesetting systems, such as {\tt ptroff.}
 
 For typesetting the package consists of a \LaTeX\ style file (\ie, a
-macro suite) named {\tt hol1.sty}; some TrueType font files for screen use,
-namely, {\tt ProofPowerMono} and {\tt ProofPowerSerif}; two shell
-scripts {\tt pptex} and {\tt texdvi} which are the recommended means
-of preparing documents for typesetting and for running \LaTeX{} in
-normal use.  There are additional supporting programs which are
-normally invoked via the shell scripts but which may be called directly
-for special effects.
+macro suite) named {\tt hol1.sty}; some TrueType font files for use on
+screen or in print, namely, {\tt ProofPowerMono} and {\tt ProofPowerSerif};
+two shell scripts {\tt pptex} and {\tt texdvi} which are the recommended
+means of preparing documents for typesetting and for running {\LaTeX}
+or its derivatives.
+There are additional supporting programs which are normally invoked via
+the shell scripts but which may be called directly for special effects.
 
 The shell script {\tt pptex} (with the supporting programs) allows the
 user to prepare a \LaTeX\ file using UNICODE.
@@ -171,7 +171,7 @@ in~\cite{lamport86} and Z, which is described in~\cite{spivey89}.
 
 %The interfaces to the programs are described in various sections below.
 
-%A third part of the interface is the extended character set provided in
+%A third part of the interface is the non-ascii character set provided in
 %the font files.  This, together with the keyboard keystrokes used to
 %access the characters, is shown in section~\ref{ExtCharSet}.
 
@@ -218,8 +218,8 @@ To use the package you prepare a file, say {\tt myfile.pp}, using an editor
 for UNICODE files (e.g.{\tt xpp}) and  one of the supplied TrueType fonts.
 The characters available in this font are described in section~\ref{ExtCharSet}
 together with the character codes and the keystrokes used to access them.
-Another way of entering the extended characters is by copying from the
-palette which may be displayed with the command {\tt palette}.
+Another way of entering the non-ascii characters is by copying from the
+palette which may be displayed in {\tt xpp} with the command {\tt palette}.
 
 The form of the file is essentially that of a
 \LaTeX{} file except that you can include material in formal languaes
@@ -297,7 +297,7 @@ The basic job in preparing the {\tt.tex} file is to translate each
 non-ASCII character into \LaTeX\ macro calls which
 typeset that character and to add \LaTeX{} macro calls to properly
 format the formal material.  The lines starting with an equals~`{\tt=}'
-sign and some of the extended characters are directive lines which
+sign and some of the non-ascii characters are directive lines which
 control the way in which it does this,
 as we shall see.
 
@@ -346,12 +346,17 @@ many mathematical symbols, particularly those of~Z, plus the Greek
 letters.
 
 Within formal text segments UNICODE characters are available plus
-a number of percent keywords, each of which is associated with a
-particular UNICODE code point in a keyword file.  UNICODE characters
-can be used even if not assigned a keyword, but production of
-latex documents from documents containing such characters will
-depend on the use of a \LaTeX{} variant which accepts utf-8 input,
-such as {\bf XeTeX} or {]bf LuaTeX}.
+a number of percent keywords, each of which may be associated with a
+particular UNICODE code point in a keyword file.
+UNICODE characters can be used even if not assigned a keyword,
+but production of latex documents from documents containing such
+characters will depend on the use of a \LaTeX{} variant which accepts
+utf-8 input, such as {\bf XeTeX} or {\bf LuaTeX}.
+When associated with a keyword, an occurrence of a UNICODE character
+in narrative text may be translated for typesetting using a macro
+associated with the keyword in the keyword file.
+If no macro is supplied in the keyword file the UNICODE character
+will be passed through in utf-8.
 
 To use percent keywords to get symbols in text that is to be typeset in
 a paragraph, also to get the same formatting style as is used in formal
@@ -362,17 +367,23 @@ avoided or \LaTeX{} will interpret them as paragraph separations.
 Section~\ref{AboutInlineFT} gives more details of `{\tt=INLINEFT}'.
 
 Formal text is typeset in \LaTeX{} math mode, but with some changes.
-Extended characters and percent keywords are recognised and the
-corresponding symbols are displayed.  Space characters are
-significant.  The \LaTeX{} special characters, such as `\verb|\|',
+UNICODE characters and percent keywords are recognised and the
+corresponding symbols are displayed.
+Space characters are significant.
+The \LaTeX{} special characters, such as `\verb|\|',
 `\verb|$|', `\verb|&|', `\verb|#|', `\verb|$|' and `\verb|_|' lose
 their special meaning, they are just printed.
+
+UNICODE characters may be included in the narrative text not in math mode,
+and not in a formal text section provided that the text processor
+used for typesetting will accept either the unicode character itself
+in utf-8 or the macro supplied for that character in the keyword file.
 
 %********************************************************************
 
 \section{Making an Index of Defined Terms}\label{MakingAnIndex}
 
-An additional pair of extended characters, `\StartIndex' and
+An additional pair of non-ascii characters, `\StartIndex' and
 `\EndIndex' may be used to help make an index of defined terms for the
 document.  If you type, say, `\StartIndex
 \verb"InterestingThing"\EndIndex', somewhere in {\tt myfile.pp} then
@@ -510,10 +521,8 @@ characters or keywords are required in the {\tt .sml} file then the
 should be used.
 
 Note that {\tt ppsml} attempts to convert text in an `{\tt=SMLLITERAL}' section
-to Standard~ML by a simple algorithm: all extended characters are
-converted to their string literal form, i.e., to a backslash followed
-by their character code as a three-digit decimal number.  This means
-that extended characters outside of Standard~ML string literals will
+to Standard~ML by a simple algorithm suitable only for their use in string-literals,
+which means that extended characters outside of Standard~ML string literals will
 provoke error messages from the Standard~ML compiler.
 
 %********************************************************************
@@ -553,7 +562,7 @@ directive line containing the four characters \index{=TEX } `{\tt=TEX}',
 this text is copied into the {\tt.tex} file by {\tt pptex} but
 discarded by {\tt ppsml}.  Program {\tt pptex} additionally converts
 non-ascii characters in this category into calls of \LaTeX{} macros
-if a keyword has been assigned to the character and asuitable LaTeX
+if a keyword has been assigned to the character and a suitable LaTeX
 macro has been supplied in a keyword file.
 
 %--------------------------------------------------------------------
@@ -654,7 +663,7 @@ the UNIX {\tt sccs} program.
 	to calculate factorials and Fibonacci numbers.
 
 	=SML
-	fun ⦏factorial⦎ (n:int) : int = (
+	fun %SX%factorial%EX% (n:int) : int = (
 		if n > 0
 		then	n * factorial(n-1)
 		else	1
@@ -677,10 +686,10 @@ the UNIX {\tt sccs} program.
 	\end{document}
 =TEX
 
-Notice the keywords and extended characters used for creating an index
+Notice the keywords and non-ascii characters used for creating an index
 of defined names.  In particular notice how they are interchangeable
 which is illustrated by indexing $factorial$ using percent keywords
-and $fibonacci$ using extended characters.
+and $fibonacci$ using non-ascii characters.
 
 \newpage
 
@@ -698,7 +707,7 @@ to calculate factorials and Fibonacci numbers.
 \label{FactFibExample}
 
 =SML
-fun ⦏factorial⦎ (n:int) : int = (
+fun %SX%factorial%EX% (n:int) : int = (
 	if n > 0
 	then	n * factorial(n-1)
 	else	1
@@ -866,10 +875,6 @@ definition, from page~82; and, constraint, page~51.
 ⦏RAddBirthday⦎ ≜ (AddBirthday ∧ Success) ∨ AlreadyKnown
 ■
 
-ⓈIZAX
-⦏DATABASE⦎ == ADDR → PAGE
-■
-
 ⓈZ
 ⦏TREE⦎ ::= tip | fork ⟨⟨ℕ × TREE × TREE⟩⟩
 ■
@@ -879,7 +884,7 @@ n_disks<5
 ■
 \penalty10000\index{Z-paragraphs }\index{Z }\par
 
-The first of these was typed in as follows, the other have the same
+The first of these was typed in as follows, the others have the same
 start and end symbols.
 
 =GFTSHOW
@@ -887,6 +892,27 @@ start and end symbols.
 	⦏RAddBirthday⦎ ≜ (AddBirthday ∧ Success) ∨ AlreadyKnown
 	■
 =TEX
+
+The usual Z syntax for an abbreviation definition may be rendred informally thus:
+
+ⓈIZAX
+⦏DATABASE⦎ == ADDR → PAGE
+■
+
+typed:
+
+=GFTSHOW
+	ⓈIZAX
+	⦏RAddBirthday⦎ ≜ (AddBirthday ∧ Success) ∨ AlreadyKnown
+	■
+=TEX
+
+but this form is not accepted by \Product, which requires such definitions to be given thus:
+
+ⓈZ
+⦏DATABASE⦎ ≜ ADDR → PAGE
+■
+
 
 \bigskip
 
@@ -1105,7 +1131,7 @@ auxfile2}, the header of the printed form replaces {\tt dumped} with
 {\tt appended}.
 
 Within the formal text of `{\tt=DUMP}' and `{\tt=DUMPMORE}' categories
-extended characters are allowed.  The text written out by {\tt ppsml}
+non-ascii characters are allowed.  The text written out by {\tt ppsml}
 will have any indexing characters (i.e., `\StartIndex' and `\EndIndex')
 deleted.  This allows, e.g., makefile target names to be indexed but
 not have the indexing characters included in the makefile.
@@ -1205,35 +1231,45 @@ of the program text rather than controlling how that text is to be
 printed.  A small number of other characters, those used for Z~box
 drawing, are treated in the same manner.  Text in the category
 \index{=SMLLITERAL } `{\tt=SMLLITERAL}' will be printed so that all the
-extended characters are visible, in particular the `\StartIndex' and
+non-ascii characters are visible, in particular the `\StartIndex' and
 `\EndIndex' are displayed and do not cause indexing.  When processed by
-{\tt ppsml} all of the extended characters are converted to the
+{\tt ppsml} all of the non-ascii characters are converted to the
 Standard~ML string literal form (namely backslash plus three decimal digits)
 and thus will be read by Standard~ML but keywords will not be recognised.
-Thus `{\tt=SMLLITERAL}' is useful when extended characters occur only
+Thus `{\tt=SMLLITERAL}' is useful when non-ascii characters occur only
 in Standard~ML strings.
 Note that in the extended Standard~ML of \Product,
 indexing characters in strings are retained, but elsewhere they are
 discarded, see also section~\ref{IndexingStrings}.
 
-Category `{\tt=SMLLITERAL}' is intended for use when extended
+Category `{\tt=SMLLITERAL}' is intended for use when non-ascii
 characters are wanted in Standard~ML strings where the normal purpose
 of the characters is to achieve some printing effect.  For example,
 when initialising a data structure containing such strings.  Note that
 in this case the Standard~ML identifiers within the segment may not
-contain extended characters --- Standard~ML compilation errors will be
+contain non-ascii characters --- Standard~ML compilation errors will be
 reported if this rule is violated.  Standard~ML code which contains a
-mixture of identifiers with extended characters and strings with the
-extended characters for printing effects needs a combination of the
+mixture of identifiers with non-ascii characters and strings with the
+non-ascii characters for printing effects needs a combination of the
 `{\tt=SML$\ldots$}' categories and the `\verb|\Show|$\ldots$' macros
-(see~\ref{ShowingExtendedCharacterImages}) to obtain the correct output.
+(see~\ref{ShowingNon-AsciiCharacterImages}) to obtain the correct output.
 
 %--------------------------------------------------------------------
 
 \subsection{Theory Documentation} \label{TheoryListings}
 
-Describe\footnote{To be done.} the categories \index{=THDOC }
-`{\tt=THDOC}' and \index{=THSML } `{\tt=THSML}'.
+{\tt=THDOC} and {\tt=THSML} are categorise which may be used in documentation of
+theories such as may be found in the \Product{} reference manuals.
+When {\tt sieve} is run with {\tt tex} as the view, the materials are fornatted
+in the manner exemplified by the theory listing sections of the reference
+manual.
+Apart from the headings for the material, this is similar to the treatment of
+formal material in {\tt=DOC} sections.
+Hence this is the kind of output to be expected from {\tt pptex}.
+
+Alternatively, if {\tt sieve} is used with the view {\tt thydoc}
+(for which no special command line script is provided) then these sections
+are treated in the same way as =SML sections are by {\tt ppsml}.
 
 =IGN
 THDOC		tex
@@ -1267,7 +1303,7 @@ are displayed as themselves rather than being toggled between
 `~``~'~and~`~''~' and between `~`~'~and~`~'~' respectively.
 
 Category \index{=GFTSHOW } `{\tt=GFTSHOW}' is similar to `{\tt=GFTXQ}'
-but here all of the extended characters are shown, none of the special
+but here all of the non-ascii characters are shown, none of the special
 interpretations of (e.g.) indexing and padding characters are made.
 
 %--------------------------------------------------------------------
@@ -1330,7 +1366,7 @@ Environment & Opening & Closing & Purpose \\
 	toggled\\
 
 {\tt GFTSHOW*} & {\tt=GFTSHOW} & {\tt=TEX} & General formal text where
-	all of the extended characters are shown rather than specially
+	all of the non-ascii characters are shown rather than specially
 	treated, uses a single font and with a user supplied label,
 	quote character are not toggled, \\
 
@@ -1406,13 +1442,13 @@ the printed output.  Tab characters are used to give type-writer style
 tabbing, see section~\ref{AboutTabs} for more details.
 
 Some of the environments support Z~schema boxes where the visual layout
-of the source text is important.  For these a range of extended
+of the source text is important.  For these a range of non-ascii
 characters are provided that allow the schema boxes to be drawn.  Some
 other environments, including formal rules and $\ldots$, use the same
 characters to allow a good layout.
 
 The shape of these box drawing characters has been chosen so that you
-can use them, together with the extended characters `\VBar', `\HBar',
+can use them, together with the non-ascii characters `\VBar', `\HBar',
 `\DblHBar' and `\BigTurnstile', to draw boxes which look on the screen
 like the printed form.  The characters `\VBar', `\HBar' and `\DblHBar'
 are merely padding and have no effect on the form of the printed
@@ -1677,7 +1713,7 @@ in such cases
 they should not be used in maths mode, \ie, do not enclose them in
 dollar `\verb|$|' signs.  The sectioning commands are the commands that
 create entries for the table of contents, such as \verb|\section|,
-\verb|\subsection| and\verb|\subsubsection|.  Having the extended
+\verb|\subsection| and\verb|\subsubsection|.  Having the non-ascii
 characters in maths mode will often cause \LaTeX\ error messages to be
 issued when it reads the `{\tt.toc}' file to generate the table of
 contents.
@@ -2041,13 +2077,13 @@ give random gaps.
 
 %--------------------------------------------------------------------
 
-\subsection{Showing Extended Character Images}
-\label{ShowingExtendedCharacterImages}
+\subsection{Showing Non-Ascii Character Images}
+\label{ShowingNon-AsciiCharacterImages}
 
-Normally some of the extended characters cause formatting effects such
+Normally some of the non-ascii characters cause formatting effects such
 as indexing but it may be necessary to cause these characters to be
 printed.  A range of macros are provided to allow various sections of
-the extended character set to be shown.  These controls are normally
+the non-ascii character set to be shown.  These controls are normally
 invoked automatically via one of the sieving categories but they may
 be called by the user to get particular printing effects.
 
@@ -2079,7 +2115,7 @@ groups.
 
 In many simple cases the `{\tt=SML$\ldots$}' categories (see
 section~\ref{OtherSMLCategories}) provide an alternative method
-for displaying extended characters.
+for displaying non-ascii characters.
 
 %--------------------------------------------------------------------
 
@@ -2109,16 +2145,16 @@ in the same font as their enclosing text and macro \index{\BS
 HOLindexBold }\verb|\HOLindexBold| restores the bold font.
 
 It may useful to be able to turn off indexing over some blocks of text
-even though the indexing macros (or extended characters) are still
+even though the indexing macros (or non-ascii characters) are still
 used.  Macros \index{\BS HOLindexOff }\verb|\HOLindexOff| and
 \index{\BS HOLindexOn }\verb|\HOLindexOn| turn on and off,
-respectively, the indexing actions of the indexing extended characters
+respectively, the indexing actions of the indexing characters
 and keywords.  (The \verb|\index| macro of \LaTeX{} is not affected.)
 
 All of these macros may have their scope limited by enclosing them in
 \TeX{} groups.
 
-	For example, this paragraph uses the extended characters
+	For example, this paragraph uses the non-ascii characters
 	for indexing.  This term ⦏ci_one⦎ uses the default style
 	of indexing.  This term {\HOLindexPlain ⦏ci_two⦎} is
 	displayed with the enclosing font.  These terms \HOLindexOff
@@ -2129,7 +2165,7 @@ All of these macros may have their scope limited by enclosing them in
 The above paragraph was typed as follows.
 
 =GFTSHOW
-	For example, this paragraph uses the extended characters
+	For example, this paragraph uses the non-ascii characters
 	for indexing.  This term ⦏ci_one⦎ uses the default style
 	of indexing.  This term {\HOLindexPlain ⦏ci_two⦎} is
 	displayed with the enclosing font.  These terms \HOLindexOff
@@ -2250,14 +2286,14 @@ printed when \LaTeX\ closes the file.
 A few error messages are reported by the style file, most faults are
 left to be reported by \LaTeX{} or other parts of the documentation
 system.
-Some of these errors may include translations of extended characters
+Some of these errors may include translations of non-ascii characters
 into their \index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal NN$\verb|{}|' form, see
 section~\ref{ConvertUNICODE}, which is used internally by the document
 processing system.  To assist the user in understanding these error
 messages the translations are shown in
-section~\ref{ExtendedCharImages}.
+section~\ref{Non-AsciiCharImages}.
 
-Some extended character values are reserved for future expansion.  If
+Some non-ascii character values are reserved for future expansion.  If
 one of these is found in a {\tt.pp} file then the default action is
 for the style file to issue an error message and display the character
 as its hexadecimal value enclosed in a box.  For example, the character
@@ -2404,6 +2440,12 @@ texdvi} to be used from make files.
 
 The {\tt -p} option may be used to select a program other than
 \LaTeX{} (the default program is {\tt latex}).
+The use of {\tt luatex} instead of {\tt latex} allows documents to
+include UNICODE characters for which no macro has been supplied
+in the keyword files, provided that a font is used which supports
+the characters.
+Two fonts are supplied with \Product{} which include a wide range of
+characters which might be useful in mathenmatical or formal text.
 
 If the {\tt -v} option is given the programs prints out the names of
 the source and main output files.
@@ -2419,10 +2461,10 @@ If the {\tt -b} option is given, {\BibTeX} is run after running {\LaTeX}.
 =TEX
 
 This program produces a verbatim listing of one or more files which
-may contain characters in the extended character set.
+may contain characters in the non-ascii character set.
 By default the listings are sent to a printer using {\tt pstex}
 The {\tt -n} option is used to add line numbers to the listings.
-The {\tt -p} option is preserve the {\tt.dvi} file, i.e., it is not
+The {\tt -p} option preserves the {\tt.dvi} file, i.e., it is not
 deleted when {\tt pppr} completes.
 The {\tt -s} option causes the output to be sent to the screen
 previewer {\tt dvipage}, allowing selected pages to be printed
@@ -2537,16 +2579,19 @@ discarded.
 
 \item{\tt-u } If this flag is set the all inputs and outputs are treated as
         {\tt utf-8} files.
-
-\item{\tt-e } If this flag is set then input and output files are treated as coded
-	using the extended character set, not as utf-8 UNICODE.
 	This is the default interpretation, if no other indication is given,
 	but if the environment variable PPCHARSET is set this will override the default.
 
+\item{\tt-e } If this flag is set then input and output files are treated as coded
+	using the ``extended character set'', not as utf-8 UNICODE.  This character
+	set was used by \Product{} prior to support for utf-8 encoded unicode 
+	characters, and this facility is provided for backwards compatibility.
+	When sieve is use in this way the resulting ML files will only be acceptable
+	to \Product{} if the flag {\tt input\_in\_utf8} is set to {\tt false}.
+
 \item{\tt-a } If this flag is set then output is in ascii, using percent keywords
-	rather than extended characters or utf8 encoded UNICODE codes, except where
-	extended characters or utf8 output is forced by the action specified in the
-        sieve viewfile. 
+	rather than `extended' characters or utf8 encoded UNICODE characters, except where
+	non-ascii output is forced by the action specified in the sieve viewfile. 
 
 \item{\tt-d <number> } Causes copious diagnostic tracing on the
 	standard output.  The information produced depends on the
@@ -2597,11 +2642,11 @@ following forms.
 =GFT Directive lines
 	=<equals category> <arguments>
 
-	<extended category> <arguments>
+	<non-ascii category> <arguments>
 =TEX
 
 The `\verb/=/' of an equals category or the initial character of
-an extended category must be the first characters on the line.
+an non-ascii category must be the first characters on the line.
 
 Any text on lines preceding the first directive line is ignored.
 
@@ -2618,18 +2663,22 @@ directive lines are processed.
 
 \subsection{Conversion of non-ascii characters} \label{ConvertUNICODE}
 
-In some of the copying actions extended characters are converted to
-\LaTeX{} macro calls as specified in keyword steering file.
+In some of the copying actions non-ascii characters are converted to
+\LaTeX{} macro calls as specified in the keyword steering files.
 Each such specification is associated with a keyword assigned to
 a specific unicode character, optionally assigned a \LaTeX{} expression.
 If a unicode character is used for which no \LaTeX{} macro has been
 assigned, then the unicode character will be passed through to the
 output unchanged.  It will then be necessary to process the file
 though software which will accept unicode characters, such as
-{\it XeLaTex} or {\it LuaLaTeX}.
+{\it XeLaTex} or {\it LuaLaTeX}, and to use a font for the document
+which covers the relevant UNICODE characters.
 
 In some of the copying actions non-ascii UNICODE characters are converted
 to their assigned \%$\ldots$\% keyword (if there is one).
+In others they may be translated into up to three character codes for
+the characters in the utf-8 encoding in the format accepted by the standard
+ML compiler.
 
 %--------------------------------------------------------------------
 
@@ -2641,7 +2690,7 @@ macro.
 In some of the copying actions percent keywords will be converted into
 the {\tt utf-8} encoding of the corresponding UNICODE code point.
 
-Keywords corresponding to extended characters which are specified as
+Keywords corresponding to non-ascii characters which are specified as
 {\tt directive} type in the keyword file are always recognised when
 they occur at the start of a line of the source file.  When recognised
 at the start of the line these keywords introduce a new category of
@@ -2649,33 +2698,12 @@ text.
 
 Keyword of the form \%\#$\ldots$\% are read as UNICODE code points,
 and in some of the copying actions will be converted either to
-corresponding extended characters, or into \%$\ldots$\% keywords which
+corresponding non-ascii characters, or into \%$\ldots$\% keywords which
 have been declared in the current {\tt sievekeyword} file(s) as
 corresponding to that UNICODE code point.
 
 Keywords are always recognised on directive lines.  Unknown or
 mal-formed keywords will be reported.
-
-%--------------------------------------------------------------------
-
-\subsection{Conversion of {\tt utf-8} UNICODE} \label{utf8UNICODE}
-
-When the standard input is taken to be encoded in {\tt utf-8} (because
-the {\tt -u} option is specified on the command line), the {\tt utf-8} character
-stream is converted immediately into the \Product\ extended character set,
-and thence, according to the particular copying actions undertaken, may
-be subject to other translations as described above.
-
-=IGNORE
-When the {\tt convutf8} action is selected all \Product\ extended characters
-or \%$\ldots$\% keywords or code values will output as the corresponding
-{\tt utf-8} encoded UNICODE code point, except for keywords for which
-the {\tt sievekeyword} file assigns no UNICODE code point.
-
-When the {\tt zelatex} action is selected the output will be similar to
- {\tt convutf8} except where characters have a particular significance
-such as paragraph markup and end of lines.
-=TEX
 
 %--------------------------------------------------------------------
 
@@ -2741,19 +2769,13 @@ following words.
 
 	The \LaTeX{} macro is used when producing text from the {\tt
 	cat} action with the {\tt latex} option set.  If it is not
-	provided then the character or keyword is output in
-	the \index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal NN$\verb|{}|' form
-	(see section~\ref{ConvertUNICODE}).  If both a character code
-	and a \LaTeX{} macro are given then the macro element is output
-	rather than the \index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal
-	NN$\verb|{}|' form of the extended character code.
-	For the {\tt cat} action with the {\tt utf8out} option set,
-	keywords for which a UNICODE code point has been provided will
-	be output as the {\tt utf-8} encoding of that code point.
-
+	provided then the character or keyword is output  If both a character code
+	and a \LaTeX{} macro are given then the macro element is output.
+	
 	The fourth element may also include a hash sign ``{\tt \#}'' followed
 	by a specification of an argument to the {\LaTeX} macro to be extracted from the text
-	on an input line following the keyword or extended character. This specification comprises
+	on an input line following the keyword or non-ascii character.
+	This specification comprises
 	an optional minus sign ``{\tt -}'' followed by a regular expression
 	(in the POSIX extended regular expression syntax).
 	If the minus sign is omitted,
@@ -2771,7 +2793,7 @@ following words.
 \ITEM{directive} Same format as {\tt simple} keywords, but denotes that the
 	character is a directive character that is a complete
 	category name.  These keywords must not\footnote{The reason is
-	that the extended category name has the extended character as
+	that the non-ascii category name has the non-ascii character as
 	its first character.  Source file lines starting with keywords
 	are, effectively, modified so that the character
 	replaces the keyword.} have a character code of~{\tt-1}.
@@ -2917,10 +2939,10 @@ Category names are of two forms depending on their first character.
 Those whose first character has been specified as a `{\tt directive}'
 or '{\tt startdirective}'
 character in the keyword file, see section~\ref{KeywordFile}, are
-known as `extended categories' because they are invoked without any
-special prefix.  All others are known as `equals categories' because
+known as `non-ascii categories' because they are invoked using a
+non-ascii character.  All others are known as `equals categories' because
 they are invoked by source file lines starting with an `{\tt=}'
-character.  (Note that the source file may introduce an extended
+character.  (Note that the source file may introduce a non-ascii
 category using either the character or the corresponding
 keyword on the directive line.)
 
@@ -2966,7 +2988,7 @@ are divided into three classes, as follows.
 
 		\begin{description}
 
-		\ITEM{delindex}{}  Extended characters and percent
+		\ITEM{delindex}{}  Non-Ascii characters and percent
 			keywords for indexing are deleted.
 
 		\ITEM{latex}{}  See discussion under the {\tt cat}
@@ -2998,24 +3020,23 @@ are divided into three classes, as follows.
 
 		\begin{description}
 
-		\ITEM{char}{}  Extended characters are converted to
+		\ITEM{char}{}  Non-Ascii characters are converted to
 			their \LaTeX{} equivalent.  This option is
 			implied by option {\tt verbatim}.
 
 		\ITEM{convkw}{} This option triggers conversion of percent keywords
-		        either into extended characters (where one is assigned to the keyword)
-			or into UNICODE code points (if option {\tt utf8out} is selected,
-			in which case percent enclosed hexadecimal literal UNICODE code points
-			are also converted to the UNICODE character).
+		        either into non-ascii characters (where one is assigned to the keyword).
+			Percent enclosed hexadecimal literal UNICODE code points
+			are also converted to the UNICODE character.
 			Only meaningful when option {\tt verbatim} is not
 			set.
 
-		\ITEM{convext}{} Extended characters are converted to
+		\ITEM{convext}{} Non-Ascii characters are converted to
 			their keyword form. This option
 			is not allowed with options {\tt mlchar}, {\tt latex}
 			or {\tt verbatim}.
 
-		\ITEM{delindex}{}  Extended characters for indexing
+		\ITEM{delindex}{}  Non-Ascii characters for indexing
 			are deleted.  Additionally, with option {\tt
 			kw} percent keywords for indexing are deleted.
 
@@ -3051,39 +3072,19 @@ are divided into three classes, as follows.
 			style file {\tt hol1.sty}.  In this style
 			characters with special meaning
 			to \LaTeX{} are converted so that they are
-			printed in a verbatim-like fashion.  Extended
-			characters are converted to their \LaTeX{}
-			equivalent.
+			printed in a verbatim-like fashion.  Non-ascii
+			characters are converted using the macro provided
+			in the keyword file, if there is one, and are otherwise
+			passed through as utf-8 unicode.
 			This option is not allowed with options {\tt convext}
 			or {\tt mlchar}.
 
-		\ITEM{mlchar}{}  Extended characters are converted to
+		\ITEM{mlchar}{}  Non-Ascii characters are converted to
 			their Standard~ML string form, a backslash
-			followed by three decimal digits.  This option
+			followed by three decimal digits for each character of the utf-8
+			encoding.  This option
 			is not allowed with options {\tt convext}, {\tt latex}
 			or {\tt verbatim}.
-
-		\ITEM{utf8out}{} Output will be in UNICODE using the {\tt utf-8} encoding.
-		
-			If option {\tt convkw} is selected then
-			any keyword having a UNICODE code point associated with
-			it in the {\tt sievekeyword} file will be translated to that
-			unicode character output as utf-8 and
-			keywords of the form \%\#x\emph{HHHHHH}\% will be translated into
-			the {\tt utf-8} encoding of that code point.
-			
-			If option {\tt convkw} is not selected then percent keywords
-			and percent enclosed hex literals will be output unchanged
-			(the ascii and unicode utf-8 representations will be identical).
-
-			The translation to utf-8 unicode takes place after the
-			processing of the line taking into account all the other
-			specified options and does not affect that processing.
-
-% Note that while sieve continues to use ext internally this will require special
-% measures to ensure that percent keywords introduced by the translation of the
-% input file from utf8 to ext are translated back while those not thus obtained
-% are left alone.
 	
 		\ITEM{verbalone}{}  Modifies option {\tt verbatim} so
 			that lines containing at least one character of
@@ -3102,19 +3103,10 @@ are divided into three classes, as follows.
 			This option is not allowed with options {\tt convext}
 			or {\tt mlchar}.
 
-		\ITEM{white}{} Extended characters of class "white" are replaced by
+		\ITEM{white}{} Non-ascii characters of class "white" are replaced by
 			space characters.
-			If option {\tt kw} is also selected keywords for extended characters
+			If option {\tt kw} is also selected keywords for non-ascii characters
 			of class "white" are also replaced by spaces.
-
-%		\ITEM{xelatex}{}  This is similar to the {\tt latex} option
-%			except that the output is encoded as {\tt utf-8}
-%			UNICODE code points and translation of keywords into
-%			\LaTeX macros will only be done for keywords which
-%			have no declared corresponding UNICODE code point
-%			in the current {\tt sieveview} file.
-%			This option is not allowed with options {\tt convext}
-%			or {\tt mlchar}.
 
 		\end{description}
 
@@ -3137,8 +3129,10 @@ are divided into three classes, as follows.
 		prefixed with a `~\verb|\|~'. {} Across the whole
 		input (not just each use of this action) convert even
 		numbered `~\verb|`|~' characters (as counted when
-		read) into `~\verb|'|~'. {} All other chars are left
-		unchanged.
+		read) into `~\verb|'|~'. {} Other ascii chars are left
+		unchanged. Non-ascii (UNICODE) characters are translated
+		byte by byte of the utf-8 encoding into a sequence
+		of byte value decimals as described above.
 
 	\ITEM{ignore}{}  The text is discarded.
 
@@ -3249,8 +3243,8 @@ following cases.
 
 \item When its first characters are the percent keyword for a directive
 	character (of type either {\tt directive} or {\tt
-	startdirective}, see section~\ref{KeywordFile}).  This is an
-	extended category.
+	startdirective}, see section~\ref{KeywordFile}).
+	This is a non-ascii category.
 
 \end{itemize}
 
@@ -3258,10 +3252,10 @@ A directive line is split into its category and arguments as follows.
 
 \begin{enumerate}
 
-\item The line is processed to convert all extended characters and
+\item The line is processed to convert all characters and
 	keywords of type {\tt white} to spaces.  Other keywords are
-	converted to their extended character where possible.  Note
-	that directive keywords must have extended characters ---
+	converted to their non-ascii character where possible.  Note
+	that directive keywords must have non-ascii characters ---
 	see~\ref{KeywordFile}.  Any unknown or mal-formed keywords will
 	provoke warning messages.
 
@@ -3468,14 +3462,9 @@ long.
 Merged input lines from the view and keyword files (see
 section~\ref{SteerFileLineFormat}) must be less than 1024 bytes long.
 
-Lines after macro expansion and conversion of extended characters and
+Lines after macro expansion and conversion of non-ascii characters and
 percent keywords to their \LaTeX{} equivalents must be less than
-approximately 2036 bytes.  In the case of a line containing only
-extended characters which are converted to the
-\index{\BS Pr$\cal NN$ }`\verb|\Pr|$\cal
-NN$\verb|{}|' form (see section~\ref{ConvertUNICODE}) this limit means
-a worst case where the input line must have no more than about
-$2036/7\approx290$ characters.
+approximately 2036 bytes.
 
 Lines produced by echo actions and the text of a filter command must be
 less than~2048 bytes.
@@ -3493,7 +3482,7 @@ keywords.  Each keyword may have a maximum length of~50 bytes.
 The standard view-file contains entries for all the sieving
 categories described in this document.  If additional features are
 required for a particular file then a copy of the view-file can be
-made, and then extended, in directory holding the document needing
+made, and then extended, in the directory holding the document needing
 these additional features.
 
 %********************************************************************
@@ -3502,16 +3491,20 @@ these additional features.
 
 The standard keyword-file contains entries for all the percent
 keywords supported by \Product.  If additional keywords are required for
-a particular file then a copy of the keyword file can be made, and then
-extended, in directory holding the document needing these additional
-features.
+a particular file then a supplementarey keyword file can be in
+the directory holding the document needing these additional
+keywords.
+A keyword already mentioned may have additional information supplied about in
+in this way, e.g. a latex macro.
 
 %********************************************************************
 
 \section{{\tt pp\_file\_conv\index{pp\_file\_conv }}} \label{AboutPpFileConv}
 
-The program {\tt pp\_file\_conv} translates files between the {\Product} extended character set and utf8 encoded Unicode.
-
+The program {\tt pp\_file\_conv} translates files between the {\Product}
+extended character set and utf8 encoded Unicode.
+Users of \Product\ are encouraged to move their files from the extended character set
+to utf8, since support for the extended character set will eventually be withdrawn.
 %********************************************************************
 
 \subsection{Synopsis}
@@ -3572,8 +3565,8 @@ The entire file will be translated in a uniform manner, to or from utf8, as dete
 	{\Product} extended character set, and the output will be in {\tt utf8}.
 
 \item{\tt-a } If this flag is set and -u is set then output is in ascii,
-	using percent keywords rather than extended characters
-	or utf8 encoded UNICODE codes. 
+	using percent keywords rather than non-ascii characters
+	or utf-8 encoded UNICODE codes.
 
 \item{\tt-d <number> } Causes copious diagnostic tracing on the
 	standard output.  The information produced depends on the
@@ -3592,8 +3585,8 @@ The entire file will be translated in a uniform manner, to or from utf8, as dete
 	exact format of this is not defined and may vary from issue to
 	issue of the program.
 
-\item{\tt-n } If this flag is set and -u is not set, then the input
-will be treated as encoded in the {\Product} extended character set without use of ascii keywords for special, characters which will transcribed literally not replaced by the corresponding unicode character code.
+\item{\tt-n } If this flag is set and -u is not set, then the input will be treated as encoded in the {\Product} extended character set without use of \%\...\% keywords for special characters.
+Any \%\...\% keywords in the input will be transcribed literally, not replaced by the corresponding unicode character code.
 
 \end{description}
 
@@ -3647,13 +3640,21 @@ last case an error message is written to standard error.
 
 \section{Font Files} \label{FontFiles}
 
+Two ttf fonts are supplied for use with xpp when editing documents or
+for use with {\tt luatex} in typesetting documents containing non-ascii
+unicode characters for which no macro has been supplied in a keyword file.
+They are {\tt \Product{}Mono.ttf} and {\tt \Product{}Serif.ttf}.
+
+In addition, the font provisions for working with the obsolescent extended
+character set continue to be supplied, pro-tempore, as desribed below:
+
 Three font files are provided for use with literate scripts containing
-extended characters.  They all provide the same character images but at
+non-ascii characters.  They all provide the same character images but at
 different sizes, all include the standard ASCII characters (with codes
-$0$~to~$127\sb{10}$) together with the extended characters (with codes
+$0$~to~$127\sb{10}$) together with the non-ascii characters (with codes
 $128\sb{10}$~to~$255\sb{10}$).
 
-The extended characters can be entered from the keyboard by using the
+The non-ascii characters can be entered from the keyboard by using the
 META key, although keyboard accelerators interfere with a small number
 of the codes.
 
@@ -3663,7 +3664,7 @@ normal use in text editors and command or shell tools.
 Font {\tt holpalette.vfont\index{holpalette.vfont }} is recommended for
 use in making a palette of characters from which characters can be
 picked when required.  Having the palette avoids the need to remember
-keyboard sequences for the extended characters.  A suitable palette can
+keyboard sequences for the non-ascii characters.  A suitable palette can
 be obtained using the {\tt palette} command.
 
 Font {\tt holdouble.vfont\index{holdouble.vfont }} is recommended for
@@ -3673,7 +3674,7 @@ those in font {\tt holnormal.vfont} but without the large empty
 boundaries of those in {\tt holpalette.vfont}.
 
 File {\tt holpalette\index{holpalette }} is used by the {\tt
-palette} command, it contains all the extended characters,
+palette} command, it contains all the non-ascii characters,
 grouped according to function.
 
 %********************************************************************
@@ -3808,8 +3809,8 @@ books,~\cite{knuth84} and~\cite{lamport86}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
-\chapter{EXTENDED CHARACTER SET}  \label{ExtCharSet}
-The extended character set provides characters grouped
+\chapter{NON-ASCII CHARACTER SET}  \label{ExtCharSet}
+The non-ascii character set provides characters grouped
 into various categories.
 
 {\tabstop0.3in\vertbarfalse
@@ -3860,7 +3861,7 @@ These may be freely used between the indexing characters.
 
 \section{Formal Text Brackets}
 
-Indexing of these extended characters is not supported.
+Indexing of these non-ascii characters is not supported.
 Hence, unfortunately, the index to this document cannot
 include the viewing categories whose names include these
 characters.
@@ -3876,7 +3877,7 @@ itself.
 
 \section{Padding Symbols}
 
-Indexing of these extended characters is not supported.  Attempting to
+Indexing of these non-ascii characters is not supported.  Attempting to
 do so tends to get an index entry with just a page number!
 
 =GFTSHOW
@@ -3985,9 +3986,9 @@ These may be freely used between the indexing characters.
 %********************************************************************
 
 %\newpage
-\section{Extended Character Images} \label{ExtendedCharImages}
+\section{Non-Ascii Character Images} \label{Non-AsciiCharImages}
 
-The  table below shows all of the available extended characters.  Each character is shown with
+The  table below shows all of the available non-ascii characters.  Each character is shown with
 its hexadecimal value using conventional hexadecimal digits, its octal value and
 its hexadecimal value using \index{\BS Pr$\cal NN$ }
 the `$\cal NN$' letters used in its `\verb|\Pr|$\cal NN$\verb|{}|' form
@@ -4171,9 +4172,9 @@ Octal value are used in {\tt xpp} applications defaults files (see \XPPUSERGUIDE
 \newpage
 \section{ASCII Keywords for Special Symbols} \label{ASCIIKeywords}
 
-ASCII keywords may be used instead of the characters in the extended character set.
-Use the programs {\tt conv\_ascii} and {\tt conv\_extended} described in {\REFERENCE} to convert a document from extended to ASCII format and vice versa.
-The following table shows the ASCII keyword corresponding to each of the extended characters.
+ASCII keywords may be used instead of the characters in the non-ascii character set.
+Use the programs {\tt conv\_ascii} and {\tt conv\_non-ascii} described in {\REFERENCE} to convert a document from non-ascii to ASCII format and vice versa.
+The following table shows the ASCII keyword corresponding to each of the non-ascii characters.
 
 \bigskip
 
@@ -4346,7 +4347,7 @@ The following table shows the ASCII keyword corresponding to each of the extende
 }
 
 
-In addition to the keywords for the extended characters,
+In addition to the keywords for the non-ascii characters,
 there are keywords for the mathematical symbols from tables 3.4, 3.5, 3.6 and 3.7 of
 the  \LaTeX\ User's Guide and Reference Manual, \cite{lamport86},
 and for the calligraphic and blackboard bold letters, %calA% \ldots %calZ%, %bbA% \ldots ℤ.
@@ -4355,10 +4356,10 @@ The keywords for the calligraphic and blackboard bold letters are
 {\tt \%calA\%} \ldots {\tt \%calZ\%} and {\tt \%bbA\%} \ldots {\tt \%bbZ\%}.
 %********************************************************************
 
-\section{Using {\tt Xpp} to work with the Extended Character Set}
+\section{Using {\tt Xpp} to work with the Non-Ascii Character Set}
 
 The {\tt xpp} program is designed to help you work with documents containing
-symbols in the extended character set. Its palette tool provides a graphical
+symbols in the non-ascii character set. Its palette tool provides a graphical
 interface for selecting symbols. It can also be configured to let you enter
 symbols using the keyboard. See {\XPPUSERGUIDE} for more information about
 {\tt xpp} and how to work with and customise the keyboard layout.
