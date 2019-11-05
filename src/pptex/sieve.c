@@ -491,7 +491,6 @@ options_available cat_options[] = {
 	{L"latex", OPT_LATEX | OPT_CHAR},
 	{L"mlchar", OPT_MLCHAR},
 	{L"verbalone", OPT_VERB_ALONE},
-	{L"utf8out", OPT_UTF8OUT},
 	{L"verbatim", OPT_VERBATIM | OPT_LATEX | OPT_CHAR},
 	{L"white", OPT_WHITE},
 	{NULL, 0}
@@ -2471,9 +2470,9 @@ main_convert_ext(
 						tex_arg = curkw->tex_arg;
 						tex_arg_sense = curkw->tex_arg_sense;
 					}
-				} else if (opt_do_latex) {
+				} else if (opt_do_conv_ext) {
 					if(curkw != NULL && curkw->name != NULL) {
-						/* Convert it to LaTeX form */
+						/* Output keyword untouched */
 						outp += wcopy_string(curkw->name,
 							&out_line[outp], lenout_line-outp);
 					} else {
@@ -2856,9 +2855,9 @@ main_convert_uni(
 		  tex_arg = curkw->tex_arg;
 		  tex_arg_sense = curkw->tex_arg_sense;
 		} else out_line[outp++] = ch;
-	      } else if (opt_do_latex) {
+	      } else if (opt_do_conv_ext) {
 		  if(curkw->name != NULL) {
-		    /* Convert it to LaTeX form */
+		    /* Output keyword untouched */
 		    outp += wcopy_string(curkw->name,
 					 &out_line[outp], lenout_line-outp);
 		  } else out_line[outp++] = ch;

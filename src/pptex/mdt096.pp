@@ -218,6 +218,10 @@ These may be freely used between the indexing characters.
 
 	⊢	⦂	≜	⊥	⊖
 
+EOF
+END_OF_BODY_TEXT
+
+my $body_text2 = <<'END_OF_BODY_TEXT';
 
 Supplemental Arrows-B[1]
 
