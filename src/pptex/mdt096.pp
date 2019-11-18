@@ -110,8 +110,6 @@ See \cite{LEMMA1/HOL/DTD118}.
 
 \section{TEST CASES}
 
-The following is the material to be injected.
-It is Chapter "NON-ASCII CHARACTER SET" from USR001 with all directives removed and an extra wadge of exotic unicode character added at the end.
 
 =DUMP mdt096a.pl
 #!/usr/bin/perl
@@ -119,8 +117,11 @@ use strict;
 use warnings;
 use diagnostics;
 
-my $body_text = <<'END_OF_BODY_TEXT';
+my $body_text_head = <<'END_OF_BODY_TEXT';
 cat <<'EOF' >/dev/null
+END_OF_BODY_TEXT
+
+my $body_text = <<'END_OF_BODY_TEXT';
 
 The non-ascii character set provides characters grouped
 into various categories.
@@ -218,6 +219,298 @@ These may be freely used between the indexing characters.
 
 	⊢	⦂	≜	⊥	⊖
 
+# minimal keywordfile 
+
+# This is a stripped down keyword file for use with document
+# processors which accept utf8 such as lualatex.
+
+# The only change is to delete most of the LaTeX macros.
+#
+#
+# This keywordfile contains support for the Z and HOL extended character
+# set together with some additional keywords giving access to the calligraphic
+# letters and the symbols given in tables 3.4, 3.5, 3.6 and 3.7 of the
+# LaTeX User's Guide and Reference Manual (L. Lamport 1986).
+# The calligraphic letters are called %calA%, %calB%, etc.
+# Blackboard bold letters are also supported and are called %bbA%,
+# %bbB%, etc. Blackboard bold B, C, F, N, P, Q, R, U and Z have extended
+# characters assigned to them and have the aliases:
+# The keywords for the symbols from the tables have the same names as in LaTeX
+# (e.g. the infinity symbol, \infty in LaTeX, has keyword %infty%), with the
+# exception of the names in the following table:
+#
+# The character codes supplied in this file were once the codes in the ProofPower
+# extended character set, but are now UNICODE code points.
+#
+# LaTeX Name		Keyword
+# ===== ====		=======
+# \Leftrightarrow	
+# \subseteq 		
+# \ast 			N/A (use ASCII `*')
+# \supset		%supset%
+# \supseteq 		
+# \equiv		%identical%
+# \sim			N/A (use ASCII `~')
+# \mid 			N/A (use ASCII `|')
+# \backslash 		N/A (use ASCII `\')
+# \int			%integral%
+# \bullet		%=>%
+# \cap			%intersect%
+# \cup			%union%
+# \uplus		%bagunion%
+# \vee			%or%
+# \wedge		%and%
+# \oplus		%overwrite%
+# \amalg		%coprod%
+# \in			%mem%
+# \vdash		%thm%
+# \perp			%bottom%
+# \frown		%cat%
+# \rightarrow		%fun%
+# \Rightarrow		%implies%
+# \leftrightarrow	%rel%
+# \Leftrightarrow	
+# \mapsto		%map%
+# \bot			%bottom%
+# \|			%parallel%
+# \neg			%not%
+# \triangle		%bigtriangleup%
+#
+# (The exceptions arise either because LaTeX gives more than one name
+# for a symbol or because the keyword is taken from Z usage)
+%bbI%			simple	 0x01D540
+%bbJ%			simple	 0x01D541
+%bbK%			simple	 0x01D542
+%bbL%			simple	 0x01D543
+%bbM%			simple	 0x01D544
+%bbN%			simple	 0x002115
+%bbO%			simple	 0x01D546
+%bbP%			simple	 0x002119
+%bbS%			simple	 0x01D54A
+%bbT%			simple	 0x01D54B
+%bbU%			simple	 0x01D54C
+%bbV%			simple	 0x01D54D
+%bbW%			simple	 0x01D54E
+%bbX%			simple	 0x01D54F
+%bbY%			simple	 0x01D550
+%beta%			simple	 0x0003B2
+%bigcirc%		simple	 0x0025ef
+%bigcolon%		simple	 0x002982
+%bigodot%		simple	 0x002a00
+%bigoplus%		simple	 0x002a01
+%bigotimes%		simple	 0x002a02
+%bigsqcup%		simple	 0x002a06
+%bigtriangledown%	simple	 0x0025bd
+%bigtriangleup%		simple	 0x0025b3
+%biguplus%		simple	 0x002a04
+%bigvee%		simple	 0x0022c1
+%bigwedge%		simple	 0x0022c0
+%bij%			simple	 0x002916
+%boolean%		sameas	 %bbB%
+%bottom%		simple	 0x0022A5
+%bowtie%		simple	 0x0022c8
+%calA%			simple	 0x1D49C
+%calB%			simple	 0x0212C
+%calC%			simple	 0x1D49E
+%calD%			simple	 0x1D49F
+%calE%			simple	 0x02130
+%calF%			simple	 0x02131
+%calG%			simple	 0x1D4A2
+%calH%			simple	 0x0210B
+%calI%			simple	 0x02110
+%calJ%			simple	 0x1D4A5
+%calK%			simple	 0x1D4A6
+%calL%			simple	 0x02112
+%calM%			simple	 0x02133
+%calN%			simple	 0x1D4A9
+%calO%			simple	 0x1D4AA
+%calP%			simple	 0x1D4AB
+%calQ%			simple	 0x1D4AC
+%calR%			simple	 0x0211B
+%calS%			simple	 0x1D4AE
+%calT%			simple	 0x1D4AF
+%calU%			simple	 0x1D4B0
+%calV%			simple	 0x1D4B1
+%calW%			simple	 0x1D4B2
+%calX%			simple	 0x1D4B3
+%calY%			simple	 0x1D4B4
+%calZ%			simple	 0x1D4B5
+%cantext%		simple	 0x002195
+%ulbegin%		simple	 0x002A3D
+%ulend%			simple	 0x002A3C
+%cat%			simple	 0x002040
+%cdot%			simple	 0x00010b
+%chi%			simple	 0x0003C7
+%circ%			sameas	 %fcomp%
+%clubsuit%		simple	 0x002663
+%complex%		sameas	 %bbC%
+%cong%			simple	 0x002245
+%coprod%		simple	 0x002210
+%dagger%		simple	 0x002020
+%dashv%			simple	 0x0022a3
+%ddagger%		simple	 0x002021
+%def%			simple	 0x00225C
+%delta%			simple	 0x0003B4
+%diamond%		simple	 0x0022c4
+%diamondsuit%		simple	 0x002666
+%dintersect%		simple	 0x0022C2
+%div%			simple	 0x0000f7
+%dntext%		simple	 0x002198	\PrOI{}
+%doteq%			simple	 0x002250
+%down%			simple	 0x0022CE
+%downarrow%		simple	 0x002193	\MMM{\downarrow}
+%dres%			simple	 0x0025C1	\MMM{\dres}
+%dsub%			simple	 0x002A64	\dsub{}
+%dunion%		simple	 0x0022C3
+%ell%			simple	 0x002113
+%emptyset%		simple	 0x002205
+%epsilon%		simple	 0x0003B5
+%equiv%			simple	 0x0021D4
+%eta%			simple	 0x0003B7
+%exists%		simple	 0x002203
+%extract%		simple	 0x0021BF
+%fcomp%			simple	 0x002218
+%ffun%			simple	 0x0021FB
+%filter%		simple	 0x0021BE
+%finj%			simple	 0x002915
+%flat%			simple	 0x00266d
+%fn%			sameas	 %lambda%
+%forall%		simple	 0x002200
+%fset%			sameas	%bbF%
+%fun%			simple	 0x002192
+%gamma%			simple	 0x0003B3
+%geq%			simple	 0x002265
+%gg%			simple	 0x00226b
+%hbar%			simple	 0x00210f
+%heartsuit%		simple	 0x002665
+%hookleftarrow%		simple	 0x0021a9
+%hookrightarrow%	simple	 0x0021aa
+%identical%		simple	 0x002261
+%imath%			simple	 0x000131
+%implies%		simple	 0x0021D2
+%infty%			simple	-1	\MMM{\infty}
+%inj%			simple	 0x0021A3
+%integral%		simple	-1	\MMM{\int}
+%intersect%		simple	 0x002229
+%iota%			simple	 0x0003B9
+%jmath%			simple	 0x000237
+%kappa%			simple	 0x0003BA
+%lambda%		simple	 0x0003BB
+%lbag%			simple	 0x0027E6
+%lchevron%		simple	-1	{\langle}
+%leadsto%		simple	-1	\MMM{\leadsto}
+%leftarrow%		simple	 0x002190
+%leftharpoondown%	simple	 0x0021bd
+%leftharpoonup%		simple	 0x0021bc
+%leq%			simple	 0x002264
+%lhd%			simple	-1	\MMM{\lhd}
+%ll%			simple	 0x00226a
+%longleftarrow%		simple	 0x0027f5
+%longleftrightarrow%	simple	 0x0027f7
+%longmapsto%		simple	 0x0027fc
+%longrightarrow%	simple	 0x0027f6
+%lrelimg%		simple	 0x002987
+%lseq%			simple	 0x0027E8
+%map%			simple	 0x0021A6
+%mem%			simple	 0x002208
+%mho%			simple	 0x002127
+%models%		simple	 0x0022a7
+%mp%			simple	 0x002213
+%mu%			simple	 0x0003BC
+%nabla%			simple	 0x002207
+%nat%			sameas	%bbN%
+%natural%		simple	 0x00266e
+%nearrow%		simple	 -1
+%neq%			simple	 0x002260
+%ni%			simple	 0x00220b
+%not%			simple	 0x0000AC
+%notmem%		simple	 0x002209
+%nu%			simple	 0x0003BD
+%nwarrow%		simple	 0x002196
+%odot%			simple	 0x002299
+%oint%			simple	 0x00222e
+%omega%			simple	 0x0003C9
+%ominus%		simple	 0x002296
+%or%			simple	 0x002228
+%oslash%		simple	 0x0000f8
+%otimes%		simple	 0x002297
+%overwrite%		simple	 0x002295
+%parallel%		simple	 0x002225
+%partial%		simple	-1	\MMM{\partial}
+%pfun%			simple	 0x0021F8
+%phi%			simple	 0x0003C6
+%pi%			simple	 0x0003C0
+%pinj%			simple	 0x002914
+%pm%			simple	 0x0000b1
+%prec%			simple	 0x00227a
+%preceq%		simple	 0x002aaf
+%prod%			simple	 0x00220f
+%propto%		simple	 0x00221d
+%pset%			sameas	%bbP%
+%psi%			simple	 0x0003C8
+%psubset%		simple	 0x002282
+%psupset%		simple	 0x002283
+%psurj%			simple	 0x002900
+%rbag%			simple	 0x0027E7
+%rchevron%		simple	-1	{\rangle}
+%rcomp%			simple	 0x002A3E
+%rat%			sameas	 %bbQ%
+%real%			sameas	 %bbR%
+%refinedby%		sameas	 %sqsubseteq%
+%rel%			simple	 0x002194
+%rhd%			simple	-1	\MMM{\rhd}
+%rho%			simple	 0x0003C1
+%rightharpoondown%	simple	 0x0021c1
+%rightharpoonup%	simple	 0x0021c0
+%rightleftharpoons%	simple	 0x0021cc
+%rrelimg%		simple	 0x002988
+%rres%			simple	 0x0025B7
+%rseq%			simple	 0x0027E9
+%rsub%			simple	 0x002A65
+%searrow%		simple	 -1	\MMM{\searrow}
+%select%		sameas	 %epsilon%
+%setminus%		simple	 0x002216
+%sharp%			simple	 0x00266f
+%sigma%			simple	 0x0003C3
+%simeq%			simple	 0x002243
+%smile%			simple	 0x002323
+%spadesuit%		simple	 0x002660
+%spot%			simple	 0x002981
+%sqcap%			simple	 0x002293
+%sqcup%			simple	 0x002294
+%sqsubset%		simple	 0x00228f
+%sqsubseteq%		simple	 0x002291
+%star%			simple	 0x002606
+%succ%			simple	 0x00227b
+%succeq%		simple	 0x002ab0
+%sum%			simple	 0x002211
+%supset%		simple	 0x002283
+%surd%			simple	-1	\MMM{\surd}
+%surj%			simple	 0x0021A0
+%swarrow%		simple	 0x002199
+%symbol%		sameas	 %bbS%
+%symdiff%		simple	 0x002296
+%tau%			simple	 0x0003C4
+%theta%			simple	 0x0003B8
+%thm%			simple	 0x0022A2
+%top%			simple	 0x0022a4
+%triangleleft%		simple	 0x0025c3
+%triangleright%		simple	 0x0025b9
+%u%			sameas	 %bbU%
+%uminus%		simple	 0x00FE63
+%union%			simple	 0x00222A
+%unlhd%			simple	-1	\MMM{\unlhd}
+%unrhd%			simple	-1	\MMM{\unrhd}
+%up%			simple	 0x0022CF	
+%uparrow%		simple	 0x002191	\MMM{\uparrow}
+%updownarrow%		simple	 -1	\MMM{\updownarrow}
+%upsilon%		simple	 0x0003C5
+%uptext%		simple	 0x002197	\PrOH{}
+%wp%			simple	 0x002118
+%wr%			simple	 0x002240
+%x%			simple	 0x0000D7
+%xi%			simple	 0x0003BE
+%zeta%			simple	 0x0003B6
 EOF
 END_OF_BODY_TEXT
 
@@ -240,6 +533,7 @@ EOF
 END_OF_BODY_TEXT
 
 my $viewfilename = shift @ARGV;
+my $keyfilename = shift @ARGV;
 my $sievetestfile = "mdt096b";
 my $sievedumpfile = "mdt096c";
 my $sievedumpfileacc = "mdt096d";
@@ -308,37 +602,38 @@ if ($filter) {${$dirdata}->{filter}=$filter};
 };
 close $SF;
 
-# Now write the test file
+# Now write the test file (unless a file is supplied)
 
-open (my $TF, ">", $sievetestfile) or die $!;
 my $dumpcount=0;
-foreach my $dir (sort(keys %metadata)){
-    $dirdata=$metadata{$dir};
-    print $TF $dir;
-    print $TF ("\t",
-	          ${$dirdata}->{append}  ? $sievedumpfile."0"
-		: ${$dirdata}->{write}   ? $sievedumpfile.(sprintf("%d",++$dumpcount))
-	        : ${$dirdata}->{minargs} ? $sievedumpfile
-	        : "",
-	       "\n");
-    my $fil = ${$dirdata}->{filter};
- #  if (defined($fil)) {print "filter for $dir is $fil\n"};
-    print $TF (
-	 defined ($fil)
-	 ? ($fil eq "cat" ? $cat_text : $sh_text)
-	 : $body_text
-	 );
+if(my $testfilename = shift @ARGV) {
+      $sievetestfile = $testfilename;
+} else {
+  open (my $TF, ">", $sievetestfile) or die $!;
+  foreach my $dir (sort(keys %metadata)){
+  	   $dirdata=$metadata{$dir};
+    	   my $dirline = "$dir ".
+	           ( ${$dirdata}->{append}  ? $sievedumpfile."0"
+		   	: ${$dirdata}->{write}   ? $sievedumpfile.(sprintf("%d",++$dumpcount))
+	        	: ${$dirdata}->{minargs} ? $sievedumpfile
+	        	: "");
+ 	   print $TF "$dirline\n";
+    	   my $fil = ${$dirdata}->{filter};
+       	      print $TF (
+	      defined ($fil)
+	      ? ($fil eq "cat" ? $cat_text : $sh_text)
+	      : $body_text_head."&&&&&&&\tdirective: \"$dirline\"\t&&&&&&&\n".$body_text
+	   );
+  };
+  close $TF;
 };
-
-close $TF;
 
 system("echo \"\" > $sievedumpfileacc");
 
 # Now run sieve on the test file for each view
 
 for my $view (sort keys %views) {
-    print "sieve $view <$sievetestfile >$sievedumpfile\n";
-    system("sieve $view <$sievetestfile >$sievedumpfile");
+    print "sieve -f $viewfilename -K -k $keyfilename $view <$sievetestfile >$sievedumpfile\n";
+    system("sieve -f $viewfilename -K -k $keyfilename $view <$sievetestfile >$sievedumpfile");
     system("echo \"@@@@@@@@@@@@ view $view @@@@@@@@@@@@@@@ sieve $view <$sievetestfile >$sievedumpfile @@@@@@@\n\" >> $sievedumpfileacc");
     system("cat $sievedumpfile >> $sievedumpfileacc");
     system("rm $sievedumpfile");
@@ -346,13 +641,14 @@ for my $view (sort keys %views) {
 
 # Append to the main output file the output from all the dump files
 
+
 for my $dump (0..$dumpcount) {
     system("echo \"@@@@@@@@@@@@ cat $sievedumpfile$dump >> $sievedumpfileacc @@@@@@@@@@@\n\" >> $sievedumpfileacc");
     system("cat $sievedumpfile$dump >> $sievedumpfileacc");
     system("rm -f $sievedumpfile$dump");
 };
 
-system("rm -f $sievetestfile");
+#system("rm -f $sievetestfile");
 system("rm -f $textforcatfile");
 
 #    system("\nls -l mdt096*");
@@ -361,8 +657,7 @@ system("rm -f $textforcatfile");
 =TEX
 
 =SH
-perl mdt096a.pl utf8svf
+perl mdt096a.pl utf8svf sievekeyword
 =TEX
 \end{document}
 =IGN
-

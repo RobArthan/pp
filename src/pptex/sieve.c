@@ -3840,7 +3840,7 @@ main(int argc, char **argv)
 		case 'd':
 		    debug |= atoi(optarg);
 		    break;							/* BREAK */
-	    case 'e': /* ext i/o */
+	        case 'e': /* ext i/o */
 		    eu_flags += 1;
 		    break;							/* BREAK */
 		case 'f':
@@ -3893,7 +3893,7 @@ if not thus determined, by the $PPCHARSET environment,
 and failing that defaults to utf8.
 
 */	
-	if (eu_flags > 0) main_F.utf8 = (eu_flags == 2);
+	if (eu_flags > 0) main_F.utf8 = (eu_flags > 1);
 	else if (ppcharset == NULL || !strcmp(ppcharset,"ext"))  main_F.utf8 = True;
 	else main_F.utf8 = False;
 	

@@ -1605,7 +1605,7 @@ set_pp_home
 EXITSTATUS=0
 
 convert(){
-	{ echo '=CONVERT_FORMAT' ; sed -e '1,$s/^/ /' $2 ; echo '=IGN' ; } |
+	{ echo '=CONVERT_FORMAT' ; LC_ALL=C sed -e '1,$s/^/ /' $2 ; echo '=IGN' ; } |
 		eval sieve -e "$OPT_K" "$KEYFILE" "$1" | sed -e '1,$s/ //'
 }
 

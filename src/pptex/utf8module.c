@@ -1292,13 +1292,6 @@ add_new_keyword(
 	if (debug & D_SHOW_KEYWORD_TABLE) {
 	   PRINTF("add_new_keyword: %S ext: %d uni %x\n", name, ki->ech, uni);
 	};
-	
-	/* (broken and unnecessary)
-	if(kwi.num_keywords>1 && wcscmp(kwi.keyword[kwi.num_keywords-1].name,
-				name) < 0) {
-		grumble1("keywords unsorted", &keyword_F, True);
-	}
-	*/
 }
 
 
@@ -1911,32 +1904,6 @@ read_keyword_file(char *name)
 			code = (icode < 0) ? U_NOT_FOUND : icode;
 
 			ech = uni_to_pp(code);
-
-			/* This code used to look up in the table to find out whether
-			   keyword was already defined, but until table is sorted the lookup
-			   will not work, so this check has been deferred.
-			*/
-			/*
-			kwindex = find_keyword(def_kw);
-			
-			if(kwindex != NOT_FOUND) {
-			  if (kind == KW_SIMPLE) {
-			    struct keyword_information *ki = &kwi.keyword[kwindex];
-			    if (ki->orig_kind == KW_SIMPLE){
-			      if (ki->uni == U_NOT_FOUND){
-				ki->uni = code;
-				ki->ech = ech;
-			      } else {
-				if (ki->uni != code)
-				  grumble1("clashing keyword definitions", &keyword_F, True);
-			      };
-			    } else {
-			    grumble1("duplicate keyword", &keyword_F, True);
-			    }
-			  } else grumble1("duplicate keyword", &keyword_F, True);
-			  continue;
-			}
-			*/
 			
 			if((kind == KW_DIRECTIVE || kind == KW_START_DIR)
 					&& ech == -1) {
@@ -1970,7 +1937,7 @@ This procedure completes the keyword_information after all the keyword files
 have been read.
 
 First it sorts the table in alphabetic order of keyword, preserving the original
-ordering where there are multiple entries for a sinle keyword.
+ordering where there are multiple entries for a single keyword.
 Then it scans the table to eliminate multiple entries.
 In a limited number of cases a second entry is permitted to override parts of the first,
 and is then discarded.
@@ -2179,18 +2146,21 @@ conclude_keywordfile(void)
       kwi.num_unicodes++;
     };
     
-  /* sort kwi.num_unicode_code */
+  /* sort kwi.unicode_code table */
 
   qsort((char*)kwi.unicode_code,
 	kwi.num_unicodes,
 	sizeof(&kwi),
 	compare_keyword_unicode2);
 
-  /* Remove duplicate entries (keeping the first keyword with each unicode code) */
+  /* Remove duplicate entries (keeping the last keyword with each unicode code) */
 
   j = 0;
   for(i=1; i<kwi.num_unicodes; i++) {  
-    if (kwi.unicode_code[i]->uni == kwi.unicode_code[j]->uni) continue;
+    if (kwi.unicode_code[i]->uni == kwi.unicode_code[j]->uni) {
+      /*      kwi.unicode_code[j] = kwi.unicode_code[i]; */
+      continue;
+    };
     if (++j < i) {
       kwi.unicode_code[j] = kwi.unicode_code[i];
     };
