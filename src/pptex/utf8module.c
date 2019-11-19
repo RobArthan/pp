@@ -2416,8 +2416,9 @@ otherwise, return 0.  Codes <128 are returned unchanged.
 */
 
 const wchar_t unicode_to_ext(unicode code_point){
+  wchar_t ext = uni_to_pp(code_point);
   struct keyword_information *kwi;
-  if (code_point <= 0x7F) return (wchar_t) code_point;
+  if (ext > 0) return ext;
   kwi = unicode_to_kwi(code_point);
   if (kwi == NULL) return (wchar_t) 0;
   else return (wchar_t)kwi->ech;

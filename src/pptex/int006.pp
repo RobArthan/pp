@@ -162,7 +162,7 @@ Tests for the symbols supported by the style file hol1.sty.}
 	cat:	⁀
 	cdot:	ċ
 	chi:	χ
-	circ:	ˆ
+	circ:	∘
 	clubsuit:	♣
 	cong:	≅
 	coprod:	∐
