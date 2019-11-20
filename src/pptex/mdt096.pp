@@ -247,7 +247,6 @@ These may be freely used between the indexing characters.
 # \Leftrightarrow	
 # \subseteq 		
 # \ast 			N/A (use ASCII `*')
-# \supset		%supset%
 # \supseteq 		
 # \equiv		%identical%
 # \sim			N/A (use ASCII `~')
@@ -484,7 +483,6 @@ These may be freely used between the indexing characters.
 %succ%			simple	 0x00227b
 %succeq%		simple	 0x002ab0
 %sum%			simple	 0x002211
-%supset%		simple	 0x002283
 %surd%			simple	-1	\MMM{\surd}
 %surj%			simple	 0x0021A0
 %swarrow%		simple	 0x002199
