@@ -103,7 +103,7 @@ The guillemet characters, ``%
 \item
 A calligraphic letter such as ``%
 =INLINEFT
-%calM%
+ℳ
 =TEX
 '' that has not been assigned a single key-stroke is entered as \verb"%"\verb"calM%".
 \item
@@ -111,7 +111,7 @@ Most of the additional symbols from the \LaTeX\ manual mentioned under $Symbol$
 are entered by enclosing the alphabetic part of the \LaTeX\
 name in percent characters. E.g.\ the infinity symbol, ``%
 =INLINEFT
-%infty%
+⧜
 =TEX
 '', which
 is invoked by the macro \verb"\infty" in \LaTeX, is entered as
@@ -1304,6 +1304,8 @@ relation _ ⨽ _ ⨼ _
 └
 
 } % matches the brace at the head of the file.
+
+
 
 
 

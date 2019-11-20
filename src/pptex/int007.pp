@@ -164,7 +164,7 @@
 	cat:	⁀
 	cdot:	ċ
 	chi:	χ
-	circ:	ˆ
+	circ:	∘
 	clubsuit:	♣
 	cong:	≅
 	coprod:	∐
