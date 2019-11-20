@@ -122,7 +122,10 @@ cat <<'EOF' >/dev/null
 END_OF_BODY_TEXT
 
 my $body_text = <<'END_OF_BODY_TEXT';
+	Γ	Δ	Θ	Λ	Ξ	Π	Σ	Υ	Φ	Ψ	Ω
+END_OF_BODY_TEXT
 
+my $body_text_extra = <<'END_OF_BODY_TEXT';
 The non-ascii character set provides characters grouped
 into various categories.
 
@@ -658,4 +661,17 @@ system("rm -f $textforcatfile");
 perl mdt096a.pl utf8svf sievekeyword
 =TEX
 \end{document}
+=VDUMP trans.sh
+pp_file_conv -u -n <mdt096a.pl >~/git/pp3.1w8/src/pptex/mdt096ae.pl
+pp_file_conv -u -n <utf8svf >~/git/pp3.1w8/src/pptex/utf8svfe
+cd ~/git
+mv pp pputf8
+mv pp3.1w8 pp
+cd pp/src/pptex
+perl mdt096ae.pl utf8svfe sievekeyword
+cd ~/git
+mv pp pp3.1w8
+mv pputf8 pp
+cd pp/src/pptex
+pp_file_conv -n <~/git/pp3.1w8/src/pptex/mdt096d mdt096du
 =IGN
