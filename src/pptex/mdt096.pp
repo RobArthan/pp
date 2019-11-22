@@ -122,17 +122,7 @@ cat <<'EOF' >/dev/null
 END_OF_BODY_TEXT
 
 my $body_text = <<'END_OF_BODY_TEXT';
-	Γ	Δ	Θ	Λ	Ξ	Π	Σ	Υ	Φ	Ψ	Ω
-END_OF_BODY_TEXT
-
-my $body_text_extra = <<'END_OF_BODY_TEXT';
-The non-ascii character set provides characters grouped
-into various categories.
-
-{\tabstop0.3in\vertbarfalse
-
-\section{Greek Letters}
-
+cat <<'EOF' >/dev/null
 These may be freely used between the indexing characters.
 
 	Γ	Δ	Θ	Λ	Ξ	Π	Σ	Υ	Φ	Ψ	Ω
@@ -141,41 +131,23 @@ These may be freely used between the indexing characters.
 
 \section{Logic, Equivalence and Related Symbols}
 
-These may be freely used between the indexing characters.
-
 	∧	∨	¬	∀	∃	⦁	×	≤	≠	≥	∈	∉	⇔	⇒
 
 \section{Set Symbols}
-
-These may be freely used between the indexing characters.
 
 	𝔹	ℂ	𝔽	ℕ	ℙ	ℚ	ℝ	𝕊	𝕌	ℤ	⊆	∅	⊂	∩	⋂	∪	⋃	⊖
 
 \Section{Arrows}
 
-These may be freely used between the indexing characters.
-
 	→	⤖	⤕	⇻	↔	⤀	⇸	↣	↦	↠	⤔
 
 \section{Formal Text Brackets}
 
-Indexing of these non-ascii characters is not supported.
-
-
 	⌜	ⓣ	ⓜ	ⓩ	⌝	Ⓢ	■	┌	└	╒	├
-
 
 \section{Padding Symbols}
 
-Indexing of these non-ascii characters is not supported.  Attempting to
-do so tends to get an index entry with just a page number!
-
 	│	─	═
-
-
-\section{Index Brackets}
-
-Indexing of the indexing brackets themselves is not supported.
 
 \section{Bracketing Symbols}
 
@@ -184,10 +156,6 @@ These may be freely used between the indexing characters.
 	⟨	⟩	⟦	⟧	⦇	⦈
 
 \section{Subscription and Superscription}
-
-These characters may be used as part of the identifiers in indexed
-entries, but they will cause the appropriate subscription or
-superscription, their images will not be shown in the index.
 
 	⋎	⋏	↗	↘	↕
 
@@ -205,45 +173,26 @@ Character:	& \DNchar	& \UPchar	& \UPtext	& \DNtext	& \CANtext	\\
 \end{center}
 
 \section{Underlining}
-These underlining brackets enclose a block of text that will be underlined. The brackets must balance. Underlining brackets may be nested to achieve multiple underlining. The underlined text may extend over multiple lines.
-
 	⨽	⨼
 
 
 \section{Relation, Sequence and Bag Symbols}
 
-These may be freely used between the indexing characters.
-
 	⩥	▷	⩤	◁	⁀	↾	↿	⊕	⊎	⨾	∘
 
 \section{Miscellaneous}
-
-These may be freely used between the indexing characters.
 
 	⊢	⦂	≜	⊥	⊖
 
 # minimal keywordfile 
 
-# This is a stripped down keyword file for use with document
-# processors which accept utf8 such as lualatex.
-
-# The only change is to delete most of the LaTeX macros.
-#
-#
-# This keywordfile contains support for the Z and HOL extended character
-# set together with some additional keywords giving access to the calligraphic
-# letters and the symbols given in tables 3.4, 3.5, 3.6 and 3.7 of the
-# LaTeX User's Guide and Reference Manual (L. Lamport 1986).
-# The calligraphic letters are called %calA%, %calB%, etc.
+ The calligraphic letters are called %calA%, %calB%, etc.
 # Blackboard bold letters are also supported and are called %bbA%,
 # %bbB%, etc. Blackboard bold B, C, F, N, P, Q, R, U and Z have extended
 # characters assigned to them and have the aliases:
 # The keywords for the symbols from the tables have the same names as in LaTeX
 # (e.g. the infinity symbol, \infty in LaTeX, has keyword %infty%), with the
 # exception of the names in the following table:
-#
-# The character codes supplied in this file were once the codes in the ProofPower
-# extended character set, but are now UNICODE code points.
 #
 # LaTeX Name		Keyword
 # ===== ====		=======
@@ -277,245 +226,244 @@ These may be freely used between the indexing characters.
 # \|			%parallel%
 # \neg			%not%
 # \triangle		%bigtriangleup%
-#
-# (The exceptions arise either because LaTeX gives more than one name
-# for a symbol or because the keyword is taken from Z usage)
-%bbI%			simple	 0x01D540
-%bbJ%			simple	 0x01D541
-%bbK%			simple	 0x01D542
-%bbL%			simple	 0x01D543
-%bbM%			simple	 0x01D544
-%bbN%			simple	 0x002115
-%bbO%			simple	 0x01D546
-%bbP%			simple	 0x002119
-%bbS%			simple	 0x01D54A
-%bbT%			simple	 0x01D54B
-%bbU%			simple	 0x01D54C
-%bbV%			simple	 0x01D54D
-%bbW%			simple	 0x01D54E
-%bbX%			simple	 0x01D54F
-%bbY%			simple	 0x01D550
-%beta%			simple	 0x0003B2
+
+%bbI%  0x01D540
+%bbJ%	 0x01D541
+%bbK%	 0x01D542
+%bbL%	 0x01D543
+%bbM%	 0x01D544
+%bbN%	 0x002115
+%bbO%	 0x01D546
+%bbP%	 0x002119
+%bbS%	 0x01D54A
+%bbT%	 0x01D54B
+%bbU%	 0x01D54C
+%bbV%	 0x01D54D
+%bbW%	 0x01D54E
+%bbX%	 0x01D54F
+%bbY%	 0x01D550
+%beta%	 0x0003B2
 %bigcirc%		simple	 0x0025ef
-%bigcolon%		simple	 0x002982
-%bigodot%		simple	 0x002a00
-%bigoplus%		simple	 0x002a01
-%bigotimes%		simple	 0x002a02
-%bigsqcup%		simple	 0x002a06
-%bigtriangledown%	simple	 0x0025bd
-%bigtriangleup%		simple	 0x0025b3
-%biguplus%		simple	 0x002a04
-%bigvee%		simple	 0x0022c1
-%bigwedge%		simple	 0x0022c0
-%bij%			simple	 0x002916
+%bigcolon%		 0x002982
+%bigodot%		 0x002a00
+%bigoplus%		 0x002a01
+%bigotimes%		 0x002a02
+%bigsqcup%		 0x002a06
+%bigtriangledown%	 0x0025bd
+%bigtriangleup%		 0x0025b3
+%biguplus%		 0x002a04
+%bigvee%		 0x0022c1
+%bigwedge%		 0x0022c0
+%bij%	 0x002916
 %boolean%		sameas	 %bbB%
-%bottom%		simple	 0x0022A5
-%bowtie%		simple	 0x0022c8
-%calA%			simple	 0x1D49C
-%calB%			simple	 0x0212C
-%calC%			simple	 0x1D49E
-%calD%			simple	 0x1D49F
-%calE%			simple	 0x02130
-%calF%			simple	 0x02131
-%calG%			simple	 0x1D4A2
-%calH%			simple	 0x0210B
-%calI%			simple	 0x02110
-%calJ%			simple	 0x1D4A5
-%calK%			simple	 0x1D4A6
-%calL%			simple	 0x02112
-%calM%			simple	 0x02133
-%calN%			simple	 0x1D4A9
-%calO%			simple	 0x1D4AA
-%calP%			simple	 0x1D4AB
-%calQ%			simple	 0x1D4AC
-%calR%			simple	 0x0211B
-%calS%			simple	 0x1D4AE
-%calT%			simple	 0x1D4AF
-%calU%			simple	 0x1D4B0
-%calV%			simple	 0x1D4B1
-%calW%			simple	 0x1D4B2
-%calX%			simple	 0x1D4B3
-%calY%			simple	 0x1D4B4
-%calZ%			simple	 0x1D4B5
-%cantext%		simple	 0x002195
-%ulbegin%		simple	 0x002A3D
-%ulend%			simple	 0x002A3C
-%cat%			simple	 0x002040
-%cdot%			simple	 0x00010b
-%chi%			simple	 0x0003C7
+%bottom%		 0x0022A5
+%bowtie%		 0x0022c8
+%calA%	 0x1D49C
+%calB%	 0x0212C
+%calC%	 0x1D49E
+%calD%	 0x1D49F
+%calE%	 0x02130
+%calF%	 0x02131
+%calG%	 0x1D4A2
+%calH%	 0x0210B
+%calI%	 0x02110
+%calJ%	 0x1D4A5
+%calK%	 0x1D4A6
+%calL%	 0x02112
+%calM%	 0x02133
+%calN%	 0x1D4A9
+%calO%	 0x1D4AA
+%calP%	 0x1D4AB
+%calQ%	 0x1D4AC
+%calR%	 0x0211B
+%calS%	 0x1D4AE
+%calT%	 0x1D4AF
+%calU%	 0x1D4B0
+%calV%	 0x1D4B1
+%calW%	 0x1D4B2
+%calX%	 0x1D4B3
+%calY%	 0x1D4B4
+%calZ%	 0x1D4B5
+%cantext%		 0x002195
+%ulbegin%		 0x002A3D
+%ulend%	 0x002A3C
+%cat%	 0x002040
+%cdot%	 0x00010b
+%chi%	 0x0003C7
 %circ%			sameas	 %fcomp%
-%clubsuit%		simple	 0x002663
+%clubsuit%		 0x002663
 %complex%		sameas	 %bbC%
-%cong%			simple	 0x002245
-%coprod%		simple	 0x002210
-%dagger%		simple	 0x002020
-%dashv%			simple	 0x0022a3
-%ddagger%		simple	 0x002021
-%def%			simple	 0x00225C
-%delta%			simple	 0x0003B4
-%diamond%		simple	 0x0022c4
-%diamondsuit%		simple	 0x002666
-%dintersect%		simple	 0x0022C2
-%div%			simple	 0x0000f7
-%dntext%		simple	 0x002198	\PrOI{}
-%doteq%			simple	 0x002250
-%down%			simple	 0x0022CE
-%downarrow%		simple	 0x002193	\MMM{\downarrow}
-%dres%			simple	 0x0025C1	\MMM{\dres}
-%dsub%			simple	 0x002A64	\dsub{}
-%dunion%		simple	 0x0022C3
-%ell%			simple	 0x002113
-%emptyset%		simple	 0x002205
-%epsilon%		simple	 0x0003B5
-%equiv%			simple	 0x0021D4
-%eta%			simple	 0x0003B7
-%exists%		simple	 0x002203
-%extract%		simple	 0x0021BF
-%fcomp%			simple	 0x002218
-%ffun%			simple	 0x0021FB
-%filter%		simple	 0x0021BE
-%finj%			simple	 0x002915
-%flat%			simple	 0x00266d
+%cong%	 0x002245
+%coprod%		 0x002210
+%dagger%		 0x002020
+%dashv%	 0x0022a3
+%ddagger%		 0x002021
+%def%	 0x00225C
+%delta%	 0x0003B4
+%diamond%		 0x0022c4
+%diamondsuit%		 0x002666
+%dintersect%		 0x0022C2
+%div%	 0x0000f7
+%dntext%		 0x002198	\PrOI{}
+%doteq%	 0x002250
+%down%	 0x0022CE
+%downarrow%		 0x002193	\MMM{\downarrow}
+%dres%	 0x0025C1	\MMM{\dres}
+%dsub%	 0x002A64	\dsub{}
+%dunion%		 0x0022C3
+%ell%	 0x002113
+%emptyset%		 0x002205
+%epsilon%		 0x0003B5
+%equiv%	 0x0021D4
+%eta%	 0x0003B7
+%exists%		 0x002203
+%extract%		 0x0021BF
+%fcomp%	 0x002218
+%ffun%	 0x0021FB
+%filter%		 0x0021BE
+%finj%	 0x002915
+%flat%	 0x00266d
 %fn%			sameas	 %lambda%
-%forall%		simple	 0x002200
+%forall%		 0x002200
 %fset%			sameas	%bbF%
-%fun%			simple	 0x002192
-%gamma%			simple	 0x0003B3
-%geq%			simple	 0x002265
-%gg%			simple	 0x00226b
-%hbar%			simple	 0x00210f
-%heartsuit%		simple	 0x002665
-%hookleftarrow%		simple	 0x0021a9
-%hookrightarrow%	simple	 0x0021aa
-%identical%		simple	 0x002261
-%imath%			simple	 0x000131
-%implies%		simple	 0x0021D2
-%infty%			simple	-1	\MMM{\infty}
-%inj%			simple	 0x0021A3
-%integral%		simple	-1	\MMM{\int}
-%intersect%		simple	 0x002229
-%iota%			simple	 0x0003B9
-%jmath%			simple	 0x000237
-%kappa%			simple	 0x0003BA
-%lambda%		simple	 0x0003BB
-%lbag%			simple	 0x0027E6
-%lchevron%		simple	-1	{\langle}
-%leadsto%		simple	-1	\MMM{\leadsto}
-%leftarrow%		simple	 0x002190
-%leftharpoondown%	simple	 0x0021bd
-%leftharpoonup%		simple	 0x0021bc
-%leq%			simple	 0x002264
-%lhd%			simple	-1	\MMM{\lhd}
-%ll%			simple	 0x00226a
-%longleftarrow%		simple	 0x0027f5
-%longleftrightarrow%	simple	 0x0027f7
-%longmapsto%		simple	 0x0027fc
-%longrightarrow%	simple	 0x0027f6
-%lrelimg%		simple	 0x002987
-%lseq%			simple	 0x0027E8
-%map%			simple	 0x0021A6
-%mem%			simple	 0x002208
-%mho%			simple	 0x002127
-%models%		simple	 0x0022a7
-%mp%			simple	 0x002213
-%mu%			simple	 0x0003BC
-%nabla%			simple	 0x002207
+%fun%	 0x002192
+%gamma%	 0x0003B3
+%geq%	 0x002265
+%gg%	 0x00226b
+%hbar%	 0x00210f
+%heartsuit%		 0x002665
+%hookleftarrow%		 0x0021a9
+%hookrightarrow%	 0x0021aa
+%identical%		 0x002261
+%imath%	 0x000131
+%implies%		 0x0021D2
+%infty%	-1	\MMM{\infty}
+%inj%	 0x0021A3
+%integral%		-1	\MMM{\int}
+%intersect%		 0x002229
+%iota%	 0x0003B9
+%jmath%	 0x000237
+%kappa%	 0x0003BA
+%lambda%		 0x0003BB
+%lbag%	 0x0027E6
+%lchevron%		-1	{\langle}
+%leadsto%		-1	\MMM{\leadsto}
+%leftarrow%		 0x002190
+%leftharpoondown%	 0x0021bd
+%leftharpoonup%		 0x0021bc
+%leq%	 0x002264
+%lhd%	-1	\MMM{\lhd}
+%ll%	 0x00226a
+%longleftarrow%		 0x0027f5
+%longleftrightarrow%	 0x0027f7
+%longmapsto%		 0x0027fc
+%longrightarrow%	 0x0027f6
+%lrelimg%		 0x002987
+%lseq%	 0x0027E8
+%map%	 0x0021A6
+%mem%	 0x002208
+%mho%	 0x002127
+%models%		 0x0022a7
+%mp%	 0x002213
+%mu%	 0x0003BC
+%nabla%	 0x002207
 %nat%			sameas	%bbN%
-%natural%		simple	 0x00266e
-%nearrow%		simple	 -1
-%neq%			simple	 0x002260
-%ni%			simple	 0x00220b
-%not%			simple	 0x0000AC
-%notmem%		simple	 0x002209
-%nu%			simple	 0x0003BD
-%nwarrow%		simple	 0x002196
-%odot%			simple	 0x002299
-%oint%			simple	 0x00222e
-%omega%			simple	 0x0003C9
-%ominus%		simple	 0x002296
-%or%			simple	 0x002228
-%oslash%		simple	 0x0000f8
-%otimes%		simple	 0x002297
-%overwrite%		simple	 0x002295
-%parallel%		simple	 0x002225
-%partial%		simple	-1	\MMM{\partial}
-%pfun%			simple	 0x0021F8
-%phi%			simple	 0x0003C6
-%pi%			simple	 0x0003C0
-%pinj%			simple	 0x002914
-%pm%			simple	 0x0000b1
-%prec%			simple	 0x00227a
-%preceq%		simple	 0x002aaf
-%prod%			simple	 0x00220f
-%propto%		simple	 0x00221d
+%natural%		 0x00266e
+%nearrow%		 -1
+%neq%	 0x002260
+%ni%	 0x00220b
+%not%	 0x0000AC
+%notmem%		 0x002209
+%nu%	 0x0003BD
+%nwarrow%		 0x002196
+%odot%	 0x002299
+%oint%	 0x00222e
+%omega%	 0x0003C9
+%ominus%		 0x002296
+%or%	 0x002228
+%oslash%		 0x0000f8
+%otimes%		 0x002297
+%overwrite%		 0x002295
+%parallel%		 0x002225
+%partial%		-1	\MMM{\partial}
+%pfun%	 0x0021F8
+%phi%	 0x0003C6
+%pi%	 0x0003C0
+%pinj%	 0x002914
+%pm%	 0x0000b1
+%prec%	 0x00227a
+%preceq%		 0x002aaf
+%prod%	 0x00220f
+%propto%		 0x00221d
 %pset%			sameas	%bbP%
-%psi%			simple	 0x0003C8
-%psubset%		simple	 0x002282
-%psupset%		simple	 0x002283
-%psurj%			simple	 0x002900
-%rbag%			simple	 0x0027E7
-%rchevron%		simple	-1	{\rangle}
-%rcomp%			simple	 0x002A3E
+%psi%	 0x0003C8
+%psubset%		 0x002282
+%psupset%		 0x002283
+%psurj%	 0x002900
+%rbag%	 0x0027E7
+%rchevron%		-1	{\rangle}
+%rcomp%	 0x002A3E
 %rat%			sameas	 %bbQ%
 %real%			sameas	 %bbR%
 %refinedby%		sameas	 %sqsubseteq%
-%rel%			simple	 0x002194
-%rhd%			simple	-1	\MMM{\rhd}
-%rho%			simple	 0x0003C1
-%rightharpoondown%	simple	 0x0021c1
-%rightharpoonup%	simple	 0x0021c0
-%rightleftharpoons%	simple	 0x0021cc
-%rrelimg%		simple	 0x002988
-%rres%			simple	 0x0025B7
-%rseq%			simple	 0x0027E9
-%rsub%			simple	 0x002A65
-%searrow%		simple	 -1	\MMM{\searrow}
+%rel%	 0x002194
+%rhd%	-1	\MMM{\rhd}
+%rho%	 0x0003C1
+%rightharpoondown%	 0x0021c1
+%rightharpoonup%	 0x0021c0
+%rightleftharpoons%	 0x0021cc
+%rrelimg%		 0x002988
+%rres%	 0x0025B7
+%rseq%	 0x0027E9
+%rsub%	 0x002A65
+%searrow%		 -1	\MMM{\searrow}
 %select%		sameas	 %epsilon%
-%setminus%		simple	 0x002216
-%sharp%			simple	 0x00266f
-%sigma%			simple	 0x0003C3
-%simeq%			simple	 0x002243
-%smile%			simple	 0x002323
-%spadesuit%		simple	 0x002660
-%spot%			simple	 0x002981
-%sqcap%			simple	 0x002293
-%sqcup%			simple	 0x002294
-%sqsubset%		simple	 0x00228f
-%sqsubseteq%		simple	 0x002291
-%star%			simple	 0x002606
-%succ%			simple	 0x00227b
-%succeq%		simple	 0x002ab0
-%sum%			simple	 0x002211
-%surd%			simple	-1	\MMM{\surd}
-%surj%			simple	 0x0021A0
-%swarrow%		simple	 0x002199
+%setminus%		 0x002216
+%sharp%	 0x00266f
+%sigma%	 0x0003C3
+%simeq%	 0x002243
+%smile%	 0x002323
+%spadesuit%		 0x002660
+%spot%	 0x002981
+%sqcap%	 0x002293
+%sqcup%	 0x002294
+%sqsubset%		 0x00228f
+%sqsubseteq%		 0x002291
+%star%	 0x002606
+%succ%	 0x00227b
+%succeq%		 0x002ab0
+%sum%	 0x002211
+%surd%	-1	\MMM{\surd}
+%surj%	 0x0021A0
+%swarrow%		 0x002199
 %symbol%		sameas	 %bbS%
-%symdiff%		simple	 0x002296
-%tau%			simple	 0x0003C4
-%theta%			simple	 0x0003B8
-%thm%			simple	 0x0022A2
-%top%			simple	 0x0022a4
-%triangleleft%		simple	 0x0025c3
-%triangleright%		simple	 0x0025b9
+%symdiff%		 0x002296
+%tau%	 0x0003C4
+%theta%	 0x0003B8
+%thm%	 0x0022A2
+%top%	 0x0022a4
+%triangleleft%		 0x0025c3
+%triangleright%		 0x0025b9
 %u%			sameas	 %bbU%
-%uminus%		simple	 0x00FE63
-%union%			simple	 0x00222A
-%unlhd%			simple	-1	\MMM{\unlhd}
-%unrhd%			simple	-1	\MMM{\unrhd}
-%up%			simple	 0x0022CF	
-%uparrow%		simple	 0x002191	\MMM{\uparrow}
-%updownarrow%		simple	 -1	\MMM{\updownarrow}
-%upsilon%		simple	 0x0003C5
-%uptext%		simple	 0x002197	\PrOH{}
-%wp%			simple	 0x002118
-%wr%			simple	 0x002240
-%x%			simple	 0x0000D7
-%xi%			simple	 0x0003BE
-%zeta%			simple	 0x0003B6
+%uminus%		 0x00FE63
+%union%	 0x00222A
+%unlhd%	-1	\MMM{\unlhd}
+%unrhd%	-1	\MMM{\unrhd}
+%up%	 0x0022CF	
+%uparrow%		 0x002191	\MMM{\uparrow}
+%updownarrow%		 -1	\MMM{\updownarrow}
+%upsilon%		 0x0003C5
+%uptext%		 0x002197	\PrOH{}
+%wp%	 0x002118
+%wr%	 0x002240
+%x%	 0x0000D7
+%xi%	 0x0003BE
+%zeta%	 0x0003B6
 EOF
 END_OF_BODY_TEXT
 
-my $body_text2 = <<'END_OF_BODY_TEXT';
+my $body_text_tail = <<'END_OF_BODY_TEXT';
+
 
 Supplemental Arrows-B[1]
 
@@ -608,6 +556,7 @@ close $SF;
 my $dumpcount=0;
 if(my $testfilename = shift @ARGV) {
       $sievetestfile = $testfilename;
+      $dumpcount = shift @ARGV;
 } else {
   open (my $TF, ">", $sievetestfile) or die $!;
   foreach my $dir (sort(keys %metadata)){
@@ -659,19 +608,28 @@ system("rm -f $textforcatfile");
 
 =SH
 perl mdt096a.pl utf8svf sievekeyword
+diff mdt096d mdt096r
+if test "$?" != 0
+then echo Test failed
+     echo Some module tests failed \(see mdt096.ttd for details\)
+else echo All module tests passed
+fi
 =TEX
 \end{document}
+=IGN
+The following script was used to compare test results with pp3.1w8 so that reference results could be established.
 =VDUMP trans.sh
 pp_file_conv -u -n <mdt096a.pl >~/git/pp3.1w8/src/pptex/mdt096ae.pl
+pp_file_conv -u -n <mdt096b >~/git/pp3.1w8/src/pptex/mdt096be
 pp_file_conv -u -n <utf8svf >~/git/pp3.1w8/src/pptex/utf8svfe
 cd ~/git
 mv pp pputf8
 mv pp3.1w8 pp
 cd pp/src/pptex
-perl mdt096ae.pl utf8svfe sievekeyword
+perl mdt096ae.pl utf8svfe sievekeyword mdt096be 2
 cd ~/git
 mv pp pp3.1w8
 mv pputf8 pp
 cd pp/src/pptex
-pp_file_conv -n <~/git/pp3.1w8/src/pptex/mdt096d mdt096du
+pp_file_conv -n <~/git/pp3.1w8/src/pptex/mdt096d >mdt096du
 =IGN
