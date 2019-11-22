@@ -300,7 +300,6 @@ Character:	& \DNchar	& \UPchar	& \UPtext	& \DNtext	& \CANtext	\\
 %ddagger%		 0x002021
 %def%	 0x00225C
 %delta%	 0x0003B4
-%diamond%		 0x0022c4
 %diamondsuit%		 0x002666
 %dintersect%		 0x0022C2
 %div%	 0x0000f7
