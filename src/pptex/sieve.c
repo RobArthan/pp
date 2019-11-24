@@ -2156,7 +2156,7 @@ mlstring(wchar_t *line, FILE *fp)
 				if(isascii(ch) && isgraph(ch)) {
 					PUTC(ch, fp);
 				} else {
-       if (ch > 0xFF) WFPRINTF(stderr, "Warning: mlstring invoked on unicode character %c", ch);
+       if (ch > 0xFF) WFPRINTF(stderr, "Warning: mlstring invoked on unicode character %c\n", ch);
        else	FPRINTF(fp, "\\%03d", ch & 0xFF);
 				}
 		}
