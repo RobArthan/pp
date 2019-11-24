@@ -2127,7 +2127,7 @@ left unchanged.
 */
 
 void
-mlstring(wchar_t *line, FILE    *fp)
+mlstring(wchar_t *line, FILE *fp)
 {
 	int ch;
 	int j;
@@ -2156,7 +2156,8 @@ mlstring(wchar_t *line, FILE    *fp)
 				if(isascii(ch) && isgraph(ch)) {
 					PUTC(ch, fp);
 				} else {
-					FPRINTF(fp, "\\%03d", ch & 0xFF);
+       if (ch > 0xFF) WFPRINTF(stderr, "Warning: mlstring invoked on unicode character %c", ch);
+       else	FPRINTF(fp, "\\%03d", ch & 0xFF);
 				}
 		}
 	}

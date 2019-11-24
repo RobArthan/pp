@@ -368,7 +368,6 @@ Character:	& \DNchar	& \UPchar	& \UPtext	& \DNtext	& \CANtext	\\
 %nabla%	 0x002207
 %nat%			sameas	%bbN%
 %natural%		 0x00266e
-%nearrow%		 -1
 %neq%	 0x002260
 %ni%	 0x00220b
 %not%	 0x0000AC
@@ -415,7 +414,6 @@ Character:	& \DNchar	& \UPchar	& \UPtext	& \DNtext	& \CANtext	\\
 %rres%	 0x0025B7
 %rseq%	 0x0027E9
 %rsub%	 0x002A65
-%searrow%		 -1	\MMM{\searrow}
 %select%		sameas	 %epsilon%
 %setminus%		 0x002216
 %sharp%	 0x00266f
@@ -450,7 +448,6 @@ Character:	& \DNchar	& \UPchar	& \UPtext	& \DNtext	& \CANtext	\\
 %unrhd%	-1	\MMM{\unrhd}
 %up%	 0x0022CF	
 %uparrow%		 0x002191	\MMM{\uparrow}
-%updownarrow%		 -1	\MMM{\updownarrow}
 %upsilon%		 0x0003C5
 %uptext%		 0x002197	\PrOH{}
 %wp%	 0x002118

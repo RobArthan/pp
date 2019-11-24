@@ -81,7 +81,6 @@ Tests for the symbols supported by the style file hol1.sty.}
 	Sigma:	Σ
 	Theta:	Θ
 	Uparrow:	⇑
-	Updownarrow:	⇕
 	Upsilon:	Υ
 	Xi:	Ξ
 	aleph:	ℵ
@@ -240,7 +239,6 @@ Tests for the symbols supported by the style file hol1.sty.}
 	nabla:	∇
 	nat:	ℕ
 	natural:	♮
-	nearrow:	%nearrow%
 	neq:	≠
 	ni:	∋
 	not:	¬
@@ -287,7 +285,6 @@ Tests for the symbols supported by the style file hol1.sty.}
 	rres:	▷
 	rseq:	⟩
 	rsub:	⩥
-	searrow:	%searrow%
 	select:	ε
 	setminus:	∖
 	sharp:	♯
@@ -322,7 +319,6 @@ Tests for the symbols supported by the style file hol1.sty.}
 	unlhd:	%unlhd%
 	unrhd:	%unrhd%
 	uparrow:	↑
-	updownarrow:	%updownarrow%
 	upsilon:	υ
 	wp:	℘
 	wr:	≀
