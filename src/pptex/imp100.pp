@@ -537,13 +537,15 @@ do
 		eval sieve -e "$OPT_K" "$KEYFILE" "$SIEVEFILE" \""$DOCSMLVIEW"\" < "$docfile" > "$outfile"
 
 		eval sieve -e "$OPT_K" "$KEYFILE" "$SIEVEFILE" errors < "$docfile" \
-		| sed \
-		-e '1,1s/^\([0-9][0-9]*\)		*\(.*\)/'\
+        | sed \
+        -e '/\\/s/\\/\\\\/g'\
+        -e '/"/s/"/\\"/g'\
+	-e '1,1s/^\([0-9][0-9]*\)[	 ][	 ]*\(.*\)/'\
 '(new_error_message {id= \1, text = "\2\\/'\
-		-e '2,$s/^		*\(.*\)/	\\ \1\\/' \
-		-e '2,$s/^\([0-9][0-9]*\)		*\(.*\)/'\
-'\\" }; new_error_message {id= \1, text = "\2\\/' \
-		-e '$s/\\$/" });/' \
+	-e '2,$s/^[	 ][	 ]*\(.*\)/	\\ \1\\/'\
+	-e '2,$s/^\([0-9][0-9]*\)[	 ][	 ]*\(.*\)/'\
+'\\" }; new_error_message {id= \1, text = "\2\\/'\
+	-e '$s/\\$/" });/'\
 	>> $outfile
 
 		if test ! -s "$outfile"
@@ -632,15 +634,15 @@ do
 		eval sieve -u "$OPT_K" "$KEYFILE" "$SIEVEFILE" \""$PPSMLVIEW"\" < "$ppfile" > "$outfile"
 
 		eval sieve -u "$OPT_K" "$KEYFILE" "$SIEVEFILE" errors < "$ppfile" \
-                | sed \
-                -e '/\\/s/\\/\\\\/g'\
-                -e '/"/s/"/\\"/g'\
-                -e '1,1s/^\([0-9][0-9]*\)               *\(.*\)/'\
+        | sed \
+        -e '/\\/s/\\/\\\\/g'\
+        -e '/"/s/"/\\"/g'\
+	-e '1,1s/^\([0-9][0-9]*\)[	 ][	 ]*\(.*\)/'\
 '(new_error_message {id= \1, text = "\2\\/'\
-                -e '2,$s/^              *\(.*\)/        \\ \1\\/' \
-                -e '2,$s/^\([0-9][0-9]*\)               *\(.*\)/'\
-'\\" }; new_error_message {id= \1, text = "\2\\/' \
-                -e '$s/\\$/" });/' \
+	-e '2,$s/^[	 ][	 ]*\(.*\)/	\\ \1\\/'\
+	-e '2,$s/^\([0-9][0-9]*\)[	 ][	 ]*\(.*\)/'\
+'\\" }; new_error_message {id= \1, text = "\2\\/'\
+	-e '$s/\\$/" });/'\
 	>> $outfile
 
 		if test ! -s "$outfile"
