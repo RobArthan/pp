@@ -227,7 +227,7 @@ fun my_diff (ignore_order : bool)
 		val s = if ignore_order then sort string_order else Combinators.I;
 		val ok = compare
 			(s(explode contents drop is_space))
-			(s(explode expected drop is_space));
+			(s(explode (translate_for_output expected) drop is_space));
 		val se = close_in chan;
 	in	ok
 	end	handle ex => (
