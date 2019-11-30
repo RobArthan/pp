@@ -1368,9 +1368,9 @@ set_flag("output_in_utf8", true);
 The UTF-8 in the next line of ML is suppressed from the typeset
 document because it contains what are used in the {\Product}
 character set as box-drawing characters. 
-\Hide{
+\Hide{╒
 =SMLPLAIN
-store_mt_results_show mt_run[("uu_1a", I, ⊥Σ═ 27 ⊥Λ╒, 27)];
+store_mt_results_show mt_run[("uu_1a", I, ⓜ27⌝, 27)];
 =TEX
 }
 =SMLPLAIN
