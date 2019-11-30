@@ -269,6 +269,8 @@ use_file "mdt005.sml";
 Load and initialise the module test system.
 
 =SML
+get_flag "input_in_utf8";
+get_flag "output_in_utf8";
 use_file "dtd013.sml";
 use_file "imp013.sml";
 init_mt_results ();
@@ -503,6 +505,7 @@ val T = ReaderWriter.translate_for_output;
 fun ST s = T(W_dq s);
 in
 set_flag("use_extended_chars", true);
+set_flag("output_in_utf8", false);
 =TEX
 
 Check that the input strings are built correctly, by length and by content.
@@ -554,7 +557,7 @@ store_mt_results_show mt_run[
 ("to_5c", T, to_5, "Δ"),
 ("to_6c", T, to_6, W_1Q "Delta"),
 ("to_7c", T, to_7, "Δ" ^ (W_pc "calA")),
-("to_8c", T, to_8, (W_1Q "Delta") ^ (W_1Q "calA"))
+("to_8c", T, to_8, (W_1Q "Delta") ^ (W_1Q "calA")) 
 ,("to_9c", T, to_9, (W_pc C_Q) ^ (W_pc C_Q) ^ "Delta")
 ,("to_10c", T, to_10, C_Q ^ "Delta")
 ,("to_11c", T, to_11, "Δ" ^ (W_pc C_Q) ^ (W_pc C_Q) ^ "calA")
@@ -600,6 +603,7 @@ store_mt_results_show mt_run[
 ("to_nasty_10", T, C_Q, CS_pcQpc),
 ("to_nasty_11", T, CS_pcQpc, C_pc ^ C_pc ^ CS_pcQpc ^ C_pc ^ C_pc)
 ];
+set_flag("output_in_utf8", true);
 =TEX
 Run some of the tests again without using extended characters.
 The test series match as follows:
@@ -1368,7 +1372,7 @@ set_flag("output_in_utf8", true);
 The UTF-8 in the next line of ML is suppressed from the typeset
 document because it contains what are used in the {\Product}
 character set as box-drawing characters. 
-\Hide{╒
+{\Hide
 =SMLPLAIN
 store_mt_results_show mt_run[("uu_1a", I, ⓜ27⌝, 27)];
 =TEX
@@ -1378,12 +1382,15 @@ store_mt_results_show mt_run[
 ("uu_2a", translate_for_output, "\181", "\226\136\128")
 ];
 use_utf8_string "val \226\136\128 = 99;";
+val forall = ∀;
 =TEX
+The following test eviscerated by RBJ because it required ext codes to be inserted in a utf8 file.
+(previoiusly the ext code for forall appeared instead of the present arrangement).
 =SML
 set_flag("input_in_utf8", false);
 set_flag("output_in_utf8", false);
 store_mt_results_show mt_run[
-("uu_3a", I, ∀, 99)
+("uu_3a", I, forall, 99)
 ];
 =TEX
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1392,6 +1399,8 @@ store_mt_results_show mt_run[
 (map ord o explode) all_chars;
 
 =SML
+get_flag "input_in_utf8";
+get_flag "output_in_utf8";
 "End of test file";
 
 diag_line(summarize_mt_results());
