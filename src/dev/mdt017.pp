@@ -558,7 +558,7 @@ mt_run
 =SML
 =DUMP mdt017f.grm.txt
 (* Grammar for a Pocket Calculator with ⊕ meaning addition and tab meaning multiplication! *)
-	E	=	E, `⊕`, T				(add x1 x3)
+	E	=	E, `@`, T				(add x1 x3)
 		|	T 				(fetch x1);
 
 	T	=	T, `	`, F			(mul x1 x3)
@@ -579,7 +579,7 @@ cat mdt017f.grm.sml
 
 =SML
 fun slrp_6_classify "\t" = MkLit "\t"
-|   slrp_6_classify "\171" = MkLit "\171"
+|   slrp_6_classify "@" = MkLit "@"
 |   slrp_6_classify "(" = MkLit "("
 |   slrp_6_classify ")" = MkLit ")"
 |   slrp_6_classify "<end-of-input>" = Eos
@@ -596,13 +596,13 @@ val slrp_6: string -> int = slrp_6_parser o slrp_2_lex;
 store_mt_results
 mt_run
 [("SLRP.6.1", slrp_6, "1", 1),
- ("SLRP.6.2", slrp_6, "2\1712", 4),
- ("SLRP.6.3", slrp_6, "(2)\1712", 4),
- ("SLRP.6.4", slrp_6, "(2\1713)\t6", (2+3)*6),
+ ("SLRP.6.2", slrp_6, "2@2", 4),
+ ("SLRP.6.3", slrp_6, "(2)@2", 4),
+ ("SLRP.6.4", slrp_6, "(2@3)\t6", (2+3)*6),
  ("SLRP.6.5", slrp_6, "(2\t3)\t6", 2*3*6),
  ("SLRP.6.6", slrp_6, "2\t(3\t6)", 2*3*6),
  ("SLRP.6.7", slrp_6, "2\t((((( ((((( ((((( 3\t6 ))))) ))))) )))))", 2*3*6),
- ("SLRP.6.8", slrp_6, "2\1712", 4)];
+ ("SLRP.6.8", slrp_6, "2@2", 4)];
 =TEX
 =SML
 fun check_6 f s = (f s; "Wrong") handle SYNTAX_ERROR => "OK";
