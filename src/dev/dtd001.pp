@@ -172,7 +172,12 @@ Now allows SLRP to be compiled with MLton.
 
 \item[2017/03/05]
 Added {\tt integer\_interval} to support testing when default integers are fixed magnitude.
+
+\item[2019/12/13]
+Added {\tt translate\_for\_output\_temp} to allow {\em raw\_diag...} functions to invoke {\em translate\_for_output}.
+
 %%%% END OF CHANGES HISTORY %%%%
+
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1011,11 +1016,15 @@ $set\_line\_length$
 =ENDDOC
 =DOC
 val ⦏raw_diag_string⦎ : string -> unit;
+val ⦏translate_for_output_temp⦎ : (string -> string) ref;
 =DESCRIBE
 $raw\_diag\_string$ outputs
 a string on the standard output stream.
 If the string exceeds the value of {\em get\_line\_length} it attempts to split the string into tokens, to fit within the line length.
 A token is taken to be an initial string of spaces, followed by exclusively non-space characters.
+It also undertakes a translation which may convert output to utf8 depending on the setting of a control flag.
+This translation is not available when the procedure is first compiled, being supplied by the reader/writer, dtd/imp110, so a temporary identity function is used which is overwritten by the correct function as soon as it is available.
+This is called {\em translate\_for\_output\_temp}, which is later given the value of ${\em translate\_for\_output}
 =SEEALSO
 $list\_raw\_diag\_string$, $raw\_diag\_line$, $diag\_string$.
 =ENDDOC

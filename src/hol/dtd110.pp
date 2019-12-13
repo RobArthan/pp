@@ -615,6 +615,8 @@ Translates a string according to the macro processing rules used when
 outputting text.  The output produced depends on the setting of the
 control flag $use_extended_chars$, when false the result will have no
 extended characters, the keyword forms will be used.
+The output also depends upon the setting of the control flag $output_in_utf8$.
+When this flag is set the output is translated into UNICODE using the utf8 coding.
 =ENDDOC
 %--------------------------------------------------------------------
 =DOC

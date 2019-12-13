@@ -190,6 +190,8 @@ so we now use structure {\tt IntInf} rather than {\tt Int} for the
 arbitrary magnitude arithmetic.  Pretty-printing arbitrary magnitude integers in SML/NJ
 now works so SML/NJ and Poly/ML can use the same code.
 
+\item[2019/12/13]
+Added {\em translate\_for\_output\_temp}.
 
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
@@ -907,12 +909,18 @@ fun ⦏set_line_length⦎ (n: int): int = set_int_control ("line_length", n);
 fun ⦏get_line_length⦎ (():unit): int = !line_length;
 end;
 =TEX
+$translate\_for\_output\_temp$ is a location for holding an output translation procedure to be assigned later in the build.
+=SML
+val ⦏translate_for_output_temp⦎: (string -> string) ref = ref (fn x => x);
+=TEX
 $raw\_diag\_string$ outputs
 a string on the standard output stream.
 If the string exceeds the value of {\em get\_line\_length} it attempts to split the string into tokens, to fit within the line length.
 A token is taken to be an initial string of spaces, followed by exclusively non-space characters.
 =SML
-fun ⦏raw_diag_string⦎ (s : string) : unit = (
+fun ⦏raw_diag_string⦎ (t : string) : unit = (
+  let val s = !translate_for_output_temp t
+  in
 	let 	val line_length = get_line_length();
 		val len = size s;
 		fun next test i = (
@@ -941,6 +949,7 @@ fun ⦏raw_diag_string⦎ (s : string) : unit = (
 		);
 	in	go 0 0
 	end
+  end
 );
 =TEX
 $raw\_diag\_string\_list$ outputs a list of strings
@@ -948,7 +957,9 @@ onto the standard output stream. The strings in the list
 are concatenated (with spaces to separate them) and then
 output with $raw\_diag\_string$.
 =SML
-fun ⦏list_raw_diag_string⦎ (s : string list) : unit = (
+fun ⦏list_raw_diag_string⦎ (t : string list) : unit = (
+  let val s = map (!translate_for_output_temp) t
+  in
     let
         fun aux ((s :: []) : string list) = s
         |   aux ((s :: t) : string list) = s ^ " " ^ aux t
@@ -956,6 +967,7 @@ fun ⦏list_raw_diag_string⦎ (s : string list) : unit = (
     in
         raw_diag_string (aux s)
     end
+  end
 );
 =TEX
 $raw\_diag\_line$ outputs a string to the standard output
@@ -965,9 +977,12 @@ theorems and the like (for which the pretty printer
 will have included new lines within the string if
 necessary ).
 =SML
-fun ⦏raw_diag_line⦎ (s : string) : unit = (
+fun ⦏raw_diag_line⦎ (t : string) : unit = (
+  let val s = !translate_for_output_temp t
+  in
         output(std_out, s);
         output(std_out, "\n")
+  end
 );
 =TEX
 $format\_list$ is used to format a list of items for printing

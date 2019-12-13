@@ -446,6 +446,7 @@ structure ⦏ReaderWriterSupport⦎ : ReaderWriterSupport = struct
 
 %********************************************************************
 
+
 \subsection{Integers and Strings}
 
 The string representation of integers is needed in various places.
@@ -3946,10 +3947,16 @@ end (* of local for use_terminal, ask_at_terminal and reset_use_terminal *);
 
 %********************************************************************
 \subsection{Translating Output Functions}
+
+First assign {\em translate\_for\_output} so that it is used by {\em raw\_diag...} functions.
 =SMLPLAIN SML
-val ⦏diag_string⦎: string -> unit = raw_diag_string o translate_for_output;
-val ⦏list_diag_string⦎ : string list -> unit = list_raw_diag_string o map translate_for_output;
-val ⦏diag_line⦎ : string -> unit = raw_diag_line o translate_for_output;
+val _ = (translate_for_output_temp := translate_for_output);
+=TEX
+Then make the non-raw versions the same.
+=SMLPLAIN SML
+val ⦏diag_string⦎: string -> unit = raw_diag_string;
+val ⦏list_diag_string⦎ : string list -> unit = list_raw_diag_string;
+val ⦏diag_line⦎ : string -> unit = raw_diag_line;
 =TEX
 
 \subsection{Completion of Basic Reader Writer}
