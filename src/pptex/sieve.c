@@ -285,8 +285,45 @@ init_signals(void)
 }
 /*
 
+\subsection{Queing and printing unknown unicode characters}
 
+*/
 
+typedef struct node {
+   wchar_t code;
+   struct node *previous;
+} node_t;
+
+node_t *unicode_list = NULL;
+
+void unknown_code(wchar_t code) {
+   node_t *scan = unicode_list;
+   while(scan){
+     if (scan->code == code)return;
+     scan = scan->previous;
+   };
+   node_t *new_node = malloc(sizeof(node_t));
+   if (!new_node) return;
+   new_node->code = code;
+   new_node->previous = unicode_list;
+   unicode_list = new_node;
+}
+
+void code_warnings(void) {
+  if (unicode_list){
+    FPRINTF(stderr, "Unicode characters not assigned to a keyword:");
+    while(unicode_list){
+      node_t *temp = unicode_list->previous;
+      FPRINTF(stderr, " %c:%x", unicode_list->code, unicode_list->code);
+      free(unicode_list);
+      unicode_list = temp;
+    };
+    FPRINTF(stderr, "\n");
+  };
+  return;
+};
+
+/*
 \subsection{Input Files}
 
 The input file controls are now located in the utf8module, so that it can use them in processing the keyword file.
@@ -2868,6 +2905,7 @@ main_convert_uni(
 	    } else {
 	      /* no keyword */
 	      out_line[outp++] = ch;
+	      if(ch > 127) unknown_code(ch);
 	      inp++;
 	    } /* End of conditional */
 	  } /* End of switch:default */
@@ -3972,6 +4010,7 @@ and failing that defaults to utf8.
 		EXIT(39);							/* EXIT */
 	}
 
+	code_warnings();
 	EXIT(0);								/* EXIT */
 
     }

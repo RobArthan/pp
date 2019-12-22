@@ -1568,7 +1568,7 @@ Now we form the new term:
 The following conflates two substituitions (and not just variables as second of pairs), on the
 grounds that the new (left) terms of the first substituition
 do not contain the next initial (right) terms.
-Note that in is the first matching substituition in a list
+Note that it is the first matching substituition in a list
 that is used.
 =SML
 			val ncbody = subst (combine xs args'@ substs) cbody;
