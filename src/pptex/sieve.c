@@ -314,7 +314,7 @@ void code_warnings(void) {
     FPRINTF(stderr, "Unicode characters not assigned to a keyword:");
     while(unicode_list){
       node_t *temp = unicode_list->previous;
-      FPRINTF(stderr, " %c:%x", unicode_list->code, unicode_list->code);
+      FPRINTF(stderr, " %C:%x", unicode_list->code, unicode_list->code);
       free(unicode_list);
       unicode_list = temp;
     };
