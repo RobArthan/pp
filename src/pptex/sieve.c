@@ -102,6 +102,12 @@ Correction to mlchar mode in utf8 mode.
 
 Changing to default utf8 rather than ext (see {\it main}).
 
+29/12/2019
+
+Expect and read keyword files in utf8 when other files are in utf8.
+Select default keyword file appropriate to encoding.
+(this fixes a bug arising from reading keyword files and compiling regexes in macros in the C locale and then executing them in a utf8 locale).
+
 \section{SIEVE PROGRAM}
 
 \subsection{Initial Declarations}
@@ -131,6 +137,7 @@ Changing to default utf8 rather than ext (see {\it main}).
 #define NOT_FOUND (-1)
 
 #define KEYWORD_FILE "sievekeyword"
+#define UKEYWORD_FILE "utf8skw"
 
 #define PPHOME "PPHOME"
 #define PPETCPATH "PPETCPATH"
@@ -2937,7 +2944,7 @@ main_convert_uni(
 	    int eflags = REG_NOTBOL;
 	    int error_code;
 	    regmatch_t pmatch;
-	    error_code = regwexec(tex_arg, &in_line[inp], 1, &pmatch, eflags);
+	    error_code = sv_regwexec(tex_arg, &in_line[inp], 1, &pmatch, eflags);
 	    out_line[outp++] = '{';
 	    tex_arg_stack_head += 1;
 	    if(tex_arg_sense == KW_RE_MATCH) {
@@ -3865,12 +3872,13 @@ main(int argc, char **argv)
 	char *ppcharset=getenv("PPCHARSET");
 	short eu_flags = 0;
 
-	limits.num_keyword_files = 0;
-	keyword_files[limits.num_keyword_files++] = KEYWORD_FILE;
 	program_name = argv[0];
 	
 	initialize();
-
+	
+	keyword_files[0] = UKEYWORD_FILE;
+	limits.num_keyword_files = 1;
+	
 	check_program_initializations();
 
 	main_F.utf8 = False;
@@ -3900,7 +3908,7 @@ main(int argc, char **argv)
 		case 'l':
 		    limits.opt_list = 1;
 		    break;							/* BREAK */
-	    case 'u': /* utf8 i/o */
+	        case 'u': /* utf8 i/o */
 		    eu_flags += 2;
 		    break;							/* BREAK */
 		case 'v':
@@ -3916,16 +3924,17 @@ main(int argc, char **argv)
 
 /*
 
-The choice of view file is as follows:
+The choice of keyword and view files is determined either by the -f -K and -k flags or by a default, which depends on the character encioding.
 
-1) if the -f option is used it determines the view file
+1) if the -f option is used it determines the view file, if the -K flag is used the default keyword file is not used.
+
 otherwise
-2) if the e or u flags are used they determine a default view file for ext or utf8 resp.
+2) if the -e or -u flags are used they determine a default keyword and view file for ext or utf8 resp.
 otherwise
 3) if the PPCHARSET environment variable is "ext" then the default view for ext is selected.
 otherwise that for utf8
 
-The defaults are, for ext: sieveview, for utf8: utf8svf.
+The defaults are, for ext: sieveview sievekeyword, for utf8: utf8svf utf8svf.
 
 The character set for reading and writing is determined by the command line flags or,
 if not thus determined, by the $PPCHARSET environment,
@@ -3937,10 +3946,14 @@ and failing that defaults to utf8.
 	else main_F.utf8 = False;
 	
 	view_F.utf8 = main_F.utf8;
+	keyword_F.utf8 = main_F.utf8;
 	
 	if(*steering_file == 0)
 	  steering_file = view_F.utf8 ? "utf8svf" : "sieveview";
 	
+	if (keyword_files[0] != NULL && !keyword_F.utf8)
+	  keyword_files[0] = KEYWORD_FILE;
+
 	if(debug) {
 		int i;
 		PRINTF("Debug options set:\n");
@@ -3969,11 +3982,15 @@ and failing that defaults to utf8.
 
 	if(debug) message("Processing for view %s", view_option);
 
+	setlocale(LC_ALL, main_F.utf8 ?  "en_GB.UTF-8" : "C.ISO88591");
+
+	if(debug) message("Locale set to %s",
+			  (main_F.utf8 ? "en_GB.UTF-8" : "C.ISO88591"));
+
 	read_keyword_files(keyword_files);
 
 	if(debug & (D_SHOW_SIEVE_TABLE | D_SHOW_FULL_SIEVE_TABLE)) print_table();
 	
-	setlocale(LC_ALL, main_F.utf8 ?  "en_GB.UTF-8" : "C");
 
 	read_view_file(steering_file);
 	conclude_steerfile();

@@ -21,6 +21,7 @@
 #include <string.h>
 #include <errno.h>
 #include <regex.h>
+#include <locale.h>
 #include <unistd.h>
 #include <pwd.h>
 #include <sys/types.h>
@@ -1710,13 +1711,14 @@ simple_wread_line(wchar_t *line, int max_len, struct file_data *file_F)
 	int i = 0;
 
 	/*	if(debug & D_UTF8) (void)printf("simple_wread_line"); */
+	if(debug & D_UTF8) (void)printf("%s\n", file_F->file_name);
 
 	while(i < max_len && (whatgot = getwc(file_F->fp)) != L'\n' && whatgot != WEOF) {
-	/*  	if(debug & D_UTF8)(void)printf(":%06x", whatgot); */
+	  /* 	if(debug & D_UTF8)(void)printf(":%x", whatgot); */
 	  line[i++] = whatgot;
 	}
 
-	/*	if(debug & D_UTF8) (void)printf("!%06x\n", whatgot); */
+	/*	if(debug & D_UTF8) (void)printf("!%x\n", whatgot); */
 
 	if(i >= max_len) {
 		error_top();

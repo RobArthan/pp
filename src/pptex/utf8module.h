@@ -415,7 +415,7 @@ const int uni_to_pp(unicode cp);
 void output_ext_as_utf8(wchar_t *line, FILE *file_F);
 
 /*
-These high levek transcription procedures are used by pp_file_conv
+These high level transcription procedures are used by pp_file_conv
 and may not be more genrally applicable.
 */    
 

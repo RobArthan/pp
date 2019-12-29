@@ -603,7 +603,7 @@ system("rm -f $textforcatfile");
 =TEX
 
 =SH
-perl mdt096a.pl utf8svf sievekeyword
+perl mdt096a.pl utf8svf utf8skw
 diff mdt096d mdt096r
 if test "$?" != 0
 then echo Test failed
@@ -622,7 +622,7 @@ cd ~/git
 mv pp pputf8
 mv pp3.1w8 pp
 cd pp/src/pptex
-perl mdt096ae.pl utf8svfe sievekeyword mdt096be 2
+perl mdt096ae.pl utf8svfe utf8skw mdt096be 2
 cd ~/git
 mv pp pp3.1w8
 mv pputf8 pp
