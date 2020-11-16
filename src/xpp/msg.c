@@ -4,7 +4,7 @@
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
- * msg.c: this file is part of the PPTex system
+ * msg.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

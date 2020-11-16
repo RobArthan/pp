@@ -1,0 +1,280 @@
+=IGN
+********************************************************************************
+def001C.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+To be included as the section `LEXICAL ANALYSIS'
+=IGN
+ ℤ $Revision: 1.11 $ $RCSfile: def001C.doc,v $ $Date: 2006/12/09 15:46:35 $
+=TEX
+\label{LEXICALANALYSIS}
+The following subsections describe the rules by which a fragment of
+HOL text, i.e. a sequence of what we shall call {\em lexical units},
+is construed as a sequence of terminal symbols to be parsed
+according to the grammar defined in section~\ref{CollectedGrammar}.
+
+The rules are intended to meet the following
+requirements:
+
+\begin{enumerate}
+\item names may have both alphanumeric and non-alphanumeric components and
+have components which are subscripted or superscripted;
+\item spaces are not normally be required around frequently occuring names
+such as `$∀$', `$∃⋎1$', `$=$' etc.;
+\item the lexical status of names is under the control of
+the user rather than the system.
+\end{enumerate}
+
+The approach taken generalises that taken in the lexis of Standard ML
+by allowing names to be formed by
+joining alphanumeric and non-alphanumeric components using underscores or special
+characters which indicate superscription or subscription.
+In addition, sequences of alphanumeric and non-alphanumeric
+characters may be declared to act as terminator symbols which
+do not require space separation from
+adjacent characters unless those characters are underscores
+or the superscription or subscription characters.
+
+\subsection{Lexical Units}\label{LexicalUnits}
+To describe the lexical analysis of HOL we consider the  HOL text
+to have been first separated into a sequence
+of lexical units (as part of the macro processing
+which embeds HOL in an extension of Standard ML).
+These lexical units may be though of as ``extended characters'' corresponding
+to one or more actual characters in the input stream.
+
+A lexical unit is one of the following:
+
+\begin{itemize}
+\item
+A single character.
+\item
+A keyword symbol such as the superscription symbol, ``$\ShowScripts ⋏ $'',
+or the subscription symbol ``$\ShowScripts ⋎ $''.
+\item
+A term quotation.
+\item
+A type quotation.
+\item
+A string literal. These follow the same rules as string literals in Standard
+ML.
+\item
+A character literal. These follow the same rules as string literals in Standard
+ML except that they are delimited by the backprime character `\verb"`"'.
+\item
+A comment. These are delimited by
+``{\tt (*}'' and by a ``{\tt *)}'' as in Standard ML.
+\end{itemize}
+
+Lexical units are grouped into categories as shown in
+table \ref{HOLLexicalUnits}.
+
+\begin{table}[htb]
+\centering
+\begin{tabular}{|l|p{4in}|}\hline
+Category & Contents \\ \hline\hline
+Punctuation &
+`\verb"("', `\verb")"', `\verb"{"', \verb"}"',
+`\verb"["', `\verb"]"', `\verb":"', `\verb";"', `\verb","', `\verb"|"', `⦁' and `\verb"$"'
+\\ \hline
+Numeric &
+`$0$' \ldots `$9$'
+\\ \hline
+Alphanumeric &
+`$A$' \ldots `$Z$',
+`$a$' \ldots `$z$',
+`$0$' \ldots `$9$'
+and `$'$'
+\\ \hline
+Copula &
+`$\ShowScripts ⋏ $', `$\ShowScripts ⋎ $' and `$\_$'
+\\ \hline
+Space &
+Space, tab, newline and other formatting characters
+and comment units
+\\ \hline
+Literal &
+A string or character literal or a term or type quotation
+\\ \hline
+Term Quotation &
+A term quotation
+\\ \hline
+Type Quotation &
+A type quotation
+\\ \hline
+Symbolic &
+Any lexical unit not in the one of the other categories
+\\ \hline
+\end{tabular}
+\caption{Lexical Units for \ProductHOL} \label{HOLLexicalUnits}
+\end{table}
+
+Thus symbolic units comprise the ASCII characters other than
+alphanumerics and the punctuation characters, the characters with
+character codes greater than 127 and the keyword symbols other than
+the superscription and subscription keywords.
+
+\subsection{Control of Lexical Analysis and Parsing}\label{ControlofLexicalAnalysisandParsing}
+\Product{} will allow the user to control the lexical analysis and parsing of \ProductHOL{} through the following forms of declaration (in which the term {\em name} denotes a sequence of one or more alphanumeric, copula or symbolic lexical units).
+
+\paragraph{Binder Declarations}
+These allow binder status to be associated with a name.
+
+\paragraph{Fixity Declarations}
+These allow infix, prefix or postfix status
+and a numeric precedence value
+to be associated with a name. They also allow the ordinary (``nonfix'')
+status to be restored to a name which has previously been given infix, prefix,
+postfix or binder status.
+
+\paragraph{Terminator Declarations}
+These allow a name to be given the status
+of a lexical terminator in the sense that, while such a name forms a name
+on its own, it may only form part of a longer name if it is tied
+to the other constituents of the name with copula characters (or,
+in fact, if it forms part of a longer terminator).
+The precise rules for forming identifiers are given in the next section.
+A terminator must begin with a symbolic lexical unit.
+
+\newpage
+\subsection{Lexical Analysis}\label{LexicalAnalysis}
+Sequences of lexical units are classified into {\em lexemes} as follows:
+
+\begin{table}[htb]
+\centering
+\begin{tabular}{|l|p{4.5in}|}\hline
+Lexeme & Sequence of Lexical Units\\ \hline\hline
+Identifier &
+A sequence of one or more alphanumeric, symbolic or copula lexical units, which either has the form  of a floating point number or
+in which (1) any subsequence which has been declared as a terminator is
+either adjacent only to copula units, or is a subsequence of a terminator, and (2) alphanumeric and symbolic units only appear adjacently within subsequences which have been declared as terminators.
+
+A floating point number comprises a sequence of digits giving the integer part, followed by a decimal point, optionally followed by a sequence of digits giving the mantissa, all optionally followed by a possibly negative exponent part.
+\\ \hline
+Punctuation &
+A sequence comprising exactly one punctuation character
+\\ \hline
+Space &
+A sequence comprising one or more space units
+\\ \hline
+Literal &
+A sequence comprising exactly one literal unit
+\\ \hline
+Term Quotation &
+A sequence comprising exactly one term quotation unit
+\\ \hline
+Type Quotation &
+A sequence comprising exactly one type quotation unit
+\\ \hline
+\end{tabular}
+\caption{\ProductHOL{} Lexemes}\label{HOLLexemes}
+\end{table}
+
+Thus the syntax of identifiers is as given by the following grammar:
+
+=GFT BNF
+ ⦏Id⦎		=	{Copula}, Atom, [{Copula, {Copula}, Atom}, {Copula}]
+		|	Copula, {Copula}
+		|	Num, {Num}, `.`, {Num}, [(`e` | `E`), [`~`], Num, {Num}];
+
+ ⦏Atom⦎		=	AlNum , {AlNum}
+		|	Sym, {Sym}
+		|	Terminator;
+
+ ⦏Terminator⦎	=    Sym, {AlNum | Sym | Copula};
+=TEX
+in which $Num$, $AlNum$, $Copula$ and $Sym$ stand for numeric, alphanumeric,
+copula and symbolic lexical units respectively, and
+in which instances of $Terminators$ are restricted to sequences of
+lexical units which have been declared as terminators.
+
+A sequence of lexical units is {\em lexically analysed} by processing it
+from left to right at each stage extracting the longest possible lexeme.
+The sequence of lexemes is in error if any of the following
+holds
+
+\begin{enumerate}
+\item
+the last lexeme of the sequence is the `\verb"$"' punctuation character;
+\item
+the sequence contains the `\verb"$"' punctuation
+character followed by a type or term quotation;
+\item
+the sequence contains a character literal which does not contain
+exactly one character
+\end{enumerate}
+
+The non-space lexemes in the sequence of lexemes resulting from lexical analysis
+are then processed from left to right to give terminal symbols in the grammar
+as indicated in the following table (in which, if two or more rows apply
+then the first applicable row should be used and in which some distinctions
+may depend on the context within the grammar within which the terminal
+symbol is required).
+
+\begin{table}[htb]
+\centering
+\begin{tabular}{|l|p{3in}|}\hline
+Terminal & Lexemes \\ \hline\hline
+`\verb"{"',
+`\verb"}"',
+`\verb"("',
+`\verb")"',
+`\verb"["',
+`\verb"]"',
+`$⦁$',
+`\verb":"',
+`\verb","',
+`\verb"|"',
+`\verb";"' & Punctuation \\ \hline
+`\verb"and"',
+`\verb"else"',
+`\verb"if"',
+`\verb"in"',
+`\verb"let"',
+`\verb"then"'& Identifier \\ \hline
+⦏Name⦎ & Identifier or Literal or `\verb"$"' followed by any lexeme other than type or term quotation \\ \hline
+⦏Binder⦎ & Identifier declared as binder\\ \hline
+⦏InTmOp⦎ & Identifier declared as infix or the punctuation lexeme `\verb","'\\ \hline
+⦏InTyOp⦎ & Identifier declared as infix\\ \hline
+⦏PostOp⦎ & Identifier declared as postfix\\ \hline
+⦏PreOp⦎ & Identifier declared as prefix\\ \hline
+⦏TmQ⦎ & Term Quotation\\ \hline
+⦏TyQ⦎ & Type Quotation\\ \hline
+\end{tabular}
+\caption{Terminal Symbols for the HOL Grammar} \label{TerminalSymbols}
+\end{table}
+
+Thus `\verb"$"' acts as an escape character and suppresses any special
+interpretation of what follows. `\verb"$"' followed by a string or character
+literal is taken to mean the HOL name represented by the contents
+of the literal --- this might be used, for example, to give access from the
+standard HOL syntax described here to a language which allowed spaces in its
+identifiers or which had `\verb"let"' or `\verb"if"' etc. as identifiers.
+
+\subsubsection{Examples}
+Assume that `$=$' and `$+$' have been declared as infix  and
+as terminators
+that `$∃⋎1$' has been declared as a binder and a terminator and that `$div$' has
+been declared as infix.
+
+Then no space is required after the `$∃⋎1$' or the `$v$'
+in `$∃⋎1δ⦁1divδ=1$' or in `$∃⋎1x⦁1+x=1$', however a space is
+required after the `$v$', but not after the `$∃⋎1$' in `$∃⋎1x⦁1div$ $x=1$'; spaces
+are required in both places in `$∃⋎1$ $\_x⦁1div$ $\_x=1$'.
+
+`\verb"$"$∃⋎1$' denotes the same function as `$∃⋎1$' but with ordinary function
+application syntax rather than the special binder syntax.
+
+A name such as {\em `=1'} may be declared as a terminator, and
+then {\em `x=1'} and {\em `=1x'}
+each contain two identifiers, whereas {\em `x\_=1'} is a single
+identifier.
+$div$ could not be declared as a terminator since it does not
+begin with a symbolic character.
+
+

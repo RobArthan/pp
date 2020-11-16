@@ -1,0 +1,490 @@
+=IGN
+********************************************************************************
+dtd105.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of Integer Arithmetic Proof Procedure}
+
+\def\AbstractText{This document contains the detailed design of proof procedures for integer arithmetic. The main proof procedures provided are arithmetic normalisation and a linear arithmetic prover.}
+
+\def\Reference{DS/FMU/IED/DTD105}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design of Integer Arithmetic Proof Procedure}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD105}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.4 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.B.~Jones & FMU Manager}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design of proof
+%% LaTeX2e port: procedures for integer arithmetic.
+%% LaTeX2e port: The main proof procedures provided are arithmetic normalisation and a linear arithmetic prover.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}
+\begin{description}
+\item[1.1~(\FormatDate{$Date: 2002/10/17 15:10:58 $%
+})] First draft.
+\item[Issue 1.4 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.5 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes forecast}
+As determined by comments and use.
+\newpage
+\section{GENERAL}
+\subsection{Scope}
+This document contains the detailed design of part of the \ProductHOL\ system.
+The document responds to \cite{DS/FMU/IED/HLD012}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+The documents \cite{DS/FMU/IED/DTD081,DS/FMU/IED/DTD082} provide automated support for the HOL natural numbers, in the shape of:
+a conversion which puts an arithmetic expression in a normal form (``multiplying out and cancelling like terms'');
+and rules, tactics and a proof context implementing a decision procedure for zero-order linear arithmetic.
+The purpose of this document is to provide the analogue for the integers in HOL as constructed in \cite{DS/FMU/IED/DTD093}.
+
+\subsubsection{Dependencies}
+This document depends on the theory $ℤ$ defined in
+\cite{DS/FMU/IED/DTD093}, on the conversions in
+\cite{DS/FMU/IED/DTD081}, and on the generic support for the linear arithmetic decision procedure in \cite{DS/FMU/IED/DTD082}
+
+\subsubsection{Algorithms}
+The algorithms are very similar to, and reuse much of what is provided in \cite{DS/FMU/IED/DTD081,DS/FMU/IED/DTD082}.
+
+\subsubsection{Known Deficiencies}
+A possible deficiency is that no analogue of the scaling rules of \cite{DS/FMU/IED/DTD082} is provided.
+These would necessarily have a more complex interface for the integers, since multiplication by an integer need not preserve the sense of the ordering relation.
+Using easy-to-prove theorems to do the samethings  is probably no more complicated than it would be to use custom scaling rules.
+\newpage
+\newpage
+\section{SIGNATURE}
+=DOC
+signature ⦏ℤArithmeticTools⦎ = sig
+=DESCRIBE
+This is the signature of a structure containing arithmetic and an automatic linear
+arithmetic prover for the HOL integers (as defined in the theory ℤ).
+=ENDDOC
+\subsection{Arithmetic Normalisation}
+
+=DOC
+	val ⦏ℤ_term_order⦎ : TERM -> TERM -> int;
+=DESCRIBE
+=INLINEFT
+ℤ_term_order
+=TEX
+\ gives an ordering relation on HOL terms analogous to that given by $term\_order$, q.v., but which takes special arrangements for certain terms of type ℤ.
+In particular it ensures that a `monomial' (formed using integer multiplication) without a sign immediately precedes the same monomial with a sign, which in turn precedes the same monomial with a signed literal multiplier, e.g.:
+
+=GFT
+	a*b < ~a * b < 0 * a * b < ~1 * a * b < 1 * a * b < ....
+=TEX
+=ENDDOC
+
+=DOC
+	val ⦏ℤ_anf_conv⦎ : CONV;
+	val ⦏ℤ_ANF_C⦎ : CONV -> CONV;
+=DESCRIBE
+=INLINEFT
+ℤ_anf_conv
+=TEX
+\ is a conversion which proves theorems of the form
+=INLINEFT
+⊢ t1 = t2
+=TEX
+\ where $t1$ is a term formed from atoms of type ℤ and
+$t2$ is in what we may call additive normal form, i.e. it has the form:
+=INLINEFT
+t⋎1 + t⋎2 + ...
+=TEX
+, where the
+=INLINEFT
+t⋎i
+=TEX
+\ have the form
+=INLINEFT
+s⋎1 * s⋎2 * ...
+=TEX
+where the
+=INLINEFT
+s⋎i
+=TEX
+\ are atoms.
+Here, by atom
+we mean a term which is not of the form
+=INLINEFT
+t⋎1 + t⋎2 + ...
+=TEX
+or
+=INLINEFT
+s⋎1 * s⋎2 * ...
+=TEX
+.
+
+The summands
+=INLINEFT
+t⋎i
+=TEX
+\ and,
+within them,
+the factors
+=INLINEFT
+s⋎j
+=TEX
+\ are given in increasing order with respect to the ordering
+on terms given by the function
+=INLINEFT
+ℤ_term_order
+=TEX
+, q.v. Arithmetic computation is carried out on atoms to ensure
+that at most one of the summands is a numeric literal and that, within
+each summand, at most one factor is a numeric literal. Any literal appears
+at the beginning of its factor or summand and addition of $0$
+or multiplication by $1$ is simplified out.
+
+=INLINEFT
+ℤ_ANF_C conv
+=TEX
+\ is a conversion which acts like
+=INLINEFT
+ℤ_anf_conv
+=TEX
+\ but which applies
+=INLINEFT
+conv
+=TEX
+\ to each atom as it is encountered (and normalises the result recursively).
+The argument conversion  may signal that it does not
+wish to change a subterm, $t$ say, either by failing or by returning $t = t$,
+the former approach is more efficient.
+
+The conversions fail with error number 105032 if there are no changes to be
+made to the term.
+
+=FAILURE
+105032	?0 is not of type ⓣℤ⌝ or is already in additive normal form
+=ENDDOC
+
+\subsection{Linear Arithmetic Proof Procedure}
+Some messages form \cite{DS/FMU/IED/DTD082} are used behind the scenes by the decision
+procedure to format its main diagnostic print-out when it cannot find
+a contradiction.
+As in \cite{DS/FMU/IED/DTD082} care must be taken not to evaluate the diagnostic print-out until the error has propagated to the ML top-level.
+
+
+=FAILURE
+82100	Cannot derive a contradiction from the following assumptions
+	using the linear arithmetic proof procedure:
+82101	Assigning variables to terms as follows:
+82102	Gives the satisfiable system:
+=TEX
+=DOC
+	val ⦏ℤ_lin_arith_rule⦎ : TERM list -> THM;
+=DESCRIBE
+
+Given a system,
+=INLINEFT
+Γ = [r⋎1, r⋎2, ...]
+=TEX
+, of numeric constraints,
+=INLINEFT
+r⋎i
+=TEX
+, of the form
+=INLINEFT
+(s⋎i:ℤ) = ℕℤ 0
+=TEX
+or
+=INLINEFT
+s⋎i ≤ ℕℤ 0
+=TEX
+\ these rules attempt to prove a theorem of the form
+=INLINEFT
+Γ ⊢ F
+=TEX
+. Terms in Γ which are not of either of these forms are ignored and
+do not appear in the assumptions of the result theorem.
+
+The usual interface to these rules is via the decision procedures in the
+proof context $ℤ\_lin\_arith$, q.v., e.g. as invoked by
+=INLINEFT
+PC_T1"ℤ_lin_arith"prove_tac[]
+=TEX
+
+The algorithm for the decision procedure is very similar to the one used in $lin\_arith\_rule$, q.v.
+The only significant difference is that there is no opportunity with the integers to add in assumptions that all atoms are non-negative.
+
+=FAILURE
+82110	System is satisfiable
+82111	A system with no constraints is satisfiable
+105112	No constraints of the form ⊢ (t1:ℤ) ≤ t2 or ⊢ (t1:ℤ) = t2 could
+	be derived from the assumptions
+=TEX
+=ENDDOC
+\subsection{Conversions}
+=DOC
+	val ⦏ℤ_eq_cancel_conv⦎ : CONV
+	val ⦏ℤ_≤_cancel_conv⦎ : CONV
+
+=DESCRIBE
+=INLINEFT
+ℤ_eq_cancel_conv
+=TEX
+\ (resp.
+=INLINEFT
+ℤ_≤_cancel_conv
+=TEX
+) puts arithmetic equations (resp. inequalities formed with $≤$) in
+a normal form in which the right-hand side is a signed literal and
+the left-hand side is in additive normal form, in the
+sense of
+=INLINEFT
+ℤ_anf_conv
+=TEX
+, q.v.
+
+For example, the calls:
+=GFT ProofPower Input
+ℤ_eq_cancel_conv⌜x + ℕℤ 2*y + ℕℤ 3 = ℕℤ 1 + ℕℤ 6*y⌝;
+ℤ_≤_cancel_conv⌜x + ℕℤ 2*y + x + ℕℤ  3 ≤ y + ℕℤ 2 + ℕℤ 2*x + y⌝;
+=TEX
+produce the following output
+=GFT ProofPower Output
+val it = ⊢ x + ℕℤ 2 * y + ℕℤ 3 = ℕℤ 1 + ℕℤ 6 * y
+	⇔ x + ~ (ℕℤ 4) * y = ~ (ℕℤ 2) : THM
+val it = ⊢ x + ℕℤ 2 * y + x + ℕℤ 3 ≤ y + ℕℤ 2 + ℕℤ 2 * x + y
+	⇔ ℕℤ 1 ≤ ℕℤ 0 : THM
+=TEX
+
+Note that if the left-hand side reduces to $0$ the truth value is not evaluated.
+However,
+=INLINEFT
+ℤ_eq_conv
+=TEX
+\ or
+=INLINEFT
+ℤ_≤_conv
+=TEX
+\ may be used to perform the evaluation, where required.
+
+=USES
+The conversions are intended for use in tactic and conversion programming.
+The normal interactive interface is via rewriting or stripping in the proof context
+=INLINEFT
+ℤ_lin_arith
+=TEX
+, which performs other useful simplifications.
+=FAILURE
+105120	?0 is not of the form (t1:ℤ) = t2 or is already in normal form
+105121	?0 is not of the form (t1:ℤ) ≤ t2 or is already in normal form
+=SEEALSO
+=INLINEFT
+lin_arith, ℤ_lin_arith, ℤ_eq_conv, ℤ_≤_conv
+=TEX
+=ENDDOC
+\section{TACTICS}
+=DOC
+	val ⦏ℤ_lin_arith_tac⦎ : TACTIC;
+=DESCRIBE
+This tactic is primarily intended for use in conjunction with
+the integer linear arithmetic proof contexts
+=INLINEFT
+ℤ_lin_arith
+=TEX
+\ and
+=INLINEFT
+'ℤ_lin_arith
+=TEX
+, q.v.
+The normal interface to the tactics is via the decision
+procedures in these proof contexts, as in for example:
+=INLINEFT
+PC_T1"ℤ_lin_arith"prove_tac[]
+=TEX
+.
+
+The tactics do however, have possible applications in specialised
+tactic programming, in which circumstances their
+behaviour may be understood
+from their definition, in terms of
+=INLINEFT
+ℤ_lin_arith_rule
+=TEX
+, q.v., essentially as:
+=GFT
+val ⦏ℤ_lin_arith_tac⦎ = GET_ASMS_T (f_thm_tac o ℤ_lin_arith_rule o map concl);
+=USES
+The most likely application is in specialised tactic programming in
+situations where it is known that the assumptions are already in
+the normal form produced by the proof context
+=INLINEFT
+lin_arith
+=TEX
+\ and it is important for performance not to restrip them.
+=ENDDOC
+
+\section{PROOF CONTEXTS}
+=DOC
+(* Proof Context: ⦏ℤ_lin_arith⦎ *)
+=DESCRIBE
+This is a proof context whose main purpose is to supply a decision procedure
+for problems in linear arithmetic over the HOL integers.
+\paragraph{Contents}
+The rewriting, theorem stripping and conclusion stripping components are
+as for the proof context $predicates$, q.v., each augmented with conversions
+effecting the following transformations, where $a$ and $b$ stand for
+numeric literals.
+=GFT
+a = b	→	ℤ_eq_conv⌜a = b⌝
+a ≤ b	→	ℤ_≤_conv⌜a ≤ b⌝
+t1 = t2		→	ℤ_eq_cancel_conv⌜t1 = t2⌝
+t1 ≤ t2		→	ℤ_≤_cancel_conv⌜t1 ≤ t2⌝
+¬ t1 = t2	→	t1 < t2 ∨ t2 < t1
+¬ t1 ≤ t2	→	t2 < t1
+t1 < t2	→	t1 + 1 ≤ t2
+t1 ≥ t2	→	t2 ≤ t1
+t1 > t2	→	t2 < t
+¬ t1 < t2	→	t2 ≤ t1
+¬ t1 ≥ t2	→	¬ t2 ≤ t1
+¬ t1 > t2	→	t1 ≤ t2
+t1 = t2	→	t1 = t2
+t1 ≤ t2	→	t1 ≤ t2
+=TEX
+(where all variables are of type ℤ).
+
+The automatic proof tactic works by {\em(i)} restripping all the
+assumptions of the goal, {\em(ii)} adding the argument theorems
+to the stock of assumptions using $strip\_asm\_tac$, {\em(iii)} applying
+$contr\_tac$, and {\em(iv)} searching for a linear combination of
+the assumptions which will reduce, by multiplying out and cancelling like terms,
+to a contradiction of the form $a = b$ or
+$a ≤ b$ with $a$ and $b$ numeric literals.
+The automatic proof conversion just tries to prove its argument, $t$ say, using
+the automatic proof tactic and returns $t = T$ if it succeeds.
+
+Other components of the proof context are as for $predicates$.
+
+For example,
+=INLINEFT
+PC_T1"ℤ_lin_arith"prove_tac[]
+=TEX
+\ will prove any of the following goals:
+=GFT
+	([], ⌜∀a b c:ℤ⦁a ≤ b ∧ (a + b < c + a) ⇒ a < c⌝)
+	([], ⌜∀a b c:ℤ⦁a ≥ b ∧ ¬ b < c ⇒ a ≥ c⌝)
+	([], ⌜∀a b c:ℤ⦁a + ℕℤ 2*b < ℕℤ 2*a ⇒ b + b < a⌝)
+	([], ⌜∀ x y:ℤ⦁ ¬ (ℕℤ 2*x + y = ℕℤ 4 ∧ ℕℤ 4*x + ℕℤ 2*y = ℕℤ 7)⌝)
+=TEX
+=SEEALSO
+=INLINEFT
+'ℤ_lin_arith
+=ENDDOC
+=DOC
+(* Proof Context: ⦏'ℤ_lin_arith⦎ *)
+=DESCRIBE
+This is a component
+proof context whose main purpose is to supply a decision procedure
+for problems in linear arithmetic for the HOL integers.
+\paragraph{Contents}
+The rewriting, theorem stripping and conclusion stripping components
+are as for the proof context $ℤ\_lin\_arith$ but without any of the
+material from the proof context $predicates$.
+The automatic proof components are as for $lin\_arith$.
+Other components are blank.
+
+A typical use of the proof context would be to solve problems containing
+a mixture of (linear) arithmetic and set theory.
+=FAILURE
+82200	Could not prove theorem with conclusion ?1 (?0)
+=ENDDOC
+\section{EPILOGUE}
+=SML
+end (* of signature ℤArithmeticTools *);
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+

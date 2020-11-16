@@ -1,0 +1,518 @@
+=IGN
+********************************************************************************
+dtd058.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% dtd058.doc   ℤ $Date: 2005/12/16 10:34:27 $ $Revision: 1.16 $ $RCSfile: dtd058.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of Automatic Existence Proofs}
+
+\def\AbstractText{This document contains the detailed design of the tools providing automated existence proofs.}
+
+\def\Reference{DS/FMU/IED/DTD058}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design of Automatic Existence Proofs}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD058}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.16 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $ %
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D. Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design
+%% LaTeX2e port: of the tools providing automated existence proofs.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item[Issue 1.1 (1991/12/10)]
+First version.
+
+\item[Issue 1.3 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.4 (1992/02/13),1.5 (1992/02/14),1.6 (1992/02/14)(13th-14th February 1992)]
+Moving material from 058 to 027.
+\item[Issue 1.7 (1992/03/06)(6th February 1992)]
+Corrected description of $simple\_∃\_equation\_conv$.
+\item [Issue 1.8 (1992/03/26) (26th March 1992)]
+Changed to use proof context material of issue 1.13 of \cite{DS/FMU/IED/DTD051}.
+\item [Issue 1.9 (1992/03/27) (27th March 1992)]
+Split up proof context $prove\_∃$.
+\item [Issue 1.10 (1992/05/11) (7th May 1992)]
+USed $pp'TS$ instead of $CombI$.
+\item [Issue 1.11 (1992/05/12) (12th May 1992)]
+Changed theory and names.
+\item [Issue 1.12 (1992/05/14) (14th May 1992)]
+Tidying up proof contexts.
+\item[Issue 1.14 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.15 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.16 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.32] Existence theorems no longer need to have unique existentials.
+Added new error message for improved error-handling.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+$sum\_basic\_prove\_∃$ is anomalous, and should be fixed.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+Tools providing automatic existence proofs
+are a supporting tools for the specification of constants
+and are called for in \cite{DS/FMU/IED/HLD010}.
+This document provides a detailed design for these tools.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains a detailed design for the
+tools supporting automatic existence proofs.
+These are required both to assist in constant specification (See $const\_spec$) and
+as independent tools.
+\subsubsection{Dependencies}
+This document depends upon the paired-abstraction inference rules of
+\cite{DS/FMU/IED/DTD027}.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+\section{METHODS AND ISSUES}
+
+\section{PREAMBLE}
+=DOC
+signature ⦏ExistenceProofs⦎  = sig
+=DESCRIBE
+This is the signature of a structure supporting automatic existence proofs.
+=ENDDOC
+\section{THE DESIGN}
+\subsubsection{Term Manipulation Conversions}
+=DOC
+val ⦏simple_∃_∨_conv⦎: CONV;
+=DESCRIBE
+This conversion will push simple existential quantifiers
+into a term body that consists of nested disjunctions.
+It will prove the input equal to a term formed by disjoining
+the list of disjuncts, existentially quantified
+by any of the original quantifiers that are free in that disjunct.
+=FRULE 1 Conversion
+simple_∃_∨_conv
+⌜∃ x1 ... xn⦁ P [y1 ... ym]
+∨ Q [z1 ...zo]⌝
+├
+├
+⊢ (∃ x1 ... xn⦁ P[y1...ym] ∨ Q[z1...zo])
+	⇔
+	(∃ y1 ... ym⦁ P [y1 ... ym]) ∨
+	(∃ z1 ... zo⦁ P [z1 ... zo])
+=TEX
+where $\{y1...ym\}\ ⊆\ \{x1 ... xn\}$, and
+$\{z1...zo\}\ ⊆\ \{x1 ... xn\}$.
+The conversion will actually distribute over an arbitrary disjunctive
+structure, though the result is ``flattened''.
+=EXAMPLE
+simple_∃_∨_conv ⌜∃ x y⦁ f x ∨ g y⌝ =
+	⊢ (∃ x y⦁ f x ∨ g y) ⇔ (∃ x⦁ f x) ∨ (∃ y⦁ g y)
+
+simple_∃_∨_conv ⌜∃ x y⦁ f x ∨ g y ∨ h x y ∨ i⌝ =
+	⊢ (∃ x y⦁ f x ∨ g y ∨ h x y ∨ i) ⇔
+		(∃ x⦁ f x)
+		∨ (∃ y⦁ g y)
+		∨ (∃ x y⦁ h x y)
+		∨ i
+=SEEALSO
+$∃\_uncurry\_conv$ to uncurry any paired $∃$-abstractions.
+$simple\_∃\_∧\_conv$.
+=FAILURE
+58010	?0 is not of the form: ⌜∃ x1 ...⦁ a ∨ b⌝
+58015	Unexpected feature of ?0 caused failure
+=ENDDOC
+This function, and others, are designed to try, and fail in special cases,
+rather than catch all problems.
+Thus just in case we give error message 58015:
+=FAILURE
+58015	Unexpected feature of ?0 caused failure
+=TEX
+=DOC
+val ⦏simple_∃_∧_conv⦎: CONV;
+=DESCRIBE
+This conversion will push simple existential quantifiers
+into a term body that consists of nested conjunctions
+when not all the conjuncts have all of the quantified
+variables free in them.
+It will prove the input equal to a term formed by conjoining
+the list of existentially quantified groupings
+of conjuncts, grouped by possession of a quantified
+variable free in each of the group.
+It may not necessarily form the ``most pushed in'' form
+with each conjunct minimally bound,
+but will do some pushing in if any is available.
+=FRULE 1 Conversion
+simple_∃_∧_conv
+⌜∃ x1 ... xn⦁
+...∧ P[y1...ym] ∧...⌝
+├
+├
+(∃ x1 ... xn⦁ .... ∧ P[y1...ym] ∧ ....)
+ ⇔
+<pushed in form>
+=TEX
+where the $y_i$ are a subset of the $x_j$.
+=EXAMPLE
+simple_∃_∧_conv ⌜∃ x⦁ P[x] ∧ Q⌝ =
+	 ⊢ (∃ x⦁ P[x] ∧ Q) ⇔ (∃ x⦁ P[x]) ∧ Q
+
+simple_∃_∧_conv ⌜∃ x⦁ P ∧ Q[x]⌝ =
+	 ⊢ (∃ x⦁ P ∧ Q[x]) ⇔ (∃ x⦁ Q[x]) ∧ P
+
+simple_∃_∧_conv ⌜∃ x y⦁ P[x] ∧ Q[y]⌝ =
+	⊢ (∃ x y⦁ P[x] ∧ Q[y]) ⇔ (∃ y⦁ Q[y]) ∧ (∃ x⦁P[x])
+
+simple_∃_∧_conv ⌜∃ x y z⦁ P[x, z] ∧ Q[y, z]⌝ =
+	⊢ (∃ x y z⦁ P[x, z] ∧ Q[y, z]) ⇔
+	∃ z⦁ (∃ y⦁ Q[y, z]) ∧ (∃ x⦁P[x, z])
+=TEX
+The original conjunctive structure and ordering is lost.
+=SEEALSO
+$∃\_uncurry\_conv$ to uncurry any paired $∃$-abstractions.
+$simple\_∃\_∨\_conv$.
+=FAILURE
+58012	?0 is not of the form: ⌜∃ x1 ...⦁ a ∧ b⌝
+58014	All conjuncts of ?0 have all existentially quantified variables
+	free within them
+=ENDDOC
+=DOC
+val ⦏∀_∧_conv⦎: CONV;
+=DESCRIBE
+This conversion will push universal quantifiers
+into a term body that consists of nested conjunctions.
+It will prove the input equal to a term formed by conjoining
+the list of conjuncts, universally quantified
+by any of the original quantifiers that are free in that conjunct.
+=FRULE 1 Conversion
+∀_∧_conv
+⌜∀ x1 ... xn⦁
+P [y1 ... ym]
+∧ Q [z1 ... zo]⌝
+├
+├
+⊢ (∀ x1 ... xn⦁ P[y1... ym] ∧ Q[z1...zo])
+	⇔
+	(∀ y1 ... ym⦁ P [y1...ym]) ∧
+	(∀ z1 ... zo⦁ P [z1...zo])
+=TEX
+where $\{y1...ym\}\ ⊆\ \{x1 ... xn\}$, and
+$\{z1...zo\}\ ⊆\ \{x1 ... xn\}$.
+The conversion will actually distribute over an arbitrary conjunctive
+structure, though the result is ``flattened''.
+The conversion will work with paired universal quantifiers,
+and will still return a result even if
+it only acts as $all\-\_∀\-\_uncurry\-\_conv$ (q.v.), and does not
+redistribute the quantifiers any further.
+=EXAMPLE
+∀_∧_conv ⌜∀ x y⦁ f x ∧ g y⌝ =
+	⊢ (∀ x y⦁ f x ∧ g y) ⇔ (∀ x⦁ f x) ∧ (∀ y⦁ g y)
+
+∀_∧_conv ⌜∀ x y⦁ f x ∧ g y ∧ h x y ∧ i⌝ =
+	⊢ (∀ x y⦁ f x ∧ g y ∧ h x y ∧ i) ⇔
+		(∀ x⦁ f x)
+		∧ (∀ y⦁ g y)
+		∧ (∀ x y⦁ h x y)
+		∧ i
+=SEEALSO
+$∀\_uncurry\_conv$ to uncurry any paired $∃$-abstractions.
+=FAILURE
+58020	?0 is not of the form: ⌜∀ x1 ...⦁ a ∧ b⌝
+=ENDDOC
+=DOC
+val ⦏simple_∃_equation_conv⦎ : CONV;
+=DESCRIBE
+This conversion eliminates a simple existential quantifier that is equated to
+a term within the body of the quantification.
+The term equated with must not contain the existential quantifier,
+nor may it have free variables that are bound in the
+body of the existential quantifier, other than in an outer
+existential.
+The equation must also be ``reached'' only through
+existential and universal quantifications, $∧$.
+Implicit equations (e.g. $x$ being an implicit $x\ ⇔\ T$ or by $¬\ y$ giving an implicit $y\ ⇔\ F$) are also handled.
+=FRULE 1 Conversion
+simple_∃_equation_conv
+⌜∃ f⦁ P (f = tm) f ⌝
+├
+├
+⊢ (∃ f⦁ P [(f = tm), f]) ⇔ P [T, tm]
+=TEX
+Some simplification will also take place if any of the following apply where $T$ replaced the selected equation:
+=GFT
+	[∧_rewrite_thm, ∃_rewrite_thm, ∀_rewrite_thm,
+	eq_rewrite_thm, ⇒_rewrite_thm, ¬_rewrite_thm]
+=TEX
+=EXAMPLE
+simple_∃_equation_conv ⌜∃ f⦁ f = x⌝ = ⊢ (∃ f⦁ f = x) ⇔ T
+
+simple_∃_equation_conv ⌜∃ f⦁ x = f⌝ = ⊢ (∃ f⦁ x = f) ⇔ T
+
+simple_∃_equation_conv ⌜∃ f⦁ (f = x) ∧ P f⌝ =
+	⊢ (∃ f⦁ (f = x) ∧ P f) ⇔ P x
+
+simple_∃_equation_conv ⌜∃ f g⦁ (f = g) ∧ P f⌝ =
+	⊢ (∃ f g⦁ (f = g) ∧ P f) ⇔ ∃ g⦁P g
+
+simple_∃_equation_conv ⌜∃ f⦁ f ∧ P f⌝ =
+	⊢ (∃ f⦁ f ∧ P f) ⇔ P T
+
+simple_∃_equation_conv ⌜∃ f⦁ ¬ f ∧ P f⌝ =
+	⊢ (∃ f⦁ ¬ f ∧ P f) ⇔ P F
+=SEEALSO
+$basic\_prove\_∃\_conv$ for a more powerful existence prover.
+=FAILURE
+3034	?0 is not of form: ⌜∃ var ⦁ body⌝
+58013	Cannot find an equation in ?0 to simplify
+58022	Could not prove ?0 by selected witness ?1
+=ENDDOC
+\subsection {The Main Functions}
+=DOC
+val ⦏basic_prove_∃_conv⦎ : CONV;
+=DESCRIBE
+This conversion uses its internal mechanisms, and material stored in the current proof context, to attempt to prove a ``simpler'' term
+equal to its argument, which must be of the
+form $⌜∃ ...⌝$.
+It will simplify by:
+\begin{itemize}
+\item
+Converting paired existential quantifiers into simple ones (see $all\-\_∃\-\_uncurry\-\_conv$).
+\item
+Removing existential and universal quantifiers not used in the body of their
+quantification.
+\item
+Distributing existential quantifiers over $∧$ and $∨$ as far
+as it is able (see $simple\_∃\_∧\_conv$ and $simple\_∃\_∨\_conv$).
+\item
+Eliminating an existential quantifier that is equated to
+a term within the body of the quantification.
+Implicit equations (e.g. an implicit $⇔\ T$ or by $¬$) are also handled
+(see $simple\_∃\-\_equation\-\_conv$ for caveats).
+\item
+``Pulling out'' universal quantifiers through existential
+quantifiers if the existential is a function applied in all its instances
+to the universally quantified variables
+(see $simple\-\_∃\-\_∀\-\_conv1$), or variable structures
+formed by data constructors accessed by $current\-\_ad\-\_∃\-\_vs\-\_thms$ in the current proof context.
+Redistribution of universals and data constructions may be done to allow this simplification to apply
+(see $∀\-\_∧\-\_conv$).
+\item
+Uncurrying existential quantifiers that are curried functions.
+\item
+Simplifying existential quantifiers that match the pattern of
+use of recursive functions held by $current\-\_ad\-\_∃\_cd\_thms$ in the current proof context.
+\item
+Traversing subterms reached from the outside of the term through (perhaps paired)
+existential and universal quantifiers, and $∧$ or $∨$ operators.
+\end{itemize}
+It will repeat its simplification attempts until it can go no further.
+=FRULE 1 Conversion
+basic_prove_∃_conv
+⌜∃ decls⦁ pred⌝
+├
+├
+⊢ (∃ decls⦁ pred) ⇔ simpler
+=TEX
+=USES
+To implement $basic\_prove\_∃\_rule$ and
+$basic\_prove\_∃\_tac$ (q.v.),
+as an appropriate argument for $set\_cs\_∃\_conv$,
+and as a stand-alone tool.
+=FAILURE
+58001	?0 is not of the form: ⌜∃ decls⦁ pred⌝
+58002	Failed to simplify ?0
+=ENDDOC
+=DOC
+val ⦏basic_prove_∃_rule⦎ : TERM -> THM;
+=DESCRIBE
+This will attempt to simplify its argument to $T$, by using
+$basic\_prove\_∃\_conv$ (q.v.).
+If it succeeds, it returns the theorem with $⇔\ T$ stripped off.
+=FRULE 1 Rule
+basic_prove_∃_rule
+⌜∃ decls⦁ pred⌝
+├
+├
+⊢ ∃ decls⦁ pred
+=TEX
+=SEEALSO
+$basic\_prove\_∃\_conv$, $basic\_prove\_∃\_tac$
+=FAILURE
+58001	?0 is not of the form: ⌜∃ decls⦁ pred⌝
+58002	Failed to simplify ?0
+58003	Failed to prove ?0
+=FAILUREC
+We distinguish between no simplification, and failing to prove a term,
+to indicate whether $basic\_prove\_∃\_conv$ may be of initial use in a manual proof of the term.
+=ENDDOC
+=DOC
+val ⦏basic_prove_∃_tac⦎ : TACTIC;
+=DESCRIBE
+This will attempt to prove its goal, by using
+$basic\_prove\_∃\_conv$ (q.v.).
+If $basic\_prove\_∃\_conv$ fails, or only partially succeeds,
+then the tactic will fail.
+=FRULE 2 Tactic
+basic_prove_∃_tac
+├
+{ Γ } ∃ decls⦁ pred
+├
+=TEX
+=SEEALSO
+$basic\_prove\_∃\_conv$, $basic\_prove\_∃\_rule$
+=FAILURE
+58004	Goal is not of the form: { Γ } ∃ decls⦁ pred
+58005	Failed to simplify goal
+58006	Failed to prove goal
+=FAILUREC
+We distinguish between no simplification, and failing to prove a term,
+to indicate whether $basic\_prove\_∃\_conv$ may be of initial use in a manual proof of the term.
+=ENDDOC
+\subsection{Proof Contexts}
+=DOC
+val ⦏evaluate_∃_cd_thm⦎ : THM ->
+	(TERM list * int list * TYPE * (TERM list)list * THM);
+=DESCRIBE
+This gives the sophisticated user direct access to the standard internal mechanism
+set by $pp'set\_eval\_ad\_∃\_cd\_thm$.
+Its input theorem is of the ``standard'' form of a primitive recursion theorem or pattern matching theorem:
+=GFT
+∀ fn1 fn2 ...⦁ ∃ f⦁
+(∀ a11 ...⦁ f (dc1[a11,...]) = fn1 (patt11[f,a11...]) (patt12[f,a11,...]) ...) ∧
+(∀ a21 ...⦁ f (dc2[a21,...]) = fn1 (patt21[f,a21...]) (patt22[f,a21,...]) ...) ∧
+...
+=TEX
+Compare this with:
+=GFT
+prim_rec_thm = ⊢ ∀ z s⦁ ∃⋎1 f⦁ (f 0 = z) ∧ (∀ n⦁ f (n + 1) = s (f n) n)
+=TEX
+The $fn_i$ (in the example: $z$ and $s$) are the new functions which express the behaviour
+of each data constructor.
+$f$ ($f$) is the function defined by clausal definitions, note that unique existence is not necessary.
+The $a_{ij}$ ($n$ in the second conjunct) are the free variables of the data construction.
+The $dc_i$ ($n+1$ and $0$) are data constructions, as in the example given these do not need to be the original data constructors of a type, just applications of constants and variables.
+The $patt_{ij}$ ($f\ n$, $n$) are the arguments to the new functions.
+They may involve uses of the clausally defined function.
+
+The result of this function is:
+the list of data constructions,
+a list of free variable counts in each data construction,
+the type of $f$,
+a list of free variables in each data construction,
+and a theorem of the form:
+=GFT
+⊢ ∀ pred1 ...⦁
+(∃ f⦁ (∀ a11 ...⦁ pred1 (dc1[...]) (patt1[...]) ..) ∧ ...) ⇔
+((∀ x11 ... x1n⦁ ∃ y1⦁ pred1 y11 x11 ...) ∧ ...) ∨
+(pp'TS(∃ f⦁ (∀ a11 ...⦁ pred1 (dc1[...]) (patt1[...]) ..) ∧ ...))
+=TEX
+This is in a convenient form for proving the existence of
+clausally defined functions, in particular
+recursive functions within $basic\_prove\_∃\_conv$.
+The $pred_i$, $x_{ij}$ and $y_i$ are generated by $gen\_vars$.
+$pp'TS$ is an identity function, with defining theorem
+in theory ``misc'' of key ``pp'ts$\_$def''.
+=FAILURE
+58007	?0 is not of the form: `⊢ ∀ ...⦁ ∃ f⦁ ...` or `⊢ ∀ ...⦁ ∃⋎1 f⦁ ...`
+58008	?0 has a conjunct not of the form: ⌜∀ ...⦁ f dc = ...⌝
+58009	?0 has a conjunct not of the form: ⌜∀ ...⦁ f dc = ...⌝
+	where f is the function whose existence is to be proven
+58021	Failed to prove new theorem based on ?0
+58023	?0 has a conjunct not of the form: ⌜∀ ...⦁ f dc = P ...⌝
+58024	?0 has the form: `⊢ ∀ ... fni ...⦁ B` where fni does not appear
+	in any of the expected positions in B
+=ENDDOC
+
+\section{EPILOGUE}
+=SML
+end; (* of signature ExistenceProofs *)
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+

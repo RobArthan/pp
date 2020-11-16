@@ -4,7 +4,7 @@
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
- * lineno.c: this file is part of the PPTex system
+ * lineno.c: this file is part of the PPXpp system
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

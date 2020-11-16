@@ -1,0 +1,1374 @@
+=IGN
+********************************************************************************
+mdt030.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  mdt030.doc  ℤ $Date: 2002/10/17 16:20:01 $ $Revision: 1.26 $ $RCSfile: mdt030.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for the Subgoal Package}
+
+\def\AbstractText{A set of module tests are given for the the subgoal package.}
+
+\def\Reference{DS/FMU/IED/MDT030}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests for the Subgoal Package}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Module Tests for the Subgoal Package}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT030}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.26 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $ %
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{ML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{K.Blackburn & WIN01\\D.J.~King & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{A set of module tests are given for the
+%% LaTeX2e port: the subgoal package.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/07/10)]
+First draft version, works for \cite{DS/FMU/IED/IMP030} version 1.2.
+\item [Issue 1.2 (1991/07/10)]
+Fixed a \LaTeX fault and a spelling.
+\item [Issue 1.3 (1991/07/22)]
+Added renaming check.
+\item [Issue 1.4 (1991/08/14)]
+Corrected message 30051.
+\item [Issue 1.5 (1991/08/15)]
+Renamings of functions containing the name atom $simple$,
+and renaming of $aconv$.
+\item [Issue 1.6 (1991/08/16)]
+Changes to match changes in issue 1.11 of \cite{DS/FMU/IED/DTD030},
+and various changes elsewhere in system.
+\item [Issue 1.7 (1991/09/25),1.8 (1991/09/25)]
+Reacting to issue 1.12 of \cite{DS/FMU/IED/DTD030}.
+\item [Issue 1.9 (1991/10/22)]
+Reacting to issue 1.14 of \cite{DS/FMU/IED/IMP030}.
+\item [Issue 1.10 (1991/10/30),1.11 (1991/11/08)]
+Fixing bug in test ``$apply\_tac\ 8$''.
+Some rearrangement of material.
+Added test for $top\_current\_label$
+\item [Issue 1.12 (1992/01/17)]
+Changes to $subgoal\_package\_quiet$, effect of duplicate free variables in goal, no longer observes kernel state change, message 30055.
+
+\item[Issue 1.13 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.14 (1992/01/21)]
+Removed duplicate labels.
+\item [Issue 1.15 (1992/03/18), 1.16 (1992/03/19)]
+Added $set\_goal$.
+\item [Issue 1.17 (1992/04/09) (9th April 1992)]
+Changes required by CR0016.
+\item [Issue 1.18 (1992/04/14) (14th April 1992)]
+Changes required by CR0017.
+\item[Issue 1.19 (1992/05/15) (15 May 1992)] Use correct quotation symbols.
+\item[Issue 1.20 (1992/06/26) (26th June 1992)]
+Added persistent undo stacks and $subgoal\-\_package\-\_size$.
+\item[Issue 1.21 (1992/07/24) (24th July 1992)]
+Added test of 30018.
+\item[Issue 1.22 (1992/12/15)]
+Updates for SML'97.
+\item[Issue 1.23 (1999/02/24)]
+Made test of $subgoal\_package\_size$ more robust.
+\item[Issue 1.25 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.26 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.27 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the Subgoal Package, required by \cite{DS/FMU/IED/DTD030}.
+The design is in \cite{DS/FMU/IED/DTD030}
+and it is
+implemented in \cite{DS/FMU/IED/IMP030}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module testing of the material given a design in \cite{DS/FMU/IED/DTD030},
+following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+
+Much of the testing uses material from \cite{DS/FMU/IED/DTD013},
+though this is incapable of testing that the information outputs of the subgoal package are correct.
+In addition, it sometimes only tests that the results are as expected by subsequent testing of the subgoal package state,
+rather than the immediate outputs of the function tested.
+
+\subsubsection{Dependencies}
+This document is derived from the detailed design in \cite{DS/FMU/IED/DTD030},
+and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP030}.
+\subsubsection{Deficiencies}
+None known.
+\section{TEST CASES}
+We test each function of the signature of \cite{DS/FMU/IED/DTD003}
+in turn, where possible in the same order as in the design document.
+
+\section{INITIALISATION}
+Get a new theory to work in:
+=SML
+val start_theory = get_current_theory_name();
+(open_theory "basic_hol" handle _ => ());
+(set_pc "basic_hol" handle _ => ());
+repeat drop_main_goal;
+new_theory "test_mdt030";
+=TEX
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+=TEX
+=SML
+fun list_eq (eq:'a * 'a -> bool) ((a :: x), (b :: y)) : bool = (
+	eq(a,b) andalso list_eq eq (x, y)
+) | list_eq eq ([], []) = true
+| list_eq _ _ = false;
+=TEX
+=SML
+infix 3 =*#;
+fun (a,b) =*# (c,d) = (a = c) andalso (b =# d);
+=TEX
+\section{VALUE BINDINGS}
+=SML
+val goal0 : GOAL = ([],⌜T⌝);
+val goal1 : GOAL = ([],⌜x ∧ (∀ y ⦁ y = 0)⌝);
+val goal2 : GOAL = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜p ∧ s ∧ (∀ q ⦁ q = 0)⌝);
+val sg1_goal2 : GOAL = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜p:BOOL⌝);
+val sg2_goal2 : GOAL = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜s ∧ (∀ q ⦁ q = 0)⌝);
+val goal3 = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜¬ T⌝);
+val sg_goal3 = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜F⌝);
+val goal4 = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜T ∧ p⌝);
+val sg2_goal4 = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜p:BOOL⌝);
+val sg1_goal4 = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜T⌝);
+val goal5 = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜p ∧ p ∧ q⌝);
+val sg1_goal5 = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜p:BOOL⌝);
+val sg3_goal5 = ([⌜p ∧ q⌝,⌜r ∧ (∀ s ⦁ s)⌝],⌜q:BOOL⌝);
+val goal6 = ([⌜p : BOOL⌝],⌜p ∧ q⌝);
+val tf_goal6 = ⌜∀ p q ⦁ p ⇒ (pp'TS (p ∧ q))⌝;
+val stf_goal6 = ⌜∀ p q ⦁ p ⇒ (p ∧ q)⌝;
+val tf_goal6_sg1 = ⌜∀ p ⦁ p ⇒ (pp'TS p)⌝;
+val tf_goal6_sg2 = ⌜∀ p q ⦁ p ⇒ (pp'TS q)⌝;
+val stf_goal6_sg1 = ⌜∀ p ⦁ p ⇒ p⌝;
+val stf_goal6_sg2 = ⌜∀ p q ⦁ p ⇒ q⌝;
+val goal7 = ([⌜(a : '1) = a⌝],⌜((a : BOOL) = a) ∧ T⌝);
+val gst1 = asm_rule (mk_⇒(⌜(a : '1) = a⌝,⌜pp'TS(((a : BOOL) = a) ∧ T)⌝));
+val goal8 = ([⌜(a : '1) = a⌝],⌜∃ b : BOOL ⦁ b = b⌝);
+val goal9 : GOAL = ([],⌜a1 ∧ a2 ∧ a3 ∧ a4 ∧ a5 ∧ a6 ∧ a7 ∧ a8 ∧ a9 ∧ a10 ∧ a11 ∧ a12 ∧ a13 ∧ a14 ∧ a15⌝);
+
+=TEX
+The following function repeatedly applies a function to void,
+until failure.
+$repeat$ $drop\_main\_goal$ empties the main goal stack.
+=SML
+repeat drop_main_goal;
+val ⦏empty_subgoal_state⦎ = pending_reset_subgoal_package ();
+=TEX
+\section{THE TESTS}
+\subsection{push\_goal}
+We test the correct operation by checking that the
+top main goal, top current goal, and goal labelled ``'' are
+the goal pushed.
+We cannot test message 30001, except by examination of output.
+=SML
+push_goal goal3;
+push_goal goal1;
+store_mt_results (mt_runf (op =#))[
+	("push_goal 1 a",
+	top_main_goal,
+	(),
+	goal1),
+	("push_goal 1 b",
+	top_goal,
+	(),
+	goal1)
+	];
+store_mt_results (mt_runf (op =#))[
+	("push_goal 1 c",
+	top_labelled_goal,
+	"",
+	goal1)
+	];
+=TEX
+=SML
+push_goal goal2;
+store_mt_results (mt_runf (op =#))[
+	("push_goal 2 a",
+	top_main_goal,
+	(),
+	goal2),
+	("push_goal 2 b",
+	top_goal,
+	(),
+	goal2)
+	];
+store_mt_results (mt_runf (op =#))[
+	("push_goal 2 c",
+	top_labelled_goal,
+	"",
+	goal2)
+	];
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("push_goal 30002",
+	push_goal,
+	([],⌜1⌝),
+	gen_fail_msg "push_goal" 30002 ["⌜1⌝"]),
+	("push_goal 30003",
+	push_goal,
+	([⌜T⌝, ⌜1⌝, ⌜F⌝],⌜T⌝),
+	gen_fail_msg "push_goal" 30003 ["⌜1⌝"]),
+	("push_goal 30004 a",
+	push_goal,
+	([⌜T⌝, ⌜T⌝],⌜T⌝),
+	gen_fail_msg "push_goal" 30004 ["⌜T⌝", "⌜T⌝"]),
+	("push_goal 30004 b",
+	push_goal,
+	([⌜∀ x ⦁ x⌝, ⌜∀ y ⦁y⌝],⌜T⌝),
+	gen_fail_msg "push_goal" 30004 ["⌜∀ x⦁ x⌝", "⌜∀ y⦁ y⌝"])
+	];
+=TEX
+Now check that the stacking is doing what its meant to.
+=SML
+drop_main_goal();
+store_mt_results (mt_runf (op =#))[
+	("push_goal 3",
+	top_main_goal,
+	(),
+	goal1)];
+=TEX
+\subsection{set\_goal}
+We test the correct operation by checking that the
+top main goal, top current goal, and goal labelled ``'' are
+the goal pushed.
+We cannot test message 30001, except by examination of output.
+=SML
+empty_subgoal_state ();
+push_goal goal3;
+push_goal goal0;
+set_goal goal1;
+store_mt_results (mt_runf (op =#))[
+	("set_goal 1 a",
+	top_main_goal,
+	(),
+	goal1),
+	("set_goal 1 b",
+	top_goal,
+	(),
+	goal1)
+	];
+store_mt_results (mt_runf (op =#))[
+	("set_goal 1 c",
+	top_labelled_goal,
+	"",
+	goal1)
+	];
+=TEX
+=SML
+set_goal goal2;
+store_mt_results (mt_runf (op =#))[
+	("set_goal 2 a",
+	top_main_goal,
+	(),
+	goal2),
+	("set_goal 2 b",
+	top_goal,
+	(),
+	goal2)
+	];
+store_mt_results (mt_runf (op =#))[
+	("set_goal 2 c",
+	top_labelled_goal,
+	"",
+	goal2)
+	];
+=TEX
+Now check that the stacking is doing what its meant to.
+=SML
+drop_main_goal();
+store_mt_results (mt_runf (op =#))[
+	("set_goal 3",
+	top_main_goal,
+	(),
+	goal3)];
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("set_goal 30002",
+	set_goal,
+	([],⌜1⌝),
+	gen_fail_msg "set_goal" 30002 ["⌜1⌝"]),
+	("set_goal 30003",
+	set_goal,
+	([⌜T⌝, ⌜1⌝, ⌜F⌝],⌜T⌝),
+	gen_fail_msg "set_goal" 30003 ["⌜1⌝"]),
+	("set_goal 30004 a",
+	set_goal,
+	([⌜T⌝, ⌜T⌝],⌜T⌝),
+	gen_fail_msg "set_goal" 30004 ["⌜T⌝", "⌜T⌝"]),
+	("set_goal 30004 b",
+	set_goal,
+	([⌜∀ x ⦁ x⌝, ⌜∀ y ⦁y⌝],⌜T⌝),
+	gen_fail_msg "set_goal" 30004 ["⌜∀ x⦁ x⌝", "⌜∀ y⦁ y⌝"])
+	];
+=TEX
+\subsection{push\_goal\_state\_thm}
+First get a goal state theorem to test:
+=SML
+push_goal goal2;
+a ∧_tac;
+val gst_thm = top_goal_state_thm ();
+=TEX
+Now try using it:
+=SML
+push_goal_state_thm gst_thm;
+store_mt_results (mt_runf (op =#))[
+	("push_goal_state_thm a",
+	top_main_goal,
+	(),
+	goal2),
+	("push_goal_state_thm b",
+	top_goal,
+	(),
+	sg1_goal2)
+	];
+store_mt_results (mt_runf (op =#))[
+	("push_goal_state_thm c",
+	top_labelled_goal,
+	"1",
+	sg1_goal2),
+	("push_goal_state_thm d",
+	top_labelled_goal,
+	"2",
+	sg2_goal2)
+	];
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("push_goal_state_thm 30005 a",
+	push_goal_state_thm,
+	t_thm,
+	gen_fail_msg "push_goal_state_thm" 30005 ["⊢ T"]),
+	("push_goal_state_thm 30005 b",
+	push_goal_state_thm,
+	asm_intro mk_t gst_thm,
+	gen_fail_msg "push_goal_state_thm" 30005 [
+	"∀ p q r⦁ p ∧ q ⇒ r ∧ (∀ s⦁ s) ⇒ pp'TS p, "^
+    "∀ p q r s⦁ p ∧ q ⇒ r ∧ (∀ s⦁ s) ⇒ pp'TS (s ∧ (∀ q⦁ q = 0)), T "^
+  "⊢ ∀ p q r s⦁ p ∧ q ⇒ r ∧ (∀ s⦁ s) ⇒ pp'TS (p ∧ s ∧ (∀ q⦁ q = 0))"])
+	];
+=TEX
+\subsection{a(pply\_tactic)}
+We need to test for the labelling if none, one or many subgoals are produced,
+as well as the various special cases (duplicates, etc).
+Note that $a$ is the alias for $apply\_tactic$.
+
+No subgoals:
+=SML
+push_goal goal4;
+a ∧_tac;
+a strip_tac;
+store_mt_results (mt_runf (op =#))[
+	("apply_tactic 1",
+	top_goal,
+	(),
+	sg2_goal4)
+	];
+=TEX
+One subgoal:
+=SML
+push_goal goal3;
+a strip_tac;
+store_mt_results (mt_runf (op =#))[
+	("apply_tactic 2",
+	top_labelled_goal,
+	"",
+	sg_goal3)
+	];
+=TEX
+Many subgoals:
+=SML
+push_goal goal2;
+a ∧_tac;
+store_mt_results (mt_runf (op =#))[
+	("apply_tactic 3",
+	top_goal,
+	(),
+	sg1_goal2)
+	];
+store_mt_results (mt_runf (op =#))[
+	("apply_tactic 4",
+	top_labelled_goal,
+	"1",
+	sg1_goal2),
+	("apply_tactic 5",
+	top_labelled_goal,
+	"2",
+	sg2_goal2)
+	];
+=TEX
+The following checks that distinct free variables with the same names in a pushed goal
+causes a suitable failure.
+Earlier versions of \cite{DS/FMU/IED/IMP030} would fail unhelpfully when apply tactics to such goals.
+=SML
+store_mt_results mt_run_fail [(
+	"push_goal 30058",
+	push_goal,
+	goal7,
+	gen_fail_msg "push_goal" 30058 ["a"])];
+store_mt_results mt_run_fail [(
+	("push_goal_state_thm 30058",
+	push_goal_state_thm,
+	gst1,
+	gen_fail_msg "push_goal_state_thm" 30058 ["a"]))];
+=TEX
+A similar thing occurring in later subgoals is tested by:
+=SML
+val was_flag = set_flag("subgoal_package_ti_context",false);
+push_goal goal8;
+a (simple_∃_tac ⌜a:BOOL⌝);
+store_mt_results (mt_runf (op =#))[(
+	"apply_tac 6",
+	top_labelled_goal,
+	"",
+	([⌜(a : '1) = a⌝],⌜(a : BOOL) = a⌝))];
+a id_tac;
+store_mt_results (mt_runf (op =#))[(
+	"apply_tac 7",
+	top_labelled_goal,
+	"",
+	([⌜(a : '1) = a⌝],⌜(a : BOOL) = a⌝))];
+a (REPEAT strip_tac);
+store_mt_results (mt_runf (op =#))[(
+	"apply_tac 8",
+	dest_thm o top_thm,
+	(),
+	goal8)];
+set_flag("subgoal_package_ti_context",was_flag);
+=TEX
+Test warning 30018:
+=SML
+set_int_control ("tactic_subgoal_warning",13);
+push_goal goal9;
+store_mt_results mt_run_fail [(
+	"tactic_subgoal_warning 30018",
+	apply_tactic,
+	REPEAT strip_tac,
+	gen_fail_msg "apply_tactic"  30018 ["15"])];
+drop_main_goal();
+=TEX
+The following manifest various information messages,
+whose presence must be visually checked for.
+Most show the use of message 30037.
+
+Message 30006:
+=SML
+push_goal goal2;
+a (fn (seqasms,gl) => ([goal2,([⌜p ∧ q⌝],⌜T⌝)],fn [thm1,thm2] =>
+	prove_asm_rule thm2 thm1
+	| _ => t_thm));
+=TEX
+=SML
+push_goal goal2;
+a (rewrite_tac[asm_rule ⌜(∀ q ⦁ q = 0) ⇔ r⌝]);
+=TEX
+Message 30030:
+=SML
+push_goal goal5;
+a ∧_tac;
+set_labelled_goal "2";
+a (rewrite_tac [⇔_t_intro(asm_rule ⌜p : BOOL⌝)]);
+=TEX
+Message 30032:
+=SML
+push_goal goal5;
+a ∧_tac;
+set_labelled_goal "2";
+a ∧_tac;
+=TEX
+Message 30033 and 30036:
+=SML
+push_goal ([],⌜¬ F⌝);
+a (fn (seqasms,gl) => ([goal0],fn [thm1] =>
+	f_thm
+	| _ => t_thm));
+=TEX
+Message 30034:
+=SML
+push_goal goal2;
+a id_tac;
+=TEX
+Message 30035:
+=SML
+push_goal goal4;
+a ∧_tac;
+a strip_tac;
+=TEX
+Now the errors:
+=SML
+push_goal goal0;
+a strip_tac;
+store_mt_results mt_run_fail [
+	("apply_tactic 30007",
+	a,
+	strip_tac,
+	gen_fail_msg "apply_tactic" 30007 [])
+	];
+=TEX
+=SML
+push_goal(goal2);
+store_mt_results mt_run_fail [
+	("apply_tactic 30008",
+	a,
+	(fn (_:GOAL) => ([],fn (_:THM list) => t_thm)) : TACTIC,
+	gen_fail_msg "apply_tactic" 30008 ["⊢ T"])
+	];
+=TEX
+\subsection{pop\_thm}
+=SML
+push_goal goal2;
+push_goal goal0;
+a strip_tac;
+val something_pending = pending_reset_subgoal_package();
+store_mt_results (mt_runf (op =#))[
+	("pop_thm 1",
+	dest_thm o pop_thm,
+	(),
+	goal0)
+	];
+store_mt_results (mt_runf (op =#))[
+	("pop_thm 2",
+	top_main_goal,
+	(),
+	goal2)
+	];
+=TEX
+Errors:
+=SML
+push_goal goal2;
+store_mt_results mt_run_fail [
+	("pop_thm 30011",
+	pop_thm,
+	(),
+	gen_fail_msg "pop_thm" 30011 [])
+	];
+
+empty_subgoal_state ();
+store_mt_results mt_run_fail [
+	("pop_thm 30010",
+	pop_thm,
+	(),
+	gen_fail_msg "pop_thm" 30010 [])
+	];
+=TEX
+\subsection{top\_thm}
+=SML
+push_goal goal2;
+push_goal goal0;
+a strip_tac;
+store_mt_results (mt_runf (op =#))[
+	("top_thm 1",
+	dest_thm o top_thm,
+	(),
+	goal0)
+	];
+store_mt_results (mt_runf (op =#))[
+	("top_thm 2",
+	top_main_goal,
+	(),
+	goal0)
+	];
+=TEX
+Errors:
+=SML
+push_goal goal2;
+store_mt_results mt_run_fail [
+	("top_thm 30011",
+	top_thm,
+	(),
+	gen_fail_msg "top_thm" 30011 [])
+	];
+
+repeat drop_main_goal;
+store_mt_results mt_run_fail [
+	("top_thm 30010",
+	top_thm,
+	(),
+	gen_fail_msg "top_thm" 30010 [])
+	];
+=TEX
+\subsection{save\_pop\_thm}
+=SML
+push_goal goal2;
+push_goal goal0;
+a strip_tac;
+store_mt_results (mt_runf (op =#))[
+	("save_pop_thm 1",
+	dest_thm o save_pop_thm,
+	"save_pop_thm 1",
+	goal0)
+	];
+store_mt_results (mt_runf (op =#))[
+	("save_pop_thm 2",
+	top_main_goal,
+	(),
+	goal2)
+	];
+store_mt_results (mt_runf (op =#))[
+	("save_pop_thm 3",
+	dest_thm o get_thm "-",
+	"save_pop_thm 1",
+	goal0)
+	];
+=TEX
+Errors:
+=SML
+push_goal goal2;
+store_mt_results mt_run_fail [
+	("save_pop_thm 30011",
+	save_pop_thm,
+	"save_pop_thm 30011",
+	gen_fail_msg "save_pop_thm" 30011 [])
+	];
+
+repeat drop_main_goal;
+store_mt_results mt_run_fail [
+	("save_pop_thm 30010",
+	save_pop_thm,
+	"save_pop_thm 30010",
+	gen_fail_msg "save_pop_thm" 30010 [])
+	];
+
+push_goal goal0;
+a strip_tac;
+store_mt_results mt_run_fail [
+	("save_pop_thm 6039",
+	save_pop_thm,
+	"save_pop_thm 1",
+	gen_fail_msg "save_pop_thm" 6039 ["save_pop_thm 1","test_mdt030"])
+	];
+=TEX
+\subsection{top\_goal\_state\_thm}
+=SML
+push_goal goal6;
+store_mt_results (mt_runf (op =#))[
+	("top_goal_state_thm 1",
+	dest_thm o top_goal_state_thm,
+	(),
+	([tf_goal6],tf_goal6))
+	];
+a ∧_tac;
+store_mt_results (mt_runf (op =#))[
+	("top_goal_state_thm 2",
+	dest_thm o top_goal_state_thm,
+	(),
+	([tf_goal6_sg1, tf_goal6_sg2],tf_goal6))
+	];
+=TEX
+Informative Message 30038
+=SML
+push_goal goal0;
+a strip_tac;
+top_goal_state_thm ();
+=TEX
+Errors
+=SML
+repeat drop_main_goal;
+store_mt_results mt_run_fail [
+	("top_goal_state_thm 30010",
+	top_goal_state_thm,
+	(),
+	gen_fail_msg "top_goal_state_thm" 30010 [])
+	];
+=TEX
+\subsection{simplify\_goal\_state\_thm}
+=SML
+push_goal goal0;
+a strip_tac;
+store_mt_results (mt_runf (op =#))[
+	("simplify_goal_state_thm 1",
+	dest_thm o simplify_goal_state_thm o top_goal_state_thm ,
+	(),
+	goal0)
+	];
+push_goal goal6;
+a ∧_tac;
+store_mt_results (mt_runf (op =#))[
+	("simplify_goal_state_thm 2",
+	dest_thm o simplify_goal_state_thm o top_goal_state_thm,
+	(),
+	([stf_goal6_sg1, stf_goal6_sg2, ⌜p:BOOL⌝],⌜p ∧ q⌝))
+	];
+=TEX
+Errors:
+=SML
+store_mt_results mt_run_fail [
+	("simplify_goal_state_thm 30005",
+	simplify_goal_state_thm,
+	t_thm,
+	gen_fail_msg "simplify_goal_state_thm" 30005 ["⊢ T"])
+	];
+=TEX
+\subsection{drop\_main\_goal}
+=SML
+push_goal goal2;
+push_goal goal3;
+push_goal goal4;
+store_mt_results (mt_runf (op =#))[
+	("drop_main_goal 1",
+	drop_main_goal,
+	(),
+	goal4),
+	("drop_main_goal 2",
+	drop_main_goal,
+	(),
+	goal3),
+	("drop_main_goal 3",
+	top_main_goal,
+	(),
+	goal2)
+	];
+=TEX
+Now testing pending with something:
+=SML
+something_pending ();
+store_mt_results (mt_runf (op =#))[
+	("pending_reset_subgoal_package 1",
+	dest_thm o pop_thm,
+	(),
+	goal0)
+	];
+store_mt_results (mt_runf (op =#))[
+	("pending_reset_subgoal_package 2",
+	top_main_goal,
+	(),
+	goal2)
+	];
+=TEX
+Errors
+=SML
+repeat drop_main_goal;
+store_mt_results mt_run_fail [
+	("drop_main_goal 30010",
+	drop_main_goal,
+	(),
+	gen_fail_msg "drop_main_goal" 30010 [])
+	];
+=TEX
+\subsection{undo and redo}
+=SML
+store_mt_results mt_run_fail [
+	("undo 30010",
+	undo,
+	1,
+	gen_fail_msg "undo" 30010 [])
+	];
+push_goal goal4;
+a ∧_tac;
+a strip_tac;
+store_mt_results (mt_runf (op =#))[
+	("undo 1",
+	top_goal,
+	(),
+	sg2_goal4)
+	];
+undo 1;
+store_mt_results (mt_runf (op =#))[
+	("undo 2",
+	top_goal,
+	(),
+	sg1_goal4)
+	];
+redo ();
+store_mt_results (mt_runf (op =#))[
+	("redo",
+	top_goal,
+	(),
+	sg2_goal4)
+	];
+store_mt_results mt_run_fail [
+	("undo 30012 a",
+	undo,
+	5,
+	gen_fail_msg "undo" 30012 ["5","s","2","ies"]),
+	("undo 30013",
+	undo,
+	0,
+	gen_fail_msg "undo" 30013 [])
+	];
+undo 1;
+store_mt_results mt_run_fail [
+	("undo 30012 b",
+	undo,
+	2,
+	gen_fail_msg "undo" 30012 ["2","s","1","y"])
+	];
+undo 1;
+store_mt_results mt_run_fail [
+	("undo 30012 c",
+	undo,
+	1,
+	gen_fail_msg "undo" 30012 ["1","","0","ies"])
+	];
+push_goal goal4;
+a ∧_tac;
+store_mt_results mt_run_fail [
+	("redo 30014",
+	redo,
+	(),
+	gen_fail_msg "redo" 30014 [])
+	];
+=TEX
+Now just to demonstate that the undo stack persists,
+a very cursory test:
+=SML
+push_goal goal4;
+a ∧_tac;
+push_goal goal4;
+a ∧_tac;
+store_mt_results (mt_runf (op =#))[
+	("undo 4",
+	top_goal,
+	(),
+	sg1_goal4)
+	];
+undo 1;
+store_mt_results (mt_runf (op =#))[
+	("undo 5",
+	top_goal,
+	(),
+	goal4)
+	];
+drop_main_goal();
+store_mt_results (mt_runf (op =#))[
+	("undo 6",
+	top_goal,
+	(),
+	sg1_goal4)
+	];
+undo 1;
+store_mt_results (mt_runf (op =#))[
+	("undo 7",
+	top_goal,
+	(),
+	goal4)
+	];
+drop_main_goal();
+store_mt_results (mt_runf (op =#))[
+	("undo 8",
+	top_goal,
+	(),
+	sg1_goal4)
+	];
+undo 1;
+store_mt_results (mt_runf (op =#))[
+	("undo 9",
+	top_goal,
+	(),
+	goal4)
+	];
+
+=TEX
+\subsection{set\_labelled\_goal}
+=SML
+push_goal goal4;
+a ∧_tac;
+set_labelled_goal "2";
+store_mt_results (mt_runf (op =#))[
+	("set_labelled_goal",
+	top_goal,
+	(),
+	sg2_goal4)
+	];
+set_labelled_goal "1";
+a strip_tac;
+store_mt_results mt_run_fail [
+	("set_labelled_goal 30041",
+	set_labelled_goal,
+	"",
+	gen_fail_msg "set_labelled_goal" 30041 [""]),
+	("set_labelled_goal 30043",
+	set_labelled_goal,
+	"1",
+	gen_fail_msg "set_labelled_goal" 30043 ["1"]),
+	("set_labelled_goal 30017 a",
+	set_labelled_goal,
+	"1.2",
+	gen_fail_msg "set_labelled_goal" 30017 ["1.2"]),
+	("set_labelled_goal 30017 b",
+	set_labelled_goal,
+	"3.4",
+	gen_fail_msg "set_labelled_goal" 30017 ["3.4"])
+	];
+=TEX
+\subsection{top\_goal\_state and push\_goal\_state}
+=SML
+push_goal goal4;
+a ∧_tac;
+a strip_tac;
+val tgs = top_goal_state();
+push_goal goal0;
+a strip_tac;
+push_goal_state tgs;
+
+store_mt_results (mt_runf (op =#))[
+	("top_goal_state/push_goal_state",
+	top_goal,
+	(),
+	sg2_goal4)
+	];
+
+repeat drop_main_goal;
+store_mt_results mt_run_fail [
+	("top_goal_state 30010",
+	top_goal_state,
+	(),
+	gen_fail_msg "top_goal_state" 30010 [])
+	];
+=TEX
+\subsection{print\_goal}
+We can only inspect the results of this printing:
+=SML
+print_goal goal1;
+print_goal goal2;
+=TEX
+\subsection{top\_main\_goal}
+Successful uses already tested.
+=SML
+repeat drop_main_goal;
+store_mt_results mt_run_fail [
+	("top_main_goal 30025",
+	top_main_goal,
+	(),
+	gen_fail_msg "top_main_goal" 30025 [])
+	];
+=TEX
+\subsection{top\_goal}
+Succesful uses already tested.
+=SML
+repeat drop_main_goal;
+store_mt_results mt_run_fail [
+	("top_goal 30026 a",
+	top_goal,
+	(),
+	gen_fail_msg "top_goal" 30026 [])
+	];
+push_goal goal0;
+a strip_tac;
+store_mt_results mt_run_fail [
+	("top_goal 30026 b",
+	top_goal,
+	(),
+	gen_fail_msg "top_goal" 30026 [])
+	];
+=TEX
+\subsection{print\_current\_goal}
+Successful use can only be checked by eye.
+=SML
+push_goal goal4;
+print_current_goal();
+a ∧_tac;
+print_current_goal();
+
+repeat drop_main_goal;
+store_mt_results mt_run_fail [
+	("print_current_goal 30026 a",
+	print_current_goal,
+	(),
+	gen_fail_msg "print_current_goal" 30026 [])
+	];
+push_goal goal0;
+a strip_tac;
+store_mt_results mt_run_fail [
+	("print_current_goal 30026 b",
+	print_current_goal,
+	(),
+	gen_fail_msg "print_current_goal" 30026 [])
+	];
+=TEX
+\subsection{top\_current\_label}
+=SML
+push_goal goal4;
+a ∧_tac;
+store_mt_results mt_run [
+	("top_current_label ",
+	top_current_label,
+	(),
+	"1")
+	];
+repeat drop_main_goal;
+store_mt_results mt_run_fail [
+	("top_current_label 30026",
+	top_current_label,
+	(),
+	gen_fail_msg "top_current_label" 30026 [])
+	];
+=TEX
+\subsection{top\_labelled\_goal}
+Successful uses already tested, except for multi-digit labels:
+=SML
+push_goal([],⌜f 1 ∧ f 2 ∧ f 3 ∧ f 4 ∧ f 5 ∧ f 6 ∧ f 7 ∧ f 8 ∧ f 9 ∧ f 10 ∧ f 11 ∧ f 12⌝);
+a (REPEAT ∧_tac);
+store_mt_results (mt_runf (op =#))[
+	("top_labelled_goal 1",
+	top_labelled_goal,
+	"12",
+	([],⌜f 12 : BOOL⌝))
+	];
+=TEX
+=SML
+push_goal goal4;
+a ∧_tac;
+a strip_tac;
+store_mt_results mt_run_fail [
+	("top_labelled_goal 30041",
+	top_labelled_goal,
+	"",
+	gen_fail_msg "top_labelled_goal" 30041 [""]),
+	("top_labelled_goal 30043",
+	top_labelled_goal,
+	"1",
+	gen_fail_msg "top_labelled_goal" 30043 ["1"]),
+	("top_labelled_goal 30017 a",
+	top_labelled_goal,
+	"1.2",
+	gen_fail_msg "top_labelled_goal" 30017 ["1.2"]),
+	("top_labelled_goal 30017 b",
+	top_labelled_goal,
+	"3.4",
+	gen_fail_msg "top_labelled_goal" 30017 ["3.4"])
+	];
+=TEX
+subsection{get\_asm}
+=SML
+push_goal goal4;
+store_mt_results (mt_runf (op =$))[
+	("get_asm 1",
+	get_asm,
+	1,
+	⌜p ∧ q⌝),
+	("get_asm 2",
+	get_asm,
+	2,
+	⌜r ∧ (∀ s ⦁ s)⌝)
+	];
+store_mt_results mt_run_fail [
+	("get_asm 30027 a",
+	get_asm,
+	0,
+	gen_fail_msg "get_asm" 30027 ["0"]),
+	("get_asm 30027 b",
+	get_asm,
+	5,
+	gen_fail_msg "get_asm" 30027 ["5"])
+	];
+repeat drop_main_goal;
+store_mt_results mt_run_fail [
+	("get_asm 30026",
+	get_asm,
+	1,
+	gen_fail_msg "get_asm" 30026 [])
+	];
+=TEX
+\subsection{top\_goals}
+=SML
+store_mt_results mt_run_fail [
+	("top_goals 30010",
+	top_goals,
+	(),
+	gen_fail_msg "top_goals" 30010 [])
+	];
+
+push_goal goal4;
+a ∧_tac;
+store_mt_results (mt_runf (list_eq(op =*#)))[
+	("top_goals 1",
+	top_goals,
+	(),
+	[(["1"], sg1_goal4), (["2"], sg2_goal4)])
+	];
+push_goal goal5;
+a (REPEAT strip_tac);
+store_mt_results (mt_runf (list_eq(op =*#)))[
+	("top_goals 2",
+	top_goals,
+	(),
+	[(["2", "1"], sg1_goal5),(["3"], sg3_goal5)])
+	];
+=TEX
+\subsection{print\_goal\_state}
+Results can only be inspected by eye:
+=SML
+push_goal goal4;
+print_goal_state(top_goal_state());
+a ∧_tac;
+print_goal_state(top_goal_state());
+=TEX
+\subsection{subgoal\_package\_size}
+Just prove that the function is present, as its results are very
+implementation dependant:
+=SML
+val _ = subgoal_package_size;
+=TEX
+\subsection{A Quiet Proof}
+The following should have no output bar the results of values.
+=SML
+diag_string "Going Quiet";
+set_flag("subgoal_package_quiet",true);
+push_goal([],⌜T ∧ T⌝);
+a(∧_tac);
+a(accept_tac t_thm);
+val quiet_thm = pop_thm();
+=TEX
+Now do it again ``noisily''
+=SML
+diag_string "Becoming Noisy";
+set_flag("subgoal_package_quiet",false);
+push_goal([],⌜T ∧ T⌝);
+a(∧_tac);
+a(accept_tac t_thm);
+val quiet_thm = pop_thm();
+=TEX
+\subsection{Type Inference Contexts}
+=SML
+set_flag("subgoal_package_ti_context",true);
+push_goal([],⌜x:'b = x⌝);
+store_mt_results (mt_runf (op =:))[("subgoal_package_context 1",
+	type_of,
+	⌜x⌝,
+	ⓣ'b⌝)];
+a(rewrite_tac[]);
+store_mt_results (mt_runf (op =:))[("subgoal_package_context 2",
+	type_of,
+	⌜x⌝,
+	ⓣ'a⌝)];
+push_goal([],⌜x:'b = x⌝);
+store_mt_results (mt_runf (op =:))[("subgoal_package_context 3",
+	type_of,
+	⌜x⌝,
+	ⓣ'b⌝)];
+set_flag("subgoal_package_ti_context",false);
+store_mt_results (mt_runf (op =:))[("subgoal_package_context 3a",
+	type_of,
+	⌜x⌝,
+	ⓣ'a⌝)];
+a(rewrite_tac[]);
+store_mt_results (mt_runf (op =:))[("subgoal_package_context 4",
+	type_of,
+	⌜x⌝,
+	ⓣ'a⌝)];
+set_flag("subgoal_package_ti_context",false);
+push_goal([⌜a:BOOL⌝],⌜∃ b :'b⦁ b = b ∧ a⌝);
+set_flag("subgoal_package_ti_context",true);
+store_mt_results (mt_runf (op =:))[("subgoal_package_context 5",
+	type_of,
+	⌜a⌝,
+	BOOL)];
+val was_ignore_warnings = set_flag("ignore_warnings",true);
+a(simple_∃_tac (mk_var("a",ⓣ'b⌝)));
+store_mt_results (mt_runf (op =:))[("subgoal_package_context 6",
+	type_of,
+	⌜a⌝,
+	ⓣ'a⌝)];
+a(rewrite_tac[]);
+store_mt_results (mt_runf (op =:))[("subgoal_package_context 7",
+	type_of,
+	⌜a⌝,
+	BOOL)];
+undo 1;
+store_mt_results (mt_runf (op =:))[("subgoal_package_context 8",
+	type_of,
+	⌜a⌝,
+	ⓣ'a⌝)];
+undo 1;
+store_mt_results (mt_runf (op =:))[("subgoal_package_context 9",
+	type_of,
+	⌜a⌝,
+	BOOL)];
+set_flag("ignore_warnings",was_ignore_warnings);
+
+=TEX
+\subsection{modify\_goal\_state\_thm}
+First a null-change:
+=SML
+push_goal goal5;
+a(REPEAT strip_tac);
+modify_goal_state_thm (Combinators.I) (top_goals());
+store_mt_results (mt_runf (list_eq(op =*#))) [
+	("modify_goal_state_thm 1",
+	top_goals,
+	(),
+	[(["1", "2"], sg1_goal5),(["3"], sg3_goal5)])
+	];
+=TEX
+Now a bit of relabelling:
+=SML
+modify_goal_state_thm (Combinators.I) [];
+store_mt_results (mt_runf (list_eq(op =*#))) [
+	("modify_goal_state_thm 2",
+	top_goals,
+	(),
+	[(["2"], sg1_goal5),(["1"], sg3_goal5)])
+	];
+=TEX
+Now some rearrangement (which gives message 30024):
+=SML
+val s1 = asm_rule ⌜∀ p ⦁ pp'TS (p ⇔ T)⌝;
+val s2 = rewrite_rule[get_defn "misc" "pp'TS"] s1;
+modify_goal_state_thm (strip_⇒_rule o
+	pure_rewrite_rule [all_simple_∀_elim s2] o all_⇒_intro) [];
+store_mt_results (mt_runf (list_eq(op =*#))) [
+	("modify_goal_state_thm 3",
+	top_goals,
+	(),
+	[(["3"], ([], ⌜p ⇔ T⌝)),
+	 (["2"], ([⌜T ∧ q⌝, ⌜r ∧ (∀ s ⦁ s)⌝], ⌜T⌝)),
+	 (["1"], ([⌜T ∧ q⌝, ⌜r ∧ (∀ s ⦁ s)⌝], ⌜q:BOOL⌝))])
+	];
+=TEX
+Errors:
+=SML
+push_goal goal5;
+a(REPEAT strip_tac);
+store_mt_results mt_run_fail [
+	("modify_goal_state_thm 30039",
+	modify_goal_state_thm (Combinators.I),
+	[(["1"],sg1_goal5), (["1.2"],sg3_goal5)],
+	gen_fail_msg "modify_goal_state_thm" 30039 ["1", "1.2"]),
+	("modify_goal_state_thm 30040",
+	modify_goal_state_thm (Combinators.I),
+	[(["1"],sg1_goal5), (["1"],sg3_goal5)],
+	gen_fail_msg "modify_goal_state_thm" 30040 ["1"]),
+	("modify_goal_state_thm 30051",
+	modify_goal_state_thm (fn x => t_thm),
+	[(["1"],sg1_goal5), (["2"],sg3_goal5)],
+	gen_fail_msg "modify_goal_state_thm" 30051 ["⊢ T"])
+	];
+=TEX
+\subsection{Miscellaneous Goal-Printing Tests}
+The following ensures that the goal printing is using the
+right translations.
+Unfortunately, the effect can only be checked by inspecting
+the output of the tests, where the goals should be displayed in
+the obvious form.
+Version 1.13 and before of \cite{DS/FMU/IED/IMP030}
+would give a corrupted output involving many more ``Q''s than input.
+=SML
+push_goal([⌜Q = QQ⌝],⌜∀ Q QQ QQQ QQQQ x ⦁ (x = Q) ∨ (x = QQ) ∨
+	(x = QQQ) ∨ (x = QQQQ)⌝);
+=TEX
+The following tests the handling of line length:
+=SML
+val lgoal = ([⌜f1 ∧ f2 ∧ f3 ∧ f4 ∧ f5 ∧ f6 ∧ f7 ∧ f8 ∧ f9 ∧
+	f10 ∧ f11 ∧ f12 ∧ f13 ∧ f14 ∧ f15 ∧ f16 ∧ f17 ∧ f 18⌝,
+	⌜f19 ∧ f20⌝],
+	⌜f1 ∨ f2 ∨ f3 ∨ f4 ∨ f5 ∨ f6 ∨ f7 ∨ f8 ∨ f9 ∨ f10 ∨
+	 f11 ∨ f12 ∨ f13 ∨ f14 ∨ f15 ∨ f16 ∨ f17 ∨ f 18 ∨ f19 ∨ f20⌝);
+val lline_length = set_line_length 60;
+push_goal lgoal;
+val dummy = set_line_length 40;
+push_goal lgoal;
+val dummy = set_line_length 20;
+push_goal lgoal;
+val lline_length = set_line_length lline_length;
+=TEX
+Notice that line length 20 is not properly handled - the actual
+length is more like 30.
+\section{END OF TESTS}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+Undo theory creation, etc
+=SML
+(*
+open_theory start_theory;
+delete_theory "test_mdt030";
+*)
+(* PolyML.quit(); *)
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+

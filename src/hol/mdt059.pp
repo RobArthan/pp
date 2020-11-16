@@ -1,0 +1,862 @@
+=IGN
+********************************************************************************
+mdt059.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% mdt059.doc $Id: mdt059.doc,v 1.27 2005/12/16 10:34:27 rda Exp rda $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for Product Types}
+
+\def\AbstractText{A set of module tests are given for the the tools for introducing product types.}
+
+\def\Reference{DS/FMU/IED/MDT059}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests for Product Types}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Module Tests for Product Types}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT059}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.27 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $ %
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{ML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & Project Manager}
+%% LaTeX2e port: \TPPabstract{A set of module tests are given for the
+%% LaTeX2e port: the tools for introducing product types.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1992/01/15)]
+First draft.
+
+\item[Issue 1.2 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.3 (1992/01/21)]
+Removed duplicate labels.
+\item [Issue 1.4 (1992/02/07),1.5 (1992/02/10)]
+Changed working theory.
+\item [Issue 1.6 (1992/02/12)] Added tests for the HOL labelled product
+recogniser.
+\item [Issue 1.7 (1992/03/26),1.8 (1992/03/26) (26th March 1992)]
+Changed to use proof context material of issue 1.13 of \cite{DS/FMU/IED/DTD051}.
+\item [Issue 1.9 (1992/04/09) (9th April 1992)]
+Changes required by CR0016.
+\item [Issue 1.10 (1992/04/14) (14th April 1992)]
+Changes required by CR0017.
+\item [Issue 1.11 (1992/05/14) (14th May 1992)]
+Tidying up proof contexts.
+\item[Issue 1.12 (1992/05/20) (15th May 1992)]
+Improved checks of theory caching, changed $∧$ structure
+in results.
+\item[Issue 1.13 (1992/05/21) (21st May 1992)]
+Changed proof context material.
+\item [Issue 1.14 (1992/05/22) (2nd June 1992)]
+Changed ``native'' theory.
+\item [Issue 1.16 (1992/06/04) (3rd June 1992)]
+Removed the testing of 59017 as not normally possible to cause it.
+\item[Issue 1.17 (1992/06/24) (24th June 1992)]
+Renamings from issue 1.6 of \cite{DS/FMU/IED/WRK038},
+mostly proof context name changes.
+\item [Issue 1.18 (1992/07/07) (6th July 1992)]
+Added error 59018.
+\item [Issue 1.18 (1992/07/07) (4th August 1992)]
+Added current theory check.
+\item [Issue 1.19 (1992/08/04),1.20 (1992/11/20) (20th November 1992)]
+Testing more robust cache mechanisms.
+\item [Issue 1.21 (1992/11/23) (18th December 1992)]
+Added $get\_valid\_cache\_theories$.
+\item [Issue 1.22 (1992/12/18) (8th September 1993)]
+Regression tests for bug 134.
+\item[Issue 1.25 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.26 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.27 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.28 (2006/06/13)] {\em force\_get\_cache\_theory} now creates a new cache theory rather than using the current theory if existing cache theories are all unusable.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the product type tools.
+The design is in \cite{DS/FMU/IED/DTD059}
+and it is
+implemented in \cite{DS/FMU/IED/IMP059}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module testing of the material given a design in \cite{DS/FMU/IED/DTD059},
+following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+
+\subsubsection{Dependencies}
+This document is derived from the detailed design in \cite{DS/FMU/IED/DTD059},
+and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP059}.
+\subsubsection{Deficiencies}
+None known.
+\section{TEST CASES}
+$set\_cache\_theories$ and $get\_cache\_theories$ are tested
+during the course of the other tests.
+Otherwise we test each function of the signature of \cite{DS/FMU/IED/DTD059}
+testing both successful, and all stated error, cases.
+Where errors are ``inherited'' from earlier functions we test a small selection of inherited error cases.
+The order of the tests is dictated by their interdependency, rather
+than the order in the signature.
+
+\section{PROLOGUE}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+=TEX
+=SML
+open_theory "hol";
+pp'Kernel.pp'freeze_hierarchy();
+push_merge_pcs ["'propositions","'paired_abstractions"];
+new_theory "cache_theory059";
+open_theory "hol";
+new_theory "somewhere_else";
+open_theory "cache_theory059";
+set_cache_theories ["cache_theory059"];
+new_theory "test059";
+val first_cache_theory = get_cache_theory();
+new_parent "ℕ" handle _ => ();
+=TEX
+=SML
+fun list_eq (eq:'a * 'a -> bool) ((a :: x), (b :: y)) : bool = (
+	eq(a,b) andalso list_eq eq (x, y)
+) | list_eq eq ([], []) = true
+| list_eq _ _ = false;
+=TEX
+\section{THE TESTS}
+\subsection{$cached\_labelled\_product\_rule$}
+=SML
+let
+	val thm = cached_labelled_product_rule 2;
+	val tm = ⌜(∃ abs rep⦁ (∀ a:'a⦁ abs (rep a) = a) ∧ (∀ r:'1 × '2⦁ rep (abs r) = r)) ⇒
+  (∃ 2Tuple Lab2_1 Lab2_2⦁ ∀ (t:'a) (x1:'1) (x2:'2)⦁
+  (Lab2_1 (2Tuple x1 x2) = x1 ∧ Lab2_2 (2Tuple x1 x2) = x2) ∧
+  2Tuple (Lab2_1 t) (Lab2_2 t) = t)⌝;
+in
+(store_mt_results (mt_runf (op =#))[
+	("cached_labelled_product_rule 2",
+	dest_thm,
+	thm,
+	([],tm))];
+store_mt_results (mt_runf (op =#))[
+	("cached_labelled_product_rule 2a",
+	dest_thm,
+	get_thm first_cache_theory "2CachedLabelledProduct",
+	([],tm))])
+end;
+=TEX
+The following checks that if the old form is present then it will be used (or at least, from the evidence, that the behaviour is as such).
+=SML
+let
+	val thm = cached_labelled_product_rule 2;
+	val tm = ⌜(∃ abs rep⦁ (∀ a:'a⦁ abs (rep a) = a) ∧ (∀ r:'1 × '2⦁ rep (abs r) = r)) ⇒
+  (∃ 2Tuple Lab2_1 Lab2_2⦁ ∀ (t:'a) (x1:'1) (x2:'2)⦁
+  (Lab2_1 (2Tuple x1 x2) = x1 ∧ Lab2_2 (2Tuple x1 x2) = x2) ∧
+  2Tuple (Lab2_1 t) (Lab2_2 t) = t)⌝;
+in
+store_mt_results (mt_runf (op =#))[
+	("cached_labelled_product_rule 2b",
+	dest_thm,
+	thm,
+	([],tm))]
+end;
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("cached_labelled_product_rule 59001",
+	cached_labelled_product_rule,
+	0,
+	gen_fail_msg "cached_labelled_product_rule" 59001 ["0"])];
+
+open_theory "basic_hol";
+store_mt_results mt_run_fail [
+	("cached_labelled_product_rule 59008",
+	cached_labelled_product_rule,
+	3,
+	gen_fail_msg "cached_labelled_product_rule" 59008 [get_current_theory_name()])];
+store_mt_results mt_run_fail [
+	("get_cache_theory 59002 a",
+	get_cache_theory,
+	(),
+	gen_fail_msg "get_cache_theory" 59002 [get_current_theory_name()])];
+open_theory first_cache_theory;
+save_thm("3CachedLabelledProduct",t_thm);
+open_theory "test059";
+store_mt_results mt_run_fail [
+	("cached_labelled_product_rule 59003",
+	cached_labelled_product_rule,
+	4,
+	gen_fail_msg "cached_labelled_product_rule" 59003 ["4"])];
+set_cache_theories [];
+local
+	val thm = cached_labelled_product_rule 2;
+	val tm = ⌜(∃ abs rep⦁ (∀ a:'a⦁ abs (rep a) = a) ∧ (∀ r:'1 × '2⦁ rep (abs r) = r)) ⇒
+  (∃ 2Tuple Lab2_1 Lab2_2⦁ ∀ (t:'a) (x1:'1) (x2:'2)⦁
+  (Lab2_1 (2Tuple x1 x2) = x1 ∧ Lab2_2 (2Tuple x1 x2) = x2) ∧
+  2Tuple (Lab2_1 t) (Lab2_2 t) = t)⌝;
+in
+val r1 = store_mt_results (mt_runf (op =#))[
+	("cached_labelled_product_rule 3a",
+	dest_thm,
+	thm,
+	([],tm))];
+val r2 =  store_mt_results mt_run[
+	("cached_labelled_product_rule 3b",
+	thm_theory,
+	thm,
+	hd(get_cache_theories()))];
+end;
+val new_thy1 =
+let
+	val cur_thy = get_current_theory_name();
+	val new_thy = hd(get_cache_theories());
+in	open_theory new_thy;
+	delete_thm "2CachedLabelledProduct";
+	open_theory cur_thy;
+	new_thy
+end;
+
+set_cache_theories [first_cache_theory];
+=TEX
+\subsection{$cached\_unlabelled\_product\_rule$}
+=SML
+let
+	val thm = cached_unlabelled_product_rule 2;
+	val tm = ⌜(∃ abs rep⦁ (∀ a:'a⦁ abs (rep a) = a) ∧ (∀ r:'1 × '2⦁ rep (abs r) = r)) ⇒
+  (∃ 2Tuple⦁ (∀ x1 x2 y1 y2⦁ 2Tuple x1 x2 = 2Tuple y1 y2 ⇔ x1 = y1 ∧ x2 = y2)
+  ∧ (∀ t:'a⦁ ∃ (x1:'1) (x2:'2)⦁ t = 2Tuple x1 x2))⌝;
+in
+(store_mt_results (mt_runf (op =#))[
+	("cached_unlabelled_product_rule 2",
+	dest_thm,
+	thm,
+	([],tm))];
+store_mt_results (mt_runf (op =#))[
+	("cached_unlabelled_product_rule 2a",
+	dest_thm,
+	get_thm first_cache_theory "2CachedUnlabelledProduct",
+	([],tm))])
+end;
+=TEX
+The following checks that if the old form is present then it will be used (or at least, from the evidence, that the behaviour is as such).
+=SML
+let
+	val thm = cached_unlabelled_product_rule 2;
+	val tm = ⌜(∃ abs rep⦁ (∀ a:'a⦁ abs (rep a) = a) ∧ (∀ r:'1 × '2⦁ rep (abs r) = r)) ⇒
+  (∃ 2Tuple⦁ (∀ x1 x2 y1 y2⦁ 2Tuple x1 x2 = 2Tuple y1 y2 ⇔ x1 = y1 ∧ x2 = y2)
+  ∧ (∀ t:'a⦁ ∃ (x1:'1) (x2:'2)⦁ t = 2Tuple x1 x2))⌝;
+in
+store_mt_results (mt_runf (op =#))[
+	("cached_unlabelled_product_rule 2b",
+	dest_thm,
+	thm,
+	([],tm))]
+end;
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("cached_unlabelled_product_rule 59001",
+	cached_unlabelled_product_rule,
+	0,
+	gen_fail_msg "cached_unlabelled_product_rule" 59001 ["0"])];
+
+open_theory "basic_hol";
+store_mt_results mt_run_fail [
+	("cached_unlabelled_product_rule 59008",
+	cached_unlabelled_product_rule,
+	3,
+	gen_fail_msg "cached_unlabelled_product_rule" 59008 [get_current_theory_name()])];
+open_theory first_cache_theory;
+save_thm("3CachedUnlabelledProduct",t_thm);
+open_theory "test059";
+store_mt_results mt_run_fail [
+	("cached_unlabelled_product_rule 59004",
+	cached_unlabelled_product_rule,
+	4,
+	gen_fail_msg "cached_unlabelled_product_rule" 59004 ["4"])];
+set_cache_theories [];
+local
+	val thm = cached_unlabelled_product_rule 2;
+	val tm = ⌜(∃ abs rep⦁ (∀ a:'a⦁ abs (rep a) = a) ∧ (∀ r:'1 × '2⦁ rep (abs r) = r)) ⇒
+  (∃ 2Tuple⦁ (∀ x1 x2 y1 y2⦁ 2Tuple x1 x2 = 2Tuple y1 y2 ⇔ x1 = y1 ∧ x2 = y2)
+  ∧ (∀ t:'a⦁ ∃ (x1:'1) (x2:'2)⦁ t = 2Tuple x1 x2))⌝;
+in
+val r1 = store_mt_results (mt_runf (op =#))[
+	("cached_unlabelled_product_rule 3a",
+	dest_thm,
+	thm,
+	([],tm))];
+val r2 = store_mt_results mt_run[
+	("cached_unlabelled_product_rule 3b",
+	thm_theory,
+	thm,
+	hd(get_cache_theories()))];
+end;
+val new_thy2 =
+let
+	val cur_thy = get_current_theory_name();
+	val new_thy = hd(get_cache_theories());
+in	open_theory new_thy;
+	delete_thm "2CachedUnlabelledProduct";
+	open_theory cur_thy;
+	new_thy
+end;
+set_cache_theories [first_cache_theory];
+=TEX
+\subsection{$labelled\_product\_spec$}
+=SML
+let
+	val inp2 = {tyname = "HOLD2",tykey = "HOLD2",conname = "Hold2",
+	constkeys= ["Hold2","First2","Second2"],
+	labels = [("First2",ℕ),("Second2",ⓣ'1⌝)],
+	tyvars = Value[ⓣ'1⌝,ⓣ'2⌝]};
+	val thm = labelled_product_spec inp2;
+	val tm = ⌜∀ (t:('1,'2)HOLD2) x1 x2⦁
+		First2 (Hold2 x1 x2:('1,'2)HOLD2) = x1 ∧
+		Second2 (Hold2 x1 x2:('1,'2)HOLD2) = x2 ∧
+		Hold2 (First2 t) (Second2 t) = t⌝;
+in
+(store_mt_results (mt_runf (op =#))[
+	("labelled_product_spec 2",
+	dest_thm,
+	thm,
+	([],tm))];
+store_mt_results (mt_runf (op =#))[
+	("labelled_product_spec 2a",
+	dest_thm,
+	get_defn "test059" "Hold2",
+	([],tm))])
+end;
+=TEX
+We have already given a corrupted third cached theorem, so this fails:
+=SML
+let
+	val inp3 = {tyname = "WHOLD3",tykey = "WHOLD3",conname = "WHold3",
+	constkeys= ["WHold3","WFirst3","WSecond3","WThird3"],
+	labels = [("First3",ℕ),("Second3",ⓣ'1⌝),("Third3",ⓣ'2⌝)],
+	tyvars = Value[ⓣ'1⌝,ⓣ'2⌝]};
+in
+store_mt_results mt_run_fail [
+	("labelled_product_spec 59014",
+	labelled_product_spec,
+	inp3,
+	gen_fail_msg "labelled_product_spec" 59014 ["WHOLD3"])]
+end;
+=TEX
+=SML
+let
+	val inp2 = {tyname = "WHOLD2",tykey = "WHOLD2",conname = "WHold2",
+	constkeys= [],
+	labels = [("WFirst2",ℕ),("WSecond2",ⓣ'1⌝)],
+	tyvars = Value[ⓣ'1⌝,ⓣ'2⌝]};
+in
+store_mt_results mt_run_fail [
+	("labelled_product_spec 6031 a",
+	labelled_product_spec,
+	inp2,
+	gen_fail_msg "labelled_product_spec" 6031 [])]
+end;
+=TEX
+=SML
+let
+	val inp2 = {tyname = "WHOLD2",tykey = "WHOLD2",conname = "WHold2",
+	constkeys= ["WHOLD2","something else"],
+	labels = [("WFirst2",ℕ),("WSecond2",ⓣ'1⌝)],
+	tyvars = Value[ⓣ'1⌝,ⓣ'2⌝]};
+in
+store_mt_results mt_run_fail [
+	("labelled_product_spec 59018",
+	labelled_product_spec,
+	inp2,
+	gen_fail_msg "labelled_product_spec" 59018 ["WHOLD2"])]
+end;
+=TEX
+=SML
+let
+	val inp2 = {tyname = "WHOLD2",tykey = "WHOLD2",conname = "WHold2",
+	constkeys= ["WHold2","WFirst2","WSecond2"],
+	labels = [],
+	tyvars = Value[ⓣ'1⌝,ⓣ'2⌝]};
+in
+store_mt_results mt_run_fail [
+	("labelled_product_spec 59010",
+	labelled_product_spec,
+	inp2,
+	gen_fail_msg "labelled_product_spec" 59010 [])]
+end;
+=TEX
+=SML
+let
+	val inp2 = {tyname = "WHOLD2",tykey = "WHOLD2",conname = "WHold2",
+	constkeys= ["WHold2","WFirst2","WSecond2"],
+	labels = [("WFirst2",ℕ),("WSecond2",ⓣ'1⌝)],
+	tyvars = Value[ⓣ'2⌝]};
+in
+store_mt_results mt_run_fail [
+	("labelled_product_spec 59015",
+	labelled_product_spec,
+	inp2,
+	gen_fail_msg "labelled_product_spec" 59015 ["'1"])]
+end;
+=TEX
+\subsection{$unlabelled\_product\_spec$}
+=SML
+let
+	val ulp2 = {tyname="ULP2", tykey="ULP2", conname="Ulp2",
+	conkeys=["Ulp2"], tyi=[ⓣ'a × 'b⌝,ⓣ'a × 'b⌝],
+	tyvars = Value [ⓣ'a⌝,ⓣ'b⌝]};
+	val thm = unlabelled_product_spec ulp2;
+	val tm = ⌜(∀ (x1:'a × 'b) (x2:'a × 'b) y1 y2⦁
+	 Ulp2 x1 x2 = Ulp2 y1 y2 ⇔ x1 = y1 ∧ x2 = y2) ∧
+	 (∀ t:('a,'b)ULP2⦁ ∃ x1 x2⦁ t = Ulp2 x1 x2)⌝;
+in
+(store_mt_results (mt_runf (op =#))[
+	("unlabelled_product_spec 2",
+	dest_thm,
+	thm,
+	([],tm))];
+store_mt_results (mt_runf (op =#))[
+	("unlabelled_product_spec 2a",
+	dest_thm,
+	get_defn "test059" "Ulp2",
+	([],tm))])
+end;
+=TEX
+We have already given a corrupted third cached theorem, so this fails:
+=SML
+let
+	val ulp3 = {tyname = "WULP3",tykey = "WULP3",conname = "WUlp3",
+	conkeys=["WUlp3"],
+	tyi = [ℕ, ⓣ'1⌝, ⓣ'2⌝],
+	tyvars = Value[ⓣ'1⌝,ⓣ'2⌝]};
+in
+store_mt_results mt_run_fail [
+	("unlabelled_product_spec 59014",
+	unlabelled_product_spec,
+	ulp3,
+	gen_fail_msg "unlabelled_product_spec" 59014 ["WULP3"])]
+end;
+=TEX
+=SML
+let
+	val ulp2 = {tyname="ULP2", tykey="ULP2", conname="Ulp2",
+	conkeys=[], tyi=[ℕ],
+	tyvars = Value [ⓣ'a⌝,ⓣ'b⌝]};
+in
+store_mt_results mt_run_fail [
+	("unlabelled_product_spec 6031 a",
+	unlabelled_product_spec,
+	ulp2,
+	gen_fail_msg "unlabelled_product_spec" 6031 [])]
+end;
+=TEX
+=SML
+let
+	val ulp2 = {tyname="ULP2", tykey="ULP2", conname="Ulp2",
+	conkeys=["ULP2","something_else"], tyi=[ℕ],
+	tyvars = Value [ⓣ'a⌝,ⓣ'b⌝]};
+in
+store_mt_results mt_run_fail [
+	("unlabelled_product_spec 59018 a",
+	unlabelled_product_spec,
+	ulp2,
+	gen_fail_msg "unlabelled_product_spec" 59018 ["ULP2"])]
+end;
+=TEX
+=SML
+let
+	val ulp2 = {tyname="ULP2", tykey="ULP2", conname="Ulp2",
+	conkeys=["Ulp2"], tyi=[],
+	tyvars = Value [ⓣ'a⌝,ⓣ'b⌝]};
+in
+store_mt_results mt_run_fail [
+	("unlabelled_product_spec 59011",
+	unlabelled_product_spec,
+	ulp2,
+	gen_fail_msg "unlabelled_product_spec" 59011 [])]
+end;
+=TEX
+=SML
+let
+	val ulp3 = {tyname="ULP3", tykey="ULP3", conname="Ulp3",
+	conkeys=["Ulp3"], tyi=[ⓣ'a × 'b⌝,ⓣ'a × 'b⌝,ⓣℕ⌝],
+	tyvars = Value [ⓣ'a⌝]};
+in
+store_mt_results mt_run_fail [
+	("unlabelled_product_spec 59016",
+	unlabelled_product_spec,
+	ulp3,
+	gen_fail_msg "unlabelled_product_spec" 59016 ["'b"])]
+end;
+=TEX
+Test that we are still in the right theory:
+=SML
+store_mt_results mt_run [
+	("unlabelled_product_spec theory",
+	get_current_theory_name,
+	(),
+	"test059")];
+=TEX
+\subsection{$HOL\_lab\_prod\_recogniser$}
+=TEX
+The following test cases comprise the tests for
+the hol labelled product recogniser.
+Calling the recogniser directly does not test the
+route which the reader/writer calls the recogniser. Therefore
+test are provided which use the reader/writer in each case.
+
+\begin{itemize}
+
+\item[1.] Input a labelled product with one constant.
+\item[2.] Input a labelled product with two constants.
+\item[3.] Input a labelled product with many constants.
+\item[4.] Check that the ordering of type variables
+is the same irrespective of the order in which they appear
+in the labelled product.
+\item[5.] Check that the correct error messages are
+produced when a) the contents of the box ends in a semi-colon, b) when the box contains a universally quantified
+declaration, and c) when the box contains a varstruct.
+\end{itemize}
+
+\subsubsection{Preamble}
+We re-initialise the theories.
+=SML
+open_theory "hol";
+new_theory "cache_theory059a";
+set_cache_theories ["cache_theory059a"];
+new_theory "test059a";
+val first_cache_theory = get_cache_theory ();
+=TEX
+\subsubsection{Test case 1.}
+ⓈHOLLABPROD MESSAGE
+	message
+■
+
+=SML
+let
+val consts = map (fst o dest_const) (get_consts "-");
+val types = map (fst o dest_ctype) (get_types "-");
+in
+store_mt_results mt_run [
+	("HOL_lab_prod_recogniser 1a",
+	contains types, "MESSAGE", true),
+	("HOL_lab_prod_recogniser 1b",
+	contains consts, "MkMESSAGE", true),
+	("HOL_lab_prod_recogniser 1c",
+	contains consts, "message",
+	true)
+] end;
+=TEX
+\subsubsection{Test case 2.}
+
+Next, a slightly more complicated case.
+
+ⓈHOLLABPROD ADDR
+	source : 'id;
+	dest : 'id
+■
+=SML
+let
+val consts = map (fst o dest_const) (get_consts "-");
+val types = map (fst o dest_ctype) (get_types "-");
+in
+store_mt_results mt_run [
+	("HOL_lab_prod_recogniser 2a",
+	contains types, "ADDR", true),
+	("HOL_lab_prod_recogniser 2b",
+	contains consts, "MkADDR", true),
+	("HOL_lab_prod_recogniser 2c",
+	contains consts, "source", true),
+	("HOL_lab_prod_recogniser 2d",
+	contains consts, "dest", true)
+] end;
+=TEX
+\subsubsection{Test case 3.}
+
+ⓈHOLLABPROD TF
+	init_state : 'st;
+	tf : ('ip × 'st) → ('st × 'op);
+	states : 'st → BOOL;
+	inputs ext_inputs : 'ip → BOOL;
+	outputs ext_outputs: 'op → BOOL
+■
+=SML
+let
+val consts = map (fst o dest_const) (get_consts "-");
+val types = map (fst o dest_ctype) (get_types "-");
+in
+store_mt_results mt_run [
+	("HOL_lab_prod_recogniser 3a",
+	contains types, "TF", true),
+	("HOL_lab_prod_recogniser 3b",
+	contains consts, "MkTF", true),
+	("HOL_lab_prod_recogniser 3c",
+	contains consts, "init_state", true),
+	("HOL_lab_prod_recogniser 3d",
+	contains consts, "tf", true),
+	("HOL_lab_prod_recogniser 3e",
+	contains consts, "states", true),
+	("HOL_lab_prod_recogniser 3f",
+	contains consts, "inputs", true),
+	("HOL_lab_prod_recogniser 3g",
+	contains consts, "ext_inputs", true),
+	("HOL_lab_prod_recogniser 3h",
+	contains consts, "outputs", true),
+	("HOL_lab_prod_recogniser 3i",
+	contains consts, "ext_outputs", true)
+] end;
+=TEX
+
+\subsubsection{Test case 4.}
+
+
+ⓈHOLLABPROD TF1
+	tf1 : ('ip × 'st) → ('st × 'op);
+	init_state1 : 'st;
+	states1 : 'st → BOOL;
+	inputs1 ext_inputs1 : 'ip → BOOL;
+	outputs1 ext_outputs1: 'op → BOOL
+■
+
+=SML
+let
+val (Value isty) = get_const_type "init_state";
+val tvars = (snd o dest_ctype o fst o dest_→_type) isty;
+val (Value isty1) = get_const_type "init_state1";
+val tvars1 = (snd o dest_ctype o fst o dest_→_type) isty1;
+in
+store_mt_results mt_run [
+	("HOL_lab_prod_recogniser 4a",
+	curry (list_eq (op =:)) tvars, tvars1, true)
+]
+end;
+=TEX
+\subsubsection{Test case 5.}
+
+=SML
+let
+
+fun hlp5a() = ⓈHOLLABPROD ERRCASEA
+	errcasea : 'a;
+	■
+
+fun hlp5b() = ⓈHOLLABPROD ERRCASEB
+	∀ errcaseb : 'a
+	■
+
+fun hlp5c() = ⓈHOLLABPROD ERRCASEC
+	(errcasec1, errcasec2)
+	■
+
+in
+store_mt_results mt_run_fail [
+	("HOL_lab_prod_recogniser 5a",
+	hlp5a, (),
+	gen_fail_msg "HOL_lab_prod_recogniser" 59000 []),
+	("HOL_lab_prod_recogniser 5b",
+	hlp5b, (),
+	gen_fail_msg "HOL_lab_prod_recogniser" 59000 []),
+	("HOL_lab_prod_recogniser 5c",
+	hlp5c, (),
+	gen_fail_msg "HOL_lab_prod_recogniser" 3007 ["⌜(errcasec1, errcasec2)⌝"])
+] end;
+
+=TEX
+Test that we are still in the right theory:
+=SML
+store_mt_results mt_run [
+	("product_spec theory",
+	get_current_theory_name,
+	(),
+	"test059a")];
+=TEX
+\subsection{Theory Caching Mechanisms}
+=SML
+open_theory "basic_hol";
+pp'Kernel.pp'seal_hierarchy ();
+open_theory "cache_theory059a";
+lock_theory "hol" handle _ => (); (* fails/handled if delivered to parent  *)
+store_mt_results mt_run [
+	("set_cache_theories 1",
+	set_cache_theories,
+	["rubbish","cache_theory059","min","hol",
+	 "cache_theory059a","basic_hol"],
+	["cache_theory059a"])];
+store_mt_results mt_run [
+	("get_cache_theories 1",
+	get_cache_theories,
+	(),
+	["rubbish","cache_theory059","min","hol",
+	 "cache_theory059a","basic_hol"])];
+store_mt_results mt_run [
+	("get_cache_theory",
+	get_cache_theory,
+	(),
+	"cache_theory059a")];
+store_mt_results mt_run [
+	("force_get_cache_theory 1",
+	force_get_cache_theory,
+	(),
+	"cache_theory059a")];
+store_mt_results mt_run [
+	("get_valid_cache_theories",
+	get_valid_cache_theories,
+	(),
+	["min","hol","cache_theory059a","basic_hol"])];
+open_theory "test059";
+store_mt_results mt_run [
+	("set_cache_theories 2",
+	set_cache_theories,
+	["rubbish","somewhere_else"],
+	["rubbish","cache_theory059","min","hol",
+	 "cache_theory059a","basic_hol"])];
+store_mt_results mt_run_fail [
+	("get_cache_theory 59002 b",
+	get_cache_theory,
+	(),
+	gen_fail_msg "get_cache_theory" 59002 [get_current_theory_name()])];
+store_mt_results mt_run [
+	("force_get_cache_theory 2",
+	force_get_cache_theory,
+	(),
+	"somewhere_else")];
+store_mt_results mt_run [
+	("force_get_cache_theory 3",
+	get_parents,
+	"test059",
+	["somewhere_else", new_thy2, new_thy1, "ℕ","cache_theory059"])];
+lock_theory "somewhere_else";
+store_mt_results mt_run_fail [
+	("force_get_cache_theory 4",
+	force_get_cache_theory,
+	(),
+	gen_fail_msg "force_get_cache_theory" 59008 ["test059"])];
+=TEX
+\subsection{Regression Tests}
+The following two relate to bug 134 (which would make the test raise
+an error incorrectly).
+=SML
+store_mt_results mt_run [
+	("regression 1",
+	(fn () => (
+		open_theory"basic_hol";
+		new_theory"mdt059_regr_1_top";
+		new_theory"mdt059_regr_1_left";
+		open_theory"mdt059_regr_1_top";
+		new_theory"mdt059_regr_1_right";
+		set_cache_theories["mdt059_regr_1_left"];
+		open_theory"mdt059_regr_1_left";
+		cached_unlabelled_product_rule 2;
+		open_theory"mdt059_regr_1_right";
+		cached_unlabelled_product_rule 2;
+	"OK")),
+	(),
+	"OK"),
+	("regression 2",
+	(fn () => (
+		open_theory"mdt059_regr_1_top";
+		new_theory"mdt059_regr_1_far_right";
+		set_cache_theories["mdt059_regr_1_left"];
+		open_theory"mdt059_regr_1_left";
+		cached_labelled_product_rule 2;
+		open_theory"mdt059_regr_1_far_right";
+		cached_labelled_product_rule 2;
+	"OK")),
+	(),
+	"OK")];
+=TEX
+\subsection{End of Tests}
+Then output the test results.
+=SML
+diag_string(summarize_mt_results());
+=TEX
+\end{document}
+
+
+

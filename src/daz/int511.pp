@@ -1,0 +1,1181 @@
+=IGN
+********************************************************************************
+int511.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ $Revision: 1.48 $ $RCSfile: int511.doc,v $ $Date: 2008/02/10 15:59:51 $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{SPARK Output Tests}
+
+\def\AbstractText{This document gives Compliance Notation script which exercise the SPARK output function using an Ada compiler to check the results.}
+
+\def\Reference{ISS/HAT/DAZ/INT510}
+
+\def\Author{G.M. Prout}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{SPARK Output Tests}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{SPARK Output Tests}
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/INT510}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.48 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2008/02/10 15:59:51 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Informal}
+%% LaTeX2e port: %\TPPstatus{Informal}
+%% LaTeX2e port: \TPPtype{Technical}
+%% LaTeX2e port: %\TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{G.M.~Prout & HAT Team}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & WIN01}
+%% LaTeX2e port: \TPPabstract{%
+%% LaTeX2e port: This document gives Compliance Notation script which exercise the SPARK output function using an Ada compiler to check the results.
+%% LaTeX2e port: }
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: \def\TPPheadlhs{Lemma 1 Ltd.}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\pagebreak
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issues 1.1 (1996/02/15)-1.5 (1996/02/28)] Initial Drafts.
+\item[Issue 1.6 (1996/02/28)] First issue for system build.
+\item[Issue 1.7 (1997/05/29)] IUCT WP7 changes, and one compilation unit per script.
+\item[Issue 1.8 (1997/06/04)] IUCT WP 2 changes.
+\item[Issues 1.9 (1997/06/12)-1.10 (1997/06/23)] Typos corrected.
+\item[Issues 1.11 (1997/07/21)] IUCT WP 4 syntax change.
+\item[Issue 1.12 (1997/08/06)] Addressing changes in gcc version, and timing problems.
+\item[Issue 1.13 (2000/06/24)] Tidied and restructured interface to gnat.
+\item[Issue 1.14 (2000/09/07)] Allowed for bizarre behaviour of {\tt which} on Solaris.
+\item[Issue 1.15 (2000/10/25)] CTLE II R2/1: global variable unsoundness.
+\item[Issue 1.16 (2001/12/15)] R0037: support for named numbers.
+\item[Issue 1.17 (2002/03/01)] New symbol for expansion of statement labels.
+\item[Issue 1.18 (2002/03/14)] {\it ExtendedIO.system} now used in place of {\it ExtendedIO.execute}.
+\item[Issue 1.19 (2002/03/14)] New tests for loop statements and percent signs; now runs
+GNAT for semantic as well as syntax checks.
+\item[Issues 1.20 (2002/05/10),1.21 (2002/05/10)] Spring 2002 enhancements: new language features for interim release.
+\item[Issues 1.22 (2002/05/25), 1.23 (2002/05/27)] Now tests syntax-check-only operation too and always generates
+the consolidated output file.
+\item[Issue 1.24 (2002/06/06)] Improved coverage (error cases, more renamings).
+\item[Issue 1.25 (2002/08/08)] More on renamings.
+\item[Issue 1.26 (2002/08/23)] Removed use of ICL logo font and corrected {\LaTeX} errors.
+\item[Issue 1.27 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.28 (2002/10/17), 1.29 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.30 (2002/11/14)]  Non-SPARK warnings.
+\item[Issue 1.31 (2002/12/18)]  Made it work with Solaris utilities.
+\item[Issue 1.32 (2003/05/20)] Added tests for new NOTHING statement form.
+\item[Issue 1.33 (2003/05/20)] Added tests for new dollar escape feature for Compliance Notation reserved words.
+\item[Issue 1.34 (2004/02/07)] Name at end of package etc. is now optional.
+Modified tests to make some of them omit the name.
+\item[Issue 1.35 (2004/02/07)] The SPARK program is now referred to as the Ada program.
+\item[Issue 1.36 (2004/08/29)] Implemented distinction between empty private part and omitted private part.
+\item[Issue 1.37 (2004/12/08)] Support for labelled statements and goto statements.
+\item[Issue 1.38 (2005/04/23)] Support for derived types.
+\item[Issue 1.39 (2005/05/28)] Enhancement 117.
+\item[Issue 1.40 (2006/03/23)] Reserved words are now prefixed with a dollar signl.
+\item[Issue 1.41 (2006/03/28)] Allowed for automated state management.
+\item[Issue 1.43 (2006/04/07)] Allowed for insistence on canonical names in Z under enhancement 117
+\item[Issue 1.44 (2006/07/20)] Added tests for use type clauses.
+\item[Issue 1.45 (2006/09/18)] {\em case\_of\_ada\_keywords} is now {\em cn\_case\_of\_ada\_keywords}.
+\item[Issue 1.46 (2006/09/19)] Allowed for enhancement 165.
+\item[Issue 1.47 (2007/05/22)] Added more tests for block statements.
+\item[Issue 1.48 (2008/02/10)] Allowed for change to lexical rules for underscores in Z.
+\item[Issue 1.49 (2008/03/24)] Tests for child packages.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+\item[2014/09/07]
+Now uses ``.sml'' suffix for temporary ML source files.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+More tests will be added to reflect any new language features implemented.
+
+\pagebreak
+\section{GENERAL}
+
+\subsection{Scope}
+
+This document contains test data for the Compliance Tool as specified in \cite{ISS/HAT/DAZ/HLD501} and \cite{ISS/HAT/DAZ/USR501}.
+
+\subsection{Introduction}
+This document gives Compliance Notation scripts which exercise the SPARK output function using an Ada compiler to check the results.
+
+At the end of the document is some {\tt sh} and ML code which together compiles the generated SPARK using the {\tt gnat} compiler and then reports on any failures using the usual module test mechanisms.
+There is no automatic check that the right SPARK has been generated, only that what has been generated is legal Ada.
+
+\subsection{Test Cases}
+
+The test cases are grouped according to a top-down analysis of the Compliance Notation grammar.
+In terms of the order the grammar is presented in \cite{DRA/CIS/CSE3/TR/94/27/2.1}, this means working from back to front for the main groups, and then (generally) from front to back within each group.
+The groups are as follows:
+
+\begin{tabular}{l}
+WEB CLAUSES\\
+REPRESENTATION CLAUSES\\
+STUBS AND SUBUNITS\\
+COMPILATION UNITS\\
+PACKAGE IMPLEMENTATIONS\\
+SUBPROGRAM DECLARATIONS\\
+STATEMENTS\\
+EXPRESSIONS\\
+BODIES AND STUBS\\
+BASIC DECLARATIONS\\
+PRAGMAS\\
+\end{tabular}
+
+In addition to the above, we also test for error cases and test
+{\it output\_ada\_program}.
+
+The tests are to be run in syntax-check-only mode as well as in normal mode.
+This is achieved with the cooperation of the make file, which creates a modified
+copy of this file with every instance of the string ``511'' replaced by ``51I''.
+This file is run in normal mode, the copy is run in syntax-check-only mode.
+The set-up below tests whether this has been done and sets the mode accordingly.
+
+In either mode, selected tests are run with the SPARK syntax warnings flag set to true.
+
+\subsection{Setting up of the environment}
+
+
+Load the test harness.
+
+=SML
+use_file "dtd013";
+use_file "imp013";
+=TEX
+Function to clean up before doing a test.
+=SML
+fun clean_up () = (
+        let     val thys = (get_descendants "cn" less "cn")
+                                        diff get_cache_theories();
+                fun del_thy thy = (force_delete_theory thy handle Fail _ => ());
+        in      map del_thy thys
+        end;    ()
+);
+=TEX
+Function to run a shell command line.
+=SML
+val system = ExtendedIO.system;
+=TEX
+Set up the mode:
+=SML
+set_flag("cn_syntax_check_only", hd(rev(explode "511")) <>  "1");
+=TEX
+\section{WEB CLAUSES}\label{WEBCLAUSES}
+=SML
+set_flag("cn_spark_syntax_warnings", true);
+clean_up();
+new_script{name="INT511PACK1", unit_type="spec"};
+=TEX
+We now work through the production for $web\_clause$.
+The first alternative (a Z paragraph) is not relevant.
+So we start with a compilation:
+
+ⓈCN
+ package int511PACK1 is
+        X: INTEGER;
+        auxiliary, by, con, implement, nothing, references, till, using : INTEGER;
+ end int511PACK1;
+■
+=SML
+set_string_control("cn_case_of_ada_keywords", "upper");
+output_ada_program{script="-", out_file="int511A1a.ada"};
+new_script{name="INT511proc1", unit_type="PROC"};
+
+ⓈZ
+│ [ A_GIVEN_SET ]
+■
+
+=TEX
+Now a compilation replacement.
+ⓈCN
+ ⟨ compilation unit k-slot ⟩			( 1 )
+■
+Now a compilation replacement.
+ⓈCN
+ (1) ≡ with int511PACK1;
+  procedure int511PROC1
+  is
+  begin
+       int511PACK1.X := 0;
+       int511pack1.auxiliary := 0;
+       int511pack1.con := 0;
+  end int511PROC1;
+■
+Now prepare for private and visible part replacements:
+=SML
+output_ada_program{script="-", out_file="int511A1b.ada"};
+system"cat int511A1a.ada int511A1b.ada > int511A1.ada ; rm -f int511A1a.ada int511A1b.ada";
+new_script{name="INT511PACK2", unit_type="spec"};
+ⓈCN
+ package int511PACK2 is
+   type priv_ty is private;
+   C : constant INTEGER;
+   ⟨ visible part k-slot ⟩			( 2 )
+ private
+   ⟨ private part k-slot ⟩			( 3 )
+ end;
+■
+Private part replacement:
+ⓈCN
+ (3) ≡ type priv_ty is range 1 .. 10;
+        C : constant INTEGER := 99;
+■
+Visible part replacement:
+ⓈCN
+ (2) ≡ X : INTEGER;
+■
+Now prepare for declaration and statement replacement and statement refinement:
+=SML
+output_ada_program{script="-", out_file="int511A2.ada"};
+new_script{name="INT511proc2", unit_type="PROC"};
+=TEX
+ⓈCN
+ procedure int511PROC2 is
+	⟨ declaration k-slot ⟩			( 4 )
+ begin
+   Δ [false, true]  (5)
+ end int511PROC2;
+■
+Statement refinement:
+ⓈCN
+ (5) ⊑ Δ [true, true] (6)
+■
+Declaration replacement:
+ⓈCN
+ (4) ≡ A : INTEGER;
+■
+Statement replacement (for a spec label):
+ⓈCN
+ (6) !⊑ A := 0;
+      ⟨ statement k-slot ⟩			( 7 )
+■
+Statement replacement (for a statement k-slot label):
+ⓈCN
+ (7) !⊑ null;
+■
+The implicit label mechanism is well-tested elsewhere, so we skip those alternatives.
+=SML
+output_ada_program{script="-", out_file="int511A3.ada"};
+system"cat int511A1.ada int511A2.ada int511A3.ada > int511A.ada ; rm -f int511A1.ada int511A2.ada int511A3.ada";
+=TEX
+\section{REPRESENTATION CLAUSES}
+=SML
+clean_up();
+set_flag("cn_spark_syntax_warnings", false);
+new_script{name="INT511proc3", unit_type="PROC"};
+=TEX
+The example address clause in the following is commented out, because such clauses are necessarily implementation-dependent, and there seems to be little point in concocting something satisfactory for a particular compiler which is unlikely to work with another one.
+ⓈCN
+ procedure int511PROC3 is
+   type COLOUR is (WHITE, RED, YELLOW, GREEN, BLUE, BROWN, BLACK);
+   BYTE : CONSTANT INTEGER := 8;
+   for COLOUR'SIZE use 1*BYTE;
+   type MIX_CODE is (ADD, SUB, MUL, LDA, STA, STZ);
+   for MIX_CODE use (ADD => 1, SUB => 2, MUL => 3, LDA => 4, STA => 5, STZ => 6);
+   type MASK is range 0 .. 2**BYTE-1;
+   type PSR is record STATUS : MASK; OVERFLOW : BOOLEAN; end record;
+   for PSR use
+       record at mod BYTE;
+            STATUS at 0*BYTE range 0 .. BYTE - 1;
+            OVERFLOW at 1*BYTE range BYTE - 1 .. BYTE - 1;
+       end record;
+   VAR : INTEGER := 0;
+--   for VAR use at 16#00000000#;
+ begin
+   null;
+ end int511PROC3;
+■
+=SML
+set_string_control("cn_case_of_ada_keywords", "as input");
+output_ada_program{script="-", out_file="int511B.ada"};
+=TEX
+\section{STUBS AND SUBUNITS}
+=SML
+clean_up();
+set_flag("cn_spark_syntax_warnings", true);
+new_script{name="INT511proc4", unit_type="PROC"};
+=TEX
+Procedure and function stubs:
+ⓈCN
+ procedure int511PROC4 is
+    APPLE : constant INTEGER := 99;
+    FRUIT : INTEGER := 0;
+    procedure int511PROC5 is separate;
+    function int511FUNC1 (I : INTEGER) return INTEGER is separate;
+ begin
+    null;
+    int511PROC5;
+ end int511PROC4;
+■
+=SML
+new_script{name="INT511proc4.INT511PROC5", unit_type="PROC"};
+ⓈCN
+ separate (int511PROC4)
+    procedure int511PROC5 is begin FRUIT := APPLE; end int511PROC5;
+■
+=SML
+new_script{name="INT511proc4.INT511FUNC1", unit_type="func"};
+ⓈCN
+ separate (int511PROC4)
+    function int511FUNC1 (I : INTEGER) return INTEGER is
+    begin return APPLE; end int511FUNC1;
+■
+=SML
+output_ada_program{script="INT511PROC4'proc", out_file="int511C1.ada"};
+output_ada_program{script="INT511PROC4oINT511PROC5'proc", out_file="int511C2.ada"};
+output_ada_program{script="INT511PROC4oINT511FUNC1'func", out_file="int511C3.ada"};
+system"cat int511C1.ada int511C2.ada int511C3.ada > int511C.ada ; rm -f int511C1.ada int511C2.ada int511C3.ada";
+=TEX
+\section{COMPILATION UNITS}
+=SML
+clean_up();
+set_flag("cn_spark_syntax_warnings", false);
+new_script{name="INT511PACK3", unit_type="spec"};
+=TEX
+Section \ref{WEBCLAUSES} has covered package specifications and main programs with simple context clauses already.
+We just need to check pragmas and use clauses (in context clauses).
+ⓈCN
+ package int511PACK3 is
+        type T is range 1 .. 10;
+        X: INTEGER;
+ end int511PACK3;
+■
+=SML
+output_ada_program{script="-", out_file="int511D1.ada"};
+new_script{name="INT511proc5", unit_type="PROC"};
+ⓈCN
+ with int511PACK3;
+ use type int511PACK3.T;
+  pragma ELABORATE(int511PACK3);
+  procedure int511PROC5
+  is
+  begin
+       int511PACK3.X := 0;
+  end int511PROC5;
+■
+=SML
+output_ada_program{script="-", out_file="int511D2.ada"};
+new_script{name="INT511proc15", unit_type="PROC"};
+ⓈCN
+ with int511PACK3;
+ use int511PACK3;
+  procedure int511PROC15
+  is
+  use type T;
+  begin
+      X := 0;
+  end int511PROC15;
+■
+=SML
+output_ada_program{script="-", out_file="int511D3.ada"};
+=SML
+new_script{name="INT511PACK11", unit_type="spec"};
+ⓈCN
+ with int511PACK3;
+ use int511PACK3;
+  package int511PACK11 is  private  end;
+■
+=SML
+output_ada_program{script="-", out_file="int511D4.ada"};
+system"cat int511D1.ada int511D2.ada int511D3.ada int511D4.ada > int511D.ada ; rm -f int511D1.ada int511D2.ada int511D3.ada int511D4.ada";
+=TEX
+\section{PACKAGE IMPLEMENTATIONS}
+=SML
+clean_up();
+set_flag("cn_spark_syntax_warnings", true);
+new_script{name="INT511PACK4", unit_type="spec"};
+=TEX
+ⓈZ
+│ fun 100 sum _, size _
+■
+
+ⓈZAX
+│	sum _ : bag ℤ → ℤ
+├───────────
+│	sum ⟦ ⟧ = 0 ∧
+│	(∀ b : bag ℤ; n : ℤ ⦁ sum (b ⊎ ⟦n⟧) = sum b + n)
+■
+ⓈZAX
+│	size _: bag ℤ → ℤ
+├───────────
+│	size ⟦ ⟧ = 0 ∧
+│	(∀ b : bag ℤ; n : ℤ ⦁ size (b ⊎ ⟦n⟧) = size b + 1)
+■
+ⓈCN
+package int511PACK4 is
+
+	$auxiliary B : bag ℤ;
+
+	procedure MEAN (M : out INTEGER)
+	Δ M Ξ B [B ≠ ⟦ ⟧, M = sum B intdiv size (B)];
+
+end int511PACK4;
+■
+=SML
+output_ada_program{script="-", out_file="int511E1.ada"};
+new_script1{name="INT511PACK4", unit_type="body", library_theories = ["INT511PACK4'spec"]};
+┌Bag_Inv────────────
+│	B : bag ℤ;
+│	S, N : INTEGER
+├──────
+│	S = sum B;
+│	N = size B
+└────────────────
+ⓈCN
+package body int511PACK4 is
+
+	$using S, N : INTEGER; $implement B $by Bag_Inv;
+
+	procedure MEAN (M : out INTEGER)
+	Δ M, S, N [N ≠ 0, M = S intdiv N ∧ S = S⋎0 ∧ N = N⋎0]
+	is
+	begin
+		M := S / N;
+	end MEAN;
+
+	procedure MEAN_LONG_NAME(A : OUT INTEGER)  renames MEAN;
+begin
+	S := 0;
+	N := 1;
+end int511PACK4;
+■
+=SML
+output_ada_program{script="-", out_file="int511E2.ada"};
+new_script{name="INT511PACK9", unit_type="spec"};
+ⓈCN
+package int511PACK9 is
+
+ procedure report(x : out integer);
+
+end int511PACK9;
+■
+=SML
+output_ada_program{script="-", out_file="int511E3.ada"};
+new_script{name="INT511PACK9", unit_type="body"};
+ⓈCN
+with int511PACK4;
+package body int511PACK9 is
+
+	use int511PACK4;
+
+	package ip4 renames int511PACK4;
+
+	procedure report (x : out INTEGER)
+	is
+	begin
+		mean(x);
+	end ;
+begin
+ Δ [true] (ARBITRARY)
+end;
+■
+ⓈCN
+ (ARBITRARY) ⊑ $nothing;
+■
+=SML
+output_ada_program{script="-", out_file="int511E4.ada"};
+new_script{name="INT511PACK9.PUB_CHILD", unit_type="spec"};
+ⓈCN
+package int511PACK9.PUB_CHILD is
+   pub_child1_var : integer;
+end int511PACK9.PUB_CHILD;
+■
+=SML
+output_ada_program{script="-", out_file="int511E5.ada"};
+=SML
+new_script{name="INT511PACK9.PRIV_CHILD", unit_type="spec"};
+ⓈCN
+private package int511PACK9.PRIV_CHILD is
+   priv_child1_var : integer;
+end;
+■
+=SML
+output_ada_program{script="-", out_file="int511E6.ada"};
+system"cat int511E[123456].ada >int511E.ada ; rm -f int511E[123456].ada";
+=TEX
+\section{SUBPROGRAM DECLARATIONS}
+=SML
+clean_up();
+set_flag("cn_spark_syntax_warnings", false);
+new_script{name="INT511PACK10", unit_type="spec"};
+=TEX
+ⓈCN
+ package int511PACK10 is
+   m, n : integer;
+ end int511PACK10;
+■
+=SML
+output_ada_program{script="-", out_file="int511F1.ada"};
+new_script{name="INT511PACK5", unit_type="spec"};
+=TEX
+ⓈCN
+ with int511PACK10;
+ package int511PACK5 is
+   procedure no_pars
+  ΔINT511PACK10oM ΞINT511PACK10oN [INT511PACK10oM > INT511PACK10oN];
+   procedure one_par (X: in out INTEGER)
+    ΔX[X > X⋎0];
+   procedure three_pars (X, Y, Z: in out INTEGER)
+    ΔX, Y, Z[X+Y+Z > X⋎0];
+   procedure four_pars (X: in out INTEGER; A, B, C: in INTEGER)
+    ΔX[X > A+B+C];
+   function fno_pars return INTEGER;
+   function six_pars
+        (X, Y : INTEGER; A, B : INTEGER; C, D  : INTEGER) return BOOLEAN
+    Ξ[INT511PACK5oSIX_PARS(X, Y, A, B, C, D) = TRUE ⇔ X > Y ∨ A > B ∨ C > D] ;
+ end int511PACK5;
+■
+=SML
+output_ada_program{script="-", out_file="int511F2.ada"};
+new_script{name="INT511PACK5", unit_type="body"};
+ⓈCN
+with int511PACK10;
+ package body int511PACK5 is
+  use int511PACK10;
+   procedure no_pars
+  Δ INT511PACK10oM Ξ INT511PACK10oN [ INT511PACK10oM > INT511PACK10oN ]
+   is begin m := m + 1 ; end no_pars;
+   procedure one_par (X: in out INTEGER)
+    ΔX[X > X⋎0]
+   is begin X := X + 1; end one_par;
+   procedure three_pars (X, Y, Z: in out INTEGER)
+    ΔX, Y, Z[X+Y+Z > X⋎0]
+   is begin X := (X - Y - Z) + 1; end three_pars;
+   procedure four_pars (X: in out INTEGER; A, B, C: in INTEGER)
+    ΔX[X > A+B+C]
+   is begin X := A + B + C + 1; end four_pars;
+   function fno_pars return INTEGER
+   is begin return 42 ; end fno_pars;
+   function six_pars
+        (X, Y : INTEGER; A, B : INTEGER; C, D  : INTEGER) return BOOLEAN
+    Ξ[SIX_PARS(X, Y, A, B, C, D) = TRUE ⇔ X > Y ∨ A > B ∨ C > D]
+   is begin return X > Y or A > B or C > D; end six_pars;
+ end int511PACK5;
+■
+=SML
+output_ada_program{script="-", out_file="int511F3.ada"};
+system"cat int511F[123].ada > int511F.ada ; rm -f int511F[123].ada";
+=TEX
+\section{STATEMENTS}
+Statement k-slots have already been covered.
+
+Assignments, if-then-else and procedure call:
+=SML
+clean_up();
+set_flag("cn_spark_syntax_warnings", true);
+new_script{name="INT511proc6", unit_type="PROC"};
+ⓈCN
+ procedure int511PROC6(X, Y : in out INTEGER)
+ is
+    type IND is range 1 .. 2;
+    type ARR is array(IND) of INTEGER;
+    type REC is record X, Y : INTEGER; end record;
+    A : ARR;
+    R : REC;
+    A_LONG_NAME : ARR renames A;
+    procedure P (Z : INTEGER) is
+    begin
+        A(1) := Y;
+    end P;
+    procedure Q (Z, T : INTEGER) is
+    begin
+        A(2) := Z + T;
+    end Q;
+ begin
+    null;
+    X := Y;
+    if (X > 9)
+    then X := 9;
+    else Y := 42;
+    end if;
+    if X > Y
+    then X := 42;
+    elsif X < Y
+    then Y := 9;
+    else Δ[ X = Y, true ] (X_EQ_Y)
+    end if;
+    P(Z => X);
+    Q(X, Y);
+    declare
+       Z : INTEGER;
+    begin
+       Z := R.X;
+       R.X := R.Y;
+       R.Y := Z;
+    end;
+label:
+    declare
+       Z : INTEGER;
+    begin
+       Z := R.X;
+       R.X := R.Y;
+       R.Y := Z;
+    end label;
+$block cnlabel:
+    declare
+       Z : INTEGER;
+    begin
+       Z := R.X;
+       R.X := R.Y;
+       R.Y := Z;
+    end $block cnlabel;
+    R.X := X;
+    R.Y := Y;
+ end int511PROC6;
+■
+ⓈCN
+ (X_EQ_Y) ⊑ $nothing;
+■
+
+=SML
+output_ada_program{script="-", out_file="int511G1.ada"};
+=TEX
+Case statement and procedure return statements.
+=SML
+clean_up();
+new_script{name="INT511proc7", unit_type="PROC"};
+ⓈCN
+ procedure int511PROC7
+ is
+    type INT8 is range 1 .. 8;
+    type ABC is (AA, BB, CC);
+    type Z is (M);
+    I : INT8;
+    A : ABC;
+    V : Z;
+ begin
+    V := M;
+    case V is
+       when M => A := AA;
+    end case;
+    case A is
+       when AA => I := 1;
+       when BB | CC => I := 2;
+       when others => Δ[false, true] (IMPOSSIBLE)
+    end case;
+    case I is
+       when 1 .. 4 | 5 | 6 | 8 => V := M;
+       when others => A := BB; return;
+    end case;
+    case I is
+       when 1 .. 4 | 5 | 6 | 8 => V := M;
+       when others => A := BB; I := 4; return;
+    end case;
+ end int511PROC7;
+■
+ⓈCN
+ (IMPOSSIBLE) ⊑ $nothing;
+■
+=SML
+output_ada_program{script="-", out_file="int511G2.ada"};
+=TEX
+Loop, exit, function return statements, labelled statements and goto statements:
+=SML
+clean_up();
+new_script{name="INT511FUNC8", unit_type="func"};
+ⓈCN
+ function int511FUNC8 return INTEGER
+ is
+    type INT8 is range 1 .. 8;
+    X : INTEGER;
+ begin
+E1: loop
+        exit when 1 = 1;
+    end loop E1;
+E2: loop
+        exit E2 when 1 = 1;
+    end loop E2;
+E3: loop
+        if 1 = 1
+       then  exit E3;
+       end if;
+    end loop E3;
+   << jump_here >>
+    $till ⟦ true ⟧
+    loop
+        if true
+        then exit;
+        end if;
+    end loop;
+   if false
+   then goto jump_here;
+   else goto int511FUNC8.jump_there;
+   end if;
+   << jump_there >>
+W1: while false
+    loop
+        null;
+    end loop W1;
+    while false
+    loop
+        null;
+    end loop;
+L1: for I in INT8
+    loop
+        X := INTEGER(I);
+    end loop L1;
+    for I in INT8
+    loop
+        X := INTEGER(I);
+    end loop;
+    for I in reverse INT8
+    loop
+        X := INTEGER(I);
+    end loop;
+    for I in INTEGER range 1 .. 10
+    loop
+        X := INTEGER(I);
+    end loop;
+    for I in reverse INTEGER range 1 .. 10
+    loop
+        X := INTEGER(I);
+    end loop;
+    loop
+        if X = 10 then exit; end if;
+    end loop;
+    for I in 1 .. 10
+    loop
+        X := INTEGER(I);
+    end loop;
+    return 999;
+ end int511FUNC8;
+■
+=SML
+output_ada_program{script="-", out_file="int511G3.ada"};
+system"cat int511G[123].ada > int511G.ada ; rm -f int511G[123].ada ";
+=TEX
+\section{EXPRESSIONS}
+Auxiliary expressions have already been done in the data refinement example above.
+
+Primaries, type conversions and qualified expressions:
+=SML
+clean_up();
+set_flag("cn_spark_syntax_warnings", false);
+new_script{name="INT511proc9", unit_type="PROC"};
+ⓈCN
+ procedure int511PROC9(A, B, C : in out INTEGER; Y : out NATURAL;
+                U, V : in out STRING)
+ is
+    D : CHARACTER;
+    function f (X : INTEGER) return INTEGER
+    is
+    begin
+       return X * 99;
+    end;
+    type IND is range 1 ..3;
+    type ARR is ARRAY(IND, IND) of INTEGER;
+    W : ARR;
+    type CARR is ARRAY(IND) of CHARACTER;
+    CA : constant CARR := "AB%";
+ begin
+     C := 42 + A;
+     D := ' ';
+     U := "ABC";
+     A := B;
+     B := f(C);
+     Y := NATURAL(C);
+     C := INTEGER'(NATURAL'FIRST);
+     B := (B + C);
+     W := ARR'((1,2,3), (3,4,5), (6,7,8));
+ end;
+■
+=SML
+output_ada_program{script="-", out_file="int511H1.ada"};
+=TEX
+Simple expressions
+=SML
+clean_up();
+new_script{name="INT511proc10", unit_type="PROC"};
+ⓈCN
+ procedure int511PROC10(A, B, C : in out INTEGER; Y : out BOOLEAN)
+ is
+	X : BOOLEAN;
+ begin
+    X := A = B or B /= C or A < C or A <= C or A > C or A >= B;
+    Y := A in 1 .. 20 or B not in 1 .. 20 or
+             (A in NATURAL and C not in NATURAL);
+ end int511PROC10;
+■
+=SML
+output_ada_program{script="-", out_file="int511H2.ada"};
+=TEX
+Relational expressions:
+=SML
+clean_up();
+new_script{name="INT511proc11", unit_type="PROC"};
+ⓈCN
+ procedure int511PROC11(A, B, C : in out INTEGER; Y : out BOOLEAN)
+ is
+	X : BOOLEAN;
+ begin
+    X := A = B or B /= C or A < C or A <= C or A > C or A >= B;
+    Y := A in 1 .. 20 or B not in 1 .. 20 or
+             (A in NATURAL and C not in NATURAL);
+ end int511PROC11;
+■
+=SML
+output_ada_program{script="-", out_file="int511H3.ada"};
+=TEX
+Logical expressions:
+=SML
+clean_up();
+new_script{name="INT511proc12", unit_type="PROC"};
+ⓈCN
+ procedure int511PROC12(A, B, C : in out BOOLEAN)
+ is
+	X : BOOLEAN;
+ begin
+    X := A and B;
+    A := X and then B;
+    B := X or B;
+    X := A or else B;
+    A := A xor B;
+    A := ((A and B) or C) and (B xor A);
+ end int511PROC12;
+■
+=SML
+output_ada_program{script="-", out_file="int511H4.ada"};
+=TEX
+Names and aggregates:
+=SML
+clean_up();
+new_script{name="INT511PACK6", unit_type="spec"};
+ⓈCN
+package int511PACK6 is
+     EMERGENCY : constant INTEGER := 999;
+     function F (X : INTEGER) return INTEGER;
+     type Interval is range -1000 .. +1000;
+end int511PACK6;
+■
+=SML
+output_ada_program{script="-", out_file="int511H51.ada"};
+new_script{name="INT511proc13", unit_type="PROC"};
+
+ⓈCN
+with int511PACK6;
+procedure int511PROC13
+ is
+    type IND2 is range 1 .. 2;
+    type IND3 is range 2 .. 4;
+    type PAIR is ARRAY(IND2) of NATURAL;
+    type PAIR3 is ARRAY(IND3) of PAIR;
+    P : PAIR;
+    P3 : PAIR3;
+    type GAUSS_QUAT is record RE, IMI, IMJ, IMK : INTEGER; end record;
+    GQ : GAUSS_QUAT;
+    function g(X : INTEGER) return GAUSS_QUAT
+    is begin return GAUSS_QUAT'(X, X, X, X);
+    end g;
+   function g_long_name(A : INTEGER) return GAUSS_QUAT renames g;
+   function plus_ind3(x, y: IND3) return IND3 renames "+";
+   function plus_interval(x, y: int511PACK6.Interval) return int511PACK6.Interval renames int511PACK6."+";
+   function "+" (x, y: int511PACK6.Interval) return int511PACK6.Interval renames int511PACK6."+";
+ begin
+    P := PAIR'(45, 46);
+    P3 := PAIR3'(P, P, P);
+    P := PAIR'(others => 9);
+    P3 := PAIR3'(P, others => PAIR'(99, 100));
+    P := PAIR'(8, others => 9);
+    P3 := PAIR3'(2 | 4 => P, 3 => PAIR'(1, 2));
+    P3 := PAIR3'(2 .. 3 => P, 4..4 => PAIR'(1, 2));
+    GQ := GAUSS_QUAT'(1,2,3,4);
+    GQ := GAUSS_QUAT'(RE | IMJ => 1, others => 2);
+    GQ := GAUSS_QUAT'(RE | IMJ => 4, IMI | IMK => 3);
+    GQ := GAUSS_QUAT'(others => 0);
+    GQ.RE := P3(2)(2);
+    P(1) := GQ.IMI;
+    P(2) := g(42).IMI;
+    P3(2)(2) := int511PACK6.F(int511PACK6.EMERGENCY);
+ end int511PROC13;
+■
+=SML
+output_ada_program{script="-", out_file="int511H52.ada"};
+system"cat int511H51.ada int511H52.ada > int511H5.ada ; rm -f int511H51.ada int511H52.ada";
+system"cat int511H1.ada int511H2.ada int511H3.ada int511H4.ada int511H5.ada > int511H.ada";
+system "rm -f int511H1.ada int511H2.ada int511H3.ada int511H4.ada int511H5.ada";
+=TEX
+\section{BODIES AND STUBS}
+Already covered.
+\section{BASIC DECLARATIONS}
+
+Only type definitions,
+named number declarations,
+and constant declarations with more than one constant have not been fully covered above.
+
+=SML
+clean_up();
+set_flag("cn_spark_syntax_warnings", true);
+new_script{name="INT511PACK7", unit_type="spec"};
+ⓈCN
+package int511PACK7 is
+   type FRUIT is (APPLE, BANANA, CHERRY, DATE, ELDERBERRY, FIG);
+   BRAMLEY, COX, GRANNY_SMITH : constant FRUIT := APPLE;
+   HALF : constant := 0.5;
+   THREE : constant := 3;
+   type HAPAX is (IT);
+   type SIGN is range -1 .. 1;
+   type TRIAD is array (SIGN) of FRUIT;
+--# --   Following disallowed by gnat:
+--# --   type SIGN2 is range TRIAD'RANGE;
+   type HUNDREDTHS is digits 2;
+   type PERCENT is digits 4 range 0.0 .. 99.99;
+--# --   Following disallowed by with gnat:
+--# --   type FIXHUNDREDTHS is delta 0.1;
+   type FIXPERCENT is delta 0.01 range 0.0 .. 99.99;
+   subtype ST1 is HUNDREDTHS range 1.0 .. 2.0;
+   subtype ST2 is HUNDREDTHS digits 1 range 1.1 .. 1.7;
+   subtype ST3 is FIXPERCENT delta 0.5 range 1.1 .. 2.2;
+   type DST1 is new HUNDREDTHS range 1.0 .. 2.0;
+   type DST2 is new HUNDREDTHS digits 1 range 1.1 .. 1.7;
+   type DST3 is new FIXPERCENT delta 0.5 range 1.1 .. 2.2;
+   type TRI_TRIAD is array(SIGN) of TRIAD;
+   type SQUARE is array(SIGN, SIGN) of FRUIT;
+   type CUBE is array(SIGN, SIGN, SIGN) of FRUIT;
+   subtype N4 is NATURAL range 1 .. 4;
+   type UNCON1 is array(N4 range <>) of FRUIT;
+   type UNCON2 is array(N4 range <>, N4 range <>) of FRUIT;
+   type UNCON3 is array(N4 range <>, N4 range <>, N4 range <>) of FRUIT;
+   subtype N2 is N4 range 2 .. 3;
+   subtype CON1 is UNCON1(N2);
+   subtype CON2 is UNCON2(N2, N2);
+   subtype CON3 is UNCON3(N2, N2, N2);
+   type REC1 is record INDICATOR : SIGN; end record;
+   type REC4 is record I1, I2, I3 : SIGN; F1, F2, F3, F4 : FRUIT; end record;
+end int511PACK7;
+■
+=SML
+set_string_control("cn_case_of_ada_keywords", "lower");
+output_ada_program{script="-", out_file="int511I.ada"};
+=TEX
+\section{PRAGMAS}
+
+Only type definitions and constant declarations with more than one constant have not been fully covered above.
+
+Type definitions:
+=SML
+clean_up();
+new_script{name="INT511PACK8", unit_type="spec"};
+ⓈCN
+pragma LIST(OFF);
+--# -- This annotation should be in the SPARK program but not in the listing
+package int511PACK8 is
+   X : INTEGER;
+   procedure P;
+end int511PACK8;
+■
+=SML
+set_string_control("cn_case_of_ada_keywords", "as input");
+output_ada_program{script="-", out_file="int511J1.ada"};
+new_script{name="INT511proc14", unit_type="PROC"};
+
+ⓈCN
+
+With int511pack8;
+Pragma List(On);
+Procedure int511proc14
+Is
+    Pragma List(Off);
+    Type INT Is Range -100 .. 100;
+    y : INT;
+    Pragma List(On);
+    Pragma Page;
+    Pragma Suppress(Range_Check, On=>y);
+Begin
+    Pragma List(Off);
+    y := 100;
+    Pragma List(On);
+    int511pack8.x := Integer(y);
+    int511pack8.p;
+End int511proc14;
+■
+
+=SML
+output_ada_program{script="-", out_file="int511J2.ada"};
+system"cat int511J1.ada int511J2.ada > int511J.ada ; rm -f int511J1.ada int511J2.ada";
+=TEX
+\section{OTHERS}
+=SML
+set_string_control("cn_case_of_ada_keywords", "as input");
+output_ada_program{script= "INT511PACK8'spec", out_file="temp1.ada"};
+output_ada_program{script= "INT511PROC14'proc", out_file="temp2.ada"};
+system"dd conv=ucase if=temp1.ada  > temp3.ada ";
+system"dd conv=ucase if=temp2.ada  >> temp3.ada ";
+store_mt_results
+mt_run[
+("output_ada_program.1.1", system, "dd conv=ucase if=int511J.ada | diff - temp3.ada", true)
+];
+store_mt_results
+mt_run_fail[
+("output_ada_program.1.2",  output_ada_program, {script="non-existent", out_file="/dev/null"},
+	gen_fail_msg "get_saved_cn_state" 507070 ["non-existent"])
+];
+=TEX
+
+
+\section{EPILOGUE}
+We use {\tt test} to test the standard output from {\tt findfile} below
+to see if {\tt gnatchop} is on the path. This is because {\tt which}
+(a) returns 0 (success) when it cannot find the program on Solaris
+and (b) behaves strangely (e.g., hangs) when not called from {\tt csh}.
+=DUMP int511.sh
+#!/bin/sh
+PROBLEMS=
+#GNATARGS='-gnatlvs'
+GNATARGS='-gnatlcv'
+MLFILE=int511.errorfiles.sml
+GNATFILEPFX=`echo int511 | dd conv=lcase 2>/dev/null`
+if	test -f `findfile gnatchop $PATH`
+then
+	rm -f $GNATFILEPFX?*.ads $GNATFILEPFX?*.adb
+	for file in int511?*.ada
+	do	echo gnatchopping $file
+		gnatchop $file >/dev/null
+		if [ $? != 0 -o ! -s $file ]
+		then PROBLEMS=$PROBLEMS" "$file"(gnatchop)"
+	       fi
+	done
+	for src in $GNATFILEPFX?*.ads
+	do	echo checking file $src
+		if	gcc -c $GNATARGS $src 2>&1
+		then	echo $src syntax-checked OK
+		else	echo $src failed to syntax-check
+			PROBLEMS="$PROBLEMS $src"$file"(gcc)"
+		fi
+	done
+	for src in $GNATFILEPFX?*.adb
+	do	echo checking file $src
+		if	gcc -c $GNATARGS $src 2>&1
+		then	echo $src syntax-checked OK
+		else	echo $src failed to syntax-check
+			PROBLEMS="$PROBLEMS $src""(gcc)"
+		fi
+	done
+	rm -f int511*.adb int511*.ads int511*.ali int511*.o
+	if	[ "x$PROBLEMS" != x ]
+	then	echo  Errors reported for:$PROBLEMS
+	fi
+		{	echo 'val error_files = '
+			for i in $PROBLEMS
+			do	echo '"'$i'"::'
+			done
+			echo 'nil;' ; } >$MLFILE
+else	echo '***' The module test generated a warning: GNAT is not available
+	echo '***' Please inspect the file int511.ada for errors
+	echo 'val error_files = [];' >$MLFILE
+fi
+rm -f int511.ada
+FIVE11=5"11"
+FIVE1I=51I
+cat  int511*.ada > int511.ada
+if	test  511 = $FIVE1I
+then	sed -e "/$FIVE1I/s/$FIVE1I/$FIVE11/g" < int$FIVE1I.ada >int$FIVE1I.cmp
+	if	cmp int$FIVE1I.cmp int$FIVE11.ada
+	then	echo "***" Normal and syntax-check-only results agree "***"
+		rm int$FIVE1I.cmp
+	else	echo "val error_files = ["'"'"int$FIVE1I.cmp"'"'"];" >$MLFILE
+	fi
+fi
+=TEX
+=SML
+system "sh int511.sh 2>&1";
+=TEX
+=SML
+val error_files = ["int511.sh"];
+use_file"int511.errorfiles.sml";
+store_mt_results (fn _ => (map (fn x => (x, false)) error_files)) ();
+diag_line (summarize_mt_results());
+=TEX
+\end{document}
+

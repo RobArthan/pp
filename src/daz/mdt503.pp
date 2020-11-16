@@ -1,0 +1,857 @@
+=IGN
+********************************************************************************
+mdt503.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+D% mdt503.doc ℤ $Date: 2005/05/28 14:15:48 $ $Revision: 1.22 $ $RCSfile: mdt503.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests: Compliance Notation Parser}
+
+\def\AbstractText{This document comprises test cases and test code/data for testing the DAZ parser as described in the document ISS/HAT/DAZ/DTD503.}
+
+\def\Reference{ISS/HAT/DAZ/MDT503}
+
+\def\Author{D.J. King,  A.C. Hayward}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT} %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests: Compliance Notation Parser} %% Mandatory field
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/MDT503} %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.22 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion} %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2005/05/28 14:15:48 $
+%% LaTeX2e port: }} %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Draft}   %% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: %\TPPauthor{A.C.~Hayward & WIN01} %% Mandatory field
+%% LaTeX2e port: \TPPauthors{D.J.~King & WIN01\\A.C.~Hayward & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.B.~Jones & HAT Manager}
+%% LaTeX2e port: \TPPabstract{This document comprises test cases and test code/data for testing the DAZ parser as described in the document ISS/HAT/DAZ/DTD503.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: Library \\ A.C. Hayward\\ D.J. King}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{daz,fmu}
+
+\subsection{Changes History} % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.1 (1994/03/25), \FormatDate{94/03/29}]
+First version.
+\item[Issue 1.2 (1994/03/30), \FormatDate{94/03/30}]
+Most tests now working.
+\item[Issue 1.3 (1994/03/30), \FormatDate{94/03/30}]
+Changed BOSparkNotmem to BOSparkNotMem.
+\item[Issue 1.4 (1994/04/07), \FormatDate{94/04/07}]
+Change to web\_cn since the formatting routines now return (int * string) list rather than string.
+\item[Issue 1.5 (1994/04/08), \FormatDate{94/04/08}]
+Change to web\_cn since the formatting routines now have FmtInfo as the first argument.
+\item[Issue 1.8 (1994/07/28) \FormatDate{94/07/21}]
+Major change. This module test is now solely for the parser.
+
+\item[Issues 1.9 (1994/10/18)-1.11 (1995/10/03)] Amended to accomodate enhancements work.
+
+\item[Issue 1.13 (1997/05/29)] To match IUCT WP 7 changes.
+\item[Issue 1.14 (1997/07/21)] To match IUCT WP 4 changes.
+\item[Issue 1.15 (1999/04/23)] SML'97 updates.
+\item[Issue 1.16 (2000/10/26)] Syntax changes for nested packages.
+\item[Issue 1.17 (2002/08/07)] Syntax changes for statement replacement (recently corrected).
+\item[Issue 1.18 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.19 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.20 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.21 (2004/12/08)] Adjustments to lexical class data type (for syntax of Ada labels).
+\item[Issue 1.22 (2005/05/28)] Compliance Notation reserved words are now prefixed by a dollar sign.
+\item[Issue 1.23 (2006/03/28)] Allowed for automated state management.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+
+This document comprises test cases and test code/data for testing the DAZ Compliance Notation as specified in \cite{ISS/HAT/DAZ/DTD503}.
+
+\subsection{Introduction}
+
+\subsubsection{Background and Purpose}
+This document is intended to supply module tests for the DAZ Compliance Notation Parser as defined in \cite{ISS/HAT/DAZ/DTD503} and implemented in \cite{ISS/HAT/DAZ/IMP503}. The tests are intended to meet the requirements for tests identified in the quality plan \cite{ISS/HAT/DAZ/PLN003}.
+
+\subsubsection{Dependencies}
+
+These tests depend on the test harness as implemented in DS/FMU/IED/IMP013, and its corresponding detailed design document, DS/FMU/IED/DTD013.
+
+\subsubsection{Possible Enhancements}
+
+None known.
+
+\subsubsection{Deficiencies}
+
+There are no known deficiencies.
+
+\section{INITIALISATION}
+
+First we need to load the test harnes and initialise it.
+
+=SML
+use_file "dtd013";
+use_file "imp013";
+init_mt_results();
+=TEX
+
+\section{PREAMBLE}
+
+Set up the theory database as necessary.
+
+=SML
+open_theory "z_library";
+force_delete_theory "mdt503" handle (_) => ();
+new_theory "mdt503";
+=TEX
+
+\section{TESTING CNParser}
+
+This is the signature for the structure containing the parser for SPARK.
+
+=SML
+open CNTypes CNParser;
+=TEX
+
+\subsection{Supporting functions}
+
+The following function looks at the label in a web clause (if there is one). The label determines the kind of web clause entered. This classification function is called from within the lexical analyser, and it is necessary for it to be called prior to the parser since the parser recognises a language in which the distinction between the kinds of web clause is made in the parser's input.
+
+=SML
+fun ⦏classify_label⦎ (itemlist : CN_LEX_ITEM list) : CN_LEX_ITEM list = (
+    case itemlist
+    of (LCLBracket, _)::(LCNumericLiteral, CNText ntxt)::(LCRBracket, _)::rest =>
+    (
+    (
+    (
+case nat_of_string ntxt
+of 1 => LCCompLabel
+| 2 => LCPPartLabel
+| 3 => LCVPartLabel
+| 4 => LCDecLabel
+| 5 => LCStmtLabel
+| 6 => LCSpecLabel
+| _ => LCCompLabel
+),
+CNText ("("^ntxt^")")
+)::rest
+)
+| _ => itemlist
+);
+=TEX
+
+Set up the Compliance Notation Reader Writer. This reads the input and then passes it through Lexical Analyser and the Parser.
+
+=SML
+fun ⦏cn_recogniser⦎ (start:string, lang:string, value:Lex.INPUT list,
+    finish:string) = (
+    if ReaderWriterSupport.PrettyNames.is_same_symbol(start, "Ⓢ")
+    andalso ReaderWriterSupport.PrettyNames.is_same_symbol(finish, "■")
+    andalso (lang = "CN")
+    then
+        let val save_cn_parser_state = get_cn_parser_state();
+        in
+            (CNParser.cn_parser o fst o CNLex.cn_lex classify_label) value
+        end
+    else
+        fail "cn_recogniser" 504010
+            [fn () => start, fn () => lang, fn () => finish]
+);
+=TEX
+
+This takes a string, and passes it through the Lexical analyser and the Parser to create a Compliance Notation version.
+
+=SML
+fun cn_of_input (inp : Lex.INPUT list) : CNTypes.WEB_CLAUSE =
+    (CNParser.cn_parser o fst o CNLex.cn_lex classify_label) inp;
+=TEX
+
+When we test the parser, we only check that the following bits of code
+compile without any errors. In a later document we check that the compliance notation produced by the Parser is what was intended. The following function returns true if the code compiled okay, and false if an error was produced.
+
+=SML
+val verbose : bool ref = ref false;
+local
+fun check_parser_aux (inp : Lex.INPUT list) : bool = (
+    (case (cn_of_input inp)
+    of x => true)
+    handle _ =>
+       ((if !verbose then (diag_string "** EXCEPTION RAISED"; ()) else()); false));
+in
+fun check_parser ([] : (string*(Lex.INPUT list)) list) = []
+|   check_parser ((n,inp)::xs : (string*(Lex.INPUT list)) list) =
+    (n, check_parser_aux inp)::(check_parser xs);
+end;
+=TEX
+=TEX
+\subsection{Expressions}
+
+\subsection{Relations}
+
+=SML
+val relation_t1 = "procedure relation1 is a,x,y,z : boolean; \
+\begin a := x and y; a := x and y and z; end relation1;";
+val relation_t2 = "procedure relation2 is a,x,y,z : boolean; \
+\begin a := x and then y; a := x and then y and then z; end relation2;";
+val relation_t3 = "procedure relation3 is a,x,y,z : boolean; \
+\begin a := x or y; a := x or y or z; end relation3;";
+val relation_t4 = "procedure relation4 is a,x,y,z : boolean; \
+\begin a := x or else y; a := x or else y or else z; end relation4;";
+val relation_t5 = "procedure relation5 is a,x,y,z : boolean; \
+\begin a := x xor y; a := x xor y xor z; end relation5;";
+val relation_t6 = "procedure relation6 is a : boolean; x,y : integer; \
+\begin a := x = y; a := x /= y; a := x < y; \
+\a := x <= y; a := x > y; a := x >= y; end relation6;";
+val relation_t7 = "procedure relation7 is a : boolean; \
+\begin a := 42 in 0..100; a := 42 not in 0..100; \
+\a := 42 in integer; a := 42 not in integer; end relation7;";
+val relation_t1_init = "procedure relation1 is a,x,y,z : boolean := (1 = 1); \
+\begin a := x and y; a := x and y and z; end relation1;";
+val _ = store_mt_results check_parser [
+    ("relation.1", [Lex.Text relation_t1]),
+    ("relation.2", [Lex.Text relation_t2]),
+    ("relation.3", [Lex.Text relation_t3]),
+    ("relation.4", [Lex.Text relation_t4]),
+    ("relation.5", [Lex.Text relation_t5]),
+    ("relation.6", [Lex.Text relation_t6]),
+    ("relation.7", [Lex.Text relation_t7]),
+    ("relation.1i", [Lex.Text relation_t1_init])];
+=TEX
+
+\subsubsection{Arithmetic operations}
+
+=SML
+val arith_t1 = "procedure factor1 is a : real; b : boolean; begin \
+\a := 42.0; a := 42.0 ** 42.0; a := abs 42.0; b := not true; end factor1;";
+val arith_t2 = "procedure multiply1 is a : real; b : integer; begin \
+\a := 42.0 * 42.0; a := 42.0 * 42.0 * 42.0; a := 42.0 / 3; \
+\b := 42.0 mod 3; b := 42.0 rem 2; end multiply1;";
+val arith_t3 = [Lex.Text "procedure add1 is a : real; b : string; begin \
+\a := 42.0 + 42.0; a := 42.0 + 42.0 + 42.0; a := 42.0 - 36.0; \
+\b := ", Lex.String "Hello", Lex.Text "&", Lex.String " ", Lex.Text "&",
+Lex.String "World", Lex.Text "; end add1;"];
+val arith_t4 = "procedure unary1 is a : real; begin \
+\a := +42.0; a := -42.0; end unary1;";
+val arith_t1_init = "procedure factor1 is a : real := 0.0; b : boolean; begin \
+\a := 42.0; a := 42.0 ** 42.0; a := abs 42.0; b := not true; end factor1;";
+val _ = store_mt_results check_parser [
+    ("factor.1", [Lex.Text arith_t1]),
+    ("multiply.1", [Lex.Text arith_t2]),
+    ("add.1", arith_t3),
+    ("unary.1", [Lex.Text arith_t4]),
+    ("factor.1i", [Lex.Text arith_t1_init])
+];
+=TEX
+
+\subsubsection{Primaries}
+
+At the parsing stage, we are unable to distinguish between a type conversion
+and a positional indexed component. Auxiliary expressions are not yet recognised and generated. Hence no test for them yet.
+
+=SML
+val primary_t1 = "procedure numeric1 is a : integer; begin a := 42; end numeric1;";
+val primary_t2 = [Lex.Text "procedure char1 is a : char; begin a := ", Lex.String "a",
+Lex.Text "; a := ", Lex.String "\"", Lex.Text "; a := ", Lex.String " ",
+Lex.Text "; end char1; "];
+val primary_t3 = [Lex.Text "procedure string1 is a : string; begin a := ",
+Lex.String "Hello, world", Lex.Text "; a := ",
+Lex.String "Apples", Lex.Text "; a := ",
+Lex.String "Zaphod Bebblebrox", Lex.Text "; end string1; "];
+val primary_t4 = "procedure indexed1 is a : integer; begin \
+\a := apple(1,2,3); a := apple(1,2)(3,4); end indexed1;";
+val primary_t5 = "procedure selected1 is a : integer; begin \
+\a := apple.ripe; a := apple(1).ripe; end selected1;";
+val primary_t6 = "procedure select1 is a : integer; begin \
+\a := apple; a := apple.colour; a := apple.colour.ripe; \
+\a := apple(1,2).colour; end select1;";
+val primary_t7 = "procedure funcall1 is a : integer; begin \
+\a := apple; a := apple (colour => red); \
+\a := apple (colour => red, ripe => true); a := apple (red); \
+\a := apple (red, true); end funcall1;";
+val primary_t8 = "procedure qualified1 is a : colour; begin \
+\a := colours'(blue); a := colours'(blue,red); a := colours'(first => blue); \
+\a := colours'(first => blue, second => red); \
+\a := colours'(first | second => blue); \
+\a := colours'(integer range 1 .. 5 | 7 => blue, 10 .. 12 => red); \
+\a := colours'(first => blue, others => red); \
+\a := colours'(first => blue, second => red, others => white); \
+\a := colours'(first | second => blue, others => red); \
+\a := colours'(others => white); end qualified1;";
+val primary_t9 = "procedure attribute1 is a : colours; begin \
+\a := colours'first; a := rainbow'base'first; \
+\a := apple'colour(first); end attribute1;";
+val primary_t10 = "procedure bracket1 is a : integer; begin \
+\a := (1 + 2); a := ((1 + 2) * (3 + 4)); \
+\a := (((1 + 2) * 3) + 4); end bracket1;";
+val primary_t9_init = "procedure attribute1 is a : colours := colours'(blue,red); begin \
+\a := colours'first; a := rainbow'base'first; \
+\a := apple'colour(first); end attribute1;";
+
+val _ = store_mt_results check_parser [
+    ("numeric.1", [Lex.Text primary_t1]),
+    ("char.1", primary_t2),
+    ("string.1", primary_t3),
+    ("indexed.1", [Lex.Text primary_t4]),
+    ("selected.1", [Lex.Text primary_t5]),
+    ("select.1", [Lex.Text primary_t6]),
+    ("funcall.1", [Lex.Text primary_t7]),
+    ("qualified.1", [Lex.Text primary_t8]),
+    ("attribute.1", [Lex.Text primary_t9]),
+    ("bracket.1", [Lex.Text primary_t10]),
+    ("attribute.1i", [Lex.Text primary_t9_init])
+];
+=TEX
+
+\subsection{Declarations}
+
+\subsubsection{Object declarations}
+
+=SML
+val obj_dec_t1 = [Lex.Text "procedure constant1 is x,y : constant string := ",
+Lex.String "Hello, world", Lex.Text "; begin null; end constant1; "];
+val obj_dec_t2 = "procedure variable1 is a : string; x,y,z : real; \
+\begin null; end variable1;";
+val _ = store_mt_results check_parser [
+    ("constant.1", obj_dec_t1),
+    ("variable.1", [Lex.Text obj_dec_t2])];
+=TEX
+
+\subsubsection{Type declarations}
+
+=SML
+val type_dec_t1 = "procedure enumeration1 is \
+\type COLOUR is (red, orange, yellow, green, blue, indigo, violet); \
+\type FRUIT is (apple, pear, orange, banana, grape); \
+\begin null; end enumeration1;";
+val type_dec_t2 = "procedure integer1 is type AGE is range 0..100; \
+\type x is range -42..42; \
+\begin null; end integer1;";
+val type_dec_t3 = "procedure real1 is type a is digits 3; \
+\type a is digits 3 range 0.00 .. 10.0; type b is delta 0.1; \
+\type b is delta 0.1 range 0.0 .. 9.9; begin null; end real1;";
+val type_dec_t4 = "procedure array1 is \
+\type COLOURS is array (wavelength range <>) of integer; \
+\type A is array (integer range <>, integer range <>) of real; \
+\type NOOFFRUIT is array (FRUITTYPE, RIPE) of integer; \
+\begin null; end array1;";
+val type_dec_t5 = "procedure record1 is type data is record \
+\day : day_range; month : month_range; year : year_range; end record;\
+\begin null; end record1;";
+val type_dec_t6 = "procedure private1 is type a is private; \
+\type b is limited private; begin null; end private1;";
+
+val _ = store_mt_results check_parser [
+    ("enumeration.1", [Lex.Text type_dec_t1]),
+    ("integer.1", [Lex.Text type_dec_t2]),
+    ("real.1", [Lex.Text type_dec_t3]),
+    ("array.1", [Lex.Text type_dec_t4]),
+    ("record.1", [Lex.Text type_dec_t5]),
+    ("private.1", [Lex.Text type_dec_t6])];
+=TEX
+
+\subsubsection{Subtype declarations}
+
+=SML
+val subtype_dec_t1 = "procedure subtype1 is subtype a is integer range 1..10; \
+\subtype rainbow is colours range red .. blue; begin null; end subtype1;";
+val subtype_dec_t2 = "procedure subtype2 is subtype a is integer range 1..10; \
+\subtype rainbow is colours; begin null; end subtype2;";
+
+val _ = store_mt_results check_parser [
+	("subtype.1", [Lex.Text subtype_dec_t1]),
+	("subtype.2", [Lex.Text subtype_dec_t2])
+];
+=TEX
+
+\subsubsection{Deferred constant declarations}
+
+=SML
+val def_const_dec_t1 = "procedure deferred1 is a : constant integer; \
+\x,y : constant real; begin null; end deferred1;";
+val _ = store_mt_results check_parser [("deferred.1", [Lex.Text def_const_dec_t1])];
+
+=TEX
+
+\subsubsection{Renaming declarations}
+
+
+=SML
+
+val rename_t1 = [Lex.Text "(4) ≡ function ", Lex.String ">=",
+Lex.Text " (x,y : in complex; z : out complex) return complex renames junk.",
+Lex.String ">=", Lex.Text "; "];
+val rename_t2 = "(4) ≡ function complex_add (x,y : in complex; z : out complex) \
+\return complex renames complex.add;";
+
+val _ = store_mt_results check_parser [
+    ("renaming.1", rename_t1),
+    ("renaming.2", [Lex.Text rename_t2])];
+=IGN
+cn_of_input rename_t1;
+=TEX
+\subsection{Statements};
+
+\subsubsection{Misc statements}
+
+
+The test for K slots is followed by a redefining clause to fill the first K slot.
+
+=SML
+val misc_stat_t1 = "procedure kslot1 is begin ⟨ more information ⟩ \
+\⟨ more information ⟩ (10) end kslot1;";
+val misc_stat_d1 = "⊑ null;";
+val misc_stat_t2 = "procedure specnoivars1 is begin Δ A [true] end specnoivars1;";
+val misc_stat_t3 = "procedure conzdecl1 is begin \
+\$con z : ℤ ⦁ Δ x, y [true, true] (4) end conzdecl1;";
+val misc_stat_d2 = "⊑ null;";
+
+val _ = store_mt_results check_parser [
+    ("kslot.1", [Lex.Text misc_stat_t1]),
+    ("dummy.1", [Lex.Text misc_stat_d1]),
+    ("spec_no_ivars.1", [Lex.Text misc_stat_t2]),
+    ("con_z_decl.1", [Lex.Text misc_stat_t3]),
+    ("dummy.2", [Lex.Text misc_stat_d2])];
+=TEX
+\subsubsection{Simple statements}
+
+=SML
+val simp_stat_t1 = "procedure null1 is begin null; end null1;";
+val simp_stat_t2 = "procedure assign1 is begin a := 42; end assign1;";
+val simp_stat_t3 = "procedure proccall1 is begin pick_apples; pick_apples(1,2); \
+\pick_apples(day => monday, time => 6.00); end proccall1;";
+val simp_stat_t4 = "procedure exit1 is begin exit; exit when 42 > 0; end exit1;";
+val simp_stat_t5 = "procedure return1 is begin return 42.0 + 42.0; end return1;";
+
+val _ = store_mt_results check_parser [
+    ("null.1", [Lex.Text simp_stat_t1]),
+    ("assign1", [Lex.Text simp_stat_t2]),
+    ("proc_call.1", [Lex.Text simp_stat_t3]),
+    ("exit.1", [Lex.Text simp_stat_t4]),
+    ("return.1", [Lex.Text simp_stat_t5])];
+=TEX
+
+\subsubsection{Compound statements}
+
+=SML
+val comp_stat_t1 = "procedure if1 is begin \
+\if 42.0 > 0 then null; end if; if 42.0 > 0 then null; else null; end if; \
+\if 42.0 > 0 then null; elsif 42 < 0 then null; end if; \
+\if 42.0 > 0 then null; elsif 42 < 0 then null; else null; end if; \
+\end if1;";
+val comp_stat_t2 = "procedure case1 is begin \
+\case a is when 1 => null; when 2..3|5|8 => null; when 4|6..7 => null; \
+\when others => null; end case; \
+\case a is when 1 => null; when 2..3|5|8 => null; when 4|6..7 => null; \
+\end case; end case1;";
+val comp_stat_t3 = "procedure loop1 is begin loop null; end loop;\
+\$till ⟦a>42⟧ loop null; end loop;\
+\apple : loop null; end loop apple;\
+\apple : $till ⟦a>42⟧ loop null; end loop apple; end loop1;";
+val comp_stat_t4 = "procedure while1 is begin while a < 42 loop null; end loop; \
+\while a < 42 $till ⟦b=false⟧ loop null; end loop; \
+\apple : while a < 42 loop null; end loop apple; \
+\apple : while a < 42 $till ⟦b=false⟧ loop null; end loop apple; end while1;";
+val comp_stat_t5 = "procedure for1 is begin \
+\for a in colours loop null; end loop; \
+\for a in reverse colours loop null; end loop; \
+\for a in integer range 1..10 loop null; end loop; \
+\for a in reverse integer range 1..10 loop null; end loop; \
+\for a in colours $till ⟦b=true⟧ loop null; end loop; \
+\for a in reverse colours $till ⟦b=true⟧ loop null; end loop; \
+\for a in integer range 1..10 $till ⟦b=true⟧ loop null; end loop; \
+\for a in reverse integer range 1..10 $till ⟦b=true⟧ loop null; end loop; \
+\apple : for a in colours loop null; end loop apple; \
+\apple : for a in reverse colours loop null; end loop apple; \
+\apple : for a in integer range 1..10 loop null; end loop apple; \
+\apple : for a in reverse integer range 1..10 loop null; end loop apple; \
+\apple : for a in colours $till ⟦b=true⟧ loop null; end loop apple; \
+\apple : for a in reverse colours $till ⟦b=true⟧ loop null; end loop apple; \
+\apple : for a in integer range 1..10 $till ⟦b=true⟧ loop null; end loop apple; \
+\apple : for a in reverse integer range 1..10 $till ⟦b=true⟧ loop null; \
+\end loop apple; end for1;";
+
+val _ = store_mt_results check_parser [
+    ("if.1", [Lex.Text comp_stat_t1]),
+    ("case.1", [Lex.Text comp_stat_t2]),
+    ("loop.1", [Lex.Text comp_stat_t3]),
+    ("while.1", [Lex.Text comp_stat_t4]),
+    ("for.1", [Lex.Text comp_stat_t5])];
+=TEX
+
+\subsection{Representation clauses}
+
+=SML
+(* length clause *)
+val repr_clause_t1 = "(2) ≡ for integer'size use 4*byte;";
+(* enumeration clause *)
+val repr_clause_t2 = "(2) ≡ for colours use (red => 1, green => 2, blue => 3);";
+(* record representation clause *)
+val repr_clause_t3 = "(2) ≡ for PROGRAM_STATUS_WORD use \
+\record at mod 8; SYSTEM_MASK at 0*WORD range 0 .. 7; \
+\PROTECTION_KEY at 0*WORD range 10 .. 11;\
+\MACHINE_STATE at 0*WORD range 12 .. 15; \
+\INTERRUPT_CAUSE at 0*WORD range 16 .. 31; \
+\ILC at 1*WORD range 0 .. 1;\
+\CC at 1*WORD range 2 .. 3; PROGRAM_MASK at 1*WORD range 4 .. 7; \
+\INST_ADDRESS at 1*WORD range 8 .. 31; end record;";
+(* address clause *)
+val repr_clause_t4 = "(2) ≡ for SWI use at 16#0002#;";
+
+val _ = store_mt_results check_parser [
+    ("length_rep.1", [Lex.Text repr_clause_t1]),
+    ("enumeration_rep.1", [Lex.Text repr_clause_t2]),
+    ("record_rep.1", [Lex.Text repr_clause_t3]),
+    ("address_rep.1", [Lex.Text repr_clause_t4])];
+=TEX
+
+\subsection{Specifications}
+
+\raggedright{Checking procedure and function specifications means we can also check $formal\_part$, $parlist$, $parameter\_specification$ and $mode$.}
+
+\subsubsection{Procedure specifications}
+
+=SML
+val proc_spec_t1 = "(3) ≡ procedure orange;";
+val proc_spec_t2 = "(3) ≡ procedure orange Δ j,k [true];";
+val proc_spec_t3 = "(3) ≡ procedure orange (x, y : IN integer; z : OUT integer);";
+val proc_spec_t4 = "(3) ≡ procedure orange (x : IN OUT integer) Δ x [true];";
+
+val _ = store_mt_results check_parser [
+    ("procedure_spec.1", [Lex.Text proc_spec_t1]),
+    ("procedure_spec.2", [Lex.Text proc_spec_t2]),
+    ("procedure_spec.3", [Lex.Text proc_spec_t3]),
+    ("procedure_spec.4", [Lex.Text proc_spec_t4])];
+=TEX
+
+\subsubsection{Function specifications}
+
+=SML
+val func_spec_t1 = "(3) ≡ function orange return integer;";
+val func_spec_t2 = "(3) ≡ function orange return integer Ξ j,k [true];";
+val func_spec_t3 = "(3) ≡ function orange (x : IN integer; y : OUT integer) return integer;";
+val func_spec_t4 = "(3) ≡ function orange (x : IN int; y : OUT int) return integer Ξ j,k [true];";
+
+val _ = store_mt_results check_parser [
+    ("function_spec.1", [Lex.Text func_spec_t1]),
+    ("function_spec.2", [Lex.Text func_spec_t2]),
+    ("function_spec.3", [Lex.Text func_spec_t3]),
+    ("function_spec.4", [Lex.Text func_spec_t4])];
+=TEX
+
+\subsubsection{Package specifications}
+
+=SML
+val pack_spec_t1 = "(4) ≡ package complex is x,y : real; end complex;";
+val pack_spec_t2 = "(4) ≡ package complex is \
+\function add_complex (z : in complex; w : out complex) return complex; \
+\private x,y : real; end complex;";
+
+val _ = store_mt_results check_parser [
+    ("package_spec.1", [Lex.Text pack_spec_t1]),
+    ("package_spec.2", [Lex.Text pack_spec_t2])];
+=TEX
+
+\subsection{Web clauses}
+
+\subsubsection{Compilations}
+
+=SML
+val comp_t1 = "procedure print_complex (z : in complex) is \
+\x,y : real; begin null; end print_complex;";
+val comp_t2 = "function add_complex (z,w : in complex) return complex is \
+\x,y,u,v : real; begin null; end add_complex;";
+val comp_t3 = "with toolkit; package complex_tools is \
+\function add_complex (z,w : in complex) return complex; \
+\procedure print_complex (z : in complex); end complex_tools;";
+val comp_t4 = "with toolkit; procedure a is begin nulll; end a;";
+val comp_t5 = "with toolkit; function b return c is begin null; end b;";
+val comp_t6 = "package body complex_tools is type complex is record \
+\x : real; y : real; end record; end complex_tools;";
+val comp_t7 = "package body complex_tools is type complex is record x : real; \
+\y : real; end record; origin : real; begin origin.x := 0; \
+\origin.y := 0;end complex_tools;";
+val comp_t8 = "separate (toolkit) package body complex_tools is type complex is \
+\record x : real; y : real; end record; origin : real; begin origin.x := 0; \
+\origin.y := 0; end complex_tools;";
+val comp_t9 = "with toolkit; package body complex_tools is type complex is \
+\record x : real; y : real; end record; origin : real; begin origin.x := 0; \
+\origin.y := 0; end complex_tools;";
+val comp_t10 = "with toolkit, extensions; separate (toolkit) package body \
+\complex_tools is type complex is record x : real; y : real; end record; \
+\origin : real; begin origin.x := 0; origin.y := 0; end complex_tools;";
+
+val _ = store_mt_results check_parser [
+    ("Compilation.1", [Lex.Text comp_t1]),
+    ("Compilation.2", [Lex.Text comp_t2]),
+    ("Compilation.3", [Lex.Text comp_t3]),
+    ("Compilation.4", [Lex.Text comp_t4]),
+    ("Compilation.5", [Lex.Text comp_t5]),
+    ("Compilation.6", [Lex.Text comp_t6]),
+    ("Compilation.7", [Lex.Text comp_t7]),
+    ("Compilation.8", [Lex.Text comp_t8]),
+    ("Compilation.9", [Lex.Text comp_t9]),
+    ("Compilation.10", [Lex.Text comp_t10])];
+=TEX
+
+\subsubsection{Private parts}
+
+=SML
+val priv_part_t1 = "(2) ≡ x,y : real;";
+
+val _ = store_mt_results check_parser [("Private.1", [Lex.Text priv_part_t1])];
+=TEX
+
+\subsubsection{Visible parts}
+(Parsing of renaming already checked elsewhere)
+=SML
+val vis_part_t1 = "(3) ≡ procedure do_nothing;";
+val vis_part_t2 = "(3) ≡ function zero return integer;";
+
+val _ = store_mt_results check_parser [
+    ("Visible.1", [Lex.Text vis_part_t1]),
+    ("Visible.2", [Lex.Text vis_part_t2])];
+=TEX
+
+\subsubsection{Dec}
+
+=SML
+val dec_t1 = "(4) ≡  procedure do_nothing is begin null; end do_nothing;";
+val dec_t2 = "(1) ≡ package body complex_tools is type complex is record \
+\x : real; y : real; end record; origin : real; begin origin.x := 0; \
+\origin.y := 0; end complex_tools;";
+val dec_t3 = "(4) ≡ procedure print_complex(z : in complex) is separate;";
+val dec_t4 = "(4) ≡ function add_complex(z,w : in complex) return complex \
+\is separate;";
+val dec_t5 = "(4) ≡ package body not_here is separate;";
+
+val _ = store_mt_results check_parser [
+    ("Dec.1", [Lex.Text dec_t1]),
+    ("Dec.2", [Lex.Text dec_t2]),
+    ("Dec.3", [Lex.Text dec_t3]),
+    ("Dec.4", [Lex.Text dec_t4]),
+    ("Dec.5", [Lex.Text dec_t5])];
+=TEX
+
+\subsubsection{Other Web clauses}
+
+=SML
+val other_web_clause_t1 = "⟨ nothing ⟩";
+val other_web_clause_t2 = "⊑ null;";
+val other_web_clause_t3 = "⟨ nothing ⟩";
+val other_web_clause_t4 = "⊑ null;";
+
+val _ = store_mt_results check_parser [
+    ("Web.1", [Lex.Text other_web_clause_t1]),
+    ("Web.2", [Lex.Text other_web_clause_t2]),
+    ("Web.3", [Lex.Text other_web_clause_t3]),
+    ("Web.4", [Lex.Text other_web_clause_t4])];
+=TEX
+\subsection{Arbitrary Replacements}
+=SML
+val arb_rep_t1 = "(1) !≡ -- 1 COMMENTARY\n-- MORE COMMENTARY\n";
+val arb_rep_t2 = "(2) !≡ -- 2 COMMENTARY\n-- MORE COMMENTARY\n";
+val arb_rep_t3 = "(3) !≡ -- 3 COMMENTARY\n-- MORE COMMENTARY\n";
+val arb_rep_t4 = "(4) !≡ -- 4 COMMENTARY\n-- MORE COMMENTARY\n";
+val arb_rep_t5 = "(5) !≡ -- 5 COMMENTARY\n-- MORE COMMENTARY\n";
+val arb_rep_t6 = "(6) !≡ -- 6 COMMENTARY\n-- MORE COMMENTARY\n";
+val arb_rep_t7 = " !≡ -- no label COMMENTARY\n-- MORE COMMENTARY\n";
+
+val arb_rep_d1 = "⟨ comp unit k-slot ⟩";
+val _ = check_parser [("", [Lex.Text arb_rep_d1])];
+val _ = store_mt_results check_parser [
+    ("ArbRep.1", [Lex.Text arb_rep_t1]),
+    ("ArbRep.2", [Lex.Text arb_rep_t2]),
+    ("ArbRep.3", [Lex.Text arb_rep_t3]),
+    ("ArbRep.4", [Lex.Text arb_rep_t4]),
+    ("ArbRep.5", [Lex.Text arb_rep_t5]),
+    ("ArbRep.6", [Lex.Text arb_rep_t6]),
+    ("ArbRep.7", [Lex.Text arb_rep_t7])];
+=TEX
+\subsection{Pragmas}
+N.B. the following are not intended to be examples of legal Ada pragmas
+(only syntactically correct ones as far as the tool is concerned).
+=SML
+val pragma_t1 = "procedure P is pragma INLINE(P); begin null; end P;";
+val pragma_t2 = "procedure P is begin pragma PAGE; end P;";
+val pragma_t3 = "pragma MEMORY_SIZE(16384);";
+val pragma_t4 = "pragma STORAGE_UNIT(BYTE=>4); \n pragma MEMORY_SIZE(16384);";
+val pragma_t5 = "with A; \
+\\n              pragma ELABORATE(B);\
+\\n              pragma ELABORATE(UNIT=>C);\
+\\n              package C is \
+\\n               X: INTEGER; \
+\\n              end C;";
+val pragma_t6 = "procedure P is begin pragma f(x=>x, y); end P;";
+
+val _ = store_mt_results check_parser [
+    ("Pragma.1", [Lex.Text pragma_t1]),
+    ("Pragma.2", [Lex.Text pragma_t2]),
+    ("Pragma.3", [Lex.Text pragma_t3]),
+    ("Pragma.4", [Lex.Text pragma_t4]),
+    ("Pragma.5", [Lex.Text pragma_t5]),
+    ("Pragma.6", [Lex.Text pragma_t6])
+];
+=TEX
+\subsection{Annotations}
+N.B. the following are not intended to be examples of legal SPARK annotations
+(only syntactically correct ones as far as the tool is concerned).
+=SML
+val annot_t1 = "procedure P is x: INTEGER; --# ANNOTATION AS DECLARATION\
+\\n              begin null; end P;";
+val annot_t2  = "procedure P is x: INTEGER; \
+\\n              begin --# ANNOTATION AS STATEMENT \
+\\n              null; end P;";
+val annot_t3  = "procedure P is --# PROCEDURE ANNOTATION \n x: INTEGER; \
+\\n              begin --# ANNOTATION AS STATEMENT \
+\\n              null; end P;";
+val annot_t4  = "function P return INTEGER\
+\\n             --# FUNCTION ANNOTATION \n is x: INTEGER; \
+\\n              begin null; end P;";
+val annot_t5  = "function P return INTEGER\
+\\n             -- NOT A FUNCTION ANNOTATION \n is x: INTEGER; \
+\\n              begin null; end P;";
+val annot_t6  = "package P --# package ANNOTATION \
+\\n              is x: INTEGER; end P;";
+val annot_t7  = "package P --# package ANNOTATION \
+\\n              is x: INTEGER; private c : INTEGER; end P;";
+val annot_t8  = "package body P --# package ANNOTATION \
+\\n              is x: INTEGER; end P;";
+val annot_t9  = "with Q; --# ANNOTATION \
+\\n               package body P -- NOT PACKAGE ANNOTATION \
+\\n              is x: INTEGER; end P;";
+val annot_t10  = "package body Q --# package ANNOTATION \n is \
+\\n                     x: INTEGER; end Q;";
+val annot_t11  = "function P return INTEGER is \
+\\n              procedure Q ;\n --# procedure ANNOTATION \
+\\n              --pragma INTERFACE(LANGUAGE => C);\
+\\n              begin null; end P;";
+val annot_t12  = "function P return INTEGER is \
+\\n              function Q return INTEGER ;\n --# function ANNOTATION \
+\\n              --pragma INTERFACE(LANGUAGE => C);\
+\\n              begin null; end P;";
+val annot_t13  = "package body Q is \
+\\n               $using x:INTEGER; pragma PAGE; $implement X $by a = b;\
+\\n                y : INTEGER; begin x := y; end Q;";
+
+val _ = store_mt_results check_parser [
+    ("Annot.1", [Lex.Text annot_t1]),
+    ("Annot.2", [Lex.Text annot_t2]),
+    ("Annot.3", [Lex.Text annot_t3]),
+    ("Annot.4", [Lex.Text annot_t4]),
+    ("Annot.5", [Lex.Text annot_t5]),
+    ("Annot.6", [Lex.Text annot_t6]),
+    ("Annot.7", [Lex.Text annot_t7]),
+    ("Annot.8", [Lex.Text annot_t8]),
+    ("Annot.9", [Lex.Text annot_t9]),
+    ("Annot.10", [Lex.Text annot_t10]),
+    ("Annot.11", [Lex.Text annot_t11]),
+    ("Annot.12", [Lex.Text annot_t12]),
+    ("Annot.13", [Lex.Text annot_t13])
+];
+=TEX
+\section{SUMMARY OF RESULTS}
+
+=SML
+diag_line(summarize_mt_results());
+=TEX
+
+\end{document}
+=IGN
+verbose := true;
+fun tp s = cn_of_input [Lex.Text s];
+tp annot_t10;

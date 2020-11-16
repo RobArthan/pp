@@ -1,0 +1,255 @@
+=IGN
+********************************************************************************
+dtd040.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  dtd040.doc  ℤ $Date: 2002/10/17 15:10:58 $ $Revision: 1.8 $ $RCSfile: dtd040.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design for the Theory of Characters and Strings}
+
+\def\AbstractText{This document contains the detailed design of the theory of characters and strings for ICL HOL.}
+
+\def\Reference{DS/FMU/IED/DTD040}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST Project}  %% Mandatory field
+%% LaTeX2e port: \TPPtitle{Detailed Design for the Theory of Characters and Strings}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Detailed Design for the \cr
+%% LaTeX2e port: Theory of Characters and Strings}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD040}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.8 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+%% LaTeX2e port: }}  %% Mandatory field
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{D.J. King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{R.D. Arthan & WIN01\\K. Blackburn & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D. Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design of the theory of characters and strings for ICL HOL.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/10/07)]
+First issue.
+\item [Issue 1.2 (1991/10/08) (25 November 1991)]
+Draft for review.
+
+\item[Issue 1.4 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.5 (1992/01/27) (23rd January 1992)]
+$new\_axiom$, $simple\_new\_type\_defn$ and $new\_type\_defn$
+all changed to take lists of keys, rather than single ones.
+
+\item[Issue 1.6 (1992/05/14) (14 May 1992)] Use correct quotation symbols.
+
+\item[Issue 1.7 (1992/08/24)]
+	Add indexing characters.
+
+%\item[\FormatDate{$Date: 2002/10/17 15:10:58 $%
+%}, issue \SCCSversion~]
+
+\item[Issue 1.8 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.9 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains a detailed design
+for the theory ``char''
+called for in \cite{DS/FMU/IED/HLD011}.
+The design is implemented in \cite{DS/FMU/IED/IMP040}.
+
+\subsection{Introduction}
+
+This document introduces characters and strings into
+the ICL HOL System. The concrete representation of a
+character is a natural number between 0 and 255 inclusive,
+the numbers notionally
+representing the ordinal values of the characters.
+The type of strings, $STRING$ is introduced as
+a type abbeviation for a list of characters.
+
+\subsubsection{Purpose and Background}
+This document contains the detailed design for the theory ``char''.
+This defines the types $CHAR$ and $STRING$ for use in
+ICL HOL.
+
+\subsubsection{Dependencies}
+This document depends on \cite{DS/FMU/IED/IMP039},
+and the theory design tools of \cite{DS/FMU/IED/DTD035}.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None.
+
+\section{THE THEORY CONTENTS}
+
+\subsection{Theory Name}
+
+=THDOC
+req_name "char" (Value "list");
+=DESCRIBE
+=ENDDOC
+
+\subsection{Definitions}
+=THDOC
+req_const(⦏"IsCharRep"⦎,ⓣℕ→BOOL⌝);
+req_defn(["IsCharRep","is_char_rep_def"], ([], ⌜∀x ⦁ IsCharRep x = x < 256⌝));
+=DESCRIBE
+The concrete representation type for characters
+are the natural numbers between 0 and 255 inclusive,
+notionally corresponding to the ordinal values of each
+character.
+=ENDDOC
+
+=THDOC
+req_type(⦏"CHAR"⦎,0);
+req_defn(["CHAR","char_def"],([],⌜∃ f:CHAR→ℕ⦁ TypeDefn IsCharRep f⌝));
+=DESCRIBE
+The type of chars, $⦏CHAR⦎$ is given by the representation
+function $IsCharRep$.
+=ENDDOC
+=THDOC
+req_const(⦏"AbsChar"⦎, ⓣℕ→CHAR⌝);
+req_const(⦏"RepChar"⦎, ⓣCHAR→ℕ⌝);
+req_defn(["AbsChar","RepChar","abs_char_rep_char_def"],([],
+⌜
+(∀ a⦁ AbsChar (RepChar a) = a) ∧
+  (∀ r⦁ IsCharRep r ⇔ RepChar (AbsChar r) = r)
+⌝));
+=DESCRIBE
+This definition describes the
+functions $AbsChar$ and $RepChar$ which
+are mappings from the concrete representation to the
+abstract representation and vice versa, respectively.
+The domain of $RepChar$ is equal to the range of
+$AbsChar$. $AbsChar$ is known by the kernel
+and appears in theorems generated by
+the conversion $char\_conv$.
+=ENDDOC
+
+=THDOC
+req_type_abbrev(⦏"STRING"⦎,[],ⓣCHAR LIST⌝);
+=DESCRIBE
+This is the type for representing strings.
+=ENDDOC
+\section{THE SIGNATURE}
+=DOC
+signature ⦏Char⦎ = sig
+=DESCRIBE
+This is the signature for the theory of characters
+and strings.
+=ENDDOC
+\subsection{Definitions}
+=DOC
+	val ⦏is_char_rep_def⦎ : THM
+	val ⦏char_def⦎ : THM
+	val ⦏abs_char_rep_char_def⦎ : THM
+=DESCRIBE
+These Standard ML variables are bound to the definitions
+in the theory ``char''.
+=ENDDOC
+=SML
+end (* of signature Char *);
+=TEX
+\section{TEST POLICY}
+The functions in this document should be tested according to the
+general criteria listed out in \cite{DS/FMU/IED/PLN008}, using the
+tests in \cite{DS/FMU/IED/MDT040}.
+The theories produced should be checked by the theory design tools
+of \cite{DS/FMU/IED/DTD035}, against the theory design provided.
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+

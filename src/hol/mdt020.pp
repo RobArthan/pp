@@ -1,0 +1,775 @@
+=IGN
+********************************************************************************
+mdt020.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% mdt020.doc   ℤ $Date: 2012/03/17 14:24:38 $ $Revision: 1.22 $ $RCSfile: mdt020.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for ICL HOL Symbol Table}
+
+\def\AbstractText{This document contains the implementation for the symbol table module for ICL HOL.}
+
+\def\Reference{DS/FMU/IED/DTD020}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests for ICL HOL Symbol Table}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD020}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.22 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2012/03/17 14:24:38 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the implementation for the
+%% LaTeX2e port: symbol table module for ICL HOL.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library\\RDA\\AJH\\DJK}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.6 (1991/07/30), \FormatDate{91/07/30} ]
+First draft for comment.
+
+\item[Issue 1.7 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.8 (1992/01/27) (23rd January 1992)]
+$new\_axiom$, $simple\_new\_type\_defn$ and $new\_type\_defn$
+all changed to take lists of keys, rather than single ones.
+\item [Issue 1.9 (1992/01/31) (31st January 1992)]
+Fixed duplicated identities.
+\item [Issue 1.10 (1992/04/09) (8th April 1992)]
+Changes required by CR0016.
+\item [Issue 1.11 (1992/04/14) (14th April 1992)]
+Changes required by CR0017.
+\item [Issue 1.12 (1992/05/21) (7 July 1992)]
+New interface to $get\_const\_language$. {}
+\item [Issue 1.13 (1992/07/07), 1.14 (2002/03/08)]
+Adapted for new function {\it get\_alias\_info} and for fix to
+{\it undeclare\_alias}
+\item[Issue 1.16 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.17 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.18 (2005/05/07)] HOL now supports left-associative operators.
+\item[Issues 1.19 (2005/12/15), 1.20 (2005/12/15)] Adjustments for the kernel interface and symbol table reform.
+\item[Issues 1.21 (2012/03/17),1.22 (2012/03/17)] Added tests for {\em get\_type\_abbrev}.
+\item[Issue 1.23 (2012/03/17)] Theory access interfaces now return lists in declaration order.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module tests for the symbol table module for ICL HOL
+as specified in \cite{DS/FMU/IED/DTD020}.
+\subsection{Introduction}
+
+\section{TEST CASES}
+The structure of the test cases broadly follows the structure of the
+detailed design \cite{DS/FMU/IED/DTD020}. Since the symbol table module
+is essentially a black box and so, for example, the precise format used
+to represent symbol table information in the theory database is taken
+as implementation-dependent, we test the module against itself.
+
+The tests come in four groups, the first three groups being subdivided
+according to the structure of \cite{DS/FMU/IED/DTD020}. The first group
+tests the basic sanity of each interface.
+The second group checks out error cases.
+The third group
+tests out the treatment of context changes.
+The fourth group tests out the response of the symbol table to
+deletion of objects of various sorts.
+\section{TEST DATA AND TEST CODE}
+=SML
+use_file"dtd013";
+use_file"imp013";
+init_mt_results();
+open Lex;
+set_flag("ignore_warnings", true);
+open_theory"min";
+val thys_to_go = rev(tl (rev (get_descendants "min")));
+map delete_theory thys_to_go;
+(delete_type"→"; "type → deleted") handle Fail _ => "type → not loaded";
+=TEX
+=SML
+fun list_eq (eq:'a * 'a -> bool) ((a :: x), (b :: y)) : bool = (
+	eq(a,b) andalso list_eq eq (x, y)
+) | list_eq eq ([], []) = true
+| list_eq _ _ = false;
+=TEX
+=SML
+fun gci_eq (Value (a,b),Value (c,d)) = a =: c andalso
+	list_eq (fn ((p,q),(r,s)) => p = r andalso q =: s) (b,d)
+| gci_eq (Nil, Nil) = true
+| gci_eq _ = false;
+=TEX
+=SML
+fun gti_eq (Value (a,Value(b,c)),Value (d,Value(e,f))) = a = d andalso
+	b = e andalso c =: f
+| gti_eq(Value (a,Nil),Value (d,Nil)) = (a = d)
+| gti_eq (Nil, Nil) = true
+| gti_eq _ = false;
+=TEX
+\subsection{Group 1}
+\subsubsection{Terminators}
+=SML
+map (undeclare_terminator o implode) (get_current_terminators());
+store_mt_results_show mt_run
+[("SymbolTable.1.1.1", get_current_terminators, (), [])];
+declare_terminator "==";
+store_mt_results_show mt_run
+[("SymbolTable.1.1.2", get_current_terminators, (), [["=", "="]])];
+store_mt_results_show mt_run
+[("SymbolTable.1.1.2a", get_terminators, "-", ["=="])];
+undeclare_terminator "==";
+store_mt_results_show mt_run
+[("SymbolTable.1.1.3", get_current_terminators, (), [])];
+store_mt_results_show mt_run
+[("SymbolTable.1.1.3a", get_terminators, "-", [])];
+=TEX
+\subsubsection{Fixity}
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.1.2.1", get_fixity, "∧", Nonfix)];
+declare_binder "∀";
+declare_infix (10, "∧");
+declare_left_infix (20, "---");
+declare_right_infix (30, "-+-");
+declare_prefix(5, "¬");
+declare_postfix(20, "!");
+store_mt_results_show mt_run
+[("SymbolTable.1.2.2", get_fixity, "!", Postfix 20),
+ ("SymbolTable.1.2.3", get_fixity, "¬", Prefix 5),
+ ("SymbolTable.1.2.4.1", get_fixity, "∧", Infix (Lex.RightAssoc, 10)),
+ ("SymbolTable.1.2.4.2", get_fixity, "---", Infix (Lex.LeftAssoc, 20)),
+ ("SymbolTable.1.2.4.3", get_fixity, "-+-", Infix (Lex.RightAssoc, 30)),
+ ("SymbolTable.1.2.5", get_fixity, "∀", Binder)];
+=TEX
+=SML
+map declare_nonfix ["∀", "∧", "¬", "!"];
+store_mt_results_show mt_run
+[("SymbolTable.1.2.6", get_fixity, "!", Nonfix),
+ ("SymbolTable.1.2.7", get_fixity, "¬", Nonfix),
+ ("SymbolTable.1.2.8", get_fixity, "∧", Nonfix),
+ ("SymbolTable.1.2.9", get_fixity, "∀", Nonfix)];
+=TEX
+\subsubsection{Constants and Aliases}
+=SML
+store_mt_results_show (mt_runf gci_eq)
+[("SymbolTable.1.3.1", get_const_info, "T", Nil)];
+new_type("BOOL", 0);
+new_type("→", 2);
+new_const("T", BOOL);
+store_mt_results_show (mt_runf gci_eq)
+[("SymbolTable.1.3.2", get_const_info, "T", Value(BOOL, [("T", BOOL)]))];
+=TEX
+=SML
+fun eqty (ty : TYPE) : TYPE = (
+	mk_→_type(ty, mk_→_type(ty, BOOL))
+);
+val vartya = mk_vartype"'a";
+val vartyb = mk_vartype"'b";
+
+new_const("=", eqty vartya);
+val ty_of_iff = mk_→_type(BOOL, mk_→_type(BOOL, BOOL));
+declare_alias("⇔", mk_const("=", ty_of_iff));
+store_mt_results_show (mt_runf gci_eq)
+[("SymbolTable.1.3.3", get_const_info, "⇔", Value(ty_of_iff, [("=", ty_of_iff)]))];
+store_mt_results_show (mt_runf (op =$))
+[("SymbolTable.1.3.4", resolve_alias, ("⇔", ty_of_iff), mk_const("=", ty_of_iff))];
+
+=TEX
+=SML
+declare_alias("⇔", mk_const("T", BOOL));
+store_mt_results_show (mt_runf gci_eq)
+[("SymbolTable.1.3.5", get_const_info, "⇔",
+	Value(mk_vartype"'0", [("T", BOOL), ("=", ty_of_iff)]))];
+store_mt_results_show (mt_runf (op =$))
+[("SymbolTable.1.3.6", resolve_alias, ("⇔", ty_of_iff),
+	mk_const("=", ty_of_iff)),
+ ("SymbolTable.1.3.7", resolve_alias, ("⇔", BOOL),
+	mk_const("T", BOOL))];
+=TEX
+=SML
+undeclare_alias("⇔", mk_const("T", BOOL));
+store_mt_results_show (mt_runf gci_eq)
+[("SymbolTable.1.3.8", get_const_info, "⇔", Value(ty_of_iff, [("=", ty_of_iff)]))];
+=TEX
+=SML
+undeclare_alias("⇔", mk_const("=", ty_of_iff));
+store_mt_results_show (mt_runf gci_eq)
+[("SymbolTable.1.3.9", get_const_info, "⇔", Nil)];
+=TEX
+=SML
+declare_alias("⇔", mk_const("=", ty_of_iff));
+store_mt_results_show mt_run
+[("SymbolTable.1.3.10", get_alias, ("=", ty_of_iff), "⇔")];
+=TEX
+=SML
+fun funeqty (ty1 : TYPE) (ty2 : TYPE) : TYPE = eqty (mk_→_type (ty1, ty2));
+
+declare_alias("funeq", mk_const("=", funeqty vartya vartyb));
+store_mt_results_show mt_run
+[("SymbolTable.1.3.11", get_alias, ("=", funeqty vartya vartya), "funeq"),
+ ("SymbolTable.1.3.12", get_alias, ("=", ty_of_iff ), "⇔")];
+=TEX
+=SML
+fun ⦏is_same_type⦎ (ty1:TYPE) (ty2:TYPE) : bool = (
+	is_type_instance ty1 ty2 andalso is_type_instance ty2 ty1
+);
+fun alias_info_order a b = (uncurry Sort.string_order o (fst ** fst))(a, b);
+fun eq_alias_info (Nil, Nil) = true
+|   eq_alias_info ((Value ctys1), (Value ctys2)) = (
+	all (combine (Sort.sort alias_info_order ctys1)
+		(Sort.sort alias_info_order  ctys2))
+	(fn ((s:string, ty), (s', ty')) => s = s' andalso is_same_type ty ty')
+	handle Fail _ => false
+) | eq_alias_info _ = false;
+=TEX
+=SML
+store_mt_results_show (mt_runf eq_alias_info)
+[("SymbolTable.1.3.13", get_alias_info, "nonalias", Nil),
+ ("SymbolTable.1.3.14", get_alias_info, "=", Value
+	[("=", eqty vartya), ("⇔", ty_of_iff), ("funeq", funeqty vartya vartyb)])];
+=TEX
+=SML
+undeclare_alias("funeq", mk_const("=", funeqty vartya vartyb));
+store_mt_results_show (mt_runf eq_alias_info)
+[("SymbolTable.1.3.15", get_alias_info, "=", Value
+	[("=", eqty vartya), ("⇔", ty_of_iff)])];
+=TEX
+=SML
+undeclare_alias("=", mk_const("=", eqty vartya));
+store_mt_results_show (mt_runf eq_alias_info)
+[("SymbolTable.1.3.16", get_alias_info, "=", Value
+	[("⇔", ty_of_iff)])];
+=TEX
+=SML
+undeclare_alias("⇔", mk_const("=", ty_of_iff));
+store_mt_results_show (mt_runf eq_alias_info)
+[("SymbolTable.1.3.17", get_alias_info, "=", Value
+	[])];
+=TEX
+\subsubsection{Types and Type Abbreviations}
+=SML
+store_mt_results_show (mt_runf gti_eq)
+[("SymbolTable.1.4.1", get_type_info, "ENDO", Nil)];
+val ty_endo = mk_→_type(mk_vartype"'a", mk_vartype"'a");
+=TEX
+=SML
+declare_type_abbrev("ENDO", ["'a"], ty_endo);
+store_mt_results_show (mt_runf gti_eq)
+[("SymbolTable.1.4.2", get_type_info, "ENDO", Value(1, Value(["'a"], ty_endo)))];
+=TEX
+=SML
+store_mt_results_show (mt_runf gti_eq)
+[("SymbolTable.1.4.3", get_type_info, "→", Value(2, Nil))];
+=TEX
+=SML
+undeclare_type_abbrev"ENDO";
+store_mt_results_show (mt_runf gti_eq)
+[("SymbolTable.1.4.4", get_type_info, "ENDO", Nil)];
+=TEX
+=SML
+declare_type_abbrev("→", ["'a"], ty_endo);
+store_mt_results_show (mt_runf gti_eq)
+[("SymbolTable.1.4.5", get_type_info, "→", Value(1, Value(["'a"], ty_endo)))];
+undeclare_type_abbrev"→";
+store_mt_results_show (mt_runf gti_eq)
+[("SymbolTable.1.4.6", get_type_info, "→", Value(2, Nil))];
+=TEX
+=SML
+declare_type_abbrev("→", ["'a"], ty_endo);
+val bool_bool = mk_ctype("→", [BOOL, BOOL]);
+store_mt_results_show mt_run
+[("SymbolTable.1.4.7", get_type_abbrev, bool_bool, Value ("→", [ⓣBOOL⌝]))];
+declare_type_abbrev("BB", [], bool_bool);
+store_mt_results_show mt_run
+[("SymbolTable.1.4.8", get_type_abbrev, bool_bool, Value ("BB", []))];
+undeclare_type_abbrev "BB";
+store_mt_results_show mt_run
+[("SymbolTable.1.4.9", get_type_abbrev, bool_bool, Value ("→", [ⓣBOOL⌝]))];
+undeclare_type_abbrev"→";
+store_mt_results_show (mt_runf gti_eq)
+[("SymbolTable.1.4.10", get_type_info, "→", Value(2, Nil))];
+=TEX
+\subsubsection{Languages}
+=SML
+new_theory"xmin";
+new_theory"x";
+set_current_language"Greek";
+new_type("TYPE", 42);
+new_const("CONST", BOOL);
+new_const("CONST2", BOOL);
+declare_const_language("CONST2", "Latin");
+store_mt_results_show mt_run
+[("SymbolTable.1.5.4", get_const_language, "=", ["HOL"]),
+ ("SymbolTable.1.5.4a", get_const_language, "CONST2", ["Greek", "Latin"]),
+ ("SymbolTable.1.5.4b", get_const_language, "1234", ["HOL"]),
+ ("SymbolTable.1.5.4c", get_const_language, "\"abc", ["HOL"]),
+ ("SymbolTable.1.5.4d", get_const_language, "`a", ["HOL"]),
+ ("SymbolTable.1.5.5", get_const_language, "CONST", ["Greek"])];
+set_current_language"Japanese";
+store_mt_results_show mt_run
+[("SymbolTable.1.5.8", get_const_language, "=", ["HOL"]),
+ ("SymbolTable.1.5.8a", get_const_language, "CONST2", ["Japanese", "Latin"]),
+ ("SymbolTable.1.5.8b", get_const_language, "1234", ["HOL"]),
+ ("SymbolTable.1.5.8c", get_const_language, "\"abc", ["HOL"]),
+ ("SymbolTable.1.5.8d", get_const_language, "`a", ["HOL"]),
+ ("SymbolTable.1.5.9", get_const_language, "CONST", ["Japanese"])];
+open_theory"min";
+("SymbolTable.1.5.12a", get_const_language "CONST2");
+store_mt_results_show mt_run
+[("SymbolTable.1.5.12", get_const_language, "=", ["HOL"]),
+ ("SymbolTable.1.5.13", get_const_language, "CONST", ["HOL"]),
+ ("SymbolTable.1.5.13a", get_const_language, "1234", ["HOL"]),
+ ("SymbolTable.1.5.13b", get_const_language, "\"abc", ["HOL"]),
+ ("SymbolTable.1.5.13c", get_const_language, "`a", ["HOL"]),
+ ("SymbolTable.1.5.12a", get_const_language, "CONST2", ["HOL"])];
+open_theory"x";
+ ("SymbolTable.1.5.16a", get_const_language "CONST2");
+store_mt_results_show mt_run
+[("SymbolTable.1.5.16", get_const_language, "=", ["HOL"]),
+ ("SymbolTable.1.5.16a", get_const_language, "CONST2", ["Japanese", "Latin"]),
+ ("SymbolTable.1.5.17", get_const_language, "CONST", ["Japanese"])];
+store_mt_results_show mt_run
+[("SymbolTable.1.5.18", get_language, "x", "Japanese"),
+ ("SymbolTable.1.5.19", get_language, "min", "HOL")];
+open_theory"min";
+delete_theory"x";
+=TEX
+\subsubsection{Miscellaneous}
+=SML
+declare_binder"E";
+declare_binder"E1";
+new_theory"x";
+declare_binder "A";
+declare_infix (10, "∧");
+declare_prefix(5, "¬");
+declare_postfix(20, "!");
+declare_nonfix"E";
+
+declare_binder "A1";
+declare_infix (100, "∧_1");
+declare_prefix(50, "¬_1");
+declare_postfix(200, "!_1");
+declare_nonfix"E1";
+declare_left_infix (100, "---");
+declare_left_infix (200, "\\\\");
+
+store_mt_results_show mt_run
+[("SymbolTable.1.6.1", rev o get_binders, "x", ["A1", "A"])];
+store_mt_results_show mt_run
+[("SymbolTable.1.6.2.1", rev o get_right_infixes, "x", [(100, "∧_1"), (10, "∧")]),
+("SymbolTable.1.6.2.2", rev o get_left_infixes, "x", [(200, "\\\\"), (100, "---")]),
+ ("SymbolTable.1.6.3", rev o get_prefixes, "x", [(50, "¬_1"), (5, "¬")]),
+ ("SymbolTable.1.6.4", rev o get_postfixes, "x", [(200, "!_1"), (20, "!")])];
+store_mt_results_show mt_run
+[("SymbolTable.1.6.5", rev o get_nonfixes, "x", ["E1", "E"])];
+
+open_theory"min";
+delete_theory"x";
+=TEX
+=SML
+new_theory"x";
+new_const("A", BOOL);
+new_type("Z", 1);
+store_mt_results_show mt_run
+[("SymbolTable.1.6.6", get_const_theory, "A", "x"),
+ ("SymbolTable.1.6.7", get_type_theory, "Z", "x")];
+open_theory"min";
+delete_theory"x";
+=TEX
+\subsection{Group 3}
+To check out the context handling we first set up a more complex theory hierarchy
+than we have used previously:
+=SML
+new_theory"level1";
+new_theory"level2a";
+new_theory"level3a";
+open_theory"level1";
+new_theory"level2b";
+new_theory"level3b";
+open_theory"level1";
+declare_binder"level1binder";
+open_theory"level2a";
+new_const("level1binder", BOOL);
+open_theory"level3a";
+declare_nonfix"level1binder";
+store_mt_results_show mt_run
+[("SymbolTable.3.1.1", get_fixity, "level1binder", Nonfix)];
+open_theory"level2a";
+store_mt_results_show mt_run
+[("SymbolTable.3.1.2", get_fixity, "level1binder", Binder)];
+open_theory"level3b";
+store_mt_results_show mt_run
+[("SymbolTable.3.1.3", get_fixity, "level1binder", Binder)];
+=TEX
+=SML
+open_theory"min";
+map delete_theory["level3a", "level2a", "level3b", "level2b", "level1"];
+=TEX
+=SML
+new_theory"x";
+new_type("T", 2);
+new_const("A", BOOL);
+new_const("∃", mk_→_type(mk_→_type(mk_vartype"'a", BOOL), BOOL));
+val A = mk_const("A", BOOL);
+val ∃ = mk_const("∃", mk_→_type(mk_→_type(mk_vartype"'a", BOOL), BOOL));
+val B = mk_var("B", BOOL);
+val x = mk_var("x", BOOL);
+
+new_axiom(["ax"], list_mk_∃([B, x], A));
+new_spec(["spec"], 1, get_axiom "x" "ax");
+store_mt_results_show mt_run
+[("SymbolTable.3.2.1", get_const_theory, "B", "x"),
+ ("SymbolTable.3.2.2", get_type_theory, "T", "x")];
+
+new_theory"y";
+store_mt_results_show mt_run
+[("SymbolTable.3.2.3", get_const_theory, "B", "x"),
+ ("SymbolTable.3.2.4", get_type_theory, "T", "x")];
+
+open_theory"x";
+delete_theory"y";
+
+delete_type"T";
+
+store_mt_results_show mt_run_fail
+[
+ ("SymbolTable.3.2.5", get_const_theory, "B", gen_fail_msg "get_const_theory" 12201 ["B"]),
+ ("SymbolTable.3.2.6", get_type_theory, "T", gen_fail_msg "get_type_theory" 12202 ["T"])
+];
+=TEX
+\subsection{Group 4}
+=TEX
+=SML
+open_theory"min";
+new_theory"thy1";
+
+declare_infix(0, "xyz");
+declare_infix(0, "xyzsafe");
+declare_terminator"#X";
+val rat = new_type("RAT", 0);
+val rat_plus_ty = mk_→_type(rat, mk_→_type(rat, rat));
+val rat_plus = new_const("+_rat", rat_plus_ty);
+declare_alias("+", rat_plus);
+declare_type_abbrev ("TYABB", [], BOOL);
+declare_type_abbrev ("TYABBSAFE", [], BOOL);
+=TEX
+=SML
+store_mt_results_show (mt_runf (op =:))
+[("SymbolTable.4.1.1", expand_type_abbrev, ("TYABB", []), BOOL),
+ ("SymbolTable.4.1.2", expand_type_abbrev, ("TYABBSAFE", []), BOOL)];
+=TEX
+=SML
+undeclare_type_abbrev"TYABB";
+store_mt_results_show mt_run_fail
+[("SymbolTable.4.1.3", expand_type_abbrev, ("TYABB", []),
+		gen_fail_msg "expand_type_abbrev" 20404 ["TYABB"])];
+=TEX
+=SML
+declare_type_abbrev ("TYABB", [], BOOL);
+store_mt_results_show (mt_runf (op =:))
+[("SymbolTable.4.1.4", expand_type_abbrev, ("TYABB", []), BOOL)];
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.1.5", Combinators.I,
+	["#", "X"] mem get_current_terminators(), true)];
+=TEX
+=SML
+undeclare_terminator"#X";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.1.6", Combinators.I,
+	["#", "X"] mem get_current_terminators(), false)];
+=TEX
+=SML
+declare_terminator"#X";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.1.7", Combinators.I,
+	["#", "X"] mem get_current_terminators(), true)];
+=TEX
+=SML
+new_theory"thy2";
+new_type("ℕ", 0);
+val ℕ_plus_ty = mk_→_type(ℕ, mk_→_type(ℕ, ℕ));
+val ℕ_plus = new_const("+", ℕ_plus_ty);
+declare_postfix(0, "xyz");
+declare_infix(0, "xyzsafe2");
+declare_type_abbrev ("TYABB", [], ℕ)		(* Warning *);
+declare_type_abbrev ("TYABBSAFE2", [], ℕ);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.2.1", get_fixity, "xyz", Postfix 0)];
+=TEX
+=SML
+declare_nonfix"xyz";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.2.2", get_fixity, "xyz", Infix (RightAssoc, 0)),
+("SymbolTable.4.2.3", get_fixity, "xyzsafe", Infix (RightAssoc, 0)),
+("SymbolTable.4.2.4", get_fixity, "xyzsafe2", Infix (RightAssoc, 0))];
+=TEX
+=SML
+open_theory"-";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.2.5", get_fixity, "xyz", Infix (RightAssoc, 0))];
+=TEX
+=SML
+declare_nonfix"xyz";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.2.6", get_fixity, "xyz", Nonfix),
+("SymbolTable.4.2.7", get_fixity, "xyzsafe", Infix (RightAssoc, 0)),
+("SymbolTable.4.2.8", get_fixity, "xyzsafe2", Infix (RightAssoc, 0))];
+=TEX
+=SML
+undeclare_type_abbrev"TYABB";
+=TEX
+=SML
+store_mt_results_show (mt_runf (op =:))
+[("SymbolTable.4.2.9", expand_type_abbrev, ("TYABB", []), BOOL),
+ ("SymbolTable.4.2.10", expand_type_abbrev, ("TYABBSAFE", []), BOOL),
+ ("SymbolTable.4.2.11", expand_type_abbrev, ("TYABBSAFE2", []), ℕ)];
+=TEX
+=SML
+store_mt_results_show (mt_runf (op =$))
+[("SymbolTable.4.2.12", resolve_alias, ("+", rat_plus_ty), rat_plus),
+ ("SymbolTable.4.2.13", resolve_alias, ("+", ℕ_plus_ty), ℕ_plus)];
+=TEX
+=SML
+undeclare_alias("+", rat_plus);
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("SymbolTable.4.2.14", resolve_alias, ("+", rat_plus_ty),
+		gen_fail_msg "resolve_alias" 20304 ["+"])];
+store_mt_results_show (mt_runf (op =$))
+[("SymbolTable.4.2.15", resolve_alias, ("+", ℕ_plus_ty), ℕ_plus)];
+=TEX
+=SML
+declare_alias("+", rat_plus);
+=TEX
+=SML
+store_mt_results_show (mt_runf (op =$))
+[("SymbolTable.4.2.16", resolve_alias, ("+", rat_plus_ty), rat_plus),
+ ("SymbolTable.4.2.17", resolve_alias, ("+", ℕ_plus_ty), ℕ_plus)];
+=TEX
+=SML
+undeclare_alias("+", rat_plus);
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("SymbolTable.4.2.18", resolve_alias, ("+", rat_plus_ty),
+		gen_fail_msg "resolve_alias" 20304 ["+"])];
+store_mt_results_show (mt_runf (op =$))
+[("SymbolTable.4.2.19", resolve_alias, ("+", ℕ_plus_ty), ℕ_plus)];
+=TEX
+=SML
+undeclare_terminator"#X";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.2.20", Combinators.I,
+	["#", "X"] mem get_current_terminators(), false)];
+=TEX
+=SML
+declare_terminator"#X";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.2.21", Combinators.I,
+	["#", "X"] mem get_current_terminators(), true)];
+=TEX
+=SML
+undeclare_terminator"#X";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.2.22", Combinators.I,
+	["#", "X"] mem get_current_terminators(), true)];
+=TEX
+=SML
+undeclare_terminator"#X";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.2.23", Combinators.I,
+	["#", "X"] mem get_current_terminators(), false)];
+=TEX
+=SML
+open_theory"min";
+delete_theory"thy2";
+delete_theory"thy1";
+new_theory"thy1";
+val foo = new_const ("FOO", BOOL);
+val type0 = new_type ("TYPE0", 0);
+val type2 = new_type ("TYPE2", 2);
+declare_alias("ALIAS", foo);
+declare_alias("ALIAS2", mk_t);
+declare_type_abbrev ("AB0", [], type0);
+declare_type_abbrev ("AB1", ["'a"], mk_ctype("TYPE2", [mk_vartype"'a", type0]));
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.3.1", length, get_type_abbrevs "-", 2)];
+=TEX
+=SML
+delete_type "TYPE2";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.3.2", length, get_type_abbrevs "-", 1)];
+=TEX
+=SML
+new_theory"thy2";
+val type0a = new_type("TYPE0A", 0);
+declare_type_abbrev ("AB0", [], type0a)	(* Warning *);
+=TEX
+=SML
+store_mt_results_show (mt_runf (op =:))
+[("SymbolTable.4.3.3", expand_type_abbrev, ("AB0", []), type0a)];
+=TEX
+=SML
+delete_type "TYPE0A";
+=TEX
+=SML
+store_mt_results_show (mt_runf (op =:))
+[("SymbolTable.4.3.4", expand_type_abbrev, ("AB0", []), type0)];
+=TEX
+=SML
+open_theory"thy1";
+delete_theory"thy2";
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.3.5", Combinators.I, length(get_type_abbrevs "-"), 1),
+ ("SymbolTable.4.3.6", Combinators.I, length(get_aliases "-"), 2)];
+=TEX
+=SML
+delete_type "TYPE0";
+delete_const foo;
+=TEX
+=SML
+store_mt_results_show mt_run
+[("SymbolTable.4.3.7", Combinators.I, length(get_type_abbrevs "-"), 0),
+ ("SymbolTable.4.3.8", Combinators.I, length(get_aliases "-"), 1)];
+=TEX
+\section{SUMMARY OF RESULTS}
+=TEX
+=SML
+diag_string(summarize_mt_results());
+=TEX
+
+\end{document}
+
+
+

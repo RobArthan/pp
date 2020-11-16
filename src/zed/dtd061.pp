@@ -1,0 +1,872 @@
+=IGN
+********************************************************************************
+dtd061.doc: this file is part of the PPZed system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  dtd061.doc ℤ $Date: 2011/07/11 11:44:45 $ $Revision: 1.39 $ $RCSfile: dtd061.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of the Z Parser}
+
+\def\AbstractText{This document contains the detailed design for the parser for HOL/Z.}
+
+\def\Reference{DS/FMU/IED/DTD061}
+
+\def\Author{R.D. Arthan, D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design of the Z Parser}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD061}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.39 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2011/07/11 11:44:45 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: %\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthors{R.D.~Arthan&WIN01\\D.J.~King&WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & HAT Manager}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the detailed design for the
+%% LaTeX2e port: parser for HOL/Z.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item [Issues 1.1 (1992/03/31) to 1.12 (1992/06/29)]
+Initial Drafts.
+\item[Issue 1.13 (1992/06/30))]
+Forced creation of $dtd061.grm.run$, even if it
+previously exists.
+\item[Issue 1.18 (1992/12/01))]
+The parser is now not sensitive to the difference between standard
+and extended Z.
+\item[Issue 1.19 (1992/12/10))]
+Global rename from wrk038.doc issue 1.9.
+\item[Issue 1.20 (1994/03/17)]
+Added structure ZParserInternals to the signature of ZParser.
+\item[Issue 1.21 (1995/11/09)]
+Moved the completely enclosed form of fancy-fix expression into $Expr4$ so it now longer requires brackets around its operand.
+\item[Issue 1.22 (1996/02/29)]
+Added path setting to call to slrp database.
+\item[Issue 1.23 (1999/02/16),1.24 (1999/03/07)]
+Update for NJML.
+\item[Issue 1.25 (1999/04/23)]
+Update for extra portability.
+\item[Issue 1.26 (2000/06/30)]
+Productions for $\mu$-expressions with no dot moved into the right place.
+\item[Issue 1.27 (2000/08/01)]
+Now uses shell script to run the parser generator.
+\item[Issue 1.28 (2001/12/12)] Removed local declarations for Poly/ML port.
+\item[Issue 1.29 (2002/01/23)] Support for left associative operators.
+\item[Issue 1.30 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.31 (2002/10/17)] PPZed-specific updates for open source release
+\item[Issue 1.32 (2005/08/01)] Now allows ISO-standard syntax for fixity paragraphs (with brackets round the templates).
+\item[Issue 1.33 (2006/01/12)] Now support decoration of fancyfix identifiers.
+\item[Issue 1.35 (2006/04/20)] Added support for floating point literals
+\item[Issue 1.36 (2007/08/03)] Quoted identifiers are not allowed in templates.
+\item[Issue 1.37 (2010/04/01)] Support for empty schemas.  SLRP grammar for declarations tightened, obviating error 61104 from phase 2 syntax check.
+\item[Issue 1.38 (2011/07/10)] Separated parsing of lambda and mu expressions.
+\item[Issue 1.39 (2011/07/11)] Support for empty schemas in paragraphs.
+\item[Issue 1.40 (2011/09/03)] With LALR(1), the syntax for tuples does not need to be made wider than necessary.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported PPZed to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+The phase 2 checks and transformations are yet to be documented.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the detailed design for the parser for HOL/Z
+as required in \cite{DS/FMU/IED/HLD018}.
+
+\subsection{Introduction}
+
+\subsubsection{Purpose and Background}
+
+This document gives the detailed design for the parser for HOL/Z.
+The interface specification is quite simple. The parser is
+essentially a complex black box and is implemented using
+the SLRP parser generator, see \cite{DS/FMU/IED/DTD017} using a grammar
+based on that specified in \cite{DS/FMU/IED/DEF007}.
+
+\subsubsection{Dependencies}
+The parser is dependent on the Z lexical analyser, \cite{DS/FMU/IED/DTD060},
+and on the HOL symbol table, \cite{DS/FMU/IED/DTD020}.
+%\subsubsection{Possible Enhancements}
+\subsubsection{Deficiencies}
+None known.
+
+\section{DESIGN ISSUES}
+
+
+\subsection{Diagnostics}
+It is a requirement that the parser gives helpful diagnostics
+when the grammar recognises an error, and that it aims to point the
+user directly to the location of the error.
+
+For the syntax errors in which the input contains a token
+which prevents further parsing,
+it is sufficient in the Z parser to provide diagnostics
+similar to those in HOL, in which the tokens already recognised
+are printed out, followed by a marker ``$<?>$'', and the symbol which
+was unacceptable.
+
+It is necessary that diagnostic messages reproduce
+the user's input verbatim.
+One example where care is needed to ensure that this is possibly when
+printing out partially parsed input is in function applications:
+a function applied to an argument is represented either as a template
+e.g., ⓩ(\_ + \_) (1, 2)⌝, or with the fixity rule applied; thus
+ⓩ1 + 2⌝. Other examples are constructs, such as set comprehensions
+with optional constituents.
+
+To achieve a precise diagnostic message,
+any structural information necessary to reproduce the user's input
+needs to be maintained in the data structure which represents a
+parsed Z paragraph.
+This requires that the grammar be analysed for productions where structural
+information might be lost, and that information be recorded in the data
+structure for parsed paragraphs.
+
+The BNF grammar which has been chosen accepts a slightly larger language.
+Checks are made to ensure that the input lies in
+the desired language (extended or standard as determined by user-settable
+options). This  allows higher level diagnostics to be
+produced. For example, if a predicate is provided in a place where
+an expression is expected, then the situation can be explained as such
+(rather than having to say that some token or other was not expected).
+Care has to be taken, however, to ensure that as much contextual information
+is included in the diagnostic report as given in the diagnostics for an
+unexpected token.
+
+\subsection{SLR Problems}
+
+It is quite hard to describe the language of \cite{DS/FMU/IED/DEF007} with
+a grammar which is directly amenable to automatic parser-generation,
+and the reference description in \cite{DS/FMU/IED/DEF007} uses a number
+of features of BS BNF which are not available with SLRP.
+To get round the problems we use two standard compiler-writer's tricks:
+
+\begin{enumerate}
+\item
+For constructs where the reference description imposes restrictions which
+are hard to describe using the available tools one uses a grammar for
+a superset of the language and makes checks that the input  is in
+the language during a second phase of parsing.
+An example of this arise from the $DecName$/$VarName$ distinction in
+\cite{DS/FMU/IED/DEF007} which goes against the grain of the usual treatment
+of bracketing.
+\item
+For constructs where the reference description makes short range contextual
+distinctions in the BNF, again one uses a superset and during a second phase of
+parsing, one transforms the parse tree to reflect the context. An example
+of this arises from the need to distinguish generic instantiations
+from horizontal schemas in certain contexts.
+\end{enumerate}
+
+The nature of the checks is such that the parser must be organised
+in two phases, a context-free parse in phase 1 and a trawl to implement
+the above tricks in phase 2. This organisation is, in fact, internal
+to the parser and is not visible at its user interface. However, it does
+mean that the user will see slightly different styles of error message
+in the two different phases. This is currently felt to be not inappropriate,
+since the phase 2 errors are, in some sense, higher level errors than those
+of phase 1.
+
+The checks and transformations which are required are described alongside
+the affected productions and a check-list of them is given in section
+TBA (for now see phase 2 of the parser implementation in \cite{DS/FMU/IED/IMP061}).
+
+\section{GRAMMAR}
+
+The grammar of  \cite{DS/FMU/IED/DEF007} requires some recasting
+for use in the parser. This section contains the actual form
+for processing with $SLRP$ and inclusion in the implementation.
+We include reduction functions for use in the implementation.
+These have mnemonic names relating to the grammar rules in which
+they appear in order to make the grammar easier to change when necessary.
+
+The main differences in the grammar is the  widening of the grammar for
+$Expr1$ to allow its re-use (possibly with some extra checks) in
+all places in the grammar where applied use
+of something approximately like a fancy-fix expression is called for.
+In more detail this works out as follows.
+
+\begin{enumerate}
+\item
+We identify 8 lexical classes for identifiers used to form
+fancy-fix expressions, as follows (where \ldots\ stands for
+a non-empty part of the expression)
+
+\begin{tabular}{|l|l|}\hline
+Class & Position in Expression \\\hline
+$InOp$		&	\_ $Id: dtd061.doc,v 1.39 2011/07/11 11:44:45 rda Exp rda $ \_			\\\hline
+$PostOp$	&	\_ $Id: dtd061.doc,v 1.39 2011/07/11 11:44:45 rda Exp rda $				\\\hline
+$PreOp$		&	$Id: dtd061.doc,v 1.39 2011/07/11 11:44:45 rda Exp rda $ \_				\\\hline
+$BeginOp$	&	$Id: dtd061.doc,v 1.39 2011/07/11 11:44:45 rda Exp rda $ \_ \ldots			\\\hline
+$PostBeginOp$	&	\_ $Id: dtd061.doc,v 1.39 2011/07/11 11:44:45 rda Exp rda $ \_ \ldots		\\\hline
+$ThenOp$	&	\ldots\ \_ $Id: dtd061.doc,v 1.39 2011/07/11 11:44:45 rda Exp rda $ \_ \ldots	\\\hline
+$EndOp$		&	\ldots\ \_ $Id: dtd061.doc,v 1.39 2011/07/11 11:44:45 rda Exp rda $			\\\hline
+$PreEndOp$	&	\ldots\ \_ $Id: dtd061.doc,v 1.39 2011/07/11 11:44:45 rda Exp rda $ \_		\\\hline
+\end{tabular}
+
+\item
+In the fixity paragraph, we give a simple SLR(1) grammar for templates
+equivalent to that of \cite{DS/FMU/IED/DEF007}. This grammar just
+uses the terminal $Id: dtd061.doc,v 1.39 2011/07/11 11:44:45 rda Exp rda $ for the constituent identifiers. The parser
+suppresses the classification of identifiers as $InOp$ etc. while it
+is processing fixity paragraphs and then after making the required
+uniqueness checks uses the information in the fixity paragraphs
+to update the tables in which the classification information is held.
+\item
+The six places in the grammar of \cite{DS/FMU/IED/DEF007} in which
+fancy-fix forms occur, namely $DefLhs$, $Branch$, $Pred4$, $Expr1$,
+$VarName$ and $DecName$.
+are handled uniformly by re-using the $Expr1$ syntax, widened to
+allow both argument place-holders and actual arguments to appear.
+The parser then checks at the point of use whether the $Expr1$ has
+the correct form.
+\end{enumerate}
+
+\subsection{Paragraphs}
+We map the terms, given sets and constraints of \cite{DS/FMU/IED/DEF007}
+onto a single nonterminal, $GeneralTerm$. This is done because of
+SLR(1) problems right at the other end of the grammar in
+$Expr4$.
+This enables one parser to handle all of the requirements for parsing Z.
+=DUMP dtd061.grm.txt
+⦏Paragraph⦎		= Fixity				(red_fixity x1 stk)
+			| GeneralTerm				(red_general_term x1 stk)
+			| AbbDef				(red_abb_def x1 stk)
+			| FreeTypeDef				(red_free_type_def x1 stk)
+			| AxDes				(red_ax_des x1 stk)
+			| Conjecture				(red_conjecture x1 stk);
+=TEX
+\subsubsection{Fixity Paragraph}
+
+Several points are to be noted in these productions.
+\begin{enumerate}
+\item
+The generic template $GTemplate$ and $Template$ of \cite{DS/FMU/IED/DEF007}
+are
+commoned up in this production.
+\item
+The $rel$ option does not have a numeric precedence parameter. This
+is not the case in the production, and a subsequent
+check is required.
+\item
+We anticipate that early on in the parsing process the parser will
+look at the first token of the paragraph and, if it is `$fun$',
+`$gen$' or `$rel$', the parser will arrange for all non-reserved identifiers
+to be classified as $Id: dtd061.doc,v 1.39 2011/07/11 11:44:45 rda Exp rda $ (rather than $PreOp$ etc.).
+The parser will then check after parsing that the uniqueness rules
+for each template are satisfied.
+\item
+The forms of template containing decoration are not allowed in
+a fixity paragraph.
+\end{enumerate}
+
+=DUMPMORE dtd061.grm.txt
+⦏Fixity⦎			= FixityClass, Templates		(red_templates x1 x2 stk)
+			| FixityClass, Number, Templates	(red_prec_templates x1 x2 x3 stk)
+			| FixityClass, Number, Assoc, Templates
+						(red_prec_assoc_templates x1 x2 x3 x4 stk);
+=TEX
+=DUMPMORE dtd061.grm.txt
+⦏Templates⦎		= Template				(red_template x1 stk)
+			| `LBrk`, Template, `RBrk`			(red_template x2 stk)
+			| Template, `Comma`, Templates
+					(red_template_templates x1 x2 x3 stk)
+			| `LBrk`, Template, `RBrk`, `Comma`, Templates
+					(red_template_templates x2 x4 x5 stk);
+
+⦏Template⦎		= StubIds				(red_stub_ids x1 stk)
+			| IdStubs				(red_id_stubs x1 stk);
+
+⦏StubIds⦎		= Stub, TmplId				(red_stub_id x1 x2 stk)
+			| Stub, TmplId, Stub			(red_stub_id_stub x1 x2 x3 stk)
+			| Stub, TmplId, StubIds			(red_stub_id_stub_ids x1 x2 x3 stk);
+
+⦏IdStubs⦎			= TmplId, Stub			(red_id_stub x1 x2 stk)
+			| TmplId, Stub, TmplId				(red_id_stub_id x1 x2 x3 stk)
+			| TmplId, Stub, IdStubs			(red_id_stub_id_stubs x1 x2 x3 stk);
+
+⦏TmplId⦎			= Id				(red_tmpl_id x1 stk);
+=TEX
+
+\subsubsection{Given Set Definition, Constraint and Term}
+$Expr4$ q.v. has been widened to allow a $Pred$ to begin
+with a generic formal parameter list. This should only be allowed at
+the outermost level, and then the resulting $Pred$ is either a generic one
+or if it consists of a single generic formal parameter list it must
+be a given set definition.
+
+=DUMPMORE dtd061.grm.txt
+⦏GeneralTerm⦎	= Pred					(red_pred x1 stk)
+			| Pred, `Ampersand`, Pred		(red_pred_constraint x1 x2 x3 stk);
+=TEX
+Note that in the second two forms the first $Pred$ has to be a given
+set definition and that these forms are only allowed when the
+$GeneralTerm$ is serving as a constraint.
+
+A $GeneralTerm$ used as a term is distinguished by the use of
+the Z Quine corners to delimit it.
+=TEX
+\subsubsection{Abbreviation Definition}
+=DUMPMORE dtd061.grm.txt
+⦏AbbDef⦎		= EqDef						(red_eq_def x1 stk)
+			| `Sch`, DefLhs, `Is`, VSchemaText
+								(red_schema_box x1 x2 x3 x4 stk);
+
+⦏EqDef⦎			= DefLhs, `EqHat`, Pred		(red_deflhs_pred x1 x2 x3 stk);
+=TEX
+We take the meat of a $DefLhs$ just as $Expr1$. It is required that the expression
+be a simple variable or a possibly fancy-fix
+generic instantiation thereof.
+=DUMPMORE dtd061.grm.txt
+⦏DefLhs⦎		= Expr1				(red_expr1_as_def_lhs x1 stk);
+=TEX
+\subsubsection{FreeType Definition}
+We take $Branches$ to be a `$\vert$' separated list of $Expr1$s.
+
+Here the $Expr1$s on the left of
+the `$::=$' are the $DecName$s of \cite{DS/FMU/IED/DEF007}.
+
+=DUMPMORE dtd061.grm.txt
+⦏FreeTypeDef⦎		= Expr1, `ColonsEq`, Branches
+					(red_a_free_type x1 x2 x3 stk)
+			| Expr1, `ColonsEq`, Branches, `Ampersand`, FreeTypeDef
+					(red_free_types x1 x2 x3 x4 x5 stk);
+
+⦏Branches⦎		= Pred						(red_pred_as_branch x1 stk)
+			| Pred, `Bar`, Branches			(red_branches x1 x2 x3 stk);
+=TEX
+\subsection{Axiomatic box}
+=DUMPMORE dtd061.grm.txt
+⦏AxDes⦎		= `Ax`, VSchemaText
+					(red_ax_box x1 x2 stk)
+			| `Ax`, `LSqBrk`, SomeExprs, `RSqBrk`, `Bars`, VSchemaText
+					(red_gen_ax_box x1 x2 x3 x4 x5 x6 stk);
+=TEX
+\subsection{Conjecture}
+As with constraint we just use $Pred$ for the notion of a possibly generic term:
+=DUMPMORE dtd061.grm.txt
+⦏Conjecture⦎		= `TurnStile`, Pred
+					(red_no_id_conjecture x1 x2 stk)
+			| Id, `TurnStile`, Pred	
+					(red_id_conjecture x1 x2 x3 stk);
+=TEX
+\section{PREDICATES, SCHEMAS AND EXPRESSIONS}
+\subsection{Discussion}
+The constructs containing quantifiers or logical
+operators create a problem because with them the context
+determines whether they are schema forms or predicate forms.
+
+The issue here is that some contexts require predicates, some require
+expressions and others may permit either depending on outer context.
+A schema expression will serve as either a predicate or an expression.
+However, a construct formed with quantifiers or logical operators (which we
+assume is taken to be a predicate by default) needs recasting
+where an expression is required.
+Wherever relevant in the grammar which follows we state what the
+contextual rules which enable these distinctions to be made.
+
+The main difference between Z and extended Z is that extended Z also permits
+predicates as expressions and vice versa.
+Thus the contextual rules mentioned in the previous paragraph are not
+enforced for extended Z.
+Since the contextual distinction evaporates,
+some way is needed to provide a context
+in which a schema expression formed with quantifiers or logical operators
+is required. Such a context is supplied by the `⦂' operator, for which
+the left-hand operator is taken to be in a context in which the rules
+of standard Z apply (to the quantifiers and/or logical operations at
+the top levels).
+For example, in standard Z:
+
+=GFT Standard Z Examples
+ⓩA ∧ B⌝					is a predicate conjunction
+ⓩ∀A | a = a ⦁ B⌝				is a predicate quantifier
+ⓩ[x:A ∧ B | x.c = 1]⌝				contains a schema conjunction
+=TEX
+
+However, in extended Z:
+
+=GFT Extended Z Examples
+ⓩ(A ∧ B) ∈ {true}⌝				contains a predicate conjunction
+ⓩ(∀A | a = a ⦁ B) ⦂ [A; B]⌝			contains a schema quantifier
+ⓩ[A ∧ B ∨ C ⇔ D] ⦂ [A; B; C; D]⌝		contains no predicate logical operators
+ⓩ(A ∧ [B | C ∧ D] ⦂ [A; B]⌝			contains both sorts of conjunction
+=TEX
+The point in the last example is that the local reversion to standard
+Z to the left of the `⦂' does not apply to the conjunction nested inside
+the horizontal schema but only to the outermost logical operators and/or
+quantifiers.
+\subsection{Predicates and Schemas}
+In a $Pred$ the $Pred1$s are contexts requiring predicates.
+=DUMPMORE dtd061.grm.txt
+⦏Pred⦎			= Pred1				(red_pred1_as_pred x1 stk)
+			| Pred1, `Semi`, Pred			(red_pred_semi_pred x1 x2 x3 stk);
+=TEX
+$Pred1$, $Pred2$ and $Pred3$ cater for both schemas and predicates.
+
+In a $Pred1$, the constituent $Pred1$s and $Pred2$ are contexts
+where either expressions or predicates are allowed.
+
+=DUMPMORE dtd061.grm.txt
+⦏Pred1⦎			= Pred2				(red_pred2_as_pred1 x1 stk)
+			| Quant, SchemaText, `Spot`, Pred1
+					(red_quant x1 x2 x3 x4 stk)
+			| `Let`, LetDefs, `Spot`, Pred1	(red_let x1 x2 x3 x4 stk);
+=TEX
+In the following it seems reasonably safe to reuse the reduction functions used for binding displays.
+We need a separate production for $LetDef$ with a $Pred1$ rather than a $Pred$ because otherwise the semicolon would be ambiguous (could be a low-precedence conjunction).
+=DUMPMORE dtd061.grm.txt
+⦏LetDef⦎			= DefLhs, `EqHat`, Pred1		(red_deflhs_pred x1 x2 x3 stk);
+⦏LetDefs⦎		= LetDef				(red_eq_def_as_eq_defs x1 stk)
+			| LetDef, `Semi`, LetDefs			(red_eq_defs x1 x2 x3 stk);
+=TEX
+In the first two alternatives for $Pred2$, the constituent $Pred2$s and $Pred3$ are contexts
+where either expressions or predicates are allowed.
+In the third alternative only expressions are allowed.
+(We bundle the non-logical schema operators in here, since they have lower precedence than
+the logical ones.)
+=DUMPMORE dtd061.grm.txt
+⦏Pred2⦎			= Pred3				(red_pred3_as_pred2 x1 stk)
+			| Pred2, LogInOp, Pred2		(red_log_in_op x1 x2 x3 stk)
+			| Pred2, SchInOp, Pred2		(red_sch_in_op x1  x2 x3 stk);
+=TEX
+In a $Pred3$, the constituent $Schema3$s and $Pred3$ are contexts
+where either expressions or predicates are allowed.
+
+=DUMPMORE dtd061.grm.txt
+⦏Pred3⦎			= Schema3				(red_schema2_as_pred3 x1 stk)
+			| `Not`, Pred3				(red_neg x1 x2 stk);
+=TEX
+
+As in \cite{DS/FMU/IED/DEF007},
+we assume that equality and membership are classified as $InRel$s, so that
+they do not need a production of their own but just fall under the
+appropriate alternative of $Expr1$, q.v.
+\subsection{Schemas}
+
+=TEX
+In the first sort of $Schema3$, the constituent $Schema4$ is a context where an
+expression or predicate is allowed. In the second sort of $Schema3$
+the constituent $Schema3$s are contexts where only an expression is allowed.
+=DUMPMORE dtd061.grm.txt
+⦏Schema3⦎		= Schema4				(red_schema4_as_schema3 x1 stk)
+			| SchPreOp, Schema3			(red_sch_pre_op x1 x2 stk);
+=TEX
+$SchPreOp$ comprises the prefix special purpose schema operators:
+
+In the first sort of $Schema4$, the constituent $Expr$ is a context where an
+expression or predicate is allowed. In the other sorts of $Schema4$
+the constituent $Schema4$s are contexts where only an expression is allowed.
+
+The renaming operation is another source of SLR(1) parsing problems
+(which arise from the use of square brackets for lots of different
+purposes).
+It is handled here by taking $RenameList$ as one of the options for
+$Expr4$. The parser must check that the position in the expression
+of any $RenameList$s agrees with the grammar of \cite{DS/FMU/IED/DEF007}
+and then move them out to their proper position.
+=DUMPMORE dtd061.grm.txt
+⦏Schema4⦎		= Expr0				(red_expr0_as_schema4 x1 stk)
+			| Schema4, `BackSlash`, `LBrk`, SomeExprs, `RBrk`
+					(red_schema_hiding x1 x2 x3 x4 x5 stk);
+
+⦏RenameList⦎		= `LSqBrk`, Renames, `RSqBrk`
+					(red_rename_list x1 x2 x3 stk);
+
+⦏Renames⦎		= Expr1, `Slash`, Expr1		(red_rename x1 x2 x3 stk)
+			| Expr1, `Slash`, Expr1, `Comma`, Renames
+					(red_renames x1 x2 x3 x4 x5 stk);
+=TEX
+
+\subsection{Schema Text}
+=DUMPMORE dtd061.grm.txt
+⦏VSchemaText⦎	=			(red_no_sch_text ())
+			| Decl			(red_decl_as_sch_text x1 stk)
+			| 	`St`, Pred	(red_bar_pred_as_sch_text x1 x2 stk)
+			| Decl, `St`, Pred	(red_decl_bar_pred_as_sch_text x1 x2 x3 stk);
+=TEX
+The grammar of $SchemaText$ is reworked to provide two variants:
+schema text that does not comprise just one schema-as-declaration and
+schema text that does not comprise nothing nor just one schema-as-declaration.
+These are used for horizontal schemas and characteristic set comprehensions.
+=DUMPMORE dtd061.grm.txt
+⦏SchemaText⦎		= SchemaTextMinusPred	(red_sch_text_minus_pred x1 stk)
+			| Pred1			(red_pred1_as_sch_text x1 stk);
+
+⦏SchemaTextMinusPred⦎	= SchemaTextMinusEmptyMinusPred
+						(red_sch_text_minus_empty_minus_pred x1 stk)
+			| 			(red_no_sch_text ());
+
+⦏SchemaTextMinusEmptyMinusPred⦎
+			= DeclMinusPred		(red_decl_minus_pred_as_sch_text x1 stk)
+			| Decl, `Bar`, Pred	(red_decl_bar_pred_as_sch_text x1 x2 x3 stk)
+			| 	`Bar`, Pred	(red_bar_pred_as_sch_text x1 x2 stk);
+=TEX
+
+\subsection{Declaration}
+The grammar of $Decl$ is reworked to provide a variant that does not
+comprise just one schema-as-declaration.
+This is used for the above variants of $SchemaText$.
+=DUMPMORE dtd061.grm.txt
+⦏Decl⦎			= DeclMinusPred			(red_decl_minus_pred x1 stk)
+			| Pred1				(red_pred1_as_decl x1 stk);
+=TEX
+=DUMPMORE dtd061.grm.txt
+⦏DeclMinusPred⦎	= DeclSemi, SomeExprs, `Colon`, Pred1
+					(red_decl_semi_var_decs_pred1 x1 x2 x3 x4 stk)
+			| DeclSemi, Pred1
+					(red_decl_semi_pred1 x1 x2 stk)
+			| SomeExprs, `Colon`, Pred1
+					(red_var_decs_pred1 x1 x2 x3 stk);
+
+⦏DeclSemi⦎		= SomeExprs, `Colon`, Pred1, `Semi`
+					(red_var_decs_pred1_semi x1 x2 x3 x4 stk)
+			| Pred1, `Semi`				(red_pred1_as_decl_semi x1 x2 stk)
+			| DeclSemi, SomeExprs, `Colon`, Pred1, `Semi`
+					(red_decl_semi_var_decs_pred1_semi x1 x2 x3 x4 x5 stk)
+			| DeclSemi, Pred1, `Semi`
+					(red_decl_semi_pred1_semi x1 x2 x3 stk);
+=TEX
+\subsection{Expressions}
+In the first sort of $Expr0$, the constituent $Expr1$ is a context where an
+expression or predicate is allowed. In the other sorts of $Expr0$
+the constituent $Expr0$s are contexts where only an expression is allowed.
+
+=DUMPMORE dtd061.grm.txt
+⦏Expr0⦎			= Expr1				(red_expr1_as_expr0 x1 stk)
+			| Lambda, SchemaText, `Spot`, Expr0	(red_lambda x1 x2 x3 x4 stk)
+			| Mu, SchemaText, `Spot`, Expr0		(red_mu x1 x2 x3 x4 stk);
+=TEX
+=DUMPMORE dtd061.grm.txt
+⦏EqDefs⦎		= 				(red_no_eq_defs ())
+			| SomeEqDefs			(red_some_eq_defs x1 stk);
+
+⦏SomeEqDefs⦎		= EqDef				(red_eq_def_as_eq_defs x1 stk)
+			| EqDef, `Comma`, SomeEqDefs	(red_eq_defs x1 x2 x3 stk);
+=TEX
+
+Note that while cartesian product looks like a binary operator here,
+it is actually a family of $n$-ary operations. one for each $n ≥ 2$.
+
+In the first sort of $Expr1$, the constituent $Expr2$ is a context where an
+expression or predicate is allowed. In the other sorts of $Schema4$
+the constituent $Expr1$s are contexts where only an expression is allowed.
+The resulting $Expr1$ is an expression unless the template matching
+the $Expr1$ comes from a `$rel$' fixity paragraph in which case it
+is a predicate.
+=DUMPMORE dtd061.grm.txt
+⦏Expr1⦎			= Expr2				(red_expr2_as_expr1 x1 stk)
+			| PreOp, OptDecor, Expr1		(red_pre_op x1 x2 x3 stk)
+			| Expr1, PostOp, OptDecor		(red_post_op x1 x2 x3 stk)
+			| Expr1, InOp, OptDecor, Expr1	(red_in_op x1 x2 x3 x4 stk)
+			| BeginOp, CoreExpr, PreEndOp, OptDecor, Expr1
+					(red_bo_ce_peo x1 x2 x3 x4 x5 stk)
+			| Expr1, PostBeginOp, CoreExpr, EndOp, OptDecor
+					(red_pbo_ce_eo x1 x2 x3 x4 x5 stk)
+			| Expr1, PostBeginOp, CoreExpr, PreEndOp, OptDecor, Expr1
+					(red_pbo_ce_peo x1 x2 x3 x4 x5 x6 stk)
+			| Expr1, `Cross`, Expr1		(red_cross x1 x2 x3 stk);
+=TEX
+The above reformulation requires the following auxiliary productions:
+=DUMPMORE dtd061.grm.txt
+
+⦏CoreExpr⦎		= Exprs					(red_exprs x1 stk)
+			| Exprs, ThenOp, CoreExpr	(red_es_to_ce x1 x2 x3 stk);
+=TEX
+=DUMPMORE dtd061.grm.txt
+⦏Exprs⦎			=				(red_no_exprs ())
+			| SomeExprs			(red_some_exprs x1 stk);
+=TEX
+In both sorts of $SomeExprs$, the constituent $Pred1$s are contexts where
+only expressions are allowed.
+=DUMPMORE dtd061.grm.txt
+⦏SomeExprs⦎		= Pred1				(red_pred1_as_some_exprs x1 stk)
+			| Pred1, `Comma`, SomeExprs	(red_pred1_comma_some_exprs x1 x2 x3 stk);
+=TEX
+In the first sort of $Expr2$, the constituent $Expr3$ is a context where an
+expression or predicate is allowed. In the other sort of $Expr2$
+the constituent $Expr3$ is a context where only an expression is allowed.
+=DUMPMORE dtd061.grm.txt
+⦏Expr2⦎			= Expr3					(red_expr3_as_expr2 x1 stk)
+			| `BBoldP`, Expr2				(red_pow x1 x2 stk);
+=TEX
+In the first sort of $Expr3$, the constituent $Expr4$ is a context where an
+expression or predicate is allowed. In the other sort of $Expr3$
+the constituent $Expr3$s and $Expr4$s are contexts
+where only an expression is allowed.
+
+The parser is expected to move decoration at the end of the θ-form
+out into the abstract θ-construct. Note it must distinguish
+=INLINEFT
+θ(x')
+=TEX
+\ from
+=INLINEFT
+θ(x)'
+=TEX
+\ etc.
+We have to expand the rule for $VarName$ to get an LR(1) grammar.
+
+In the form with  `$Dot$' the $Expr4$ must be an identifier or a numeric
+literal.
+=DUMPMORE dtd061.grm.txt
+⦏Expr3⦎			= Expr4a			(red_expr4_as_expr3 x1 stk)
+			| Expr3, Expr4a		(red_expr3_expr4 x1 x2 stk)
+			| `Theta`, Expr4a		(red_theta x1 x2 stk);
+=TEX
+=DUMPMORE dtd061.grm.txt
+⦏Expr4a⦎		= Expr4			(red_expr4_as_expr4a x1 stk)
+			| Expr4a, `Dot`, Expr4	(red_expr4a_dot_expr4 x1 x2 x3 stk);
+=TEX
+In an $Expr4$, any constituent $Pred1$s are contexts in which
+only an expression is allowed.
+The $Pred$ in the third sort of $Expr4$ is a context where an expression
+or a predicate is allowed.
+Any $Pred$s immediately after `$\vert'$s in an $Expr4$ are contexts
+where only a predicate is allowed.
+
+The form comprising an expression list in square brackets is intended
+for generic parameter lists (which also serve for generic constraints
+and conjectures and for given set definitions).
+
+In the form which covers $Pred$ in brackets and tuple displays,
+the initial $Pred$ must actually be a $Pred1$ if it is a tuple display.
+
+The binding display has been omitted for the time being since there
+is currently some disagreement about its format.
+
+=DUMPMORE dtd061.grm.txt
+⦏Expr4⦎			= IdDec				(red_id_dec_as_exp x1 stk)
+			| Quotation			(red_quotation x1 stk)
+			| Stub			(red_stub x1 stk)
+			| Number			(red_number x1 stk)
+			| Float			(red_float x1 stk)
+			| String			(red_string x1 stk)
+			| `LBrk`, Pred1, `Comma`, SomeExprs, `RBrk`
+					(red_tuple x1 x2 x3 x4 x5 stk)
+			| `LBrk`, EqDefs, `RBrk`
+					(red_binding x1 x2 x3 stk)
+			| `LBrk`, Mu, SchemaText, `RBrk`
+					(red_mu_no_spot x1 x2 x3 x4 stk)
+			| `LBrace`, Exprs, `RBrace`	(red_set_display x1 x2 x3 stk)
+			| `LSeqBrk`, Exprs, `RSeqBrk`	(red_seq_display x1 x2 x3 stk)
+			| `LBrace`, SchemaTextMinusEmptyMinusPred, `RBrace`
+					(red_set_comp_no_spot x1 x2 x3 stk)
+			| `LBrace`, SchemaText, `Spot`, Pred, `RBrace`
+					(red_set_comp x1 x2 x3 x4 x5 stk)
+			| `LSqBrk`, SchemaTextMinusPred, `RSqBrk`
+					(red_h_schema x1 x2 x3 stk)
+			| `LSqBrk`, SomeExprs, `RSqBrk`	(red_gen_inst x1 x2 x3 stk)
+			| RenameList		(red_rename_list_as_expr x1 stk)
+			| BeginOp, CoreExpr, EndOp, OptDecor
+					(red_bo_ce_eo x1 x2 x3 x4 stk)
+			| `LBrk`, Pred, `RBrk`
+					(red_brk_pred x1 x2 x3 stk)
+			| `LBrk`, Pred, `RBrk`, Decor
+					(red_pred_decor x1 x2 x3 x4 stk);
+=TEX
+\subsection{Names}
+=TEX
+=DUMPMORE dtd061.grm.txt
+⦏IdDec⦎			= Id, OptDecor			(red_id_dec x1 x2 stk);
+=TEX
+=DUMPMORE dtd061.grm.txt
+⦏OptDecor⦎		= 				(red_no_decor stk)
+			| Decor				(red_decor x1 stk);
+=TEX
+Now run the parser generator. The generated parser source is included in the
+implementation document \cite{DS/FMU/IED/IMP061}.
+=SH
+slrp -e Eos -f dtd061.grm.txt >dtd061.grm.run 2>&1
+=TEX
+
+\section{CHECKS AND TRANSFORMATIONS}
+This section gives a check list of the checks and transformations
+required to transform a sentence of the language $Specification$ as defined
+in this document into a sentence of the language of the same name defined in
+\cite{DS/FMU/IED/DEF007}.
+
+=DOC
+signature ⦏ZParser⦎ = sig
+val ⦏z_parser⦎ : {is_quot : bool} -> ZLex.Z_TOKEN list -> ZUserInterfaceSupport.Z_PARA;
+
+structure ⦏ZParserInternals⦎ : sig
+	val ⦏z_parser_pass_1⦎ : ZLex.Z_TOKEN list -> ZUserInterfaceSupport.PARAGRAPH;
+	val ⦏z_parser_pass_2⦎ : {is_quot : bool} ->
+			ZUserInterfaceSupport.PARAGRAPH -> ZUserInterfaceSupport.Z_PARA;
+end (* of structure ZParserInternals *);
+end (* of signature ZParser *);
+=DESCRIBE
+This is the context-free parser for Z. It maps the lists of
+tokens output by the lexical analyser onto the datatype used as input
+to the type inferrer.
+
+Parsing takes place in two passes, the second of which implements various disambiguation rules (e.g., distinction between expressions and predicates).
+For the convenience of the developer of applications involving Z embedded in other languages, the two passes are made visible separately in the structure $ZParserInternals$.
+
+If an error is detected in the parsed input
+error message 61001 is printed out.
+The insert in message 61001 comprises the tokens up to and including
+the one at which the error was detected.
+The string `$<?>$' is placed in the insert just before the last token to
+highlight it.
+Note that in the case of an invalid local definition the `$<?>$' is
+printed just after the failing $let$-term, since the check is not made
+until the entire $let$-term has been read.
+After this first line is printed one of message 61003 or 61004 is printed with
+appropriate inserts and
+error 61000 is raised.
+
+Messages 61005, 61006 and 61007 indicate
+an error in the parser itself.
+
+=FAILURE
+61000	Syntax error
+61001	Syntax error in: ?0 <?> ?1
+61003	?0 is not expected after ?1
+61004	?0 is not a valid ?1; it does not match the declared template ?2
+61005	?0 is not a valid operand for ?1
+61006	?0 is not valid here (a generic actual parameter list is only allowed after ?1)
+61007	?0 is not a valid component selector
+61008	?0 is not a valid expression
+61009	?0 is not a valid ?1 (& is only allowed after a ?1)
+61010	?0 is not valid here (a ?1 is only allowed after a ?2)
+61011	A precedence number is not allowed in a `rel` fixity paragraph
+61012	?0 is not a valid ?1
+61013	Precedence number ?0 is too large (maximum allowed is ?1)
+61014	Selector ?0 is too large (maximum allowed is ?1)
+61015	Syntax error in: ... ?0 ... ?1 ...
+61016	?0 and ?1 have the same precedence but
+	?0 is right associative and ?1 is left associative;
+61017	?0 and ?1 have the same precedence but
+	?0 is left associative and ?1 is right associative;
+61018	You must use brackets to disambiguate this expression
+61019	A quoted identifier is not allowed in a template
+61201	Parser internal error: ?0
+=ENDDOC
+=FAILURE
+61101	template
+61102	VarName
+61103	DecName
+61105	an IdDec
+61106	given set definition
+61107	DefLhs
+61108	Branch
+61109	RenameList
+61110	Schema4
+=TEX
+
+\section{TEST POLICY}
+The functions in this document are to be tested according to the
+criteria identified in \cite{DS/FMU/IED/PLN008}.
+
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
+
+
+

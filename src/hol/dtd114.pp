@@ -1,0 +1,392 @@
+=IGN
+********************************************************************************
+dtd114.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+\documentclass[a4paper,12pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+\makeindex
+
+\def\Title{ Detailed Design: Theory of Dyadic Rationals }
+
+\def\Abstract{\begin{center}
+{\bf Abstract}\par\parbox{0.7\hsize}
+{\small This document gives the detailed design for the (multiplicative) theory
+of dyadic rational numbers that is used in constructing the representation
+type for the real numbers in \ProductHOL.}
+\end{center}}
+
+\def\Reference{LEMMA1/HOL/DTD114}
+
+\def\Author{R.D. Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 118 958 4409}
+
+\def\Fax{+44 118 956 1920}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+\begin{centering}
+
+
+
+\end{centering}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+%%%%% STANDARD RED-TAPE SECTIONS (MAY WANT TO INTERLEAVE SOME \newpage COMMANDS IN THESE)
+
+%%%%% CONTENTS:
+
+\subsection{Contents}
+
+\tableofcontents
+
+%%%%% REFERENCES:
+
+\newpage
+\subsection{References}
+
+\bibliographystyle{fmu}
+
+%%%%% CHANGE THE FOLLOWING AS NECESSARY (E.G., TO PICK UP daz.bib):
+{\raggedright
+\bibliography{fmu}
+}
+%%%%% CHANGES HISTORY:
+\subsection{Changes History}
+\begin{description}
+\item[Issues 1.1 (2000/12/04), 1.2 (2000/12/04)] Initial development drafts.
+\item[Issue 1.3 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.4 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+\item[2015/04/15]
+Now uses new date and version macros from doctex
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%%%%%  CHANGES FORECAST:
+
+\subsection{Changes Forecast}
+
+Some of the material in this document might more usefully be shipped into a separate
+document extending the facilities for natural numbers.
+
+%%%%% DISTRIBUTION LIST
+
+\subsection{Distribution}
+
+Lemma 1 build system.
+
+\newpage
+
+\section{Introduction}
+\subsection{Scope}
+The real numbers are constructed in HOL using the positive dyadic rational numbers
+under multiplication to provide an ordered algebraic system whose completion
+provides the reals.
+This construction is carried out in \cite{LEMMA1/HOL/DTD116}.
+This module provides the necessary algebraic and order-theoretic facts about
+this system of numbers.
+
+
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/HLD011}.
+
+
+\section{PREAMBLE}
+=SML
+force_delete_theory"dyadic" handle Fail _ => ();
+open_theory"ℤ";
+set_merge_pcs["basic_hol", "'ℤ"];
+new_theory"dyadic";
+=THDOC
+req_name ⦏"dyadic"⦎ (Value "ℤ");
+set_flag("tc_thms_only",true);
+=DESCRIBE
+The theory $dyadic$ contains various definitions relating to the system of
+positive dyadic rational numbers under multiplication.
+Its main purpose is to support the construction of the real numbers in
+\cite{LEMMA1/HOL/DTD116}.
+=ENDDOC
+=TEX
+\section{EXPONENTIATION FOR THE NATURAL NUMBERS}
+The following is the definition of exponentiation
+for the natural numbers.
+We actually only need this for powers of 2, but the general definition
+is no more difficult than the special case.
+The fixity declaration makes it an infix operand binding more tightly
+than multiplication and division.
+=SML
+declare_infix(320, "^");
+=TEX
+ⓈHOLCONST
+│ $^ : ℕ → ℕ → ℕ
+├──────
+│	(∀ i⦁	i ^ 0 = 1)
+│∧	(∀ i m⦁	i ^ (m + 1) = i * i ^ m)
+■
+=TEX
+\section{THE POSITIVE DYADIC RATIONALS}
+\subsection{Definitions}
+
+\subsubsection{Multiplication}
+
+We are interested in the multiplicative structure of the positive rational
+dyadic numbers, i.e., numbers of the form $n/2^{i}$ where $n$
+is a positive natural number and $i$ is an integer.
+Since we can always choose $n$ to be odd, we represent $n$ as $2*m+1$.
+This gives a canonical representation of the positive rational dyadic
+numbers in the product
+$\mathbb{N}\times\mathbb{Z}$.
+The following type abbreviation reflects this:
+=SML
+declare_type_abbrev("DYADIC", [], ⓣℕ × ℤ⌝);
+=TEX
+Now we define the multiplication operator:
+=SML
+declare_infix(310, "dy_times");
+=TEX
+ⓈHOLCONST
+│ $dy_times : DYADIC → DYADIC → DYADIC
+├──────
+│∀ (m, i) (n, j) : DYADIC⦁
+│	(m, i) dy_times (n, j) = (2*m*n + m + n, i + j)
+■
+=TEX
+The following defines the unit element for the multiplication of positive dyadic
+rationals:
+ⓈHOLCONST
+│ dy_one : DYADIC
+├──────
+│ dy_one = (0, ℕℤ 0)
+■
+We also need exponentiation:
+=SML
+declare_infix(310, "dy_exp");
+
+ⓈHOLCONST
+│ $dy_exp : DYADIC → ℕ → DYADIC
+├──────
+│	(∀ x⦁	x dy_exp 0 = dy_one)
+│∧	(∀ x m⦁	x dy_exp (m + 1) = x dy_times x dy_exp m)
+■
+=TEX
+\subsubsection{Ordering}
+
+The following defines the ordering relation for the positive dyadic
+rationals:
+=SML
+declare_infix(210, "dy_less");
+ⓈHOLCONST
+│ $dy_less : DYADIC → DYADIC → BOOL
+├──────
+│∀ (m, i) (n, j) : DYADIC⦁
+│	(m, i) dy_less (n, j) ⇔
+│	∃a b⦁ ℕℤ a + i = ℕℤ b + j ∧ 2^a * (2*m+1) < 2^b * (2*n+1)
+■
+\section{THEOREMS}
+The theorems required are the ``pod'' laws.
+\subsection{Properties of the Ordering Alone}
+=THDOC
+req_thm(⦏"dy_less_irrefl_thm"⦎, ([],
+	⌜∀ x⦁ ¬ x dy_less x⌝));
+req_thm(⦏"dy_less_antisym_thm"⦎, ([],
+	⌜∀ x y⦁ ¬ (x dy_less y ∧ y dy_less x)⌝));
+req_thm(⦏"dy_less_trans_thm"⦎, ([],
+	⌜∀ x y z⦁ x dy_less y ∧ y dy_less z ⇒ x dy_less z⌝));
+req_thm(⦏"dy_less_trich_thm"⦎, ([],
+	⌜∀ x y⦁ ¬ x = y ⇒ x dy_less y ∨ y dy_less x⌝));
+=DESCRIBE
+Taken together, these four theorems say that
+=INLINEFT
+dy_less
+=TEX
+\ is a linear ordering on the set of positive dyadic rationals.
+=ENDDOC
+\subsection{Properties of Multiplication Alone}
+=THDOC
+req_thm(⦏"dy_times_comm_thm"⦎, ([],
+	⌜∀ x y⦁ x dy_times y = y dy_times x⌝));
+req_thm(⦏"dy_times_assoc_thm"⦎, ([],
+	⌜∀ x y z⦁ (x dy_times y) dy_times z = x dy_times y dy_times z⌝));
+req_thm(⦏"dy_times_unit_thm"⦎, ([],
+	⌜∀ x⦁ x dy_times dy_one = x⌝));
+=DESCRIBE
+These theorems say that
+=INLINEFT
+dy_times
+=TEX
+\ makes the set of positive dyadic rationals into a commutative monoid
+with unit element
+=INLINEFT
+dy_one
+=TEX
+.
+=ENDDOC
+=THDOC
+req_thm(⦏"dy_times_order_thm"⦎, ([],
+	⌜∀ u x y
+		  ⦁ x dy_times u = u dy_times x
+		      ∧ (u dy_times x) dy_times y = u dy_times x dy_times y
+		      ∧ x dy_times u dy_times y = u dy_times x dy_times y⌝));
+req_thm(⦏"dy_times_unit_clauses"⦎, ([],
+	⌜∀ x⦁ x dy_times dy_one = x ∧ dy_one dy_times x = x⌝));
+=DESCRIBE
+These lemmas are elementary consequences of the commutative, associative and unit laws
+that are convenient in later work.
+=ENDDOC
+
+\subsection{Properties of Exponentiation}
+=THDOC
+req_thm(⦏"dy_exp_clauses"⦎, ([],
+	⌜∀ x m n⦁
+		x dy_exp (m + n) = (x dy_exp m) dy_times x dy_exp n
+∧		x dy_exp 0 = dy_one
+∧		x dy_exp 1 = x
+∧		x dy_exp 2 = x dy_times x
+∧		x dy_exp 3 = x dy_times x dy_times x⌝));
+=DESCRIBE
+This lemma packages elementary consequences of exponentiation of positive
+dyadic rationals by natural number exponents in a form that is convenient
+for later work.
+=ENDDOC
+\subsection{Interactions between Multiplication and Ordering}
+\subsubsection{Monotonicity}
+=THDOC
+req_thm(⦏"dy_times_mono_thm"⦎, ([],
+	⌜∀ x y z⦁ y dy_less z ⇒ x dy_times y dy_less x dy_times z⌝));
+=DESCRIBE
+This theorem says that multiplication in the positive dyadic rational numbers
+is monotonic with respect to less-than.
+=ENDDOC
+
+=THDOC
+req_thm(⦏"dy_times_mono_thm1"⦎, ([],
+	⌜∀ x y z⦁ y dy_less z ⇒ y dy_times x dy_less z dy_times x⌝));
+req_thm(⦏"dy_times_mono_thm2"⦎, ([],
+	⌜∀ x y v w⦁ x dy_less y ∧ v dy_less w
+		⇒ x dy_times v dy_less y dy_times w⌝));
+req_thm(⦏"dy_times_mono_⇔_thm"⦎, ([],
+	⌜∀ x y z⦁ x dy_times y dy_less x dy_times z ⇔ y dy_less z⌝));
+=DESCRIBE
+These theorem provide elementary consequences of
+=INLINEFT
+dy_times_mono_thm
+=TEX
+\ that are convenenient in later work.
+=ENDDOC
+\subsubsection{Archimedean Property}
+=THDOC
+req_thm(⦏"dy_arch_thm"⦎, ([],
+	⌜∀ x y⦁ dy_one dy_less x ⇒ (∃ t⦁ y dy_less x dy_exp t)⌝));
+=DESCRIBE
+This theorem expresses the archimedean property for multiplication of
+positive dyadic rational numbers.
+=ENDDOC
+\subsubsection{Balance Properties}
+=THDOC
+req_thm(⦏"dy_balance_thm1"⦎, ([],
+	⌜∀ x⦁ ∃ y⦁ dy_one dy_less x dy_times y⌝));
+req_thm(⦏"dy_balance_thm2"⦎, ([],
+	⌜∀ x⦁ ∃ y⦁ x dy_times y dy_less dy_one⌝));
+=DESCRIBE
+These theorems express the balance properties for multiplication of
+positive dyadic rational numbers.
+=ENDDOC
+\subsubsection{Density Properties}
+=THDOC
+req_thm(⦏"dy_right_dense_thm"⦎, ([],
+	⌜∀ x y⦁ x dy_less y ⇒
+		(∃ z⦁ x dy_less x dy_times z ∧ x dy_times z dy_less y)⌝));
+req_thm(⦏"dy_left_dense_thm"⦎, ([],
+	⌜∀ x y⦁ x dy_less y ⇒
+		(∃ z⦁ x dy_less y dy_times z ∧ y dy_times z dy_less y)⌝));
+req_thm(⦏"dy_less_dense_thm"⦎, ([],
+	⌜∀ x y⦁ x dy_less y ⇒
+		(∃ z⦁ x dy_less z ∧ z dy_less y)⌝));
+=DESCRIBE
+These theorems express the density properties for the positive dyadic rational numbers.
+Note that the third theorem is an elementary consequence of either the first
+or the second.
+=ENDDOC
+\section{SIGNATURE}
+=DOC
+signature ⦏Dyadic⦎ = sig
+val ⦏dy_less_irrefl_thm⦎ : THM;	val ⦏dy_less_antisym_thm⦎ : THM;
+val ⦏dy_less_trans_thm⦎ : THM;		val ⦏dy_less_trich_thm⦎ : THM;
+val ⦏dy_times_comm_thm⦎ : THM;	val ⦏dy_times_assoc_thm⦎ : THM;
+val ⦏dy_times_order_thm⦎ : THM;	val ⦏dy_times_unit_thm⦎ : THM;
+val ⦏dy_times_unit_clauses⦎ : THM;	val ⦏dy_exp_clauses⦎ : THM;
+val ⦏dy_times_mono_thm⦎ : THM;	val ⦏dy_times_mono_thm1⦎ : THM;
+val ⦏dy_times_mono_thm2⦎ : THM;	val ⦏dy_times_mono_⇔_thm⦎ : THM;
+val ⦏dy_arch_thm⦎ : THM;		val ⦏dy_balance_thm1⦎ : THM;
+val ⦏dy_balance_thm2⦎ : THM;		val ⦏dy_right_dense_thm⦎ : THM;
+val ⦏dy_less_dense_thm⦎ : THM;	val ⦏dy_left_dense_thm⦎ : THM;
+end;
+=DESCRIBE
+This is the signature of a structure giving ML bindings for the theorems
+in the theory {\it dyadic}. The main purpose of this theory is to support
+the construction of the real numbers in HOL. As the theorems are not
+of general purpose use, the structure is not opened in the HOL build,
+so you must prefix the names with `%
+=INLINEFT
+Dyadic.
+=TEX
+' to use them.
+Use the ML command: `%
+=INLINEFT
+open Dyadic;
+=TEX
+', if you want to access these bindings without the prefix.
+=ENDDOC
+
+=TEX
+\section{TEST POLICY}
+The module tests for this module are to follow the guidelines
+laid down in the quality plan~\cite{DS/FMU/IED/PLN007}.
+These require only a theory contents check, since there are
+no functional components in this module.
+
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
+
+
+
+
+
+
+
+

@@ -1,0 +1,688 @@
+=IGN
+********************************************************************************
+imp015.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% imp015.doc   ℤ $Date: 2006/12/02 17:28:02 $ $Revision: 1.13 $ $RCSfile: imp015.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{HOL PDS Lexical Analyser}
+
+\def\AbstractText{The implementation of the lexical analyser for ICL HOL.}
+
+\def\Reference{DS/FMU/IED/IMP015}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{HOL PDS Lexical Analyser}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP015}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.13 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/12/02 17:28:02 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{The implementation of the lexical analyser for ICL HOL.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.4 (1991/06/03) (3 June 1991)] First draft for comment.
+
+\item[Issue 1.5 (1991/07/25) (25 July 1991)]
+	Add declaration of $FIXITY$ and use it in $lex$ for token classification.
+
+\item[Issue 1.6 (1991/12/09) (\FormatDate{91/12/09%
+})]
+	Recursion fault in $rec_copula$ so that the text (say) ``{\tt
+	(x\_\_)}'' raises an $Unrecognised$ which in not handled.
+
+\item[Issue 1.7 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.8 (1992/02/06) ]
+Added the constructor $Separator$ to the type, $INPUT$,
+to support analysis of separators in recognisers rather
+than in the reader/writer, thus giving more flexibility when
+developing recognisers for Z paragraphs.
+\item[Issue 1.9 (2002/05/23)] Adjacent $Lex.Text$ items now do appear in the input list.
+\item[Issue 1.10 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.11 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.12 (2005/05/07)] HOL now supports left-associative operators.
+\item[Issue 1.13 (2006/12/02)] Support for floating point literals.
+\item[Issue 1.14 (2007/03/04)] Floating point literals with no mantisssa or exponent are now supported.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation
+of the lexical analyser for ICL HOL meeting the detailed design
+given in \cite{DS/FMU/IED/DTD015}.
+\subsection{Introduction}
+\subsection{Purpose and Background}
+\subsection{Dependencies}
+\subsection{Interface}
+\subsection{Algorithms}
+\subsection{Possible Enhancements}
+\subsection{Deficiencies}
+\subsection{Introduction}
+\pagebreak
+
+\section{PREAMBLE}
+=SML
+structure Lex : Lex = struct
+=TEX
+\section{DATA TYPES}
+\subsection{Interface with Reader/Writer}
+=SML
+datatype ⦏INPUT⦎	= ⦏Text⦎	of string
+			| ⦏String⦎	of string
+			| ⦏Char⦎	of string
+			| ⦏Type⦎	of TYPE
+			| ⦏Term⦎	of TERM
+			| ⦏Separator⦎	of string
+			| ⦏Error⦎	of int;
+=TEX
+\subsection{Interface with Parser}
+=SML
+datatype ⦏ASSOC⦎ =	⦏LeftAssoc⦎
+			|	⦏RightAssoc⦎;
+datatype ⦏FIXITY⦎	=	⦏Nonfix⦎
+			|	⦏Binder⦎
+			|	⦏Infix⦎		of ASSOC * int
+			|	⦏Prefix⦎		of int
+			|	⦏Postfix⦎	of int;
+=TEX
+=SML
+datatype ⦏HOL_TOKEN⦎	=	⦏HTAqTm⦎	of TERM
+			|	⦏HTAqTy⦎ of TYPE
+			|	⦏HTName⦎ of string
+			|	⦏HTNumLit⦎ of string
+			|	⦏HTChar⦎ of string
+			|	⦏HTString⦎ of string
+			|	⦏HTBinder⦎ of string
+			|	⦏HTInOp⦎ of {name:string, is_type_op:bool, is_term_op:bool, prec : ASSOC * int}
+			|	⦏HTPostOp⦎ of {name:string, prec : int}
+			|	⦏HTPreOp⦎ of {name:string, prec : int}
+			|	⦏HTAnd⦎
+			|	⦏HTBlob⦎
+			|	⦏HTColon⦎
+			|	⦏HTElse⦎
+			|	⦏HTIf⦎
+			|	⦏HTIn⦎
+			|	⦏HTLbrace⦎
+			|	⦏HTLbrack⦎
+			|	⦏HTLet⦎
+			|	⦏HTLsqbrack⦎
+			|	⦏HTRbrace⦎
+			|	⦏HTRbrack⦎
+			|	⦏HTRsqbrack⦎
+			|	⦏HTSemi⦎
+			|	⦏HTThen⦎
+			|	⦏HTVert⦎
+			|	⦏HTEos⦎;
+=TEX
+\section{THE LEXICAL ANALYSER}
+\subsection{Local Type Definitions}
+The main lexical analysis algorithm is exception-driven
+using the following local exception:
+=SML
+exception ⦏Unrecognised⦎;
+=TEX
+A state, $LEX\_STATE$, is used by most of the lexical analysis
+functions. The state is in two parts: first, the characters not yet tokenised,
+actually a list of strings of single characters produced by exploding
+the input text; second, the token immediately preceeding the first
+part.  The token may not be recognised (yet) so the token part of the
+state carries a success indicator.  On entry to an analysis function
+the state will be ``$(chars, (Unknown, \hbox{``''}))$''.
+=SML
+datatype ⦏SUCCESS⦎ = ⦏Known⦎ of string | ⦏Unknown⦎;
+
+
+type ⦏LEX_STATE⦎  = (string list) * SUCCESS;
+=TEX
+\subsection{Utilities}
+$collect$ adds the first character of the untokenised input text into the current token.
+=SML
+fun ⦏collect⦎ ( cstk : LEX_STATE ) : LEX_STATE = (
+	case cstk of
+		(c :: cs, Known s) => (cs, Known(s ^ c))
+	|	(c :: cs, Unknown) => (cs, Known c)
+	|	_ => error "lexical analyser" 15004 []
+);
+=TEX
+We need various character classifying functions:
+=SML
+=TEX
+=SML
+val ⦏ord0⦎	= ord "0";
+val ⦏ord9⦎	= ord "9";
+val ⦏orda⦎	= ord "a";
+val ⦏ordA⦎	= ord "A";
+val ⦏ordz⦎	= ord "z";
+val ⦏ordZ⦎	= ord "Z";
+=TEX
+=SML
+fun ⦏is_digit⦎  (d : string) = (
+	let	val ordd = ord d
+	in	(ordd >= ord0) andalso (ordd <= ord9)
+	end
+);
+=TEX
+=SML
+fun ⦏is_alnum⦎  (c : string) = (
+	let	val ordc = ord c
+	in		((ordc >= orda) andalso (ordc <= ordz))
+		orelse	((ordc >= ordA) andalso (ordc <= ordZ))
+		orelse	is_digit c
+		orelse c = "'"
+	end
+);
+=TEX
+=SML
+fun ⦏is_alpha⦎  (c : string) = (
+	let	val ordc = ord c
+	in		((ordc >= orda) andalso (ordc <= ordz))
+		orelse	((ordc >= ordA) andalso (ordc <= ordZ))
+		orelse c = "'"
+	end
+);
+=TEX
+=SML
+val ⦏copula⦎ : string list =
+=TEX
+=SMLLITERAL
+	["_", "⋏", "⋎"];
+=TEX
+=SML
+fun ⦏is_copula⦎ c = contains copula c;
+=TEX
+=SML
+val ⦏punctuation⦎ : string list =
+	["(", ")", "{", "}", "[", "]", ":", ";", ",", "|", "⦁", "$"];
+=TEX
+=SML
+fun ⦏is_punctuation⦎ c = contains punctuation c;
+=TEX
+=SML
+fun ⦏is_space⦎ c = c <= " ";
+=TEX
+=SML
+ fun ⦏skip_space⦎ (st as (cs as (c :: more), tk) : LEX_STATE) : LEX_STATE = (
+	if is_space c
+	then skip_space (more, tk)
+	else st
+) | skip_space (st as ([], _)) = st;
+=TEX
+=SMLPLAIN
+fun ⦏is_macro⦎ (c : string) = c = "%%";
+=TEX
+=SML
+fun ⦏is_symbolic⦎ (c : string) = (
+		not(is_space c)
+	andalso not(is_punctuation c)
+	andalso not(is_alnum c)
+	andalso not(is_copula c)
+	andalso not(is_macro c)
+);
+=TEX
+$next$ is used to apply a classifier function such as $is\_digit$
+to the first character in the input part of a state. It returns false
+if the input part is empty.
+=SML
+fun ⦏next⦎ (test : string -> bool) ((c :: _, _) : LEX_STATE) = test c
+|   next _ ([], _) = false;
+=TEX
+When a lexeme
+has been recognised, the following function is used to classify the result.
+=SML
+fun ⦏classify⦎ (cl : string -> FIXITY) (what : string) : HOL_TOKEN = (
+	case cl what of
+		Infix p => HTInOp{name=what, prec=p, is_term_op=true, is_type_op=true}
+	|	Postfix p => HTPostOp{name=what, prec=p}
+	|	Prefix p => HTPreOp{name=what, prec=p}
+	|	Binder => HTBinder what
+	|	Nonfix =>
+	case what of
+		"and" => HTAnd
+	|	"⦁" => HTBlob
+	|	":" => HTColon
+	|	"else" => HTElse
+	|	"if" => HTIf
+	|	"in" => HTIn
+	|	"{" => HTLbrace
+	|	"(" => HTLbrack
+	|	"let" => HTLet
+	|	"[" => HTLsqbrack
+	|	"}" => HTRbrace
+	|	")" => HTRbrack
+	|	"]" => HTRsqbrack
+	|	";" => HTSemi
+	|	"|" => HTVert
+	|	"then" => HTThen
+	|	other => HTName other (* should go to symbol table *)
+);
+=TEX
+\subsection{Recognition of Punctuation}
+$rec\_punctuation$ returns an appropriately updated state if the input
+begins with a punctuation, if not it raises $Unrecognised$.
+=SML
+fun ⦏rec_punctuation⦎  (st : LEX_STATE) : LEX_STATE = (
+	if next is_punctuation st
+	then collect st
+	else raise Unrecognised
+);
+=TEX
+\subsection{Recognition of Terminators}
+$rec\_terminator$ returns an appropriately updated state if the input
+begins with a terminator, if not it raises $Unrecognised$.
+=SML
+fun ⦏rec_terminator⦎  (terms : string list list) ((cs, tk) : LEX_STATE) : LEX_STATE = (
+	let	val term = find terms (fn t => cs to (length t - 1) = t)
+	in	case tk of
+			Known s => (cs from length term, Known(s ^ implode term))
+		|	Unkown => (cs from length term, Known(implode term))
+	end	handle Fail _ => raise Unrecognised
+);
+=TEX
+\subsection{Recognition of Numeric Literals}
+=SML
+fun ⦏is_point⦎ ("." : string) = true
+|   is_point _ = false;
+=TEX
+=SML
+fun ⦏is_e⦎ ("e" : string) = true
+|   is_e "E" = true
+|   is_e _ = false;
+=TEX
+=SML
+fun ⦏is_minus⦎ ("~" : string) = true
+|   is_minus _ = false;
+=SML
+fun ⦏is_point⦎ ("." : string) = true
+|   is_point _ = false;
+=TEX
+An HOL alphanumeric name is allowed to begin with digits.
+So digits followed by alphabetic or copula make a name not a numeric literal.
+Digits followed by a point followed by at least one digit and an optional (optionally signed) exponent part are a floating point literal.
+Digits followed by a point followed by a non-digit is a natural number literal followed by a point (two tokens, not one).
+=SML
+fun ⦏do_num_lit⦎ (st : LEX_STATE as (ch::_, _)) : (string * (string * string OPT) OPT) * LEX_STATE = (
+let
+	fun in_exp acc (st as (ch::more, _)) = (
+		if	next is_digit st
+		then	in_exp (ch :: acc) (collect st)
+		else	(Value(implode(rev acc)), st)
+	) | in_exp acc st = (Value(implode(rev acc)), st);
+	fun exp_sign (st as (ch::more, _)) = (
+		if	next is_minus st
+		then	let	val st1 = collect st;
+			in	if	next is_digit st1
+				then	in_exp ["~"] st1
+				else	(Nil, st)
+			end
+		else if	next is_digit st
+		then	in_exp [ch] (collect st)
+		else	(Nil, st)
+	) | exp_sign st = (Nil, st);
+	fun exp_e st = (
+		if	next is_e st
+		then	let	val st1 = collect st;
+			in	case exp_sign st1 of
+					r as (Value _, _) => r
+				| _ =>	(Nil, st)
+			end
+		else	(Nil, st)
+	);
+	fun after_point acc (st as (ch::more, _)) = (
+		if	next is_digit st
+		then	after_point (ch :: acc) (collect st)
+		else	let	val (r, st1) = exp_e st;
+			in	(Value(implode(rev acc), r), st1)
+			end
+	) | after_point acc st = (Value(implode(rev acc), Nil), st);
+	fun before_point acc  (st as (ch::more, _)) = (
+		if	next is_digit st
+		then	before_point (ch::acc) (collect st)
+		else if	next is_point st
+		then	let	val st1 = collect st;
+			in	if	next is_digit st1
+				then	let	val (r, st2) = after_point [] st1;
+					in	((implode(rev acc), r), st2)
+					end
+				else	let	val (r, st2) = exp_e st1;
+					in	((implode(rev acc), Value ("", r)), st2)
+					end
+			end
+		else	((implode(rev acc), Nil), st)
+	) | before_point acc st = ((implode(rev acc), Nil), st);
+	val res as ((x, pe_opt), st')=
+		if next is_digit st
+		then before_point [ch] (collect st)
+		else raise Unrecognised;
+in
+	if	is_Nil pe_opt
+	andalso	(next is_alpha st' orelse next is_copula st')
+	then	raise Unrecognised
+	else	res
+end
+) | do_num_lit _ = raise Unrecognised;
+=TEX
+$rec\_num\_lit$ returns an appropriately updated state if the input
+begins with an numeric literal, if not it raises $Unrecognised$.
+Note that HOL alphanumeric identifiers may begin with digits (see comments before {\em do\_num\_lit}, so $rec\_num\_lit$ has to be called before $rec\_alnum$.
+=SML
+val ⦏rec_num_lit⦎ : LEX_STATE -> LEX_STATE = snd o do_num_lit;
+=TEX
+=SML
+fun ⦏num_lit_of_string⦎ (s : string) : (INTEGER * (INTEGER * INTEGER) OPT) OPT = (
+	((case fst(do_num_lit(explode s, Unknown)) of
+		(i, Nil) => Value(natural_of_string i, Nil)
+	|	(b, Value(a, Nil)) => Value(natural_of_string (b^a), Value(integer_of_int(size a), zero))
+	|	(b, Value(a, Value e)) => Value(natural_of_string (b^a), Value(integer_of_int(size a), integer_of_string e))
+	) handle Fail _ => Nil) handle Unrecognised => Nil
+);
+=TEX
+\subsection{Recognition of Alphanumeric Sequences}
+$rec\_alnum$ returns an appropriately updated state if the input
+begins with an alphanumeric identifier, if not it raises $Unrecognised$.
+Note that HOL alphanumeric identifiers may begin with digits, so $rec\_num\_lit$ has to be called first.
+=SML
+fun ⦏rec_alnum⦎ (st : LEX_STATE) : LEX_STATE = (
+	let	fun aux st = (
+			if next is_alnum st
+			then aux (collect st)
+			else st
+		);
+	in	if next is_alnum st
+		then aux (collect st)
+		else raise Unrecognised
+	end
+);
+=TEX
+\subsection{Recognition of Symbolic Sequences}
+Recognition of symbolic sequences is more complicated than that for
+terminators or identifiers since we have to pick off keyword symbols
+as well as single characters --- $rec\_keyword$ does this.
+=SML
+fun ⦏rec_keyword⦎ (st : LEX_STATE) : LEX_STATE = (
+	let	fun aux (([], _) : LEX_STATE) = (
+			error "lexical analyser" 15004 []
+		) | aux st = (
+			if next is_macro st
+			then (collect st)
+			else aux (collect st)
+		);
+	in	if next is_macro st
+		then aux (collect st)
+		else raise Unrecognised
+	end
+);
+=TEX
+$rec\_symbolic$ uses$rec\_keyword$ to recognise a symbolic sequence:
+=SML
+fun  ⦏rec_symbolic⦎ (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
+	if (rec_terminator terms st; false) handle Unrecognised => true
+	then	if next is_symbolic st
+		then	let	val st' = (collect st)
+			in	(rec_symbolic terms st') handle Unrecognised => st'
+			end
+		else if next is_macro st
+		then	let	val st' = rec_keyword st
+			in	(rec_symbolic terms st') handle Unrecognised => st'
+			end
+		else	raise Unrecognised
+	else	raise Unrecognised
+);
+=TEX
+\subsection{Recognition of Alphanumeric Sequences}
+$rec\_terminator$ returns an appropriately updated state if the input
+begins with a terminator, if not it raises $Unrecognised$.
+=SML
+fun ⦏rec_copula⦎ (st : LEX_STATE) : LEX_STATE = (
+	let	fun aux st = (
+			if next is_copula st
+			then aux (collect st)
+			else st
+		);
+	in	if next is_copula st
+		then aux (collect st)
+		else raise Unrecognised
+	end
+);
+=TEX
+\subsection{Recognition of Identifiers}
+To recognise identifiers we first need auxiliaries to recognise the
+atomic pieces of identifiers (viz. alphanumeric sequences, symbolic
+sequences and terminators)
+=SML
+fun ⦏rec_atom⦎ (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
+	((rec_terminator terms st)
+		handle Unrecognised =>	(rec_alnum st))
+			handle Unrecognised =>	(rec_symbolic terms st)
+);
+=TEX
+=SML
+fun ⦏rec_identifier⦎ (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
+	let	val (st', flag1) = (rec_atom terms st, true)
+			handle Unrecognised => (st, false);
+		val (st'', flag2) = (rec_copula st', true)
+			handle Unrecognised => (st', false);
+	in	if flag2
+		then (rec_identifier terms st'')
+			handle Unrecognised => st''
+		else if flag1
+		then st''
+		else raise Unrecognised
+	end
+);
+=TEX
+\subsection{Recognition of Lexemes}
+Function $rec_ns_lexeme$ picks off the next non-space lexeme from the input
+using the other recognisers.
+It raises $Unrecognised$ if the input is exhausted.
+It is caller's responsibility to strip leading spaces, but our responsibility to skip over trailing spaces.
+=SML
+fun ⦏rec_ns_lexeme⦎ (terms : string list list) (st : LEX_STATE) : {new_state : LEX_STATE, is_num_lit : bool} = (
+	{new_state = skip_space(rec_num_lit st), is_num_lit = true}
+	handle Unrecognised => (
+		{new_state = skip_space(rec_punctuation st), is_num_lit = false}
+		handle Unrecognised =>
+			{new_state = skip_space(rec_identifier terms st), is_num_lit = false}
+	)
+);
+=TEX
+\subsection{Lexical Analyser for Strings}
+=SML
+fun ⦏rec_any⦎ (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
+	(rec_punctuation (skip_space st))
+	handle Unrecognised => #new_state(rec_ns_lexeme terms st)
+);
+=TEX
+$lex\_string$ converts an input string into a list of tokens. It also
+returns a flag which is true iff. the last lexeme in the input string
+was an (unescaped) `\verb"$"'.
+=SML
+fun ⦏lex_string⦎ (terms : string list list) (cl : string -> FIXITY)
+		(ip : string list) : HOL_TOKEN list * bool = (
+	let	val st = skip_space (ip, Unknown);
+		fun   recur tk more = (
+			let	val (tks, flag) = lex_string terms cl more;
+			in	(tk :: tks, flag)
+			end
+		);
+	in	case skip_space (ip, Unknown) of
+			([], _) => ([], false)
+		|	other => (
+			case rec_ns_lexeme terms other of
+				{new_state = st' as (ip', Known s), is_num_lit = true} => (
+				recur (HTNumLit s) ip'
+			) |	{new_state = st' as ([], Known "$"), is_num_lit = _} => (([], true)
+			) |	{new_state = st' as (ip', Known "$"), is_num_lit = _} => (
+				case rec_any terms (ip', Unknown) of
+					(ip'', Known s) => recur (HTName s) ip''
+				|	_ => error "lexical analyser" 15003 [fn()=>implode ip]
+			) |	{new_state = st' as (ip', Known s), is_num_lit = _} => (recur (classify cl s) ip'
+			) |	{new_state = st' as (ip', Unknown), is_num_lit = _} => (
+					error
+					"lexical analyser"
+					15003
+					[fn()=>	"unrecognised input" ^ implode ip]
+			)
+		)
+	end
+);
+=TEX
+The first case below handles the rather uncommon situation of a line ending with an unescaped
+dollar sign by concatenating the line with the next one and trying again.
+=SML
+fun ⦏lex⦎ (terms : string list list) (cl : string -> FIXITY)
+	(ip : INPUT list) : HOL_TOKEN list = (
+	case ip of
+		Text s1 ::  (more1 as (Text s2 :: more2)) => (
+			case lex_string terms cl (explode s1) of
+				(toks, true) =>  lex terms cl (Text (s1^s2) :: more2)
+			 |	(toks, false) => toks @ lex terms cl more1
+	) |	Text s :: more => (
+			case lex_string terms cl (explode s) of
+				(toks, true) => (
+					case more of
+						String s :: more' => toks @
+							(HTName s :: lex terms cl more')
+					|	Char s :: more' => toks @
+							(HTName s :: lex terms cl more')
+					|	Separator s :: more' => toks @
+							(HTName s :: lex terms cl more')
+					|	[] => fail "lexical analyser" 15002 []
+					|	_ => fail "lexical analyser" 15001 []
+			) |	(toks, false) => toks @ lex terms cl more
+	) |	String s :: more => (
+			HTString s :: lex terms cl more
+	) |	Char s :: more => (
+			if size s = 1
+			then HTChar s :: lex terms cl more
+			else fail "lexical analyser" 15005  [fn () => s]
+	) |	Type ty :: more => (
+			HTAqTy ty :: lex terms cl more
+	) |	Term tm :: more => (
+			HTAqTm tm :: lex terms cl more
+	) |	Separator s :: Text t :: more => (
+			lex terms cl (Text (s^t) :: more)
+	) | 	Separator s :: more => (
+			lex terms cl (Text s :: more)
+	) |	Error n :: more => (fail "lexical analyser" 15006 [fn () => string_of_int n]
+	) |	[] => [HTEos]
+);
+=TEX
+=SML
+end; (* of structure Lex *)
+=TEX
+=TEMP
+fun HOL_text (_, tks, _) = lex tks;
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+

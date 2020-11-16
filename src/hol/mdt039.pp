@@ -1,0 +1,243 @@
+=IGN
+********************************************************************************
+mdt039.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for the Theory of Lists}
+
+\def\AbstractText{Module tests are given for the functions associated with the theory of lists. This document also checks that the theory design has been met by the theory implementation.}
+
+\def\Reference{DS/FMU/IED/MDT039}
+
+\def\Author{D.J.King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests for the Theory of Lists}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT039}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.10 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $ %
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{ML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{D.J.King & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{Module tests are given for the
+%% LaTeX2e port: functions associated with the
+%% LaTeX2e port: theory of lists.
+%% LaTeX2e port: This document also checks that the theory design has been met by the theory implementation.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{Document Control}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/11/25)]
+Draft for Review.
+
+\item[Issue 1.2 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.3 (1992/04/09), 1.4 (1992/04/10) (9th April 1992)]
+Changes required by CR0016.
+\item [Issue 1.5 (1992/04/14) (14th April 1992)]
+Changes required by CR0017.
+\item [Issue 1.6 (1992/05/14),1.7 (1992/05/21) (14th May 1992)]
+Tidying up proof contexts.
+\item [Issue 1.8 (1992/05/27) (27th May 1992)]
+Removed uses of $makestring$.
+\item[Issue 1.9 (1992/06/24) (24th June 1992)]
+Renamings from issue 1.6 of \cite{DS/FMU/IED/WRK038},
+mostly proof context name changes.
+\item[Issue 1.10 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.11 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the functions (conversions ,etc) associated with the
+theory of lists required by \cite{DS/FMU/IED/DTD039} and
+implemented in \cite{DS/FMU/IED/IMP039}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD039}.
+
+\subsubsection{Dependencies}
+The test material depends on \cite{DS/FMU/IED/DTD013},
+\cite{DS/FMU/IED/DTD035} and \cite{DS/FMU/IED/IMP039}.
+
+\subsubsection{Deficiencies}
+None known.
+\section{INITIALISATION}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+open_theory "basic_hol";
+push_merge_pcs ["'propositions","'simple_abstractions"];
+=TEX
+\section{TEST CASES}
+The tests are grouped according to the function to be tested as follows:
+\begin{description}
+\item[Group 1]
+This group tests correct and failure cases for $list\_induction\_tac$.
+\item[Group 2]
+This group tests correct and failure cases for $LIST\_INDUCTION\_T$.
+\end{description}
+\section{THE TESTS}
+\subsection{Group 1}
+=SML
+store_mt_results (mt_runf (op =#))[("MDT039.1.1",
+	(dest_thm o simple_tac_proof),
+	(([], ⌜¬Cons h x = x⌝),
+	list_induction_tac⌜x:'a LIST⌝
+	THEN_LIST
+	[rewrite_tac[list_clauses],
+		contr_tac
+		THEN strip_asm_tac(list_simple_∀_elim
+		[⌜h⌝,⌜x'⌝,⌜Cons x' x⌝,⌜x:'a LIST⌝]list_clauses)
+		THEN DROP_ASM_T ⌜¬ Cons h x = x⌝ ante_tac
+		THEN asm_rewrite_tac[]]),
+	([], ⌜¬ Cons h x = x⌝)
+)];
+=TEX
+
+=SML
+store_mt_results mt_run_fail[
+("MDT039.1.2", list_induction_tac,⌜0⌝,
+	gen_fail_msg "list_induction_tac" 39001 [string_of_term⌜0⌝])
+];
+=TEX
+=SML
+store_mt_results mt_run_fail[
+("MDT039.1.3", list_induction_tac ⌜x:'a LIST⌝, ([],⌜y=[]⌝),
+	gen_fail_msg "list_induction_tac" 39002 [string_of_term⌜x⌝]),
+("MDT039.1.4", list_induction_tac ⌜x:'a LIST⌝, ([⌜x=[]⌝],⌜x=Cons h []⌝),
+	gen_fail_msg "list_induction_tac" 39003 [string_of_term⌜x:ℕ⌝])
+];
+=TEX
+\subsection{Group 2}
+=SML
+store_mt_results (mt_runf (op =#))[("MDT039.2.1",
+	dest_thm o simple_tac_proof,
+	(([], ⌜¬Cons h x = x⌝),
+	LIST_INDUCTION_T ⌜x:'a LIST⌝
+		(strip_asm_tac)
+	THEN_LIST
+	[rewrite_tac[list_clauses],
+		contr_tac
+		THEN strip_asm_tac(list_simple_∀_elim
+		[⌜h⌝,⌜x'⌝,⌜Cons x' x⌝,⌜x:'a LIST⌝]list_clauses)
+		THEN DROP_ASM_T ⌜¬ Cons h x = x⌝ ante_tac
+		THEN asm_rewrite_tac[]]),
+	([], ⌜¬ Cons h x = x⌝)
+)];
+=TEX
+=SML
+store_mt_results mt_run_fail[
+("MDT039.2.2", LIST_INDUCTION_T, ⌜0⌝,
+	gen_fail_msg "LIST_INDUCTION_T" 39001 [string_of_term⌜0⌝])
+];
+=TEX
+=SML
+store_mt_results mt_run_fail[
+("MDT039.2.3", LIST_INDUCTION_T ⌜x:'a LIST⌝ strip_asm_tac, ([],⌜y=[]⌝),
+	gen_fail_msg "LIST_INDUCTION_T" 39002 [string_of_term⌜x⌝]),
+("MDT039.2.4", LIST_INDUCTION_T ⌜x:'a LIST⌝ strip_asm_tac, ([⌜x=[]⌝],⌜x=Cons h []⌝),
+	gen_fail_msg "LIST_INDUCTION_T" 39003 [string_of_term⌜x:ℕ⌝])
+];
+=TEX
+\section{CHECK THE THEORY DESIGN}
+=SML
+use_file "dtd039.tch";
+store_mt_results mt_run [("theory design of lists",
+	theory_check_success,
+	(),
+	true)];
+=TEX
+\section{END OF TESTS}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+\end{document}
+
+
+

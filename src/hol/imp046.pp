@@ -1,0 +1,630 @@
+=IGN
+********************************************************************************
+imp046.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation of Constant Specification Tools}
+
+\def\AbstractText{This document contains the implementation of the tools supporting specification of constants in ICL HOL.}
+
+\def\Reference{DS/FMU/IED/IMP046}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Implementation of Constant Specification Tools}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP046}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.32 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2014/04/14 11:08:42 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the implementation
+%% LaTeX2e port: of the tools supporting specification of constants in ICL HOL.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issues 1.1 (1991/08/16) to 1.3 (1991/08/21)]
+First experimental versions.
+\item [Issue 1.4 (1991/11/22)]
+First ``real'' implementation.
+\item [Issue 1.5 (1991/11/29)]
+Changed to revert to previous theory afterwards.
+
+\item[Issue 1.6 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.7 (1992/01/28)]
+Added missing definition keys.
+Corrected $HOL\_const\_recogniser$.
+\item [Issue 1.8 (1992/02/06) (6 February 1992)]
+Re-worked $HOL\_const\_recogniser$ to construct
+an existence assertion rather than a variable list -- predicate
+pair.
+\item [Issue 1.9 (1992/02/07) (7 February 1992)]
+$HOL\_const\_recogniser$ modified to correctly
+handle predicates which begin with any binder.
+\item [Issue 1.10 (1992/03/26),1.11 (1992/03/26) (26th March 1992)]
+Changed to use proof context material of issue 1.13 of \cite{DS/FMU/IED/DTD051}.
+\item [Issue 1.12 (1992/04/09) (3rd April 1992)]
+Changes required by CR0016.
+\item [Issue 1.13 (1992/04/14) (13th April 1992)]
+Changes due to CR0017.
+\item [Issue 1.14 (1992/05/13) (13th May 1992)]
+Changed signature of $get\_spec$.
+\item [Issue 1.15 (1992/05/14) (14th May 1992)]
+Tidying up proof contexts.
+\item [Issue 1.16 (1992/05/21) (20th May 1992)]
+Rearranging build proof contexts.
+\item [Issue 1.17 (1992/05/22) (21st May 1992)]
+Fix a bug in $get\_spec$.
+\item [Issue 1.18 (1992/05/26) (26th May 1992)]
+Renamings from version 1.5 of DS/FMU/IED/WRK038.
+\item [Issue 1.19 (1992/06/02) (2nd June 1992)]
+Changed ``native'' theory.
+\item[Issue 1.20 (1992/06/24) (24th June 1992)]
+Renamings from issue 1.6 of \cite{DS/FMU/IED/WRK038},
+mostly proof context name changes.
+\item[Issue 1.21 (1992/07/03) (3rd July 1992)]
+Changed use of $subst$ to $var\_subst$.
+\item [Issue 1.22 (1992/07/24) (24th July 1992)]
+Extended $get\_spec$.
+\item [Issue 1.23 (1992/07/24) (24th July 1992)]
+Check for free variables before called existence prover
+in $const\-\_spec$.
+\item [Issue  1.24 (1992/08/13),1.25 (1992/08/13) (13th August 1992)]
+Corrected error handling for interrupts.
+\item [Issue 1.26 (1992/10/15) (15th October 1992)]
+Corrected error handling for $push\-\_consistency\-\_goal$
+and $save\-\_consistency\-\_thm$.
+\item [Issue 1.27 (1992/12/03) (3rd December 1992)]
+Enhanced $get\_spec$ for language processing.
+\item [Issue 1.28 (1992/12/10) (10th December 1992)]
+Fixing $save\_consistency\_thm$.
+\item[Issue 1.29 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.30 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.31 (2009/12/19)] Allowed for fixes to a bug in the type inferrer that was
+being exploited here.
+\item[Issue 1.32 (2014/04/14)] Tidied up error handling.
+\item[Issue 1.33 (2014/04/15)] Now use $new\_spec1$ to define the supporting constants rather than $new\_spec$.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+Tools supporting specification of constants will be required in ICL HOL.
+A design for such tools is given in \cite{DS/FMU/IED/DTD046}.
+This document provides an implementations for them.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains an implementation for the
+tools supporting specification of constants.
+\subsubsection{Dependencies}
+This document takes its signature from \cite{DS/FMU/IED/DTD046}.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+
+\section{Preamble}
+=SML
+structure ⦏ConstantSpecification⦎ : ConstantSpecification = struct
+=TEX
+\section{THE THEORY}
+=SML
+val was_theory = get_current_theory_name();
+val _ = open_theory "basic_hol";
+val _ = push_merge_pcs ["'propositions",
+	"'simple_abstractions"];
+=TEX
+=SML
+val ⦏consistent_def⦎ =
+new_spec1(["Consistent","consistent_def"], ["Consistent"], (
+	push_goal([],⌜∃ Consistent ⦁ ∀ p:'a → BOOL ⦁ Consistent p ⇔ ∃ x ⦁ p x⌝);
+	a(simple_∃_tac ⌜λ p:'a → BOOL ⦁ ∃ x ⦁ p x⌝);
+	a (rewrite_tac[]);
+	pop_thm()));
+=TEX
+=SML
+val ⦏const_spec_def⦎ =
+new_spec1(["ConstSpec","const_spec_def"], ["ConstSpec"], (
+	push_goal([],⌜∃ ConstSpec ⦁ ∀ (p:'a → BOOL) (c:'a) ⦁
+		ConstSpec p c ⇔ (Consistent p ⇒ p c)⌝);
+	a(simple_∃_tac ⌜λ (p:'a → BOOL) (c:'a) ⦁ (Consistent p ⇒ p c)⌝);
+	a (rewrite_tac[]);
+	pop_thm()));
+=TEX
+=SML
+val ⦏const_spec_thm⦎ = save_thm("const_spec_thm",(
+	push_goal([],⌜∀ (p:'a → BOOL) ⦁ ∃ x : 'a ⦁ ConstSpec p x⌝);
+	a(simple_∀_tac);
+	a(rewrite_tac[consistent_def, const_spec_def]);
+	a(simple_∃_tac ⌜(ε x⦁p x)⌝);
+	a(⇒_T (strip_asm_tac o ∃_ε_rule));
+	pop_thm()));
+=TEX
+\section{UTILITIES}
+Convert a single character to lower case, if necessary.
+=SML
+local
+	val ordA = ord "A";
+	val ordZ = ord "Z";
+	val change = ord "a" - ordA;
+in
+fun ⦏lcase⦎ (c : string) = (
+let	val dummy = if size c <> 1
+		then fail "lcase" 0 []
+		else ();
+	val ordc = ord c;
+in
+	if ordA <= ordc andalso ordc <= ordZ
+	then chr(ordc + change)
+	else c
+end);
+end;
+=TEX
+
+We wish to process a list of varstructs into a list of variables, failing if given other than varstructs,
+or duplicated names.
+=SML
+fun ⦏process_vss⦎ (caller: string) (tml : TERM list) : TERM list = (
+let	fun aux1 acc tm = (
+		if is_var tm
+		then (let val (nm ,ty) = dest_var tm
+			in
+			if nm mem acc
+			then fail caller 46003 [fn () => nm]
+			else (nm :: acc, [tm])
+			end
+		) else let val (tm1,tm2) = dest_pair tm;
+			val (acc',tms1) = aux1 acc tm1;
+			val (acc'',tms2) = aux1 acc' tm2;
+		in
+			(acc'', tms1 @ tms2)
+		end
+	);
+
+	fun aux acc [] = []
+	| aux acc (tm :: tml) = (
+		let	val (acc',tms) = aux1 acc tm
+			handle complaint =>
+			divert complaint "dest_pair"
+			caller 46004 [fn () => string_of_term tm]
+		in	
+			tms @ aux acc' tml
+		end
+	);
+in
+	aux [] tml
+end);
+
+=TEX
+=SML
+fun ⦏mk_fst⦎ tm = (
+let	val ttm = type_of tm;
+	val (ta,tb) = dest_×_type ttm;
+in
+	mk_app(mk_const("Fst", mk_→_type(ttm,ta)), tm)
+end);
+fun ⦏mk_snd⦎ tm = (
+let	val ttm = type_of tm;
+	val (ta,tb) = dest_×_type ttm;
+in
+	mk_app(mk_const("Snd", mk_→_type(ttm,tb)), tm)
+end);
+
+fun ⦏list_mk_pair⦎ ([tm]: TERM list) : TERM = tm
+| list_mk_pair (a :: x) = mk_pair(a,list_mk_pair x)
+| list_mk_pair [] = fail "list_mk_pair" 0 [];
+
+fun ⦏strip_pair⦎ (tm:TERM):TERM list = (
+	if is_pair tm
+	then (let val (tm1,tm2) = dest_pair tm
+	in
+		strip_pair tm1 @ strip_pair tm2
+	end)
+	else [tm]
+);
+=TEX
+=SML
+val ⦏sfst_snd_thm⦎ = tac_proof(([],⌜∀ x ⦁ (Fst x,Snd x) = x⌝),
+	rewrite_tac[pair_clauses]);
+=TEX
+Something tailored to our precise needs:
+=FRULE 1 Rule
+∃_uncurry_x_rule
+⌜∃ c1 ... cn ⦁ ConstSpec p (c1,...,cn)⌝
+├
+∃ x ⦁ ConstSpec p x
+├
+∃ c1 ... cn ⦁ ConstSpec p (c1,...,cn)
+=TEX
+Where the type of $(c1,...,cn)$ equals the type of $x$.
+=SML
+local
+	val rw_conv = pure_rewrite_conv[sfst_snd_thm];
+in
+fun ⦏∃_uncurry_x_rule⦎ (tm : TERM) (thm : THM) : THM = (
+let	val cs = fst(strip_simple_∃ tm);
+	fun aux x [c] = [x]
+	| aux x (c :: cs1) = mk_fst x :: aux (mk_snd x) cs1
+	| aux x [] = fail "∃_uncurry_x_rule" 0 [];
+in
+	tac_proof((asms thm,tm),(
+		SIMPLE_∃_THEN check_asm_tac thm
+		THEN
+		(fn (seqasms,gl) =>
+		let val (_,x') = dest_app(hd seqasms)
+		in
+		MAP_EVERY simple_∃_tac (aux x' cs) (seqasms,gl)
+		end)
+		THEN
+		conv_tac(RAND_C(TRY_C rw_conv))
+		THEN concl_in_asms_tac))
+end);
+end;
+=TEX
+\section{MAIN FUNCTIONS}
+\subsection{$const\_spec$}
+=SML
+fun ⦏const_spec⦎ (keys:string list, vss : TERM list, pred : TERM) : THM = (
+let	val vs = process_vss "const_spec" vss;
+	val sideeffect = if is_nil vs
+		then fail "const_spec" 6044 []
+		else if type_of pred =: BOOL
+		then ()
+		else term_fail "const_spec" 3031 [pred];
+	val proof_tm = list_mk_simple_∃ (vs, pred)
+		handle complaint =>
+		pass_on complaint "list_mk_simple_∃" "const_spec";
+	val fvs = frees proof_tm;
+	fun s () = case fvs of [_] => "" | _ => "s";
+	val dummy = if not(is_nil fvs)
+		then fail "const_spec" 46014 [
+			fn () => string_of_term proof_tm, s,
+			fn () => format_list (fst o dest_var) fvs ", "]
+		else ();
+	val proven = (Value (⇔_t_elim((current_ad_cs_∃_conv ()) proof_tm)))
+		handle (Fail _) => Nil;
+in
+case proven of
+Value res => (new_spec(keys,length vs, res)
+		handle complaint =>
+		pass_on complaint "new_spec" "const_spec"
+) | Nil	=> (
+let	val nvs = list_variant (vs @ (map mk_var (term_vars pred))) vs;
+	val insts = combine nvs vs;
+	val pred' = var_subst insts pred;
+	val deferred_bundle = list_mk_pair vs;
+	val deferred_bundle' = list_mk_pair nvs;
+	val deferred_pred = mk_λ(deferred_bundle',pred');
+	val deferred_cs = mk_const("ConstSpec",
+		mk_→_type(type_of deferred_pred,
+			mk_→_type(type_of deferred_bundle,
+				BOOL)));
+	val deferred_tm = list_mk_simple_∃ (vs,
+		list_mk_app(deferred_cs,
+			[deferred_pred, deferred_bundle]));
+	val s1 = inst_type_rule [(type_of deferred_bundle,
+		mk_vartype "'a")] const_spec_thm;
+	val s2 = simple_∀_elim deferred_pred s1;
+	val s3 = ∃_uncurry_x_rule deferred_tm s2;
+in
+	new_spec(keys,length vs, s3)
+		handle complaint =>
+		pass_on complaint "new_spec" "const_spec"	
+end)
+end);
+=IGN
+const_spec (["c1","c2","c3"],[⌜c1:BOOL⌝,⌜(c2:BOOL,c3:BOOL)⌝],
+	⌜c1 ∧ c2 ∧ c3⌝);
+const_spec (["c4"],[⌜c4:BOOL⌝],⌜c4 = T⌝);
+=TEX
+=SML
+local
+	open Lex Parser ReaderWriterSupport SymbolTable TypeInference;
+	open PrettyNames;
+	val arbitrary = fst(dest_const ⌜Arbitrary⌝);
+	fun strip_varbinder (tm : TERM) : TERM list * TERM = (
+	let	fun aux (tm1:TERM) : (TERM list * TERM) = (
+		let	val (binder, abs) = dest_app tm1;
+			val (var, body) = dest_λ abs;
+		in	if fst (dest_const binder) = arbitrary
+			then (let val (vs,bd) = aux body;
+				in
+					((var :: vs) , bd)
+				end)
+		else ([],tm1)
+		end
+		handle (Fail _) => ([],tm1)
+		);
+	in
+		aux tm
+	end);
+in
+=TEX
+=SML
+fun ⦏HOL_const_recogniser⦎
+	(x:string, y:string,
+		toks:Lex.INPUT list, z:string:string) : THM = (
+=TEX
+=SMLLITERAL
+	let	val sideeffect = if is_same_symbol(x, "Ⓢ")
+			andalso	is_same_symbol(z, "■")
+			andalso	(y = "HOLCONST")
+			then ()
+			else fail "HOL_const_recogniser" 46000 [];
+		fun aux res (Separator"├":: more) = (
+			 res@[Separator "⦁"]@more
+		) | aux res (Text t::more) = (
+			if contains (explode t) "⦁"
+			then fail "HOL_const_recogniser" 46000 []
+			else aux (res@[Text t]) more
+		) | aux res (x::more) = (aux (res@[x]) more
+		) | aux res [] = fail "HOL_const_recogniser" 46000 [];
+		val toks' =  aux [] toks;
+		val tm = (lex (get_current_terminators()) get_fixity) toks';
+		val tm1 = HTBinder arbitrary :: tm;
+		val tm2 = (make_term o HOL_parser) tm1;
+		val (vars, def) = strip_varbinder tm2;
+		val fv = list_union (op =$) (map frees vars);
+		val nms = map (fst o dest_var)fv;
+	in	
+		const_spec (nms,vars,def)
+	end
+	handle complaint =>
+	divert complaint "HOL parser" "HOL_const_recogniser" 46000 []
+);
+end (* local ... in *);
+
+=TEX
+=IGN
+
+ ⓈHOLCONST
+x4 : BOOL → BOOL;-
+x5 : BOOL → BOOL
+├
+ ∃x6 ⦁ x6 = x5
+  ■;
+
+  ⓈHOLCONST
+c1 : BOOL → BOOL
+├
+ T
+  ■;
+
+ ⓈHOLCONST
+c2 : BOOL → BOOL;
+c3 : BOOL → BOOL
+├
+ T
+  ■;
+=TEX
+\subsection{Extracting the Best Specification}
+=SML
+fun ⦏lintersect⦎ (a :: x) lst = (
+	if a mem lst
+	then a :: lintersect x lst
+	else lintersect x lst
+) | lintersect [] _ = [];
+=TEX
+=SML
+local
+	fun aux [] x = implode x
+	| aux (p :: x) (q :: y) = (
+		if lcase p = lcase q
+		then aux x y
+		else fail "strip_case_insensitive_prefix" 0 []
+	) | aux _ [] = fail "strip_case_insensitive_prefix" 0 [];
+in
+fun strip_case_insensitive_prefix (prefix:string) (nm: string) = (
+let	val pe = explode prefix;
+	val ne = explode nm;
+in
+	aux pe ne
+end);
+end;
+=TEX
+=SML
+fun ⦏get_spec⦎ (const : TERM) : THM = (
+let	val (nm,_) = dest_const (fst(strip_app const))
+		handle (Fail _) =>
+		term_fail "get_spec" 46009 [const];
+	val thy = get_const_theory nm
+		handle (Fail _) =>
+		fail "get_spec" 46005 [fn () => nm];
+	val defn = get_defn thy nm
+	handle (Fail _) =>
+	(get_axiom thy nm
+	handle (Fail _) =>
+	(let val langs = get_const_language nm;
+	 val keys = mapfilter (fn p => strip_case_insensitive_prefix (p ^ "'") nm) langs;
+	 val trys = mapfilter (fn key =>
+		(get_defn thy key handle (Fail _) =>
+			get_axiom thy key)) keys;
+	 in
+		case trys of
+		[] => fail "get_spec" 46006 [fn () => nm]
+		| [thm] => thm
+		| _ => fail "get_spec" 46013 [fn () => nm,
+			fn () => format_list string_of_thm trys ", "]
+	 end));
+in
+	(if is_bin_op "ConstSpec" (concl defn)
+	then ((
+	let	val poss_thys = thy :: (lintersect (get_ancestors "-")
+		(get_descendants thy));
+		val x_cons = nm ^ "_consistent";
+		val find_cons = hd(mapfilter
+			(fn lthy => get_thm lthy x_cons
+				handle (Fail _) =>
+				get_axiom lthy x_cons)
+			poss_thys);
+	in
+		β_rule (⇒_elim (
+			conv_rule (simple_eq_match_conv1 const_spec_def) defn)
+			find_cons)
+	end)
+	handle (Fail _) =>
+	β_rule (undisch_rule(conv_rule (simple_eq_match_conv1 const_spec_def) defn)))
+	else defn)
+end);
+=TEX
+\subsection{Supporting the Conventions}
+=SML
+local
+	val consistent_thm = pure_rewrite_rule [η_axiom] consistent_def;
+	val rw_tac = pure_once_rewrite_tac[consistent_thm];
+in
+fun ⦏push_consistency_goal⦎ (const : TERM) : unit = (
+let	val spec = get_spec const
+		handle complaint =>
+		pass_on complaint "get_spec" "push_consistency_goal";
+	val gl = (hd(asms spec)
+		handle (Fail _) =>
+		fail "push_consistency_goal" 46007 [fn () => fst(dest_const (fst(strip_app const)))])
+in
+	if is_mon_op "Consistent" gl
+	then (push_goal([],gl); a(rw_tac))
+	else fail "push_consistency_goal" 46007 [fn () => fst(dest_const (fst(strip_app const)))]
+end);
+end;
+=TEX
+=SML
+fun ⦏save_consistency_thm⦎ (const : TERM) (thm : THM) = (
+let	val (nm,_) = dest_const (fst(strip_app const))
+		handle (Fail _) =>
+		term_fail "save_consistency_thm" 46009 [const];
+	val thy = get_const_theory nm;
+	val defn = get_defn thy nm
+	handle (Fail _) =>
+	(get_axiom thy nm
+	handle (Fail _) =>
+	(let val langs = get_const_language nm;
+	 val keys = mapfilter (fn p => strip_case_insensitive_prefix (p ^ "'") nm) langs;
+	 val trys = mapfilter (fn key =>
+		(get_defn thy key handle (Fail _) =>
+			get_axiom thy key)) keys;
+	 in
+		case trys of
+		[] => fail "save_consistency_thm" 46006 [fn () => nm]
+		| [thm] => thm
+		| _ => fail "save_consistency_thm" 46013 [fn () => nm,
+			fn () => format_list string_of_thm trys ", "]
+	 end));
+	val (pred,cs) = dest_bin_op "save_consistency_thm" 46012 "ConstSpec" (concl defn);
+	val pred' = dest_mon_op "save_consistency_thm" 46008 "Consistent" (concl thm);
+	val csnms = map (fst o dest_const)(strip_pair cs);
+	val save_nms = map (fn s => s ^ "_consistent") csnms;
+	val sideeffect = if pred ~=$ pred'
+		then ()
+		else fail "save_consistency_thm" 46011
+			[fn () => string_of_thm thm,
+			fn () => nm];
+in
+	(list_save_thm (save_nms, thm)
+	handle complaint =>
+	pass_on complaint "list_save_thm" "save_consistency_thm")
+end
+handle complaint =>
+list_divert complaint "save_consistency_thm" [
+	("get_const_theory",46005,[fn () => fst(dest_const (fst(strip_app const)))]),
+	("get_defn",46006,[fn () => fst(dest_const (fst(strip_app const)))])]
+);
+=TEX
+\section{EPILOGUE}
+=SML
+val _ = open_theory was_theory;
+val _ = pop_pc();
+end; (* of structure ConstantSpecification *)
+open ConstantSpecification;
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+

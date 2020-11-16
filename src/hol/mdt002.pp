@@ -1,0 +1,883 @@
+=IGN
+********************************************************************************
+mdt002.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Tests for System Control and Basic Error Reporting}
+
+\def\AbstractText{This document contains the tests for the system control and basic error reporting subsystem for the ICL HOL system.}
+
+\def\Reference{DS/FMU/IED/MDT002}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Tests for System Control and Basic Error Reporting}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT002}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.22 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $%
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the tests for the
+%% LaTeX2e port: system control and basic
+%% LaTeX2e port: error reporting subsystem for the ICL HOL system.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library\\ R.D. Arthan\\ K. Blackburn}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1 (1991/02/06)]
+First draft containing initial test set.
+\item[Issue 1.5 (1991/11/06), \FormatDate{91/11/06%
+)}] Rework as dictated by ID0019 changes to the design and to use
+module test harness.
+
+\item[Issue 1.6 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.7 (1992/01/31)]
+Fixed duplicated identity.
+\item [Issue 1.8 (1992/02/04)]
+Changed $diag\_string$ to $raw\_diag\_string$.
+\item [Issue 1.10 (1992/02/26) (25 February 1992)] Modified because
+format of output from $get\_error\_message$ has been
+modified.
+\item [Issue 1.11 (1992/04/14) (13th April 1992)]
+Changes due to CR0017.
+\item [Issue 1.12 (1992/12/14) (14th December 1992)]
+Changes to match \cite{DS/FMU/IED/DTD002} issue 2.5.
+\item[Issues 1.13 (1999/02/06),1.14 (1999/02/24)] Update for SML97.
+\item[Issue 1.15 (2002/03/19)] Tests new function {\it pending\_reset\_control\_state}.
+\item[Issue 1.16 (2002/07/24)] Tests new behaviour of {\it new\_flag} etc.
+\item[Issue 1.17 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.18 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.19 (2003/07/17)] Made it less verbose to suppress confusing messages in test log.
+\item[Issue 1.20 (2005/04/16)] Added test for the pending reset function for the error messages.
+\item[Issue 1.21 (2005/08/17)] Added test for $elaborate$ and improved on tests for $divert$.
+\item[Issue 1.22 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.23 (2009/02/04)] Added regression test for fix to {\em get\_message\_text}.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\section{GENERAL}
+\subsection{Scope}
+This document contains module tests for the $BasicError$ and
+$SystemControl$ components of the ICL HOL system as called for
+in \cite{DS/FMU/IED/DTD002}.
+
+\subsection{Introduction}
+\subsection{Purpose and Background}
+This document defines module tests for the material
+specified in \cite{DS/FMU/IED/DTD002} and
+implemented in \cite{DS/FMU/IED/IMP002}.
+\subsection{Dependencies}
+Running these module tests requires that the error subsystem
+be loaded into a ``clean'' database. The module
+tests also require some of the functions of
+\cite{DS/FMU/IED/DTD001} and \cite{DS/FMU/IED/IMP001}.
+It is suggested that a ``clean'' database be used, and
+the beginning of the build procedure documented in
+\cite{DS/FMU/IED/IMP021} be followed.
+
+This document also depends on \cite{DS/FMU/IED/DTD013} and \cite{DS/FMU/IED/IMP013}.
+\subsection{Deficiencies}
+None known.
+\section{TEST CASES}
+\subsection{$BasicError$}
+
+The test cases  for $BasicError$ are grouped as follows:
+
+\begin{description}
+\item[Group BE.1]
+This test the error message database access functions.
+Various message texts are loaded into the database using
+$new\_error\_message$ and $pp'change\_error\_message$ and the
+results are checked using $get\_error\_message$ and
+$get\_error\_messages$.
+\item[Group BE.2]
+This group tests $fail$, $divert$, $elaborate$ and $list\_divert$
+with particular regard to the deferred evaluation
+of the insertion functions
+\item[Group BE.3]
+This group test the text form of the exceptions raised by
+$fail$ and $error$.
+\item[Group BE.4]
+This group tests $area\_of$, $reraise$ and $pass\_on$.
+\item[Group BE.5]
+Tests for {\it pending\_reset\_error\_messages}.
+\item[Group BE.6]
+This group tests $fail$, $divert$, $elaborate$ and $list\_divert$
+with regard to the actual message texts produced.
+\end{description}
+\subsection{$SystemControl$}
+\begin{description}
+\item[Group SC.1]
+This group tests the functions which allocate controls, by allocating
+a control of each of the free types and then using the $get\_\ldots$
+functions to check the stored values.
+\item[Group SC.2]
+This function tests the operation of the functions
+which set controls when presented with values within the range of
+the associated check functions.
+\item[Group SC.3]
+This function tests the operation of the functions
+which set controls when presented with values outside the range of
+the associated check functions.
+\item[Group SC.4]
+This function test the functions which return the names and values of
+the families of controls.
+\item[Group SC.5]
+This function tests the error case of trying to redeclare a control.
+\item[Group SC.6]
+Tests for {\it pending\_reset\_control\_state}.
+\end{description}
+
+\section{PREAMBLE}
+=SML
+PPBuild.pp'use"dtd013.sml";
+PPBuild.pp'use"imp013.sml";
+init_mt_results();
+=TEX
+Cobble in a support function that is not available at this stage in the build.
+=SML
+local
+	val ord0 = ord "0"
+in
+fun ⦏string_of_int⦎ (n : int) : string = (
+	let	fun aux m = ( (* assumes m > 0 *)
+			case m div 10 of
+				0 => chr(ord0 + (m mod 10))
+			|	mdiv10 => aux mdiv10 ^ chr(ord0 + (m mod 10))
+		);
+	in	if n > 0
+		then aux n
+		else if n = 0
+		then "0"
+		else "-" ^ aux (~n)
+	end
+);
+end;
+=TEX
+\section{THE TESTS}
+\subsection{$BasicError$}
+\subsubsection{Group BE.1}
+=SML
+PPCompiler.print_depth 10;
+val old_msgs = get_error_messages();
+new_error_message{id=99991, text="test message 1"};
+new_error_message{id=99992, text="test message 2 ?0"};
+new_error_message{id=99993, text="?0?1?2?3?4?5?6?7?8?9??"};
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.1.1", get_error_message 99991, [], "test message 1"),
+ ("mdt002.BE.1.2", get_error_message 99992, [], "test message 2 ?0"),
+ ("mdt002.BE.1.3", get_error_message 99992, [""], "test message 2 "),
+ ("mdt002.BE.1.4", get_error_message 99992, ["BOO"], "test message 2 BOO"),
+ ("mdt002.BE.1.5", get_error_message 99992, ["BOO", "COO"], "test message 2 BOO"),
+ ("mdt002.BE.1.6", get_error_message 99993,
+	["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+	"0123456789?")
+];
+=TEX
+Since the ordering of the messages returned by $get\_error\_messages$ is
+not defined we sort the results to get a well-defined order.
+=SML
+val new_msgs = Sort.sort (fn {id=id1, ...} => fn {id=id2, ...} => id1 - id2)
+	(get_error_messages () diff old_msgs);
+store_mt_results_show mt_run
+[("mdt002.BE.1.10", fn()=>new_msgs, (),
+	[{id=99991, text="test message 1"},
+	{id=99992, text="test message 2 ?0"},
+	{id=99993, text="?0?1?2?3?4?5?6?7?8?9??"}])
+];
+=TEX
+=SML
+pp'change_error_message{id=99993, text="new text"};
+store_mt_results_show mt_run
+[("mdt002.BE.1.20", get_error_message 99993, [], "new text")
+];
+=TEX
+Just to demonstrate presence, plus a little bit:
+=SML
+set_error_messages({id=123456,text = "hello"} :: get_error_messages());
+store_mt_results_show mt_run
+[("mdt002.BE.1.11", get_error_message 123456, [], "hello")];
+=TEX
+\subsubsection{Group BE.2}
+=SML
+val ok : bool ref = ref true;
+=TEX
+The following functions set $ok$ $false$ in the insertion function
+which should not be evaluated:
+=SML
+fun test2_1 () = (
+(
+    fail "foo" 100 [fn () => (ok := false; "BLAH")]
+)   handle X => divert X "foo" "goo" 2002
+	[fn () => ("BLAH")]
+);
+fun test2_2() = (
+(
+    fail "foo" 100 [fn () => (ok := false; "BLAH")]
+)   handle X => list_divert X "goo"
+        [("foo", 100, [fn () => (output(std_out, "this test may have worked\n"); "BLAH")]),
+        ("foo", 200, [fn () => (ok := false; "BLAH")]),
+        ("koo", 100, [fn () => (ok := false; "BLAH")])]
+);
+fun test2_3 () = (
+(
+    fail "foo" 100 [fn () => (ok := false; "BLAH")]
+)   handle X => elaborate X 100 "goo" 2002
+	[fn () => ("BLAH")]
+);
+=TEX
+=SML
+fun run2 f = (
+	(f() handle _ => !ok);
+	!ok
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.2.1", run2, test2_1, true),
+ ("mdt002.BE.2.2", run2, test2_2, true),
+ ("mdt002.BE.2.3", run2, test2_3, true)
+];
+=TEX
+\subsubsection{Group BE.3}
+=SML
+fun string_error (area : string) (id : int) (inserts : (unit -> string)list)
+	: string = (
+	(error area id inserts)
+	handle Error msg => get_message msg
+);
+fun string_fail (area : string) (id : int) (inserts : (unit -> string)list)
+	: string = (
+	(fail area id inserts)
+	handle Fail msg => get_message msg
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.3.1", string_error "foo" 99991, [], "* test message 1 [foo.99991] *"),
+ ("mdt002.BE.3.2", string_fail "foo" 99991, [], "* test message 1 [foo.99991] *"),
+ ("mdt002.BE.3.3", string_error "foo" 99992, [fn()=>"BOO"],
+	 "* test message 2 BOO [foo.99992] *"),
+ ("mdt002.BE.3.4", string_fail "foo" 99992, [fn()=>"BOO"],
+	"* test message 2 BOO [foo.99992] *")
+];
+=TEX
+\subsubsection{Group BE.4}
+=SML
+val ex1 = (fail "area" 99991 []) handle ex => ex;
+val ex2 = (error "area" 99991 []) handle ex => ex;
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.4.1",  area_of, ex1, "area")];
+=TEX
+=SML
+fun check2 (f: 'a -> 'b) ( a : 'a): bool = (
+	(f a; false)
+	handle Error msg =>
+		get_message_text msg = get_error_message 99991 []
+	|	_ => false
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.4.2",  check2 area_of, ex2, true)];
+=TEX
+=SML
+fun checkrr1 (():unit) : string = (
+	((fail "checkrr1" 99991 [])
+	handle ex => reraise ex "OK")
+	handle ex => if area_of ex = "OK" then "OK" else "Wrong"
+);
+=TEX
+=SML
+fun checkrr2 (():unit) : string = (
+	((raise Div)
+	handle ex => reraise ex "OK")
+	handle Div => "OK"
+	|	_ => "Wrong"
+);
+=TEX
+=SML
+fun checkrr3 (():unit) : string = (
+	((error "checkrr1" 99991 [])
+	handle ex => reraise ex "OK")
+	handle Error _ => "OK"
+	|	_ => "Wrong"
+);
+=TEX
+=SML
+fun checkpo1 (():unit) : string = (
+	((fail "checkpo1" 99991 [])
+	handle ex => pass_on ex "checkpo1" "OK")
+	handle ex => if area_of ex = "OK" then "OK" else "Wrong"
+);
+=TEX
+=SML
+fun checkpo2 (():unit) : string = (
+	((fail "checkpo2" 99991 [])
+	handle ex => pass_on ex "checkpo1" "Wrong")
+	handle ex => if area_of ex = "checkpo2" then "OK" else "Wrong"
+);
+=TEX
+=SML
+fun checkpo3 (():unit) : string = (
+	((raise Div)
+	handle ex => pass_on ex "checkpo3" "Wrong")
+	handle Div => "OK"
+	|	_ => "Wrong"
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.4.10",  checkrr1, (), "OK"),
+ ("mdt002.BE.4.11",  checkrr2, (), "OK"),
+ ("mdt002.BE.4.12",  checkrr3, (), "OK"),
+ ("mdt002.BE.4.13",  checkpo1, (), "OK"),
+ ("mdt002.BE.4.14",  checkpo2, (), "OK"),
+ ("mdt002.BE.4.15",  checkpo3, (), "OK")
+];
+=TEX
+\subsubsection{Group BE.5}
+Make a couple of changes:
+=SML
+val _ = new_error_message{
+	id = 99998, text ="this one will stay"};
+val _ = pp'change_error_message{
+	id = 99991, text ="this change will persist"};
+=TEX
+Take a snapshot:
+=SML
+val pre = pending_reset_error_messages();
+=TEX
+Make some more changes:
+=SML
+val _ = new_error_message{
+	id = 99999, text ="soon to go away again"};
+val _ = pp'change_error_message{
+	id = 99991, text ="this change will not persist"};
+=TEX
+Check that the changes have taken effect:
+=SML
+store_mt_results_show mt_run
+[ ("mdt002.BE.5.1",
+	get_error_message 99991, [],
+		"this change will not persist"),
+ ("mdt002.BE.5.2",
+	get_error_message 99998, [],
+		"this one will stay"),
+  ("mdt002.BE.5.3",
+	get_error_message 99999, [],
+		"soon to go away again")];
+=TEX
+Revert to snapshotted state:
+=SML
+val _ = pre();
+=TEX
+Check that last batch of changes have been reverted:
+=SML
+store_mt_results_show mt_run
+[ ("mdt002.BE.5.4",
+	get_error_message 99991, [],
+		"this change will persist"),
+ ("mdt002.BE.5.5",
+	get_error_message 99998, [],
+		"this one will stay")];
+store_mt_results_show mt_run
+[ ("mdt002.BE.5.6",
+	fn () =>
+	(get_error_message 99999 []; false)
+	handle Error _ => true, (), true)];
+=TEX
+\subsubsection{Group BE.6}
+Add some new texts:
+=SML
+val _ = new_error_message{
+	id = 1234000, text ="YOU CHOULD NEVER SEE THIS ONE!"};
+val _ = new_error_message{
+	id = 4321001, text ="-?0-"};
+val _ = new_error_message{
+	id = 4321002, text ="-?0:?1-"};
+val _ = new_error_message{
+	id = 4321003, text ="-?0:?1:?2-"};
+val _ = new_error_message{
+	id = 4321004, text ="-?0:?1:?2:?3-"};
+val _ = new_error_message{
+	id = 4321005, text ="-?0:?1:?2:?3:?4-"};
+val _ = new_error_message{
+	id = 4321006, text ="-?0:?1:?2:?3:?4:?5-"};
+=TEX
+=SML
+fun test_divert inserters = (
+	let	val text =
+	(case ((	let	val old = 1234000;
+			val new = 4321000 + length inserters;
+		in	fail "test_divert1" old []
+			handle ex => divert ex "test_divert1"  "test_divert2" new inserters
+		end;
+		Div) handle ex => ex ) of
+		Fail msg => get_message msg
+	|	ex => string_of_exn ex);
+		val skip_before = size "* ";
+		val skip_after = size " [test_divert2.432100X] *";
+	in	String.substring(text, skip_before,
+			size text - skip_before - skip_after)
+	end
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[ ("mdt002.BE.6.1", test_divert,
+	[fn () => "ABC"], "-ABC-"),
+  ("mdt002.BE.6.2", test_divert,
+	[fn () => "ABC", fn () => "DEF" ], "-ABC:DEF-"),
+  ("mdt002.BE.6.3", test_divert,
+	[fn () => "ABC", fn () => "DEF" , fn () => "GHI" ], "-ABC:DEF:GHI-")
+];
+=TEX
+=SML
+fun test_elaborate old_inserters new_inserters = (
+	let	val text =
+	(case ((	let	val old = 1234000;
+			val new = 4321000 + length old_inserters + length new_inserters;
+		in	fail "test_divert1" old old_inserters
+			handle ex => elaborate ex old  "test_divert2" new new_inserters
+		end;
+		Div) handle ex => ex ) of
+		Fail msg => get_message msg
+	|	ex => string_of_exn ex);
+		val skip_before = size "* ";
+		val skip_after = size " [test_divert2.432100X] *";
+	in	String.substring(text, skip_before,
+			size text - skip_before - skip_after)
+	end
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[ ("mdt002.BE.6.4", test_elaborate [fn () => "ABC"],
+	[fn () => "DEF"], "-ABC:DEF-"),
+  ("mdt002.BE.6.5", test_elaborate	[fn () => "ABC", fn () => "DEF" ],
+	[fn () => "GHI" ], "-ABC:DEF:GHI-"),
+  ("mdt002.BE.6.6", test_elaborate	[fn () => "ABC", fn () => "DEF" ],
+	[fn () => "GHI", fn () => "JKL", fn () => "MNO" ], "-ABC:DEF:GHI:JKL:MNO-"),
+  ("mdt002.BE.6.7", test_elaborate	[fn () => "ABC", fn () => "DEF", fn () => "GHI" ],
+	[fn () => "JKL", fn () => "MNO", fn () => "PQR" ], "-ABC:DEF:GHI:JKL:MNO:PQR-")
+];
+
+
+=TEX
+\subsection{System Control}
+Before we embark on these tests we save the original state of the controls
+for reference in group SC.4:
+=SML
+val old_flags = get_flags();
+val old_int_controls = get_int_controls();
+val old_string_controls = get_string_controls();
+=TEX
+\subsubsection{Group SC.1}
+=SML
+val testflag : bool ref = ref true;
+
+new_flag{name="testflag",
+	control=testflag,
+	default=(fn()=>true),
+	check=(fn _ => true)};
+=TEX
+=SML
+val testint : int ref = ref 40;
+
+new_int_control{name="testint",
+	control=testint,
+	default=(fn()=>80),
+	check=(fn n=> n >= 20)};
+=TEX
+=SML
+val teststring : string ref = ref "boo";
+
+new_string_control{name="teststring",
+	control=teststring,
+	default=(fn()=>""),
+	check=(fn s=> size s <= 5)};
+=TEX
+=SML
+fun prt_bool true = "true" | prt_bool false = "false";
+store_mt_results_show mt_run
+[("mdt002.SC.1.1",  prt_bool o get_flag, "testflag", "true"),
+ ("mdt002.SC.1.2",  string_of_int o get_int_control, "testint", "40"),
+ ("mdt002.SC.1.3",  get_string_control, "teststring", "boo")
+];
+=TEX
+\subsubsection{Group SC.2}
+=SML
+val s1 = prt_bool(set_flag("testflag", false));
+val s2 = string_of_int(set_int_control("testint", 20));
+val s3 = (set_string_control("teststring", "abcde"));
+
+store_mt_results_show mt_run
+[("mdt002.SC.2.1",  Combinators.I, s1, "true"),
+ ("mdt002.SC.2.2",  Combinators.I, s2, "40"),
+ ("mdt002.SC.2.3",  Combinators.I, s3, "boo")
+];
+
+store_mt_results_show mt_run
+[("mdt002.SC.2.4",  prt_bool o get_flag, "testflag", "false"),
+ ("mdt002.SC.2.5",  string_of_int o get_int_control, "testint", "20"),
+ ("mdt002.SC.2.6",  get_string_control, "teststring", "abcde")
+];
+
+val store_controls = get_controls();
+reset_controls();
+store_mt_results_show mt_run
+[("mdt002.SC.1.1a",  prt_bool o get_flag, "testflag", "true"),
+ ("mdt002.SC.1.2a",  string_of_int o get_int_control, "testint", "80"),
+ ("mdt002.SC.1.3a",  get_string_control, "teststring", "")
+];
+set_controls store_controls;
+store_mt_results_show mt_run
+[("mdt002.SC.2.4a",  prt_bool o get_flag, "testflag", "false"),
+ ("mdt002.SC.2.5a",  string_of_int o get_int_control, "testint", "20"),
+ ("mdt002.SC.2.6a",  get_string_control, "teststring", "abcde")
+];
+=TEX
+=SML
+val store_controls = (get_flags(),get_int_controls(),get_string_controls());
+reset_flags();
+reset_int_controls();
+reset_string_controls();
+store_mt_results_show mt_run
+[("mdt002.SC.1.1b",  prt_bool o get_flag, "testflag", "true"),
+ ("mdt002.SC.1.2b",  string_of_int o get_int_control, "testint", "80"),
+ ("mdt002.SC.1.3b",  get_string_control, "teststring", "")
+];
+set_flags(#1 store_controls);
+set_int_controls(#2 store_controls);
+set_string_controls(#3 store_controls);
+store_mt_results_show mt_run
+[("mdt002.SC.2.4b",  prt_bool o get_flag, "testflag", "false"),
+ ("mdt002.SC.2.5b",  string_of_int o get_int_control, "testint", "20"),
+ ("mdt002.SC.2.6b",  get_string_control, "teststring", "abcde")
+];
+
+=TEX
+\subsubsection{Group SC.3}
+=SML
+val testflag2 : bool ref = ref true;
+
+new_flag{name="testflag2",
+	control=testflag2,
+	default=(fn()=>true),
+	check=(fn tv => tv)};
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("mdt002.SC.3.1",  set_flag, ("testflag2", false),
+	gen_fail_msg "set_flag" 2012 ["testflag2"])];
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("mdt002.SC.3.2",  set_int_control, ("testint", 1),
+	gen_fail_msg "set_int_control" 2012 ["testint"])];
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("mdt002.SC.3.3",  set_string_control, ("teststring", "abcdef"),
+	gen_fail_msg "set_string_control" 2012 ["teststring"])];
+=TEX
+\subsubsection{Group SC.4}
+Since the order of the controls is not specified, we sort them into
+a known order before comparison.
+
+($csort$ is a function because of SML97 value polymorphism.)
+=SML
+fun csort () = Sort.sort (fn x => fn y => Sort.string_order (fst x) (fst y));
+val new_flags = csort()(get_flags() diff old_flags);
+val new_int_controls = csort()(get_int_controls() diff old_int_controls);
+val new_string_controls = csort()(get_string_controls() diff old_string_controls);
+val all_controls = (
+	let	val (fs, is, ss) = get_controls();
+	in	(csort() (fs diff old_flags),
+		 csort() (is diff old_int_controls),
+		 csort() (ss diff old_string_controls))
+	end);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.4.1", Combinators.I, new_flags,
+	[("testflag", false), ("testflag2", true)])];
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.4.2", Combinators.I, new_int_controls,
+	[("testint", 20)])];
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.4.3", Combinators.I, new_string_controls,
+	[("teststring", "abcde")])];
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.4.4", Combinators.I, all_controls,
+	(new_flags, new_int_controls, new_string_controls))];
+=TEX
+\subsubsection{Group SC.5}
+The first three tests in this group will only work in a  batch session. In an interactive session,
+the {\it new\_XXX} function will ask the user whether to continue.
+=SML
+set_flag("ignore_warnings", false);
+val interactive : bool ref = ref(ExtendedIO.is_term_in std_in);
+if !interactive
+then ()
+else (
+	store_mt_results_show mt_run_fail
+[("mdt002.SC.5.1",  new_flag, {name="testflag",
+	control=testflag,
+	default=(fn()=>true),
+	check=(fn _ => true)}, gen_fail_msg "new_flag" 2010 ["testflag"])];
+	store_mt_results_show mt_run_fail
+[("mdt002.SC.5.2",  new_int_control, {name="testint",
+	control=testint,
+	default=(fn()=>80),
+	check=(fn n=> n >= 20)}, gen_fail_msg "new_int_control" 2010 ["testint"])];
+	store_mt_results_show mt_run_fail
+[("mdt002.SC.5.3",  new_string_control, {name="teststring",
+	control=teststring,
+	default=(fn()=>""),
+	check=(fn s=> size s <= 5)}, gen_fail_msg "new_string_control" 2010 ["teststring"])];
+	()
+);
+=TEX
+The remaining tests in this group will work in batch or interactively.
+=SML
+set_flag("ignore_warnings", true);
+val (f1, f2, f3) = (ref true, ref false, ref false);
+new_flag{name = "f", control = f1, default= (fn () => false), check = fun_true};
+new_flag{name = "f", control = f2, default= (fn () => false), check = fun_true};
+new_flag{name = "f", control = f3, default= (fn () => false), check = fun_true};
+set_flag("f", true);
+set_flag("f'", false);
+set_flag("f''", true);
+=TEX
+=SML
+store_mt_results_show mt_run
+[	("mdt002.SC.5.4.1",  !,  f1, false),
+	("mdt002.SC.5.4.2",  !,  f2, true),
+	("mdt002.SC.5.4.3",  !,  f3, true)
+];
+=TEX
+=SML
+val (i1, i2, i3) = (ref 0, ref 0, ref 0);
+new_int_control{name = "i", control = i1, default= (fn () => 0), check = fun_true};
+new_int_control{name = "i", control = i2, default= (fn () => 0), check = fun_true};
+new_int_control{name = "i", control = i3, default= (fn () => 0), check = fun_true};
+set_int_control("i'", 1);
+set_int_control("i''", 2);
+set_int_control("i", 3);
+(i1, i2, i3);
+=TEX
+=SML
+store_mt_results_show mt_run
+[	("mdt002.SC.5.5.1",  !,  i1, 1),
+	("mdt002.SC.5.5.2",  !,  i2, 2),
+	("mdt002.SC.5.5.3",  !,  i3, 3)
+];
+=TEX
+=SML
+val (s1, s2, s3) = (ref "0", ref "0", ref "0");
+new_string_control{name = "i", control = s1, default= (fn () => "0"), check = fun_true};
+new_string_control{name = "i", control = s2, default= (fn () => "0"), check = fun_true};
+new_string_control{name = "i", control = s3, default= (fn () => "0"), check = fun_true};
+set_string_control("i'", "1");
+set_string_control("i''", "2");
+set_string_control("i", "3");
+=TEX
+=SML
+store_mt_results_show mt_run
+[ 	("mdt002.SC.5.6.1",  !,  s1, "1"),
+	("mdt002.SC.5.6.2",  !,  s2, "2"),
+	("mdt002.SC.5.6.3",  !,  s3, "3")
+];
+=TEX
+=SML
+set_flag("ignore_warnings", false);
+=TEX
+\subsubsection{Group SC.6}
+=SML
+val apple : int ref = ref 42;
+val banana : int ref = ref 99;
+val cherry : bool ref = ref true;
+val date : string ref = ref "";
+new_int_control{
+	name = "apple",
+	check = fn i => i < 1000,
+	default = fn _ => 45, (* not 42 to prove that this doesn't get called by prcs *)
+	control = apple};
+new_flag{
+	name = "cherry",
+	check = fun_true,
+	default = fn _ => true,
+	control = cherry};
+new_string_control{
+	name = "date",
+	check = fun_true,
+	default = fn _ => "",
+	control = date};
+val prcs = pending_reset_control_state();
+new_int_control{
+	name = "banana",
+	check = fn i => i > 0,
+	default = fn _ => 99,
+	control = banana};
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.6.1", get_int_control, "apple", 42),
+ ("mdt002.SC.6.2", get_int_control, "banana", 99)];
+=TEX
+=SML
+set_int_control("apple", 50);
+set_flag("cherry", false);
+set_string_control("date", "a fruit");
+prcs();
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("mdt002.SC.6.3",  get_int_control, "banana", gen_fail_msg "get_int_control" 2011 ["banana"])];
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.6.4", get_int_control, "apple", 50)];
+store_mt_results_show mt_run
+[("mdt002.SC.6.5", get_flag, "cherry", false)];
+store_mt_results_show mt_run
+[("mdt002.SC.6.6", get_string_control, "date", "a fruit")];
+=TEX
+\section{REGRESSION TESTS}
+=TEX
+=SML
+new_error_message {id = 9990999, text = "?0"};
+val Fail msg = (fail "abc" 9990999 [fn () => fail "x" 0 []]; Div)
+	handle e => e;
+store_mt_results_show mt_run
+[("mdt002.g_m_t.7.1", get_message_text, msg, "Failure detected formatting message: * failure x.0 reported *")];
+=TEX
+\section{EPILOGUE}
+=SML
+raw_diag_string(summarize_mt_results());
+if	!interactive
+then	diag_string
+	"WARNING: not all module tests in mdt002.doc can be run interactively"
+else	();
+=TEX
+\end{document}
+
+
+

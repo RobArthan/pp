@@ -1,0 +1,605 @@
+=IGN
+********************************************************************************
+dtd516.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% dtd516.doc   ℤ $Date: 2008/10/11 11:08:45 $ $Revision: 1.50 $ $RCSfile: dtd516.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design: Compliance Tool User Interface}
+
+\def\AbstractText{This document contains the signature for the commands required to operate the compliance tool.}
+
+\def\Reference{ISS/HAT/DAZ/DTD516}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\def\daztool{Compliance Tool}
+\def\REFERENCE{\cite{DS/FMU/IED/USR006}}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{DAZ PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design: Compliance Tool User Interface}  %% Mandatory field
+%% LaTeX2e port: \TPPref{ISS/HAT/DAZ/DTD516}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.50 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2008/10/11 11:08:45 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & DAZ Team}
+%% LaTeX2e port: \raggedright{\TPPabstract{This document contains the signature for the commands required to operate the compliance tool.}}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	A,~Smith, DRA \\
+%% LaTeX2e port: 	Library}}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: \def\TPPheadlhs{Lemma 1 Ltd.}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issues 1.1 (1994/11/10)-1.5 (1994/12/06)] First drafts.
+\item[Issues 1.6 (1994/12/06)-1.7 (1995/01/05)] Reworked according to desk check report 018.
+\item[Issue 1.8 (1995/01/09)] Corrected usage message in one of the documentation boxes.
+\item[Issue 1.9 (1995/10/25)] Added $output\_hypertext\_edit\_script$ to the signature.
+\item[Issue 1.10 (1995/10/27)] Updated distribution list.
+\item[Issue 1.11 (1997/04/14)] Added $new\_script1$.
+\item[Issue 1.12 (1997/06/09)] Typo.
+\item[Issue 1.13 (1997/08/08), 1.14 (1997/08/19)] Tidying.
+\item[Issue 1.15 (2000/06/20)] Enhancement R1 --- multidimensional arrays. This adds
+{\it array\_agg\_def} to the user interface.
+\item[Issue 1.16 (2000/07/03)] Added descriptions of all flags and string controls for the user guide.
+\item[Issues 1.17 (2000/10/27),1.18 (2000/12/13)] CTLE I R1/11 --- nested packages.
+\item[Issues 1.19 (2001/07/06),1.20 (2001/07/07)] Flag for option to compactify stored terms added.
+\item[Issue 1.21 (2001/11/05)] Syntax check only feature.
+\item[Issue 1.23 (2002/01/29)] R0021: domain condition generation.
+\item[Issue 1.24 (2002/05/27)] New SPARK program printing functions.
+\item[Issue 1.25 (2002/08/23)] Removed use of ICL logo font.
+\item[Issue 1.26 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.27 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.28 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.29 (2002/11/18)] Script deletion.
+\item[Issue 1.30 (2002/11/20)] Exception logging.
+\item[Issue 1.31 (2002/12/10)] New error message for {\it browse\_vcs}.
+\item[Issue 1.32 (2002/12/15)] Fixed {\LaTeX} error.
+\item[Issue 1.33 (2002/12/16)] Added documentation for SPARK output function controls.
+\item[Issue 1.34 (2002/12/17)] Addressed comments on documentation from QinetiQ.
+\item[Issue 1.37 (2004/02/07)] The SPARK program is now referred to as the Ada program.
+\item[Issue 1.38 (2004/10/27)] Now have an option to ignore SPARK annotations.
+\item[Issue 1.39 (2005/05/12)] Added {\em create\_package\_spec\_theory}.
+\item[Issue 1.40 (2005/09/07)] Now use Z let expressions rather than HOL ones.
+\item[Issue 1.41 (2006/03/17)] First clean compile for enhancement 117.
+\item[Issue 1.42 (2006/03/28)] Automated state management.
+\item[Issue 1.43 (2006/06/14)] Added {\em get\_script\_theories}.
+\item[Issue 1.44 (2006/08/09)] Added {\em cn\_spark\_annotation\_char}.
+\item[Issue 1.45 (2006/09/16)] Added {\em open\_scope}.
+\item[Issue 1.46 (2006/09/18)] {\em case\_of\_ada\_keywords} is now {\em cn\_case\_of\_ada\_keywords}.
+\item[Issue 1.47 (2006/09/19)] Change to parametrisation of {\em new\_script} etc.
+\item[Issue 1.48 (2006/09/19)] Added function to delete deferred subprogram.
+\item[Issue 1.49 (2007/11/11)] Corrected typos.
+\item[Issue 1.50 (2008/10/11)] Added interface to the evaluation report generator.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported daz source documents onto the Lemma 1 document template
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document provides the user with an interface to all the functions required to operate the compliance tool and is written in response to \cite{ISS/HAT/DAZ/HLD503}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains a signature which comprises the functions necessary for a user to operate the compliance tool. It supports the following functionality:
+\begin{description}
+\item
+Specify a new literate script
+\item
+Generate a SPARK program, either into the {\Product} journal window or into a file.
+\item
+Generate a Z document, either into the journal window or a file.
+\item
+Invoke a navigation system to map between VCs and the web clauses from which they originate.
+\end{description}
+\subsubsection{Known Deficiencies}
+None known.
+\subsection{Possible Enhancements}
+None.
+
+\section{THE SIGNATURE}
+=DOC
+signature ⦏ComplianceTool⦎  = sig
+=DESCRIBE
+This is the signature for the commands which a user requires to operate the compliance tool.
+=ENDDOC
+\section{WORKING WITH THE EXCEPTION LOG}
+=DOC
+val ⦏print_exception_log⦎  : string -> bool;
+val ⦏output_exception_log⦎ : {script : string, out_file : string} -> bool;
+val ⦏delete_exception_log⦎ : string -> unit;
+=DESCRIBE
+{\it print\_exception\_log} causes the exception log for the named script to be printed to standard output.
+{\it output\_exception\_log}  prints the exception log to a file.
+Both of these functions return true if some exceptions have been logged for the script.
+If no exceptions have been logged a message to that effect is output and the functions return false.
+Both functions will raise an exception if the named script has not been processed.
+
+{\it delete\_exception\_log} deletes the exception log for the named script.
+=ENDDOC
+=FAILURE
+516101	No exceptions have been logged for script ?0
+516102	The following exceptions have been logged for script ?0:
+=TEX
+\section{CREATING NEW LITERATE SCRIPTS}
+=DOC
+val ⦏new_script⦎ : {name : string, unit_type : string} -> unit
+val ⦏new_script1⦎ :
+	{name : string, unit_type : string,
+		library_theories : string list} -> unit
+val ⦏new_continuation_script⦎ : {name : string, unit_type : string} -> unit
+val ⦏new_continuation_script1⦎ :
+	{name : string, unit_type : string,
+		library_theories : string list} -> unit
+val ⦏delete_script⦎ : {name : string, unit_type : string} -> unit;
+val ⦏delete_deferred_subprogram⦎ : string -> unit;
+=DESCRIBE
+{\it new\_script} takes as an argument the name of an Ada compilation unit and a string indicating the type of compilation unit, which must be one of
+=INLINEFT
+"spec"
+=TEX
+\ (package specification),
+=INLINEFT
+"body"
+=TEX
+\ (package body),
+=INLINEFT
+"proc"
+=TEX
+\ (procedure) or
+=INLINEFT
+"func"
+=TEX
+\ (function). It creates a new {\Product} theory, into which the Z document generated by the subsequent literate script is placed.
+The name of the theory is derived from the compilation unit name and type.
+The data structure containing the SPARK program is set to its initial empty value.
+
+{\it new\_script1} acts the same as {\it new\_script} except that its list
+of library theories will be made the parents of the script theory,
+and any theory produced during processing the script.	
+
+{\it new\_continuation\_script} and {\it new\_continuation\_script} are
+just like {\it new\_script} and {\it new\_script1}, except that the data
+structure containing the SPARK program is retained.
+
+{\it delete\_script} removes a script from the Compliance Tool state together with any associated
+theories and other items in the state dependent on the script so that the script can be reloaded.
+It prints a report of what has been deleted.
+
+{\it delete\_deferred\_subprogram} allows the part of a script
+associated with a deferred subprogram to be re-entered. It
+deletes all theories associated with the deferred subprogram
+and undoes the effects of any refinement or replacement steps associated with the deferred subprogram.
+=ENDDOC
+\section{OPENING THE SCOPE OF A PACKAGE OR SUBPROGRAM}
+=DOC
+val ⦏open_scope⦎ : string -> unit
+=DESCRIBE
+With each declarative region in an Ada program, there is a Z theory to hold definitions and verification conditions that are needed in the scope of the declarative region.
+The scope is initially set by {\em new\_script} to correspond to the declarative region of the compilation unit.
+The {\em open\_scope} command is then used to navigate into the scope of nested subprogram bodies.
+The argument of {\em open\_scope} is the expanded name of the package or subprogram.
+For example, if the body of a package named {\em Utils} defines a subprogram named {\em sort}, then before expanding a k-slot
+or specification statement in the body of {\em sort}, the following call is required:
+
+\begin{verbatim}
+    open_scope "Utils.sort" ;
+\end{verbatim}
+
+{\em open\_scope} may also be used to return to the scope of the compilation unit after opening the scope of a package or subprogram contained in it.
+
+=ENDDOC
+\section{GENERATING THE ADA PROGRAM}
+=DOC
+val ⦏print_ada_program⦎ : string -> unit
+val ⦏output_ada_program⦎ : {script : string, out_file : string} -> unit
+=DESCRIBE
+The call $print\_spark\_program\;name$ generates and prints the Ada program contained
+in the script with the specified name.
+A minus sign may be used for the name to specify the current script.
+The Ada program is created by filling in the k-slots and specification statements in a literate script with their expansions.
+The result is printed on the standard output channel in Ada syntax such that it could be subsequently compiled using an Ada compiler.
+
+{\it output\_spark\_program} does the same as {\it print\_spark\_program} but allows the user to specify a file to which the program will then be written.
+=USES
+For example, if a literate script called ``primes'' has just been entered into the {\daztool}  then the following command will output the corresponding Ada to a file called $primes.ada$.
+
+\begin{verbatim}
+output_ada_program{script = "-", out_file="primes.ada"}
+\end{verbatim}
+
+=ENDDOC
+\section{GENERATING A Z DOCUMENT}
+=DOC
+val ⦏print_z_document⦎ : string -> unit
+val ⦏output_z_document⦎ : {script : string, out_file : string} -> unit
+val ⦏get_script_theories⦎ : string -> string list
+=DESCRIBE
+$print\_z\_document$ prints the Z document from the named script to the standard output. The listing is in a format suitable for its re-entry into a {\Product} session.
+
+$output\_z\_program$ is similar to $print\_z\_document$, but the Z document is written to the named output file $out\_file$.
+
+=USES
+For example, if a literate script called ``primes'' has been entered into the {\daztool}  then the following command will output the corresponding Z document to a file called $primes.zdoc$.
+
+\begin{verbatim}
+output_z_document{script="primes", out_file="primes.zdoc"}
+\end{verbatim}
+
+{\em get\_script\_theories n} returns a list of all the {\Product} theories associated with the Compliance Notation script {\em n}.
+=ENDDOC
+
+\section{PREPARING AN EVALUATION REPORT}
+=DOC
+	type ⦏EVAL_REPORT⦎
+	val ⦏get_eval_report⦎ :
+		{title : string, theories : string list} -> EVAL_REPORT;
+	val ⦏print_eval_report⦎ : EVAL_REPORT -> unit;
+	val ⦏output_eval_report⦎ : {report : EVAL_REPORT, out_file : string} -> unit;
+	val ⦏output_eval_report1⦎ : {report : EVAL_REPORT, out_file : string} -> unit;
+=DESCRIBE
+These functions are used to create a report
+for assistance in evaluating a compliance argument.
+The type {\em EVAL\_REPORT} is an abstract type representing
+the logical contents of the report.
+To create a report first use {\em get\_eval\_report} to
+give a title to the report specifying the theories to be
+included in the report.
+The report can then be output to the screen using {\em print\_eval\_report} or to a file, either in {\em LaTeX} format using {\em cn\_output\_eval\_report}
+or in raw {\Product} text format using {\em cn\_output\_eval\_report1}.
+=ENDDOC
+
+\section{NAVIGATION}
+
+=DOC
+val ⦏browse_vcs⦎ : unit -> unit
+=DESCRIBE
+On systems with support for X/Windows and Motif enabled,
+this command invokes an interactive browsing tool for mapping VCs onto web clauses, and vice versa.
+=FAILURE
+516201	The VC browser is not available on this ProofPower system
+=ENDDOC
+
+\section{GENERATING AN EDIT SCRIPT FOR HYPERTEXT}
+
+=DOC
+val ⦏output_hypertext_edit_script⦎ : {out_file : string} -> unit
+=DESCRIBE
+This function produces an edit script from a processed literate script. The edit script is placed in a file with name $out\_file$.
+
+The edit script will introduce hypertext links between specification statements or K-Slots, and their corresponding expansion paragraphs.
+=ENDDOC
+
+\section{SUBSTITUTION IN VCS}
+=DOC
+(* Flag ⦏cn_use_let_in_vcs⦎ - boolean control, default false *)
+=DESCRIBE
+This is the name of flag (see {\it set\_flag} in \REFERENCE).
+The flag controls the way substitution of expressions for variables is treated during VC generation.
+
+If the flag is false (the default), then the substitution is carried out using the HOL $subst$ function and then conversions are used to transform the result into Z: this results in a Z term in which the variables have actually been replaced by their substitutes, and declarations and other constructs have been adjusted as necessary to avoid variable capture.
+
+If the flag is set true (using $set\_flag$), then a Z $let$ construct is used to give the semantics of substitution without actually replacing any variables with their substitutes.
+This can help to abbreviate the VC and make its structure clearer.
+=ENDDOC
+\section{DIAGNOSTICS FOR TYPE-CHECKING}
+=DOC
+(* Flag ⦏cn_show_typing_context⦎ - boolean control, default false *)
+=DESCRIBE
+This is the name of a flag (see {\it set\_flag} in \REFERENCE).
+It controls a diagnostic display which may be of help in understanding
+problems with type-checking.
+
+When set to true the flag will cause the tool to display
+the typing context used when type-checking each Z expression
+encountered in Compliance Notation clauses.
+The display gives a list of the theories that are in scope (omitting {\it z\_library}
+and its ancestors) and a list of the variables that are have their
+type fixed by the context (e.g., variables corresponding to SPARK program variables).
+
+This flag is primarily a diagnostic aid for developers of the tool, but
+may be of help to a general user in some difficult cases.
+=ENDDOC
+\section{PRETTY-PRINTING OF THE SPARK PROGRAM}
+=DOC
+(* ⦏cn_case_of_ada_keywords⦎ - string control, default "lower" *)
+=DESCRIBE
+This is the name of a string control (see {\it set\_string\_control} in \REFERENCE).
+It controls the case of Ada reserved words in the output from {\it print\_ada\_program}
+and {\it output\_ada\_program}.
+There are three allowed values for the string control: {\tt "upper"}, {\tt "lower"} and
+{\tt "as input"}.
+The values {\tt "upper"} and {\tt "lower"} makes the tool generate upper-case and lower-case reserved words respectively;
+the value {\tt "as input"} makes the tool use the same case for a reserved
+word as was used at its first appearance in the original Compliance Notation script.
+=ENDDOC
+=DOC
+(* ⦏cn_automatic_line_splitting⦎ - integer control declared by new_int_control, default 80 *)
+(* ⦏cn_tab_width⦎ - integer control declared by new_int_control, default 2 *)
+(* ⦏cn_left_margin⦎ - integer control declared by new_int_control, default 0 *)
+=DESCRIBE
+These controls define parameters for output from
+$format\_web\_clause$,
+$print\_web\_clause$,
+$print\_spark\_program$,
+$output\_spark\_program$ and
+{\it strings\_from\_fmt1}.
+
+These functions always split lines at logical break points (e.g. at semicolons at the end of statements).
+However, they will also split lines that are longer than the value set by the control
+{\it cn\_automatic\_line\_spliting}
+(if it is non-zero), chosing to split at a syntactically allowed location.
+If the control is set to 0 then no automatic line-splitting is done
+(except in Z terms, which will be split during formatting to match the current line length setting).
+The default value of the control is 80.
+
+{\it cn\_tab\_width} controls the number of spaces used to indent a nested structure
+such as the statement in the then part of an if statement. {\it cn\_left\_margin} specifies
+an indentation to be applied on every line and is given in the units specified by {\it cn\_tab\_width}.
+E.g., if {\it cn\_tab\_width} is 2 and {\it cn\_left\_margin} is 4, every line will be indented by at
+least 8 spaces, and each nested structure will be indented 2 spaces more than the structure
+immediately containing it.
+=ENDDOC
+
+\section{STORAGE OF Z TERMS}
+=DOC
+(* Flag ⦏cn_compactify_terms⦎ - boolean control, default true *)
+=DESCRIBE
+This is the name of a flag (see {\it set\_flag} in \REFERENCE).
+It controls a feature for optimising the memory space
+occupied by the Z terms stored in the internal data structures of the Compliance Tool.
+
+Since this space optimisation involves some processing overhead,
+it is optional, but it is enabled by default.
+The space optimisation can be disabled by
+setting the flag {\it cn\_compactify\_terms} to {\it false} and
+enabled by setting it to {\it true}.
+=ENDDOC
+\section{CONTROLLING THE PARAGRAPH RECOGNISER}
+=DOC
+(* Flag ⦏cn_syntax_check_only⦎ - boolean control, default false *)
+=DESCRIBE
+This is the name of a flag (see {\it set\_flag} in \REFERENCE).
+It allows you to carry out check that a script complies
+with the syntax of the Compliance Notation.
+
+When the flag is set false, all stages of processing
+are carried out on each Compliance Notation clause entered.
+
+When the flag is set true, all processing relating to
+the production of VCs and the Z paragraphs that
+support them is suppressed. The Ada program may still
+be produced and all the literate programming language
+features may be used.
+
+Note that this flag only controls processing of Compliance Notation clauses.
+Z paragraphs will be processed regardless of the value of this flag.
+=ENDDOC
+=DOC
+(* Flag ⦏cn_stop_on_exceptions⦎ - boolean control, default true *)
+=DESCRIBE
+This flag controls the handling of exceptions when a Compliance Notation clause
+is processed. If the flag is true, then if processing a Compliance Notation clause
+will cause ML exceptions when errors are detected. If the flag is false, the an error message
+will be printed but an exception will not be raised. In either case, the error message will
+be recorded in a log that can be inspected using {\it print\_exception\_log}, q.v.
+
+The processing of Z paragraphs is not affected by this flag.
+=ENDDOC
+\section{CONTROLLING THE GENERATION OF DOMAIN CONDITIONS}
+=DOC
+(* cn_domain_conds: integer control; 3 values allowed as follows *)
+val ⦏cn_no_domain_conds⦎ : int;
+val ⦏cn_standard_domain_conds⦎ : int;
+val ⦏cn_all_domain_conds⦎ : int;
+
+=DESCRIBE
+{\it cn\_domain\_conds} is the name of an integer control
+(see {\it set\_int\_control} in \REFERENCE).
+It controls the generation of domain conditions, i.e., additional hypotheses that
+are added to VCs to help make them provable in cases where the compliance argument
+depends for its validity on the program not raising an exception.
+The control should be given one of the three
+integer values given by the three ML bindings above. The effect
+of the control is shown in the following table:
+
+\begin{center}
+\begin{tabular}{|l|p{3in}|}\hline
+=INLINEFT
+cn_no_domain_conds
+=TEX
+& No domain conditions are generated.\\\hline
+=INLINEFT
+cn_standard_domain_conds
+=TEX
+& Only domain conditions corresponding to exceptions that are guaranteed by ALRM
+\cite{AJPO83} are generated. \\\hline
+=INLINEFT
+cn_all_domain_conds
+=TEX
+& Domain conditions are generated as for
+=INLINEFT
+cn_standard_domain_conds
+=TEX
+\ together with domain conditions corresponding to real arithmetic exceptions.\\\hline
+\end{tabular}
+\end{center}
+
+=ENDDOC
+\section{CONTROLLING THE GENERATION OF SPARK SYNTAX WARNINGS}
+
+=DOC
+(* ⦏cn_spark_syntax_warnings⦎ - flag declared by new_flag; default false *)
+=DESCRIBE
+This flag controls whether or not Ada comments are to be inserted in the output
+produced by the functions
+$format\_web\_clause$,
+$print\_web\_clause$,
+$print\_ada\_program$, and
+$output\_ada\_program$
+to warn about uses of Ada syntax that is not in the SPARK subset.
+Note that the checks are only made on the Ada concrete syntax, ignoring comments, there is
+no checking that required SPARK annotations are present or correct and no context-sensitive
+checks are made.
+The checks are based on the syntax given in John Barnes' book {\it High Integrity Ada The SPARK Approach}
+ISBN 0-201-17517-7.
+=ENDDOC
+
+
+\section{CONTROLLING THE RECOGNITION OF SPARK ANNOTATIONS}
+
+=DOC
+(* Flag ⦏cn_ignore_spark_annotations⦎ - boolean control, default false *)
+=DESCRIBE
+This flag controls the treatment of Ada comments having the form of SPARK annotations,
+i.e., comments beginning with ``\verb|--#|'' (but see also {\em cn\_spark\_annotation\_char} below).
+If the flag is false, the default, then such comments are treated as SPARK annotations and
+may only appear in syntactic positions where the SPARK syntax accepts an annotation.
+The annotations are remembered for inclusion in the output when the program is printed.
+If the flag is true, then such comments are treated as ordinary Ada comments and ignored.
+
+=ENDDOC
+
+
+
+=DOC
+(* Flag ⦏cn_spark_annotation_char⦎ - string control, default "#" *)
+=DESCRIBE
+By default SPARK annotations are Ada comments beginning with ``\verb|--#|''
+This string control may be used to specify an alternative to ``\verb|#|'' for the
+character that distinguishes SPARK annotation from other Ada comments.
+=ENDDOC
+
+
+\subsection{SUPPORT FOR MULTIDIMENSIONAL ARRAYS}
+=DOC
+val ⦏array_agg_def⦎ : int -> unit
+=DESCRIBE
+This function is used to generate the definitions that support multidimensional array
+aggregates. These definitions are built-in for arrays of up to 20 dimensions, so you
+do not need to use this function unless you have array aggregates of more than 20
+dimensions. The function should be called after first opening either the theory ``cn''
+or the cache theory for your database.
+=FAILURE
+508059	the argument to array_agg_def must be at least 2
+=ENDDOC
+
+\section{INITIALISATION AND SHUTDOWN}
+This interface is not for the end-user:
+=SML
+val ⦏pending_reset_cn_state⦎ : unit -> unit -> unit;
+=TEX
+
+\section{EPILOGUE}
+
+=SML
+end (* signature ComplianceTool *);
+=TEX
+
+\section{TEST POLICY}
+The functions in this document are used to invoke interactive tools and are not appropriate for off-line testing. Therefore there are no corresponding module tests.
+
+These are to be tested during system/integration tests as discussed in \cite{ISS/HAT/DAZ/HLD502}.
+=TEX
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+\end{document}

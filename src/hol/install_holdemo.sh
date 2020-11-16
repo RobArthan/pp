@@ -24,15 +24,14 @@ rm -rf "$TMPBUILD"
 mkdir "$TMPBUILD"
 cd "$TMPBUILD"
 
-cp "$DOC"/wrk051.doc .
-cp "$DOC"/spc001.doc "$DOC"/spc002.doc .
-cp "$DOC"/usr004.doc "$DOC"/usr013* .
-cp "$DOC"/usr022_slides.doc .
-cp "$DOC"/wrk022.doc "$DOC"/wrk043.doc "$DOC"/wrk044.doc "$DOC"/wrk046.doc .
-cp "$DOC"/usr022S.doc .
-sieve sml <usr022S.doc >/dev/null
-mv hol_course_work.doc "$DOC"
-sieve sml < wrk051.doc
+cp "$DOC"/wrk051.pp .
+cp "$DOC"/spc001.pp "$DOC"/spc002.pp .
+cp "$DOC"/usr004.pp "$DOC"/usr013* .
+cp "$DOC"/usr022_slides.pp .
+cp "$DOC"/wrk022.pp "$DOC"/wrk043.pp "$DOC"/wrk044.pp "$DOC"/wrk046.pp .
+cp "$DOC"/usr022S.pp .
+cp "$DOC"/usr022S.pp "$DOC"/hol_course_work.pp
+sieve -u sml < wrk051.pp
 make -f wrk051.mkf all_hol
 
 mv example_hol.* "$DB"

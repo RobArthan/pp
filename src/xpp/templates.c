@@ -4,7 +4,7 @@
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
- * templates.c: this file is part of the PPTex system
+ * templates.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

@@ -38,6 +38,12 @@ system~\cite{DS/FMU/IED/USR001}.
 
 %\subsubsection{Deficiencies}
 
+\subsection{Change History}
+
+29/12/2019
+
+Amend to read keyword files in utf8 when the standard input is in utf8.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{PP_FILE_CONV PROGRAM}
@@ -57,12 +63,11 @@ system~\cite{DS/FMU/IED/USR001}.
 #include <regex.h>
 #include <unistd.h>
 #include "utf8module.h"
-#ifdef __CYGWIN__
 #include <locale.h>
-#endif
 
 #define NOT_FOUND (-1)
 #define KEYWORD_FILE "sievekeyword"
+#define UKEYWORD_FILE "utf8skw"
 
 #define PPHOME "PPHOME"
 #define PPETCPATH "PPETCPATH"
@@ -204,6 +209,7 @@ initialize(int argc, char **argv, int option, int *ascii_out, int *nokw,
 
 
 	main_F.utf8 = False;
+	keyword_F.utf8 = False;
 	*ascii_out = False;
 	*nokw = False;
 	while((option = getopt(argc, argv, "ad:f:Kk:lnuv")) != -1) {
@@ -234,6 +240,7 @@ initialize(int argc, char **argv, int option, int *ascii_out, int *nokw,
 	      break;							/* BREAK */
 	    case 'u':
 	      main_F.utf8 = True;
+	      keyword_F.utf8 = True;
 	      break;							/* BREAK */
 	    case 'v':
 	      FPRINTF(stderr, "%s: version %s\n", program_name,
@@ -298,15 +305,23 @@ main(int argc, char **argv)
   char *keyword_files[MAX_KEYWORD_FILES];
   
   limits.num_keyword_files = 0;
-  keyword_files[limits.num_keyword_files++] = KEYWORD_FILE;
+
   program_name = argv[0];
   
   main_F.fp = stdin;
   
   initialize(argc, argv, option, &ascii_out, &nokw, keyword_files);
   
-  read_keyword_files(keyword_files);
+  if (keyword_F.utf8) {
+    setlocale(LC_ALL, "en_GB.UTF-8");
+    keyword_files[limits.num_keyword_files++] = UKEYWORD_FILE;
+  } else {
+    setlocale(LC_ALL, "C.ISO88591");
+    keyword_files[limits.num_keyword_files++] = KEYWORD_FILE;
+  };
   
+  read_keyword_files(keyword_files);
+
   if(keyword_F.grumbles > 0) {
     FPRINTF(stderr, "\n%s: %d fault%s reported on the keyword file.\n",
 	    program_name,
@@ -321,10 +336,12 @@ main(int argc, char **argv)
   if (main_F.utf8)
     if (ascii_out) transcribe_file_to_ascii(&main_F, stdout);
     else transcribe_file_to_ext(&main_F, stdout);
-  else if (nokw) {transcribe_file_nkw_to_utf8(&main_F, stdout);}
-  else {transcribe_file_to_utf8(&main_F, stdout);}
-  if(debug) message1("Sieving completed");
-  
+  else {
+    if (nokw) {transcribe_file_nkw_to_utf8(&main_F, stdout);}
+    else {transcribe_file_to_utf8(&main_F, stdout);}
+    if(debug) message1("Sieving completed");
+  };
+
   if(limits.opt_list) list_limits();
   
   if(main_F.grumbles > 0) {

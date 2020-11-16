@@ -1,0 +1,598 @@
+=IGN
+********************************************************************************
+imp025.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% imp025.doc   ℤ $Date: 2006/01/16 17:47:20 $ $Revision: 2.15 $ $RCSfile: imp025.doc,v $
+
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation of Pretty Printer}
+
+\def\AbstractText{This document contains the user interface to the pretty printer. It also installs the pretty printing functions into the PolyML printer.}
+
+\def\Reference{DS/FMU/IED/IMP025}
+
+\def\Author{A.J. Hammon}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % imp025.doc   ℤ $Date: 2006/01/16 17:47:20 $ $Revision: 2.15 $ $RCSfile: imp025.doc,v $
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: 
+%% LaTeX2e port: \TPPtitle{Implementation of Pretty Printer}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP025}
+%% LaTeX2e port: \def\SCCSissue{$Revision: 2.15 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSissue}
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/01/16 17:47:20 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPproject{FST PROJECT}
+%% LaTeX2e port: 
+%% LaTeX2e port: =IGN
+%% LaTeX2e port: 
+%% LaTeX2e port: Commands to process this document in various ways.
+%% LaTeX2e port: 
+%% LaTeX2e port: make -f rel001.mkf imp025.dvi
+%% LaTeX2e port: doctex imp025
+%% LaTeX2e port: texdvi imp025
+%% LaTeX2e port: bibtex imp025
+%% LaTeX2e port: doctex imp025 ; texdvi imp025
+%% LaTeX2e port: doctex imp025 ; texdvi imp025 ; bibtex imp025
+%% LaTeX2e port: dvipage imp025 &
+%% LaTeX2e port: 
+%% LaTeX2e port: docsml imp025
+%% LaTeX2e port: use_file "imp025.sml";
+%% LaTeX2e port: 
+%% LaTeX2e port: lasp -s imp025.doc > zz1
+%% LaTeX2e port: lasp -s -u imp025.OKwords imp025.doc > zz1
+%% LaTeX2e port: 
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the user interface to
+%% LaTeX2e port: 	the pretty printer.  It also installs the pretty printing
+%% LaTeX2e port: 	functions into the PolyML printer.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: 
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: 
+\catcode`\_=\active
+\def\_{\kern.06em\vbox{\hrule height.1ex width.3em}\hskip0.1em\relax}
+%% LaTeX2e port: 
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{center}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{center}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{DOCUMENT CONTROL}
+
+%********************************************************************
+
+\subsection{Contents List}
+\tableofcontents
+% \listoftables
+
+%********************************************************************
+
+\subsection{Document Cross References}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+%********************************************************************
+
+\subsection{Changes History}
+
+\begin{description}
+
+\item[Issue 1.1 (1991/05/31) to 1.10 (1991/09/11) ] Initial drafts.
+
+\item[\FormatDate{91/09/12}, issue 2.1 ] First approved issue.
+
+\item[Issue 2.2 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+
+\item [Issue 2.3 (1992/04/14),13 April 1992 ] Changes due to CR0017.
+
+\item[Issues 2.4 (1992/04/21)-2.9 (1992/07/07)]
+	Add call on $translate_for_output$ to all format routines.
+	Add support for print depth.
+	Add support for not printing assumptions of theorems.
+	Remove calls of $translate\-_for\-_output$. {}
+	Pass on any exceptions found during pretty printing, this means
+		that the printing of a large Standard~ML value at
+		top-level can be stopped.
+	Change the way that the language used for printing is chosen.
+	Bug fixes passim.
+
+\item[Issue 2.10 (1999/02/11), 2.11 (1999/02/18)] Updates for NJML compatibility.
+
+\item[Issue 2.12 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.13 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 2.14 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 2.15 (2006/01/16)] {\em show\_theorem} renamed as {\em show\_thm}.
+\item[Issue 2.16 (2009/09/14)] Now installs a pretty-printer for the theory hierarchy type to avoid overhead of having the data structure printed out when new databases are made.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%********************************************************************
+
+%\subsection{Changes Forecast} \label{ChangesForecast}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section{GENERAL}
+
+%********************************************************************
+
+\subsection{Scope}
+
+This document contains the pretty printer for the ICL HOL system, it
+implements the interfaces defined in the detailed design
+in~\cite{DS/FMU/IED/DTD025}.
+
+%********************************************************************
+
+\subsection{Introduction}
+
+%--------------------------------------------------------------------
+
+\subsubsection{Purpose and Background}
+
+A number of interfaces are required in ICL~HOL for printing out types,
+terms and theorems.  The functions in signature $PrettyPrinter$ provide
+the functions needed by the users of the pretty printer, these allow a
+user to obtain textual forms of types, terms and theorems in
+Standard~ML strings.  Another group of functions interface to the
+PolyML pretty printing system so that type, term and theorem values are
+printed correctly as (parts of) Standard~ML values shown at top-level.
+
+%--------------------------------------------------------------------
+
+\subsubsection{Dependencies}
+
+This is last of the four structures that together form the HOL pretty
+printer.  This document depends upon the other three structures:
+Oppen style printing~\cite{DS/FMU/IED/IMP024};
+pretty printer support~\cite{DS/FMU/IED/IMP031};
+and,
+HOL pretty printer functions~\cite{DS/FMU/IED/IMP032}.
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Interface}
+%\subsubsection{Algorithms}
+%\subsubsection{Possible Enhancements}
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Deficiencies}
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Terminology}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{PRETTY PRINTER}
+
+%********************************************************************
+
+\subsection{Prelude}
+
+=SML
+structure ⦏PrettyPrinter⦎ : PrettyPrinter = struct
+
+open OppenFormatting;
+open PrettyPrinterSupport;
+open HOLPrettyPrinter;
+=TEX
+
+%********************************************************************
+
+\subsection{Controls}
+
+These integers control how deeply terms and types are printed.
+
+=SML
+val ⦏pp_top_level_depth⦎ : int ref = ref ~1;
+
+val SideEffect =
+new_int_control{name="pp_top_level_depth", check=fun_true,
+	control=pp_top_level_depth, default=fn() => ~1};
+=TEX
+
+=SML
+val ⦏pp_format_depth⦎ : int ref = ref ~1;
+
+val SideEffect =
+new_int_control{name="pp_format_depth", check=fun_true,
+	control=pp_format_depth, default=fn() => ~1}
+=TEX
+
+Inside the printing system we deal with non-negative depths and
+use $Nil$ to indicate print the whole value.
+
+=SML
+fun ⦏get_depth⦎(which:int ref) : int OPT = (
+let
+	val d = !which;
+in
+	if d < 0 then Nil else Value d
+end
+);
+=TEX
+
+Assumptions on theories may be suppressed.
+
+=SML
+val pp_print_assumptions : bool ref = ref true;
+val _ =
+new_flag {name = "⦏pp_print_assumptions⦎",  control=pp_print_assumptions,
+		check=fun_true, default=fun_true};
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{CALLED INTERFACE FOR PRINTERS}
+
+These functions are the outermost printing functions for the supported
+types.  They all produce a textual form of their main argument by using
+the set of Oppen printing functions provided as another argument.
+
+%********************************************************************
+
+\subsection{Types}
+
+At present there is no support for printing types in languages other
+than HOL.  All HOL types (i.e., of Standard~ML type $TYPE$) are printed
+out using the HOL syntax.
+
+=SML
+fun ⦏show_type⦎ (add_language:bool) (depth:int OPT) (oppen_funs:OPPEN_FUNS)
+			(ty:TYPE) : unit = (
+	let
+		val (addstring, beginb, space, endb) = oppen_funs;
+
+		val lang ="HOL:";
+
+		val env = initial_env lang depth oppen_funs;
+	in
+		beginb(0, true);
+		if add_language then start_new_language env lang else ();
+		main_type_pp env ty;
+		if add_language then conclude_new_language env lang else ();
+		endb()
+	end
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Terms}
+
+The first task when printing terms is to determine which language to
+use.  A simple algorithm is used here: if the outermost construct in
+the term is a constant applied to a list of arguments then the language
+of that constant is chosen, in all other cases ``HOL'' is chosen.
+
+{\hfuzz 1pt
+=SML
+fun ⦏show_term_in⦎ (lang:string) (add_language:bool) (depth:int OPT)
+			(oppen_funs:OPPEN_FUNS) (tm:TERM) : unit = (
+	let
+		val (addstring, beginb, space, endb) = oppen_funs;
+		val env = initial_env lang depth oppen_funs;
+	in
+		beginb(0, true);
+		if add_language then start_new_language env lang else ();
+		main_term_pp env tm;
+		if add_language then conclude_new_language env lang else ();
+		endb()
+	end
+);
+=TEX
+}
+
+=SML
+fun ⦏show_term⦎ (add_language:bool) (depth:int OPT)
+			(oppen_funs:OPPEN_FUNS) (tm:TERM) : unit = (
+	let
+		val lang = choose_term_language(tm, nil);
+
+		val enclose = add_language orelse
+			(get_current_language()) <> lang;
+	in
+		show_term_in lang enclose depth oppen_funs tm
+	end
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Theorems}
+
+Theorems are considered to be a series of terms, each of which is
+printed in isolation but without any language start and end symbols.
+The complexity here comes from getting the correct spacing and
+indentation.  Assumptions and conclusions should be consistently
+spaced, but the turnstile and conclusion kept together.  When they
+are formatted over several lines all the terms have their left ends
+lined up and the turnstile sticks out to the left.  With no
+assumptions there should be no spaces before the turnstile
+(the case clause and the `$pr_\ldots$' functions achieve this).
+
+{\ftlinepenalty=9999
+=SML
+fun ⦏show_thm⦎(depth:int OPT)
+			(o_funs as (addstring, beginb, space, endb):OPPEN_FUNS)
+			(th : THM) : unit = (
+let
+	val (assumptions, conclusion) = dest_thm th;
+
+	val oppen_funs = o_funs;
+
+	val d = case depth of Nil => Nil | Value v => Value(v-1);
+
+	val lang = choose_term_language(conclusion, nil);
+
+	fun aux t s = (	beginb(2, false);
+			show_term_in lang false d oppen_funs t;
+			addstring s;
+			endb()
+	);
+
+	fun pr_ass nil = ()
+	| pr_ass (a :: nil) = aux a ""
+	| pr_ass (a :: rest) = (aux a ","; space(1, 4); pr_ass rest);
+
+	fun pr_dots nil = ()
+	| pr_dots (a :: nil) = addstring "..."
+	| pr_dots (a :: rest) = (addstring "...,"; space(1, 4); pr_dots rest);
+in
+	beginb(0, true);
+
+	case (assumptions, !pp_print_assumptions)
+	of (nil, _) => ()
+	| (_, true) => (
+		pr_ass assumptions;
+		space(1, 2)
+		)
+	| (_, false) => (
+		beginb(0, false);
+		pr_dots assumptions;
+		endb();
+		space(1, 2)
+		)
+	;
+
+	beginb(2, false);
+	addstring "⊢ ";
+	show_term_in lang false d oppen_funs conclusion;
+	endb();
+	endb()
+end
+);
+=TEX
+}
+
+=SML
+fun ⦏show_hierarchy⦎(_:int OPT)
+			(o_funs as (addstring, _, _, _):OPPEN_FUNS)
+			(_ : pp'Kernel.pp'HIERARCHY) : unit = (
+	addstring "?"
+
+);
+=TEX
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\newpage
+\section{INSTALLATION}
+
+%********************************************************************
+
+\subsection{Installing PolyML Printers}
+
+Based on observation of PolyML and the function $PolyML.install_pp$ it
+seems that any unhandled exceptions from the installed printing
+function are quietly ignored.  As there is considerable complexity in
+the pretty printing code in this document and, furthermore, users may
+add their own printing functions it seems desirable to catch and report
+any problems.
+
+=SML
+local
+	fun grumble ex_name msg source = (
+		output(std_out, "Exception " ^ ex_name
+			^ msg ^ " handled by " ^ source ^ "\n")
+	);
+
+	fun ⦏interpose⦎ f f_name a b = (
+		((f (get_depth pp_top_level_depth)) a b)
+		handle E as Error args =>
+			(grumble "Error " (get_message args) f_name; raise E)
+		| E as Fail args =>
+			(grumble "Fail " (get_message args) f_name; raise E)
+		| E =>
+			(grumble "" (string_of_exn E) f_name; raise E)
+	);
+=SML
+in
+
+fun ⦏pp_init⦎ (() : unit) : unit = (
+=INSTALLPP
+	(PPCompiler.make_pp
+	["pp'TypesAndTerms", "TERM"]
+	(interpose (show_term true) "show_term"));
+=SML
+=INSTALLPP
+	(PPCompiler.make_pp
+	["pp'TypesAndTerms", "TYPE"]
+	(interpose (show_type true) "show_type"));
+=SML
+=INSTALLPP
+	(PPCompiler.make_pp
+	["pp'Kernel", "THM"]
+	(interpose show_thm "show_thm"));
+=SML
+=INSTALLPP
+	(PPCompiler.make_pp
+	["pp'Kernel", "pp'HIERARCHY"]
+	(interpose show_hierarchy "show_hierarchy"));
+	()
+);
+
+end;
+
+val side_effect = pp_init();
+=TEX
+
+%********************************************************************
+
+\subsection{Pretty Printing Interface}
+
+=SML
+fun ⦏format_term⦎ (b : bool) (t : TERM) : string list = (
+		oppen_format get_line_length (show_term b (get_depth pp_format_depth)) t
+);
+
+fun ⦏format_type⦎ (b : bool) (t : TYPE) : string list = (
+		oppen_format get_line_length (show_type b (get_depth pp_format_depth)) t
+);
+
+fun ⦏format_thm⦎ (t : THM) : string list = (
+		oppen_format get_line_length (show_thm (get_depth pp_format_depth)) t
+);
+=TEX
+
+=SML
+fun ⦏format_term1⦎ (b : bool) (l : int) (t : TERM) : string list = (
+		oppen_format (fn () => l) (show_term b (get_depth pp_format_depth)) t
+);
+
+fun ⦏format_type1⦎ (b : bool) (l : int) (t : TYPE) : string list = (
+		oppen_format (fn () => l) (show_type b (get_depth pp_format_depth)) t
+);
+
+fun ⦏format_thm1⦎ (l : int) (t : THM) : string list = (
+		oppen_format (fn () => l) (show_thm (get_depth pp_format_depth)) t
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{FINALE}
+We have a little extra bit of work to do now as a result of the NJML
+port, namely to set things up so that the $string\_of\_XXX$ functions
+pick up the proper pretty printers. We use the variant value formatters
+with a huge line length to avoid multiple spaces.
+
+=SML
+val huge = 9999999;
+val _ =  (
+	pp'set_string_of_type
+		(switch (format_list Combinators.I) " " o format_type1 true huge)
+);
+val _ =  (
+	pp'set_string_of_term
+		(switch (format_list Combinators.I) " " o format_term1 true huge)
+);
+val _ =  (
+	pp'Kernel.pp'set_string_of_thm
+		(switch (format_list Combinators.I) " " o format_thm1 huge)
+);
+=SML
+end (* of structure PrettyPrinter *);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%********************************************************************
+%--------------------------------------------------------------------
+
+\makeatletter
+\def\refstepcounter#1{\stepcounter{#1}\global\edef\@currentlabel{\csname
+	p@#1\endcsname\csname the#1\endcsname}}
+\makeatother
+
+%\twocolumn[\section{INDEX}]
+\section{INDEX}
+
+\footnotesize
+\printindex
+
+\onecolumn
+
+\end{document}
+

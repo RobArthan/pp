@@ -1,0 +1,2251 @@
+=IGN
+********************************************************************************
+mdt001.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for Standard ML Utilities}
+
+\def\AbstractText{A set of module tests are given for the utility functions for use in the prototype HOL system in this document.}
+
+\def\Reference{DS/FMU/IED/MDT001}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST Project}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests for Standard ML Utilities}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Module Tests for Standard ML Utilities}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT001}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 2.31 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2013/08/02 08:57:49 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & Project Manager}
+%% LaTeX2e port: \TPPabstract{A set of module tests are given for the utility functions for use in the prototype HOL
+%% LaTeX2e port: system in this document.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/02/07) - 1.10 (1991/09/12)]
+Initial drafts up to desk check ID0062 and its rework.
+\item [Issue 2.1 (1991/09/12) (12th September 1991)]
+Approved version of issue 1.10.
+\item [Issue 2.2 (1991/10/31)]
+Reacted to profiling being turned off in \cite{DS/FMU/IED/IMP036}.
+
+\item[Issue 2.3 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 2.4 (1992/02/03)]
+Changed $diag\_$ to $raw\_diag\_$.
+\item [Issue 2.5 (1992/03/19)]
+Added module tests for arrays.
+\item [Issue 2.6 (1992/03/30)]
+Added $filter$.
+\item [Issue 2.7 (1992/03/31)]
+Removed $gensym$.
+\item [Issue 2.8 (1992/04/09) (1st April 1992)]
+Renamed $set\_eq$ to $~=$.
+\item [Issue 2.9 (1992/04/14) (13th April 1992)]
+Changes due to CR0017.
+\item [Issue 2.10 (1992/12/14),2.11 (1992/12/14) (14th December 1992)]
+Added $set\_stats$.
+\item [Issue 2.12 (1999/03/08)]
+Update for new INTEGER type (could do a lot more, but the theorem-proving tests will suffice).
+\item [Issues 2.13 (2001/07/17), 2.14 (2001/07/19)]
+Update for new dynamic array type.
+\item [Issue 2.15 (2001/08/03)]
+Made the efficient dictionary tests robust against variations in the ordering of the
+keys in the trees.
+\item [Issue 2.16 (2001/08/07)]
+Made tests for {e\_delete} more searching.
+\item [Issue 2.17 (2001/08/09)]
+Added tests for timing function.
+\item [Issue 2.18 (2002/06/01)]
+Added tests for new efficient dictionaries and timing functions.
+\item [Issue 2.18 (2002/06/01)]
+Added tests for ordered efficient dictionaries.
+\item[Issue 2.19 (2002/06/03)]
+Corrected and improved coverage for sorting.
+\item[Issue 2.21 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.22 (2002/10/17)] PPHol-specific updates for open source release
+\item [Issue 2.23 (2003/01/07)] Fixed duplicate test identities.
+Added tests for set inclusion test for lists.
+\item[Issue 2.24 (2003/06/11)] More tests for ordered efficient dictionaries.
+\item[Issue 2.25 (2004/06/19)] Added test for {\em list\_e\_enter}.
+\item[Issue 2.26 (2004/09/07)] Added tests for {\em e\_stats} and {\em e\_dict\_of\_oe\_dict}.
+\item[Issue 2.27 (2006/12/02)] Tests for floating point literal support.
+\item[Issue 2.28 (2007/08/28), 2.29 (2007/09/09)] Tests for new ordering utilities.
+\item[Issue 2.30 (2008/12/10)] Tests for {\em merge}.
+\item[Issues 2.31 (2013/08/02), 2.32 (2013/08/03)] Tests for search tree operations.
+
+To get {\LaTeX} working, also had to reinstate and correct a test that
+had accidentally been commented out.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+
+\item[2017/03/05]
+Fixed incorrect test name.
+
+\end{description}
+%\subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the functional tool-kit, required by Release 1 ICL HOL Product Requirement Specification \cite{DS/FMU/IED/DEF004}.
+The design is in \cite{DS/FMU/IED/DTD001}
+and it is
+implemented in \cite{DS/FMU/IED/IMP001}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module testing of the material given a design in \cite{DS/FMU/IED/DTD001},
+following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+
+It uses the test harness from \cite{DS/FMU/IED/DTD013}.
+This harness is implemented in part by functions from
+\cite{DS/FMU/IED/DTD001}, but it is thought that this will not compromise the tests made.
+\subsubsection{Dependencies}
+This document is derived from the detailed design in \cite{DS/FMU/IED/DTD001},
+and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP001}.
+\subsubsection{Deficiencies}
+The coverage of the tests, as called for by the test specification, may currently be incomplete.
+
+\section{INITIALISATION}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+=TEX
+\section{VALUE BINDINGS}
+=SML
+val alist1 = [(3,4), (1,2), (5,6)];
+=TEX
+\section{THE TESTS}
+\subsection{Tests for $ListUtilities$}
+\section{LIST UTILITIES}
+\subsection{Functions For Type $'a\ OPT$}
+=SML
+store_mt_results
+mt_run [
+	("force_value",
+	force_value,
+	Value "OK",
+	"OK")];
+store_mt_results
+mt_run_fail [
+	("force_value 1001",
+	force_value,
+	Nil,
+	gen_fail_msg "force_value" 1001 [])];
+store_mt_results
+mt_run [
+	("is_Nil 1",
+	is_Nil,
+	Value "OK",
+	false),
+	("is_Nil 2",
+	is_Nil,
+	Nil,
+	true)];
+=TEX
+\subsubsection{A Miscellany}
+=SML
+store_mt_results
+mt_run [
+	("hd 1",
+	hd,
+	[1,2,3],
+	1),
+	("hd 2",
+	hd,
+	[1],
+	1)];
+store_mt_results
+mt_run_fail [
+	("hd 1002",
+	hd,
+	[],
+	gen_fail_msg "hd" 1002 [])];
+
+store_mt_results
+mt_run [
+	("tl 1",
+	tl,
+	[1,2,3],
+	[2,3]),
+	("tl 2",
+	tl,
+	[1],
+	[])];
+store_mt_results
+mt_run_fail [
+	("tl 1003",
+	tl,
+	[],
+	gen_fail_msg "tl" 1003 [])];
+
+store_mt_results
+mt_run [
+	("fold 1",
+	fold (fn (a,b) => a :: b) [],
+	[1],
+	[1]),
+	("fold 2",
+	fold (fn (a,b) => a :: b) [1,2,3],
+	[0],
+	[1,2,3,0])
+	];
+store_mt_results
+mt_run [
+	("revfold 1",
+	revfold (fn (a,b) => a :: b) [],
+	[1],
+	[1]),
+	("revfold 2",
+	revfold (fn (a,b) => a :: b) [1,2,3],
+	[0],
+	[3,2,1,0])
+	];
+store_mt_results
+mt_run [
+	("length 1",
+	length,
+	[],
+	0),
+	("length 2",
+	length,
+	[1,2,3],
+	3)
+	];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("filter 1",
+	filter (fn x => (x > 1)),
+	[],
+	[]),
+	("filter 2",
+	filter (fn x => (x > 1)),
+	[3,1,4,0],
+	[3,4])
+	];
+
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("drop 1",
+	(op drop),
+	([],(fn x => x > 3)),
+	[]),
+	("drop 2",
+	(op drop),
+	([5,2,3,4,1],(fn x => x > 3)),
+	[2,3,1])
+	];
+store_mt_results
+mt_run [
+	("less 1",
+	(op less),
+	([],3),
+	[]),
+	("less 2",
+	(op less),
+	([5,2,3,4,3,1],3),
+	[5,2,4,1])
+	];
+store_mt_results
+mt_run [
+	("grab 1",
+	(op grab),
+	([],3),
+	[3]),
+	("grab 2",
+	(op grab),
+	([1,2],3),
+	[3,1,2]),
+	("grab 3",
+	(op grab),
+	([1,3,2],3),
+	[1,3,2])
+	];
+store_mt_results
+mt_run [
+	("insert 1",
+	(insert (op =)) [],
+	3,
+	[3]),
+	("insert 2",
+	(insert (op =) [1,2]),
+	3,
+	[3,1,2]),
+	("insert 3",
+	(insert (op =) [1,3,2]),
+	3,
+	[1,3,2])
+	];
+=TEX
+Note that $union$ removes all bar the rightmost duplicate in the first list.
+A ``duplicate'' in the tests for $(list\_)union$ is anything less than a value already in the list.
+=SML
+store_mt_results
+mt_run [
+	("union 1",
+	union (op <) [3,6,12,25,24],
+	[1,2,4,8],
+	[25,24,1,2,4,8]),
+	("union 2",
+	union (op <) [3,3,2,5,1,4],
+	[],
+	[5,4]),
+	("union 3",
+	union (op <) [3,6,12,25,24],
+	[8,4,9],
+	[25, 24, 8, 4, 9])	
+	];
+store_mt_results
+mt_run [
+	("cup 1",
+	(op cup),
+	([1,3,5],[2,3,4,2]),
+	[1,5,2,3,4,2]),
+	("cup 2",
+	(op cup),
+	([5,1,3,5],[2,3,4,2]),
+	[1,5,2,3,4,2])
+	];
+store_mt_results
+mt_run [
+	("list_union",
+	list_union (op <),
+	[[0,3], [4,3], [1,3,0]],
+	[4,3,3,0])
+	];
+store_mt_results
+mt_run [
+	("list_cup",
+	list_cup,
+	[[0,5], [2,3], [1,4,0,2]],
+	[5, 3, 1, 4, 0, 2])
+	];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("find 1",
+	find [5,2,3,1,6],
+	(fn x => x > 3),
+	5),
+	("find 2",
+	find [5,2,3,1,6],
+	(fn x => x < 3),
+	2)
+	];
+store_mt_results
+mt_run_fail [
+	("find 1004 a",
+	find [],
+	(fn x => x > 3),
+	gen_fail_msg "find" 1004 []),
+	("find 1004 b",
+	find [1,2],
+	(fn x => x > 3),
+	gen_fail_msg "find"1004  [])
+	];
+store_mt_results
+mt_run [
+	("contains 1",
+	contains [],
+	2,
+	false),
+	("contains 2",
+	contains [1,3],
+	2,
+	false),
+	("contains 3",
+	contains [1,2,3],
+	2,
+	true)
+	];
+store_mt_results
+mt_run [
+	("mem 1",
+	(op mem),
+	(2,[]),
+	false),
+	("mem 2",
+	(op mem),
+	(2,[1,3]),
+	false),
+	("mem 3",
+	(op mem),
+	(2,[1,2,3]),
+	true)
+	];
+store_mt_results
+mt_run [
+	("present 1",
+	present (op =) 2,
+	[],
+	false),
+	("present 2",
+	present (op =) 2,
+	[1,3],
+	false),
+	("present 3",
+	present (op =) 2,
+	[1,2,3],
+	true)
+	];
+store_mt_results
+mt_run [
+	("any 1",
+	any [],
+	(fn x => x > 3),
+	false),
+	("any 2",
+	any [1,2],
+	(fn x => x > 3),
+	false),
+	("any 3",
+	any [1,4,2],
+	(fn x => x > 3),
+	true)
+	];
+store_mt_results
+mt_run [
+	("all 1",
+	all [],
+	(fn x => x > 3),
+	true),
+	("all 2",
+	all [1,4],
+	(fn x => x > 3),
+	false),
+	("all 3",
+	all [5,4],
+	(fn x => x > 3),
+	true)
+	];
+store_mt_results
+mt_run [
+	("subset 1",
+	(op subset),
+	([],[1]),
+	true),
+	("subset 2",
+	(op subset),
+	([2,3,4],[1,3,4]),
+	false),
+	("subset 3",
+	(op subset),
+	([2,3],[1,2,3,4]),
+	true),
+	("subset 4",
+	(op subset),
+	([1],[]),
+	false)
+	];
+store_mt_results
+mt_run [
+	("~= 1",
+	(op ~=),
+	([1,1],[1]),
+	true),
+	("~= 2",
+	(op ~=),
+	([1],[1,1]),
+	true),
+	("~= 3",
+	(op ~=),
+	([1,2,3],[3,2,1]),
+	true),
+	("~= 4",
+	(op ~=),
+	([1,2,2,3],[3,1,2,3]),
+	true),
+	("~= 5",
+	(op ~=),
+	([1,2,3,4,5],[1,2,4,5]),
+	false),
+	("~= 6",
+	(op ~=),
+	([1,2,4,5],[1,5,3,2,4]),
+	false),
+	("~= 7",
+	(op ~=),
+	([1,2,4,5],[1,3,4,5]),
+	false)
+	];
+store_mt_results
+mt_run [
+	("~<= 1",
+	(op ~<=),
+	([1,1],[1]),
+	true),
+	("~<= 2",
+	(op ~<=),
+	([1],[1,1]),
+	true),
+	("~<= 3",
+	(op ~<=),
+	([1,2,3],[3,2,1, 0]),
+	true),
+	("~<= 4",
+	(op ~<=),
+	([1,2,2,3],[3,1,2,3, 5]),
+	true),
+	("~<= 5",
+	(op ~<=),
+	([1,2,3,4,5],[1,2,4,5]),
+	false),
+	("~<= 6",
+	(op ~<=),
+	([1,2,4,5],[1,5,3,2,4]),
+	true),
+	("~<= 7",
+	(op ~<=),
+	([1,2,4,5],[1,3,4,5]),
+	false)
+	];
+store_mt_results
+mt_run [
+	("diff 1",
+	(op diff),
+	([],[1]),
+	[]),
+	("diff 2",
+	(op diff),
+	([2,3,4],[1,3,4]),
+	[2]),
+	("diff 3",
+	(op diff),
+	([2,3],[1,3,4]),
+	[2]),
+	("diff 4",
+	(op diff),
+	([1],[]),
+	[1])
+	];
+=TEX
+\subsection{Lists of Pairs as Functions and Relations}
+=SML
+store_mt_results
+mt_run [
+	("lassoc1 1",
+	lassoc1 alist1,
+	3,
+	4),
+	("lassoc1 2",
+	lassoc1 alist1,
+	6,
+	6)
+	];
+store_mt_results
+mt_run [
+	("rassoc1 1",
+	rassoc1 alist1,
+	4,
+	3),
+	("rassoc1 2",
+	rassoc1 alist1,
+	3,
+	3)
+	];
+store_mt_results
+mt_run [
+	("lassoc2 1",
+	lassoc2 alist1 (fn x => x+ 10),
+	3,
+	4),
+	("lassoc2 2",
+	lassoc2 alist1 (fn x => x+ 10),
+	6,
+	16)
+	];
+store_mt_results
+mt_run [
+	("rassoc2 1",
+	rassoc2 alist1 (fn x => x+ 10),
+	4,
+	3),
+	("rassoc2 2",
+	rassoc2 alist1 (fn x => x+ 10),
+	3,
+	13)
+	];
+store_mt_results
+mt_run [
+	("lassoc3",
+	lassoc3 alist1,
+	3,
+	4),
+	("rassoc3",
+	rassoc3 alist1,
+	4,
+	3)
+	];
+store_mt_results
+mt_run_fail [
+	("lassoc3 1005",
+	lassoc3 alist1,
+	6,
+	gen_fail_msg "lassoc3" 1005 []),
+	("rassoc3 1005",
+	rassoc3 alist1,
+	3,
+	gen_fail_msg "rassoc3" 1005 [])
+	];
+store_mt_results
+mt_run [
+	("lassoc4 1",
+	lassoc4 alist1 0,
+	3,
+	4),
+	("lassoc4 2",
+	lassoc4 alist1 0,
+	6,
+	0)
+	];
+store_mt_results
+mt_run [
+	("rassoc4 1",
+	rassoc4 alist1 0,
+	4,
+	3),
+	("rassoc4 2",
+	rassoc4 alist1 0,
+	3,
+	0)
+	];
+store_mt_results
+mt_run [
+	("lassoc5 1",
+	lassoc5 alist1,
+	3,
+	Value 4),
+	("lassoc5 2",
+	lassoc5 alist1,
+	6,
+	Nil)
+	];
+store_mt_results
+mt_run [
+	("rassoc5 1",
+	rassoc5 alist1,
+	4,
+	Value 3),
+	("rassoc5 2",
+	rassoc5 alist1,
+	3,
+	Nil)
+	];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("overwrite 1",
+	(op overwrite),
+	(alist1, (1,6)),
+	[(3, 4), (1, 6), (5, 6)]),
+	("overwrite 2",
+	(op overwrite),
+	(alist1, (6,6)),
+	[(3, 4), (1, 2), (5, 6), (6, 6)]),
+	("overwrite 3",
+	(op overwrite),
+	(alist1, (6, 1)),
+	[(3, 4), (1, 2), (5, 6), (6,1)])
+	];
+store_mt_results
+mt_run [
+	("list_overwrite",
+	(op list_overwrite),
+	(alist1,[(1,6),(4,6),(1,0)]),
+	[(3, 4), (1, 6), (5, 6), (4, 6)])
+	];
+store_mt_results
+mt_run [
+	("roverwrite 1",
+	(op roverwrite),
+	(alist1, (1,6)),
+	[(3, 4), (1, 2), (1, 6)]),
+	("roverwrite 2",
+	(op roverwrite),
+	(alist1, (6,6)),
+	[(3, 4), (1, 2), (6, 6)]),
+	("roverwrite 3",
+	(op roverwrite),
+	(alist1, (6,1)),
+	[(3, 4), (1, 2), (5, 6), (6,1)])
+	];
+store_mt_results
+mt_run [
+	("list_roverwrite",
+	(op list_roverwrite),
+	(alist1,[(1,6),(4,5),(4,0)]),
+	[(3, 4), (1, 2), (1, 6),(4, 0), (4, 5)])
+	];
+=TEX
+\subsection{Another Miscellany}
+=SML
+store_mt_results
+mt_run [
+	("is_nil 1",
+	is_nil,
+	[],
+	true),
+	("is_nil 2",
+	is_nil,
+	[1,2,3],
+	false)
+	];
+store_mt_results
+mt_run [
+	("flat",
+	flat,
+	[[1,2],[],[2,3,4]],
+	[1,2,2,3,4])
+	];
+store_mt_results
+mt_run [
+	("split",
+	split,
+	alist1,
+	([3,1,5],[4,2,6]))
+	];
+store_mt_results
+mt_run [
+	("split3",
+	split3,
+	[(1,2,3), (3,4,5)],
+	([1,3],[2,4],[3,5]))
+	];
+store_mt_results
+mt_run [
+	("combine",
+	uncurry combine o split,
+	alist1,
+	alist1)
+	];
+store_mt_results
+mt_run_fail [
+	("combine 1007",
+	combine [1],
+	[1,2],
+	gen_fail_msg "combine" 1007 [])
+	];
+store_mt_results
+mt_run [
+	("all_different 1",
+	all_different,
+	[],
+	true),
+	("all_different 2",
+	all_different,
+	[1,3,1,3,2],
+	false),
+	("all_different 3",
+	all_different,
+	[1,2,3],
+	true)
+	];
+store_mt_results
+mt_run [
+	("all_distinct 1",
+	all_distinct (fn (x,y) => (x - y = 5)),
+	[1,3,9],
+	true),
+	("all_distinct 2",
+	all_distinct (fn (x,y) => (x - y = 5)),
+	[1,3,6],
+	true),
+	("all_distinct 3",
+	all_distinct (fn (x,y) => (x - y = 5)),
+	[6,3,1],
+	false)
+	];
+
+store_mt_results
+mt_run [
+	("from 1",
+	(op from),
+	([0,1,2,3],2),
+	[2,3]),
+	("from 2",
+	(op from),
+	([0,1,2,3],6),
+	[]),
+	("from 3",
+	(op from),
+	([0,1,2,3],~5),
+	[0,1,2,3])
+	];
+store_mt_results
+mt_run [
+	("to 1",
+	(op to),
+	([0,1,2,3],2),
+	[0,1,2]),
+	("to 2",
+	(op to),
+	([0,1,2,3],6),
+	[0,1,2,3]),
+	("to 3",
+	(op to),
+	([0,1,2,3],~5),
+	[])
+	];
+store_mt_results
+mt_run [
+	("interval 1",
+	interval 2,
+	4,
+	[2,3,4]),
+	("interval 2",
+	interval 4,
+	2,
+	[]),
+	("interval 3",
+	interval 2,
+	2,
+	[2])
+	];
+store_mt_results
+mt_run [
+	("mapfilter",
+	mapfilter (lassoc3 alist1),
+	[1,4,2,3],
+	[2,4])
+	];
+store_mt_results
+mt_run [
+	("zip",
+	zip [(fn x => x+1), (fn x => x+2),(fn x => x+3)],
+	[1,2,3],
+	[2,4,6])
+	];
+store_mt_results
+mt_run_fail [
+	("zip 1008 a",
+	zip [(fn x => x+1), (fn x => x+2)],
+	[1,2,3],
+	gen_fail_msg "zip" 1008 []),
+	("zip 1008 b",
+	zip [(fn x => x+1), (fn x => x+2),(fn x => x+3)],
+	[1,2],
+	gen_fail_msg "zip" 1008 [])
+	];
+store_mt_results
+mt_run [
+	("nth",
+	nth 2,
+	[1,2,4],
+	4)
+	];
+store_mt_results
+mt_run_fail [
+	("nth 1009 a",
+	nth 6,
+	[1,2,4],
+	gen_fail_msg "nth" 1009 []),
+	("nth 1009 b",
+	nth ~5,
+	[1,2,4],
+	gen_fail_msg "nth" 1009 [])
+	];
+store_mt_results
+mt_run [
+	("which 1",
+	which (op =) 3,
+	[1,3,5],
+	Value 1),
+	("which 2",
+	which (op =) 3,
+	[2,4,6],
+	Nil)
+	];
+=TEX
+\section{FUNCTION UTILITIES}
+\subsection{Pairs}
+=SML
+store_mt_results
+mt_run [
+	("fst",
+	fst,
+	(1,2),
+	1),
+	("snd",
+	snd,
+	(1,2),
+	2)
+	];
+store_mt_results
+mt_run [
+	("swap",
+	swap,
+	(1,2),
+	(2,1))
+	];
+=TEX
+\subsection{Functionals}
+=SML
+store_mt_results
+mt_run [
+	("curry",
+	curry (op mem) 3 ,
+	[1,2,3,4],
+	true)
+	];
+store_mt_results
+mt_run [
+	("uncurry",
+	uncurry contains,
+	([1,2,3,4], 3),
+	true)
+	];
+store_mt_results
+mt_run [
+	("switch",
+	switch contains 3 ,
+	[1,2,3,4],
+	true)
+	];
+store_mt_results
+mt_run [
+	("**",
+	((fn x => x+1) ** (fn x => x+5)),
+	(1,2),
+	(2,7))
+	];
+store_mt_results
+mt_run [
+	("fun_pow",
+	fun_pow 3 (fn x => x+1),
+	2,
+	5)
+	];
+store_mt_results
+mt_run_fail [
+	("fun_pow 1010",
+	fun_pow ~5 (fn x => x+1),
+	2,
+	gen_fail_msg "fun_pow" 1010 [])
+	];
+store_mt_results
+mt_run [
+	("fun_and 1",
+	(fn x => x > 2) fun_and (fn x => x < 6),
+	4,
+	true),
+	("fun_and 2",
+	(fn x => x > 2) fun_and (fn x => x < 6),
+	1,
+	false),
+	("fun_and 3",
+	(fn x => x > 2) fun_and (fn x => x < 6),
+	7,
+	false)
+	];
+store_mt_results
+mt_run [
+	("fun_or 1",
+	(fn x => x < 2) fun_or (fn x => x > 6),
+	4,
+	false),
+	("fun_or 2",
+	(fn x => x < 2) fun_or (fn x => x > 6),
+	1,
+	true),
+	("fun_or 3",
+	(fn x => x < 2) fun_or (fn x => x > 6),
+	7,
+	true)
+	];
+store_mt_results
+mt_run [
+	("fun_not 1",
+	fun_not (fn x => x < 2),
+	4,
+	true),
+	("fun_not 2",
+	fun_not (fn x => x < 2) ,
+	1,
+	false)
+	];
+store_mt_results
+mt_run [
+	("fun_true",
+	fun_true,
+	false,
+	true),
+	("fun_false",
+	fun_false,
+	true,
+	false)
+	];
+let
+	val tref1 : int ref = ref 4;
+	val tref2 : int ref = ref 2;
+	fun f () = (if (!tref1) = 0
+		then fail "f" 0 []
+		else (tref1 :=  (!tref1) - 1;
+			tref2 := (!tref2) + 1)
+		);
+	val side_effect = repeat f;
+in
+store_mt_results
+mt_run [
+	("repeat",
+	!,
+	tref2,
+	6)]
+end;
+let
+	fun f (a,b) = if a = 0
+		then fail "f" 0 []
+		else (a - 1, b + 1)
+in
+store_mt_results
+mt_run [
+	("iterate",
+	iterate f,
+	(4, 2),
+	(0, 6))]
+end;
+=TEX
+\section{COMBINATORS}
+=SML
+store_mt_results
+mt_run [
+	("I",
+	Combinators.I,
+	5,
+	5)
+	];
+store_mt_results
+mt_run [
+	("S",
+	Combinators.S (fn x => fn y => x + y) (fn x => x + 2),
+	3,
+	8)
+	];
+store_mt_results
+mt_run [
+	("K",
+	Combinators.K 3,
+	5,
+	3)
+	];
+=TEX
+\section{SIMPLE OUTPUT}
+The results of these tests must in part be checked by eye,
+checking that the line lengths and separation of the output is correct.
+$get\_line\_length$ is tested implicitly by ``$set\-\_line\-\_length$ 1''.
+Note that tabs are counted as one character wide in $raw\_diag\_string$, etc, and thus might give actual line lengths
+greater than desired.
+=SML
+val orig_line_length = get_line_length ();
+
+val teststring = "sdljfv lkirhnf d;fljnq lkwedjfn ldkfjbnwqd;kfjn  " ^
+" ;ouinwefw  ;kiweujnbfwqel  iwe;lnfbu   wedjbnfkl; l;dkifcujbn l" ^
+"  kwjedb lk jbn  el;i  uew bhnl;kij we bljhweb ,";
+val twentytabs =
+	"t \tt \tt \tt \tt \t"^
+	"t \tt \tt \tt \tt \t"^
+	"t \tt \tt \tt \tt \t"^
+	"t \tt \tt \tt \tt \tt";
+raw_diag_string teststring;
+raw_diag_string twentytabs;
+store_mt_results
+mt_run [("set_line_length 1",
+	set_line_length,
+	20,
+	orig_line_length)
+	];
+store_mt_results
+mt_run_fail [("set_line_length 1015",
+	set_line_length,
+	10,
+	gen_fail_msg "set_line_length" 1015 [])];
+raw_diag_string teststring;
+raw_diag_string twentytabs;
+store_mt_results
+mt_run [("set_line_length 2",
+	set_line_length,
+	orig_line_length,
+	20)
+	];
+raw_diag_string teststring;
+
+list_raw_diag_string ["abc","def","gh ij"];
+
+map raw_diag_line ["one", "two", "three"];
+map raw_diag_string ["one", "two", "three"];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("format_list",
+	format_list (Combinators.I) ["abc","def","gh ij"],
+	":",
+	"abc:def:gh ij")
+	];
+=TEX
+\section{CHARACTER UTILITIES}
+=SML
+store_mt_results
+mt_run [
+	("is_all_decimal 1",
+	is_all_decimal,
+	"12a3",
+	false),
+	("is_all_decimal 2",
+	is_all_decimal,
+	"123",
+	true),
+	("is_all_decimal 3",
+	is_all_decimal,
+	"",
+	false)
+	];
+=TEX
+\subsection{Numeric Conversions}
+=SML
+store_mt_results
+mt_run [
+	("nat_of_string 1",
+	string_of_int o nat_of_string,
+	"0123",
+	"123"),
+	("natural_of_string_of_string 1",
+	string_of_integer o natural_of_string,
+	"001234567890123456789012345678901234567890",
+	"1234567890123456789012345678901234567890")
+	];
+store_mt_results
+mt_run_fail [
+	("nat_of_string 1012",
+	nat_of_string,
+	"1a3",
+	gen_fail_msg "nat_of_string" 1012 ["1a3"]),
+	("nat_of_string 1013",
+	nat_of_string,
+	"",
+	gen_fail_msg "nat_of_string" 1013 [])
+	];
+store_mt_results
+mt_run [
+	("string_of_int 1",
+	string_of_int,
+	~5,
+	"-5"),
+	("string_of_int 2",
+	string_of_int,
+	0,
+	"0"),
+	("string_of_int 3",
+	string_of_int,
+	5,
+	"5"),
+	("string_of_int 4",
+	string_of_int,
+	123,
+	"123")
+	];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("string_of_float 1",
+	string_of_float,
+	(zero, one, zero),
+	"0.0"),
+	("string_of_float 2",
+	string_of_float,
+	(zero, one, one),
+	"0.0e1"),
+	("string_of_float 3",
+	string_of_float,
+	(zero, one, @~one),
+	"0.0e~1"),
+	("string_of_float 4",
+	string_of_float,
+	(one, one, one),
+	"0.1e1"),
+	("string_of_float 5",
+	string_of_float,
+	(one, one, @~one),
+	"0.1e~1")
+];
+=TEX
+\section{DICTIONARIES}
+\subsection{Simple Dictionaries}
+$s\_enter$ and $initial\_s\_dict$ are tested by side effect.
+=SML
+s_enter "is1" 1 initial_s_dict;
+s_enter "is2" 2 it;
+s_enter "is3" 3 it;
+s_enter "is5" 5 it;
+s_enter "is2" 4 it;
+val base_simple = it;
+store_mt_results
+mt_run [
+	("s_lookup 1",
+	s_lookup "is3",
+	base_simple,
+	Value 3),
+	("s_lookup 2",
+	s_lookup "is4",
+	base_simple,
+	Nil),
+	("s_lookup 3",
+	s_lookup "is6",
+	base_simple,
+	Nil)
+	];
+store_mt_results
+mt_run [
+	("s_delete 1",
+	s_delete "is8",
+	base_simple,
+	base_simple)
+	];
+store_mt_results
+mt_run [
+	("s_delete 2",
+	s_lookup "is3",
+	(s_delete "is3" base_simple),
+	Nil),
+	("s_delete 3",
+	s_lookup "is2",
+	(s_delete "is3" base_simple),
+	Value 4)
+	];
+store_mt_results
+mt_run [
+	("s_extend",
+	s_lookup "is6",
+	s_extend "is6" 6 base_simple,
+	Value 6)
+	];
+store_mt_results
+mt_run_fail [
+	("s_extend 1014",
+	s_extend "is3" 4,
+	base_simple,
+	gen_fail_msg "s_extend" 1014 ["is3"])
+	];
+store_mt_results
+mt_run [
+	("s_merge 1",
+	s_lookup "is8",
+	s_merge (s_enter "is8" 8 initial_s_dict) base_simple,
+	Value 8),
+	("s_merge 2",
+	s_lookup "is3",
+	s_merge (s_enter "is8" 8 initial_s_dict) base_simple,
+	Value 3)
+	];
+store_mt_results
+mt_run [
+	("s_merge 3",
+	s_merge [],
+	[("a",1),("a",2)],
+	[("a",1),("a",2)])
+	];
+store_mt_results
+mt_run_fail [
+	("s_merge 1014 a",
+	s_merge (s_enter "is2" 2 initial_s_dict),
+	base_simple,
+	gen_fail_msg "s_extend" 1014 ["is2"]),
+	("s_merge 1014 b",
+	s_merge [("a",1),("a",2)],
+	[],
+	gen_fail_msg "s_extend" 1014 ["a"])
+	];
+=TEX
+\subsection{Efficient Dictionaries}
+$e\_enter$ and $initial\_e\_dict$ are tested by side effect.
+=SML
+e_enter "is1" 1 initial_e_dict;
+e_enter "is2" 2 it;
+e_enter "is3" 3 it;
+e_enter "is5" 5 it;
+e_enter "is2" 4 it;
+val base_eff = it;
+store_mt_results
+mt_run [
+	("e_lookup 1",
+	e_lookup "is3",
+	base_eff,
+	Value 3),
+	("e_lookup 2",
+	e_lookup "is4",
+	base_eff,
+	Nil),
+	("e_lookup 3",
+	e_lookup "is6",
+	base_eff,
+	Nil)
+	];
+store_mt_results
+mt_run [
+	("e_delete 1",
+	e_lookup "is3",
+	(e_delete "is3" base_eff),
+	Nil),
+	("e_delete 2",
+	e_lookup "is2",
+	(e_delete "is3" base_eff),
+	Value 4)
+	];
+store_mt_results
+mt_run [
+	("e_extend",
+	e_lookup "is6",
+	e_extend "is6" 6 base_eff,
+	Value 6)
+	];
+store_mt_results
+mt_run_fail [
+	("e_extend 1014",
+	e_extend "is3" 4,
+	base_eff,
+	gen_fail_msg "e_extend" 1014 ["is3"])
+	];
+store_mt_results
+mt_run [
+	("e_merge 1",
+	e_lookup "is8",
+	e_merge (e_enter "is8" 8 initial_e_dict) base_eff,
+	Value 8),
+	("e_merge 2",
+	e_lookup "is3",
+	e_merge (e_enter "is8" 8 initial_e_dict) base_eff,
+	Value 3)
+	];
+store_mt_results
+mt_run_fail [
+	("e_merge 1014",
+	e_merge (e_enter "is2" 2 initial_e_dict),
+	base_eff,
+	gen_fail_msg "e_extend" 1014 ["is2"])
+	];
+store_mt_results
+mt_run [
+	("e_flatten",
+	Sort.sort (curry (uncurry Sort.string_order o (fst ** fst))) o e_flatten,
+	base_eff,
+	Sort.sort (curry (uncurry Sort.string_order o (fst ** fst))) base_simple)
+	];
+store_mt_results
+mt_run [
+	("list_e_merge 1",
+	e_lookup "is8",
+	list_e_merge base_eff (s_enter "is8" 8 initial_s_dict),
+	Value 8),
+	("list_e_merge 2",
+	e_lookup "is3",
+	list_e_merge base_eff (s_enter "is8" 8 initial_s_dict),
+	Value 3)
+	];
+store_mt_results
+mt_run [
+	("list_e_enter 1",
+	e_lookup "is8",
+	list_e_enter base_eff (s_enter "is8" 8 initial_s_dict),
+	Value 8),
+	("list_e_enter 2",
+	e_lookup "is3",
+	list_e_enter base_eff (s_enter "is3" 8 initial_s_dict),
+	Value 8),
+	("list_e_enter 3",
+	e_lookup "is3",
+	list_e_enter base_eff (s_enter "is8" 8 initial_s_dict),
+	Value 3)
+	];
+store_mt_results
+mt_run_fail [
+	("list_e_merge",
+	list_e_merge base_eff,
+	(s_enter "is2" 2 initial_s_dict),
+	gen_fail_msg "e_extend" 1014 ["is2"])
+	];
+=TEX
+The above tests don't exercise deletion very hard.
+The following is a more searching test.
+=SML
+val ed_keys = map chr (interval (ord "a") (ord "z"));
+val ed_dict = list_e_merge initial_e_dict (combine ed_keys (interval 0 25));
+fun ed_try_it (keys, ed) = (
+	let	fun ok_key key = (force_value(e_lookup key ed) = ord key - ord "a")
+			handle Fail _ => false;
+	in	all keys ok_key
+	end
+);
+val ed_keys_dicts = map (fn key => (ed_keys less key, e_delete key ed_dict)) ed_keys;
+store_mt_results
+mt_run [
+	("e_delete 3",
+	all ed_keys_dicts,
+	ed_try_it,
+	true)
+	];
+=TEX
+=SML
+val sd = map (fn i => (string_of_int i, i)) (interval 1 5);
+val ed = list_e_merge initial_e_dict sd;
+val [k1, k2, k3, k4, k5] = map e_get_key (map fst sd);
+store_mt_results
+mt_run_fail [
+	("e_key_extend 1014",
+	e_key_extend k4 4,
+	ed,
+	gen_fail_msg "e_extend" 1014 ["4"])
+	];
+store_mt_results
+mt_run [
+	("e_key_lookup 1",
+	e_key_lookup k1,
+	ed,
+	Value 1),
+	("e_key_lookup 2",
+	e_key_lookup k5,
+	ed,
+	Value 5),
+	("e_key_enter 1",
+	e_key_lookup k3,
+	e_key_enter k3 10 ed,
+	Value 10),
+	("e_key_delete 1",
+	e_key_lookup k4,
+	e_key_enter k4 42 (e_key_delete k4 ed),
+	Value 42)
+	];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("e_stats 1",
+	e_stats,
+	initial_e_dict,
+	{height = 0, nnodes = 0, nentries = 0, sumweights = 0}),
+	("e_stats 2",
+	e_stats,
+	e_enter "x" 42 initial_e_dict ,
+	{height = 1, nnodes = 1, nentries = 1, sumweights = 1})
+];
+=TEX
+=SML
+val sd = map (fn i => (string_of_int i, i)) (interval 1 5);
+val ed = list_oe_merge initial_oe_dict sd;
+val [k1, k2, k3, k4, k5] = map e_get_key (map fst sd);
+store_mt_results
+mt_run_fail [
+	("oe_key_extend 1014",
+	oe_key_extend k4 4,
+	ed,
+	gen_fail_msg "e_extend" 1014 ["4"])
+	];
+store_mt_results
+mt_run [
+	("oe_key_lookup 1",
+	oe_key_lookup k1,
+	ed,
+	Value 1),
+	("oe_key_lookup 2",
+	oe_key_lookup k5,
+	ed,
+	Value 5),
+	("oe_key_enter 1",
+	oe_key_lookup k3,
+	oe_key_enter k3 10 ed,
+	Value 10),
+	("oe_key_delete 1",
+	oe_key_lookup k4,
+	oe_key_enter k4 42 (oe_key_delete k4 ed),
+	Value 42)
+	];
+=TEX
+=SML
+val [k1, k2, k3, k4, k5] = map fst sd;
+store_mt_results
+mt_run [
+	("oe_lookup 1",
+	oe_lookup k1,
+	ed,
+	Value 1),
+	("oe_lookup 2",
+	oe_lookup k5,
+	ed,
+	Value 5),
+	("oe_enter 1",
+	oe_lookup k3,
+	oe_enter k3 10 ed,
+	Value 10),
+	("oe_delete 1",
+	oe_lookup k4,
+	oe_enter k4 42 (oe_delete k4 ed),
+	Value 42)
+	];
+=TEX
+=SML
+mt_run [
+	("e_dict_of_oe_dict 1",
+	e_lookup k1,
+	e_dict_of_oe_dict ed,
+	Value 1)
+	];
+=TEX
+=SML
+val sd1 = oe_extend "a" 1 initial_oe_dict;
+val sd2 = oe_extend "b" 2 sd1;
+val sd3 = oe_extend "c" 3 sd2;
+val sd4 = oe_enter "a" 3 initial_oe_dict;
+val sd5 = oe_enter "b" 2 sd4;
+val sd6 = oe_enter "c" 1 sd5;
+val sd7 = oe_enter "a" 1 sd6;
+val sd8 = oe_enter "c" 3 sd7;
+store_mt_results
+mt_run [
+	("oe_extend 1",
+	fn _ => oe_flatten sd3 = [("c", 3), ("b", 2), ("a", 1)] ,
+	(),
+	true),
+	("oe_enter 2",
+	fn _ => oe_flatten sd8 = [("c", 3), ("b", 2), ("a", 1)] ,
+	(),
+	true)
+	];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("oe_flatten 1",
+	oe_flatten,
+	ed,
+	sd)
+	];
+=TEX
+=SML
+val sd2 = map (fn i => (string_of_int i, i)) (interval 6 10);
+val ed2 = list_oe_merge initial_oe_dict sd2;
+store_mt_results
+mt_run [
+	("oe_merge 1",
+	oe_flatten o oe_merge ed,
+	ed2,
+	s_merge sd sd2)
+	];
+=TEX
+\section{CODE PROFILING}
+We test $prof$, $print\_stats$ and $init\_stats$ by side effect.
+=SML
+set_flag ("profiling", true);
+init_stats();
+val saved_stats = get_stats();
+store_mt_results
+mt_run [
+	("get_stats 1",
+	get_stats,
+	(),
+	[])
+	];
+print_stats(get_stats());
+store_mt_results
+mt_run [
+	("counts 1",
+	counts,
+	"test",
+	Nil)
+	];
+prof "test";prof "test1";prof "test";
+set_flag ("profiling", false);
+prof "test";prof "test1";prof "test";
+set_flag ("profiling", true);
+prof "test";prof "test1";prof "test";
+print_stats(get_stats());
+val some_stats = get_stats();
+store_mt_results
+mt_run [
+	("counts 2",
+	counts,
+	"test",
+	Value 4)
+	];
+store_mt_results
+mt_run [
+	("counts 3",
+	counts,
+	"not tested",
+	Nil)
+	];
+store_mt_results
+mt_run [
+	("get_stats 2",
+	get_stats,
+	(),
+	[("test", 4), ("test1", 2)])
+	];
+set_stats saved_stats;
+store_mt_results
+mt_run [
+	("set_stats 1",
+	get_stats,
+	(),
+	[])
+	];
+set_stats some_stats;
+store_mt_results
+mt_run [
+	("set_stats 2",
+	get_stats,
+	(),
+	[("test1", 2),("test", 4)])
+	];
+store_mt_results
+mt_run_fail [
+	("set_stats",
+	set_stats,
+	[("duplicate",1), ("duplicate", 2)],
+	gen_fail_msg "set_stats" 1020 [])
+	];
+=TEX
+\section{CODE TIMING}
+We offer the following for interactive testing to anyone with just over 15 seconds to spend:
+=GFT
+time_app Seconds(ExtendedIO.system)  "sleep 1";
+time_app Milliseconds(ExtendedIO.system)  "sleep 1";
+time_app Microseconds(ExtendedIO.system)  "sleep 1";
+reset_stopwatch();
+(ExtendedIO.system "sleep 2"); read_stopwatch Seconds;
+(ExtendedIO.system "sleep 2"); read_stopwatch Milliseconds;
+(ExtendedIO.system "sleep 2"); read_stopwatch Microseconds;
+reset_stopwatch();
+(ExtendedIO.system "sleep 2"); read_stopwatch Seconds;
+(ExtendedIO.system "sleep 2"); read_stopwatch Milliseconds;
+(ExtendedIO.system "sleep 2"); read_stopwatch Microseconds;
+
+=TEX
+There is not a great deal we can do in batch here. The error is system dependent
+and we would have to wait forever on a system like Poly/ML which represent
+times as floating point numbers. All we can test is that the timing
+function does indeed call the function passed as its argument.
+=SML
+store_mt_results
+mt_run [
+	("timing 1",
+	#result o time_app Microseconds (fn x => 99*x),
+	99,
+	99*99),
+	("timing 2",
+	#result o time_app Microseconds (fn x => 99*x),
+	107,
+	99*107)
+	];
+=TEX
+We just call the stopwatch functions to see if they are there:
+=SML
+store_mt_results
+mt_run [
+	("timing 3",
+	reset_stopwatch,
+	(),
+	()),
+	("timing 4",
+	(fn _ => (read_stopwatch Seconds:int; ())),
+	(),
+	())
+	];
+=TEX
+\section{ORDERS AND SORTING}
+These are tested together for convenience.
+
+$lexicographic$ is tested by $string\_order$ calls.
+=SML
+open Sort;
+store_mt_results
+mt_run [
+	("sort 1",
+	sort (curry (op -)),
+	[3,2,5,1,8,2,3,6],
+	[1, 2, 3, 5, 6, 8]),
+	("sort 2",
+	sort (curry (op -)),
+	[],
+	[])
+	];
+fun sgn i = if i < 0 then ~1 else if i > 0 then 1 else 0;
+store_mt_results
+mt_run [
+	("string_order 1",
+	sgn o string_order "a",
+	"c",
+	~1),
+	("string_order 2",
+	sgn o string_order "c",
+	"a",
+	1),
+	("string_order 3",
+	sgn o string_order "A",
+	"C",
+	~1),
+	("string_order 4",
+	sgn o string_order "C",
+	"A",
+	1),
+	("string_order 5",
+	sgn o string_order "a",
+	"C",
+	~1),
+	("string_order 6",
+	sgn o string_order "C",
+	"a",
+	1),
+	("string_order 7",
+	sgn o string_order "A",
+	"c",
+	~1),
+	("string_order 8",
+	sgn o string_order "C",
+	"a",
+	1),
+	("string_order 9",
+	sgn o string_order " ",
+	"c",
+	1),
+	("string_order 10",
+	sgn o string_order ">",
+	"c",
+	1),
+	("string_order 11",
+	sgn o string_order "c",
+	" ",
+	~1),
+	("string_order 12",
+	sgn o string_order "c",
+	">",
+	~1),
+	("string_order 13",
+	sgn o string_order " ",
+	"C",
+	1),
+	("string_order 14",
+	sgn o string_order ">",
+	"C",
+	1),
+	("string_order 15",
+	sgn o string_order "C",
+	" ",
+	~1),
+	("string_order 16",
+	sgn o string_order "C",
+	">",
+	~1),
+	("string_order 17",
+	sgn o string_order ">",
+	" ",
+	1),
+	("string_order 18",
+	sgn o string_order " ",
+	">",
+	~1),
+	("string_order 19",
+	sgn o string_order "a",
+	"a",
+	0),
+	("string_order 20",
+	sgn o string_order "A",
+	"A",
+	0),
+	("string_order 21",
+	sgn o string_order "a",
+	"A",
+	1),
+	("string_order 22",
+	sgn o string_order "A",
+	"a",
+	~1),
+	("string_order 23",
+	sgn o string_order "ab",
+	"ab",
+	0),
+	("string_order 24",
+	sgn o string_order "abfd",
+	"abcd",
+	1),
+	("string_order 25",
+	sgn o string_order "aaAap",
+	"aaaaP",
+	~1),
+	("string_order 26",
+	sgn o string_order "aaAap",
+	"aaaaq",
+	~1),
+	("string_order 27",
+	sgn o string_order "abc",
+	"ab",
+	1),
+	("string_order 28",
+	sgn o string_order "ab",
+	"abc",
+	~1)
+	];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("merge 1",
+	uncurry (merge (curry (op -))),
+	([], []), []),
+	("merge 2",
+	uncurry (merge (curry (op -))),
+	([1], []), [1]),
+	("merge 3",
+	uncurry (merge (curry (op -))),
+	([], [1]), [1]),
+	("merge 4",
+	uncurry (merge (curry (op -))),
+	([1], [1]), [1]),
+	("merge 5",
+	uncurry (merge (curry (op -))),
+	([1, 2, 4], [3, 5, 6]), [1, 2, 3, 4, 5, 6]),
+	("merge 6",
+	uncurry (merge (curry (op -))),
+	([1, 2, 4], [3, 5, 6, 7, 8]), [1, 2, 3, 4, 5, 6, 7, 8]),
+	("merge 7",
+	uncurry (merge (curry (op -))),
+	([1, 2, 4, 5, 6], [3, 7]), [1, 2, 3, 4, 5, 6, 7])
+];
+=TEX
+=SML
+=SML
+val l1 = map chr (interval 0 255);
+val lc = map chr (interval (ord "a") (ord"z"));
+val uc = map chr (interval (ord "A") (ord"Z"));
+val others = (l1 diff lc) diff uc;
+val lu = flat(map (fn (x, y) => [x, y]) (combine uc lc));
+val r1 = lu @others;
+
+val l2 = ["a", "ab", "a", "ba", "A", "A"];
+val r2 = ["A", "a", "ab", "ba"];
+
+val l3 = ["a", "aaaa", "aaa", "a ", "A", "A "];
+val r3 = ["A", "A ", "a", "aaa", "aaaa", "a "];
+store_mt_results
+mt_run [
+	("sort.1", Sort.sort Sort.string_order, l1, r1),
+	("sort.2", Sort.sort Sort.string_order, l2, r2),
+	("sort.3", Sort.sort Sort.string_order, l3, r3)
+];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("opt_order 1",
+	sgn o opt_order (curry (op -)) (Value 1),
+	Nil,
+	~1),
+	("opt_order 2",
+	sgn o opt_order (curry (op -)) (Value 1),
+	Value 2,
+	~1),
+	("opt_order 3",
+	sgn o opt_order (curry (op -)) (Value 3),
+	Value 2,
+	1),
+	("opt_order 4",
+	sgn o opt_order (curry (op -)) Nil,
+	Value 2,
+	1),
+	("opt_order 5",
+	sgn o opt_order (curry (op -)) Nil,
+	Nil,
+	0)
+];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("opt_order1 1",
+	sgn o opt_order1 (curry (op -)) (Value 1),
+	Nil,
+	1),
+	("opt_order1 2",
+	sgn o opt_order1 (curry (op -)) (Value 1),
+	Value 2,
+	~1),
+	("opt_order1 3",
+	sgn o opt_order1 (curry (op -)) (Value 3),
+	Value 2,
+	1),
+	("opt_order1 4",
+	sgn o opt_order1 (curry (op -)) Nil,
+	Value 2,
+	~1),
+	("opt_order1 5",
+	sgn o opt_order1 (curry (op -)) Nil,
+	Nil,
+	0)
+];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("pair_order 1",
+	sgn o pair_order string_order (curry (op-)) ( "a", 1 ),
+	("b", 1),
+	~1),
+	("pair_order 2",
+	sgn o pair_order string_order (curry (op-)) ( "a", 1 ),
+	("a", 1),
+	0),
+	("pair_order 3",
+	sgn o pair_order string_order (curry (op-)) ( "a", 1 ),
+	("a", 2),
+	~1),
+	("pair_order 4",
+	sgn o pair_order string_order (curry (op-)) ( "a", 2 ),
+	("a", 1),
+	1),
+	("pair_order 5",
+	sgn o pair_order string_order (curry (op-)) ( "b", 1 ),
+	("a", 1),
+	1)
+];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("int_order 1",
+	Sort.sort int_order,
+	[3, 1, 2],
+	[1, 2, 3]),
+	("rev_order 1",
+	Sort.sort (rev_order int_order),
+	[3, 1, 2],
+	[3, 2, 1])
+];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("list_order 1",
+	Sort.sort (list_order int_order),
+	[[1, 3], [2, 3], [1, 2], [2]],
+	[[1, 2], [1, 3], [2], [2, 3]]),
+	("inv_list_order 1",
+	Sort.sort (inv_list_order int_order),
+	[[3, 1], [3, 2], [2, 1], [2] ],
+	[[2, 1], [3, 1], [2], [3, 2]])
+];
+=TEX
+Other ordering functions are quite well tested by their use in constructing term orderings.
+=TEX
+\subsection{Sparse Array Material}
+=SML
+open SparseArray;
+=TEX
+=SML
+store_mt_results
+mt_run_fail [("array 1102",
+	array,
+	~2,
+	gen_fail_msg "array" 1102 [])];
+
+val test_array:int SPARSE_ARRAY = array 5;
+update (test_array,~12,~12);
+update (test_array,8,8);
+update (test_array,3,3);
+
+store_mt_results
+mt_run [("sub 1",
+	sub,
+	(test_array,  3),
+	3),
+	("sub 2",
+	sub,
+	(test_array,  ~12),
+	~12),
+	("sub 3",
+	sub,
+	(test_array,  8),
+	8)];
+store_mt_results
+mt_run_fail [("array 1101 a",
+	sub,
+	(test_array,~24),
+	gen_fail_msg "sub" 1101 ["-24"]),
+	("array 1101 b",
+	sub,
+	(test_array,2),
+	gen_fail_msg "sub" 1101 ["2"])];
+store_mt_results
+mt_run [("sub_opt 1",
+	sub_opt,
+	(test_array,  3),
+	Value 3),
+	("sub_opt 2",
+	sub_opt,
+	(test_array,  ~12),
+	Value ~12),
+	("sub_opt 3",
+	sub_opt,
+	(test_array,  8),
+	Value 8),
+	("sub_opt 4",
+	sub_opt,
+	(test_array,  2),
+	Nil),
+	("sub_opt 5",
+	sub_opt,
+	(test_array,  58),
+	Nil)];
+store_mt_results
+mt_run [("lindex",
+	lindex,
+	test_array,
+	~12)];
+store_mt_results
+mt_run [("uindex",
+	uindex,
+	test_array,
+	8)];
+=TEX
+=SML
+scratch test_array;
+store_mt_results
+mt_run [("scratch 1",
+	sub_opt,
+	(test_array, 3),
+	Nil),
+	("scratch 2",
+	sub_opt,
+	(test_array, 2),
+	Nil)];
+store_mt_results
+mt_run_fail [
+	("lindex 1103",
+	lindex,
+	test_array,
+	gen_fail_msg "lindex" 1103 []),
+	("uindex 1103",
+	uindex,
+	test_array,
+	gen_fail_msg "uindex" 1103 [])];
+=TEX
+\subsection{Dynamic Array Material}
+=SML
+open DynamicArray;
+=TEX
+=SML
+store_mt_results
+mt_run_fail [("dynamic array 1301",
+	array,
+	~2,
+	gen_fail_msg "array" 1301 [])];
+
+val test_array:int DYNAMIC_ARRAY = array 5;
+update (test_array,3,3);
+update (test_array,8,8);
+update (test_array,100, 100);
+
+store_mt_results
+mt_run [("dynamic sub 1",
+	sub,
+	(test_array,  3),
+	3),
+	("dynamic sub 2",
+	sub,
+	(test_array,  8),
+	8),
+	("dynamic sub 3",
+	sub,
+	(test_array,  100),
+	100)];
+store_mt_results
+mt_run_fail [("dynamic array 1101",
+	sub,
+	(test_array,1),
+	gen_fail_msg "sub" 1101 ["1"]),
+	("array 1302",
+	sub,
+	(test_array,~1),
+	gen_fail_msg "sub" 1302 []),
+	("array 1303 b",
+	sub,
+	(test_array,1000),
+	gen_fail_msg "sub" 1303 ["1000"])];
+store_mt_results
+mt_run [("dynamic sub_opt 1",
+	sub_opt,
+	(test_array,  3),
+	Value 3),
+	("dynamic sub_opt 2",
+	sub_opt,
+	(test_array,  1000),
+	Nil)];
+store_mt_results
+mt_run [("dynamic uindex",
+	uindex,
+	test_array,
+	100)];
+=TEX
+=SML
+scratch test_array;
+store_mt_results
+mt_run [("dynamic scratch 1",
+	sub_opt,
+	(test_array, 3),
+	Nil),
+	("dynamic scratch 2",
+	sub_opt,
+	(test_array, 2),
+	Nil)];
+=TEX
+\subsection{Search Trees}
+=SML
+val st1 = initial_search_tree int_order : (int, string) SEARCH_TREE;
+val st2 = st_extend 1001 "banana" st1;
+val st3 = st_extend 0 "apple" st2;
+val st4 = st_enter 1001 "cherry" st3;
+store_mt_results
+mt_run [
+	("st_flatten 1", st_flatten, st1, []),
+	("st_flatten 2", st_flatten, st2, [(1001, "banana")]),
+	("st_extend 1", st_flatten, st3, [(0, "apple"), (1001, "banana")]),
+	("st_enter 1", st_flatten, st4, [(0, "apple"), (1001, "cherry")])
+];
+=TEX
+=SML
+val sd1 = map (fn i => (string_of_int i, i)) (interval 1 10000);
+val sd2 = map swap (e_flatten (list_e_merge initial_e_dict sd1));
+val st5 = list_st_merge (initial_search_tree int_order) sd2;
+val sd3 = map (fn (i, s) => (i + 1, s)) sd2;
+val st6 = list_st_enter st5 sd3;
+val st7 = st_delete 10001 st6;
+val st8 = st_delete 5000 st7;
+store_mt_results
+mt_run [
+	("list_st_merge 1", map fst o st_flatten, st5, interval 1 10000),
+	("list_st_enter 1", map fst o st_flatten, st6, interval 1 10001),
+	("list_st_delete 1", map fst o st_flatten, st7, interval 1 10000),
+	("list_st_delete 2", map fst o st_flatten, st8, interval 1 4999 @ interval 5001 10000)
+];
+store_mt_results
+mt_run [
+	("st_lookup 1", st_lookup 0, st3, Value "apple"),
+	("st_lookup 2", st_lookup 1001, st4, Value "cherry"),
+	("st_delete 3", st_lookup 4999, st8, Value "4998"),
+	("st_delete 4", st_lookup 5001, st8, Value "5000"),
+	("st_delete 4", st_lookup 5000, st8, Nil),
+	("list_st_merge 2", st_lookup 1001, st5, Value "1001"),
+	("list_st_enter 2", st_lookup 1001, st6, Value "1000")
+];
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+	("st_extend fail 1", st_extend 1001 "boo!",  st5,
+		gen_fail_msg "st_extend" 1401 [])
+];
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+	("st_extend fail 2", list_st_merge st5, [(100000, "OK"), (1001, "boo!")],
+		gen_fail_msg "list_st_merge" 1401 [])
+];
+=TEX
+\section{END OF TESTS}
+=SML
+raw_diag_string(summarize_mt_results());
+=TEX
+\end{document}
+
+
+

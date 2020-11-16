@@ -1,0 +1,771 @@
+=IGN
+********************************************************************************
+mdt058.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% mdt058.doc $Id: mdt058.doc,v 1.18 2002/10/17 16:20:01 rda Exp rda $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for Automatic Existence Proofs}
+
+\def\AbstractText{A set of module tests are given for the the automatic existence proof tools.}
+
+\def\Reference{DS/FMU/IED/MDT058}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests for Automatic Existence Proofs}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Module Tests for Automatic Existence Proofs}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT058}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.18 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $ %
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{ML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & Project Manager}
+%% LaTeX2e port: \TPPabstract{A set of module tests are given for the
+%% LaTeX2e port: the automatic existence proof tools.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/12/10)]
+First draft.
+
+\item[Issue 1.2 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.3 (1992/01/21)]
+Removed duplicate labels.
+\item[Issue 1.4 (1992/01/27) (23rd January 1992)]
+$new\_axiom$, $simple\_new\_type\_defn$, $new\_type\_defn$
+all changed to take lists of keys, rather than single ones.
+\item[Issue 1.5 (1992/02/13),(13th February 1992)]
+Moving material from 058 to 027.
+\item [Issue 1.6 (1992/03/26),1.7 (1992/03/26) (26th March 1992)]
+Changed to use proof context material of issue 1.13 of \cite{DS/FMU/IED/DTD051}.
+\item [Issue 1.8 (1992/03/27) (26th March 1992)]
+Need to push proof context $sum\_prove\_∃$ and $prove\_∃$.
+\item [Issue 1.9 (1992/04/09) (9th April 1992)]
+Changes required by CR0016.
+\item [Issue 1.10 (1992/04/14) (14th April 1992)]
+Changes required by CR0017.
+\item [Issue 1.11 (1992/05/12) (12th May 1992)]
+Changed names.
+\item [Issue 1.12 (1992/05/14) (14th May 1992)]
+Tidying up proof contexts.
+\item [Issue 1.13 (1992/05/21) (20th May 1992)]
+Made proof context ``prove$\_∃$'' local.
+\item [Issue 1.14 (1992/05/22) (22nd May 1992)]
+Bug fixing.
+\item [Issue 1.15 (1992/05/27) (27th May 1992)]
+Bug fixing.
+\item[Issue 1.16 (1992/06/24) (24th June 1992)]
+Renamings from issue 1.6 of \cite{DS/FMU/IED/WRK038},
+mostly proof context name changes.
+\item[Issue 1.17 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.18 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.32] Existence theorems no longer need to have unique existentials.
+Added tests for this and for new error messaage.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the automatic existence proof tools.
+The design is in \cite{DS/FMU/IED/DTD058}
+and it is
+implemented in \cite{DS/FMU/IED/IMP058}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module testing of the material given a design in \cite{DS/FMU/IED/DTD058},
+following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+
+\subsubsection{Dependencies}
+This document is derived from the detailed design in \cite{DS/FMU/IED/DTD058},
+and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP058}.
+\subsubsection{Deficiencies}
+None known.
+\section{TEST CASES}
+We test each function of the signature of \cite{DS/FMU/IED/DTD058}
+in turn, where possible in the same order as in the design document, testing both successful, and all error, cases.
+We do not test for design errors, or the ``special case''
+message 58015, in the later case as it is not certain that it can be provoked.
+\section{PROLOGUE}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+=TEX
+=SML
+open_theory "hol";
+=TEX
+\section{SETTING THE PROOF CONTEXT}
+To make the tests independent of some outside changes, we give a local
+proof context.
+=SML
+let
+val pair_rewrite_thm = tac_proof(([],
+⌜∀ x y p ⦁
+	Fst (x, y) = x ∧
+	Snd (x, y) = y ∧
+	(Fst p, Snd p) = p⌝),
+		basic_prove_tac [pair_clauses]);
+val dummy = delete_pc "prove_∃" handle _ => ();
+val dummy = new_pc "prove_∃";
+val dummy = set_cs_∃_convs [basic_prove_∃_conv] "prove_∃";
+val dummy = set_∃_vs_thms [(",",([⌜Fst⌝,⌜Snd⌝],pair_rewrite_thm))] "prove_∃";
+val dummy = set_∃_cd_thms [
+	(rewrite_rule[ext_thm, o_def] sum_fns_thm),
+	prim_rec_thm, list_prim_rec_thm]
+	"prove_∃";
+in
+set_merge_pcs ["'propositions","'paired_abstractions","prove_∃"]
+end;
+=TEX
+\section{THE TESTS OF COMPONENT FUNCTIONS}
+\subsection{simple$\_$∃$\_$∨$\_$conv}
+=SML
+store_mt_results (mt_runf (op =#))[
+	("simple_∃_∨_conv 1",
+	dest_thm o simple_∃_∨_conv,
+	⌜∃ x y ⦁ f x ∨ g y⌝,
+	([],⌜(∃ x y ⦁ f x ∨ g y) ⇔ (∃ x ⦁ f x) ∨ (∃ y ⦁ g y)⌝)),
+	("simple_∃_∨_conv 2",
+	dest_thm o simple_∃_∨_conv,
+	⌜∃ x y ⦁ f x ∨ g y ∨ h x y ∨ i⌝,
+	([],⌜(∃ x y ⦁ f x ∨ g y ∨ h x y ∨ i) ⇔
+		(∃ x ⦁ f x)
+		∨ (∃ y ⦁ g y)
+		∨ (∃ x y ⦁ h x y)
+		∨ i⌝))
+	];
+store_mt_results mt_run_fail [
+	("simple_∃_∨_conv",
+	simple_∃_∨_conv,
+	mk_t,
+	gen_fail_msg "simple_∃_∨_conv" 58010 ["⌜T⌝"])
+	];
+=TEX
+
+\subsection{simple$\_$∃$\_$∧$\_$conv}
+=SML
+store_mt_results (mt_runf (op =#))[
+	("simple_∃_∧_conv 1",
+	dest_thm o simple_∃_∧_conv,
+	⌜∃ x ⦁ P x ∧ Q⌝,
+	([],⌜(∃ x ⦁ P x ∧ Q) ⇔ (∃ x ⦁ P x) ∧ Q⌝)),
+	("simple_∃_∧_conv 2",
+	dest_thm o simple_∃_∧_conv,
+	⌜∃ x ⦁ P ∧ Q x⌝,
+	([],⌜(∃ x:'a ⦁ P ∧ Q x) ⇔ (∃ x:'a ⦁ Q x) ∧ P⌝)),
+	("simple_∃_∧_conv 3",
+	dest_thm o simple_∃_∧_conv,
+	⌜∃ x y:'a ⦁ P x ∧ Q y⌝,
+	([],⌜(∃ x y :'a⦁ P x ∧ Q y) ⇔ (∃ y:'a ⦁ Q y) ∧ (∃ x:'a ⦁P x)⌝)),
+	("simple_∃_∧_conv 4",
+	dest_thm o simple_∃_∧_conv,
+	⌜∃ x y z:'a ⦁ P x z ∧ Q y z⌝,
+	([],⌜(∃ x y z :'a⦁ P x z ∧ Q y z) ⇔
+	∃ z :'a⦁ (∃ y :'a⦁ Q y z) ∧ (∃ x :'a⦁P x z)⌝))
+	];
+store_mt_results mt_run_fail [
+	("simple_∃_∧_conv",
+	simple_∃_∧_conv,
+	mk_t,
+	gen_fail_msg "simple_∃_∧_conv" 58012 ["⌜T⌝"])
+	];
+=TEX
+\subsection{∀$\_$∧$\_$conv}
+=SML
+store_mt_results (mt_runf (op =#))[
+	("simple_∀_∧_conv 1",
+	dest_thm o ∀_∧_conv,
+	⌜∀ x y ⦁ f x ∧ g y⌝,
+	([],⌜(∀ x y ⦁ f x ∧ g y) ⇔ (∀ x ⦁ f x) ∧ (∀ y ⦁ g y)⌝)),
+	("∀_∧_conv 2",
+	dest_thm o ∀_∧_conv,
+	⌜∀ x y ⦁ f x ∧ g y ∧ h x y ∧ i⌝,
+	([],⌜(∀ x y ⦁ f x ∧ g y ∧ h x y ∧ i) ⇔
+		(∀ x ⦁ f x)
+		∧ (∀ y ⦁ g y)
+		∧ (∀ x y ⦁ h x y)
+		∧ i⌝)),
+	("simple_∀_∧_conv 3",
+	dest_thm o ∀_∧_conv,
+	⌜∀ (x, y) ⦁ f x ∧ g y⌝,
+	([],⌜(∀ (x,y) ⦁ f x ∧ g y) ⇔ (∀ x ⦁ f x) ∧ (∀ y ⦁ g y)⌝))
+	];
+store_mt_results mt_run_fail [
+	("∀_∧_conv",
+	∀_∧_conv,
+	mk_t,
+	gen_fail_msg "∀_∧_conv" 58020 ["⌜T⌝"])
+	];
+=TEX
+\subsection{simple$\_$∃$\_$equation$\_$conv}
+=SML
+store_mt_results (mt_runf (op =#))[
+	("simple_∃_equation_conv 1",
+	dest_thm o simple_∃_equation_conv,
+	⌜∃ f ⦁ f = x⌝,
+	([],⌜(∃ f ⦁ f = x) ⇔ (T)⌝)),
+	("simple_∃_equation_conv 2",
+	dest_thm o simple_∃_equation_conv,
+	⌜∃ f ⦁ x = f⌝,
+	([],⌜(∃ f ⦁ x = f) ⇔ (T)⌝)),
+	("simple_∃_equation_conv 3",
+	dest_thm o simple_∃_equation_conv,
+	⌜∃ f ⦁ (f = x) ∧ P f⌝,
+	([],⌜(∃ f ⦁ (f = x) ∧ P f) ⇔ (P x)⌝)),
+	("simple_∃_equation_conv 4",
+	dest_thm o simple_∃_equation_conv,
+	⌜∃ f g ⦁ (f = g) ∧ P f⌝,
+	([],⌜(∃ f g ⦁ (f = g) ∧ P f) ⇔ (∃ g ⦁ P g)⌝)),
+	("simple_∃_equation_conv 5",
+	dest_thm o simple_∃_equation_conv,
+	⌜∃ f ⦁ f ∧ P f⌝,
+	([],⌜(∃ f ⦁ f ∧ P f) ⇔ (P T)⌝)),
+	("simple_∃_equation_conv 6",
+	dest_thm o simple_∃_equation_conv,
+	⌜∃ f ⦁ ¬ f ∧ P f⌝,
+	([],⌜(∃ f ⦁ ¬ f ∧ P f) ⇔ (P F)⌝))
+	];
+store_mt_results mt_run_fail [
+	("simple_∃_equation_conv 3034",
+	simple_∃_equation_conv,
+	mk_t,
+	gen_fail_msg "simple_∃_equation_conv" 3034 ["⌜T⌝"]),
+	("simple_∃_equation_conv 58013 1",
+	simple_∃_equation_conv,
+	⌜∃ x ⦁ f x⌝,
+	gen_fail_msg "simple_∃_equation_conv" 58013 ["⌜∃ x⦁ f x⌝"]),
+	("simple_∃_equation_conv 58013 2",
+	simple_∃_equation_conv,
+	⌜∃ x ⦁ ∀ f ⦁ f = x⌝,
+	gen_fail_msg "simple_∃_equation_conv" 58013 ["⌜∃ x⦁ ∀ f⦁ f = x⌝"])
+	];
+=TEX
+\section{THE TESTS OF MAIN FUNCTIONS}
+\subsection{prove$\_$∃$\_$conv}
+=SML
+store_mt_results (mt_runf (op =#))[
+	("basic_prove_∃_conv 1",
+	dest_thm o basic_prove_∃_conv,
+	⌜∃ f ⦁ f⌝,
+	([],⌜(∃ f ⦁ f) ⇔ (T)⌝)),
+	("basic_prove_∃_conv 2",
+	dest_thm o basic_prove_∃_conv,
+	⌜∃ f ⦁ (a = f) ∧ f g⌝,
+	([],⌜(∃ f ⦁ (a = f) ∧ f g) ⇔ (a g)⌝)),
+	("basic_prove_∃_conv 3",
+	dest_thm o basic_prove_∃_conv,
+	⌜∃ f ⦁ ∀ z ⦁ (z h ∧ (a = f) ∧ z f) ∧ f g⌝,
+	([],⌜(∃ f ⦁ ∀ z ⦁ (z h ∧ (a = f) ∧ z f) ∧ f g) ⇔
+		((∀ z ⦁ z h) ∧ (∀ z ⦁ z a) ∧ a g)⌝)),
+	("basic_prove_∃_conv 4",
+	dest_thm o basic_prove_∃_conv,
+	⌜∃ f:'a → BOOL ⦁ ∀ (z, x) ⦁ (z h ∧ (a = f) ∧ z (f x)) ∧ (∀ g :'a⦁ f g)⌝,
+	([],⌜(∃ f:'a → BOOL ⦁ ∀ (z, x) ⦁ (z h ∧ (a = f) ∧ z (f x)) ∧ (∀ g :'a⦁ f g)) ⇔
+	(((∀ z x ⦁ z (a x)) ∧ (∀ g:'a⦁ a g)) ∧ (∀ z ⦁ z h))⌝)),
+	("basic_prove_∃_conv 5",
+	dest_thm o basic_prove_∃_conv,
+	⌜∃ f:'b → 'c ⦁ (∀ x ⦁ f x = g) ∧ (∀ y ⦁ h (f  y))⌝,
+	([],⌜(∃ f :'b → 'c⦁ (∀ x ⦁ f x = g) ∧ (∀ y ⦁ h (f  y))) ⇔
+		(h g)⌝)),
+	("basic_prove_∃_conv 6",
+	dest_thm o basic_prove_∃_conv,
+	⌜∃ f:((BOOL × BOOL) × (BOOL × BOOL)) → BOOL → BOOL ⦁
+		(∀ a b c p ⦁ f (a,(b,c)) p ⇔ Fst a ∧ c ∧ p) ∧
+		(∀ d e g p ⦁ f ((d,e),g) p ⇔ Snd g ∧ p ∧ d)  ∧
+		(∀ a g q ⦁ f(a,g) q ⇔ q ∧ Snd g ∧ Fst a)⌝,
+	([],⌜(∃ f:((BOOL × BOOL) × (BOOL × BOOL)) → BOOL → BOOL ⦁
+		(∀ a b c p ⦁ f (a,(b,c)) p ⇔ Fst a ∧ c ∧ p) ∧
+		(∀ d e g p ⦁ f ((d,e),g) p ⇔ Snd g ∧ p ∧ d)
+∧
+		(∀ a g q ⦁ f(a,g) q ⇔ q ∧ Snd g ∧ Fst a))
+	⇔
+		((∀ (x:(BOOL × BOOL) × (BOOL × BOOL)) p'⦁ (Fst (Fst x)
+	 ∧ Snd (Snd x) ∧ p' ⇔ Snd (Snd x) ∧ p' ∧ Fst (Fst x))
+  ∧ (Fst (Fst x) ∧ Snd (Snd x) ∧ p' ⇔ p' ∧ Snd (Snd x) ∧ Fst (Fst x))))⌝))
+	];
+
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("basic_prove_∃_conv 58001",
+	basic_prove_∃_conv,
+	mk_t,
+	gen_fail_msg "basic_prove_∃_conv" 58001 ["⌜T⌝"]),
+	("basic_prove_∃_conv 58002",
+	basic_prove_∃_conv,
+	⌜∃ f ⦁ P f⌝,
+	gen_fail_msg "basic_prove_∃_conv" 58002 ["⌜∃ f⦁ P f⌝"])
+	];
+=TEX
+
+\subsection{prove$\_$∃$\_$rule}
+=SML
+fun test tm = (concl(basic_prove_∃_rule tm) =$ tm);
+store_mt_results mt_run [
+	("basic_prove_∃_rule 1",
+	test,
+	⌜∃ a (b, c) d e ⦁ (a = b) ∧ (a = d) ∧ (b = 1) ∧ (c = d) ∧ (e = c)⌝,
+	true),
+	("basic_prove_∃_rule 2",
+	test,
+	⌜∃ f ⦁f⌝,
+	true),
+	("basic_prove_∃_rule 3",
+	test,
+	⌜∃ f ⦁ f ⇔ T⌝,
+	true),
+	("basic_prove_∃_rule 4",
+	test,
+	⌜∃ f ⦁ a = f⌝,
+	true),
+	("basic_prove_∃_rule 5",
+	test,
+	⌜∃ f ⦁ ∀ x ⦁ f x⌝,
+	true),
+	("basic_prove_∃_rule 6",
+	test,
+	⌜∃ f g h ⦁ (∀ x ⦁ f x = g) ∧ (∀ y ⦁ h (f  y))⌝,
+	true),
+	("basic_prove_∃_rule 7",
+	test,
+	⌜∃ g h f ⦁ (∀ x y z ⦁ f x y z = g y z x) ∧ (∀ a b c ⦁ h (f c a) b)⌝,
+	true),
+	("basic_prove_∃_rule 8",
+	test,
+	⌜∃ fst snd ⦁ ∀ x y ⦁ (fst(x,y) = x) ∧ (snd(x,y) = y)⌝,
+	true),
+	("basic_prove_∃_rule 9",
+	test,
+	⌜∃ app ⦁ ∀ p q r ⦁ (app [] q = q) ∧
+	(app (Cons p q) r = (Cons p (app q r))) ∧ T⌝,
+	true),
+	("basic_prove_∃_rule 10",
+	test,
+	⌜∃ app ⦁ (∀ q ⦁ (app [] q = q)) ∧
+	(∀ p q r ⦁ (app (Cons p q) r = (Cons p (app q r))))⌝,
+	true),
+	("basic_prove_∃_rule 11",
+	test,
+	⌜∃ mp ⦁ ∀ f ⦁ (mp f [] = []) ∧ (∀ p q ⦁ mp f (Cons p q) = Cons (f p) (mp f q))⌝,
+	true),
+	("basic_prove_∃_rule 12",
+	test,
+	⌜∃ ce ⦁∀ p q r s ⦁
+	(ce (Cons p r) (Cons q s) ⇔ (p = q) ∧ (ce r s)) ∧
+	(ce [] []) ∧
+	(¬ ce (Cons p r) []) ∧
+	(¬ ce [] (Cons p r))⌝,
+	true),
+	("basic_prove_∃_rule 13",
+	test,
+	⌜∃ fact ⦁ ∀ n ⦁ (fact 0 = 1) ∧ (fact (n+1) = (n + 1) *  fact n)⌝,
+	true),
+	("basic_prove_∃_rule 14",
+	test,
+	⌜∃ limit_it ⦁ ∀ n a x ⦁
+	(limit_it (n + 1) (Cons a x) = Cons a (limit_it n x)) ∧
+	(limit_it (n + 1) [] = []) ∧
+	(limit_it 0 [] = []) ∧
+	(limit_it 0 (Cons a x) = [])⌝,
+	true),
+	("basic_prove_∃_rule 15",
+	test,
+	⌜∃ limit_it ⦁ ∀ n a x ⦁
+	(limit_it (n + 1) (Cons a x) = Cons a (limit_it n x)) ∧
+	(limit_it (n + 1) [] = []) ∧
+	(limit_it 0 x = [])⌝,
+	true),
+	("basic_prove_∃_rule 16",
+	test,
+	⌜∃ f ⦁ ∀ x y ⦁ (f(InL x) = g x)∧ (f(InR y) = h y)⌝,
+	true),
+	("basic_prove_∃_rule 17",
+	test,
+	⌜∃ f ⦁f [] = 1⌝,
+	true),
+	("basic_prove_∃_rule 18",
+	test,
+	⌜∃ f ⦁∀ x a ⦁ f (Cons a x) = a⌝,
+	true),
+	("basic_prove_∃_rule 19",
+	test,
+	⌜∃ f ⦁∀ x a ⦁ f (a+1) = a⌝,
+	true),
+	("basic_prove_∃_rule 20",
+	test,
+	⌜∃ f ⦁f 0 = a⌝,
+	true),
+	("basic_prove_∃_rule 21",
+	test,
+	⌜∃ ce ⦁∀ p q r s ⦁
+	(ce (Cons p r, Cons q s) ⇔ (p = q) ∧ (ce (r, s))) ∧
+	(ce ([], [])) ∧
+	(¬ ce (Cons p r,[])) ∧
+	(¬ ce ([], Cons p r))⌝,
+	true)
+	];
+
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("basic_prove_∃_rule 58001",
+	basic_prove_∃_rule,
+	mk_t,
+	gen_fail_msg "basic_prove_∃_rule" 58001 ["⌜T⌝"]),
+	("basic_prove_∃_rule 58002",
+	basic_prove_∃_rule,
+	⌜∃ f ⦁ P f⌝,
+	gen_fail_msg "basic_prove_∃_rule" 58002 ["⌜∃ f⦁ P f⌝"]),
+	("basic_prove_∃_rule 58003",
+	basic_prove_∃_rule,
+	⌜∃ f ⦁ f ∧ P⌝,
+	gen_fail_msg "basic_prove_∃_rule" 58003 ["⌜∃ f⦁ f ∧ P⌝"])
+	];
+=TEX
+
+\subsection{prove$\_$∃$\_$tac}
+=SML
+fun test tm = (concl(tac_proof(([],tm),basic_prove_∃_tac)) =$ tm);
+store_mt_results mt_run [
+	("basic_prove_∃_tac 1",
+	test,
+	⌜∃ a (b, c) d e ⦁ (a = b) ∧ (a = d) ∧ (b = 1) ∧ (c = d) ∧ (e = c)⌝,
+	true),
+	("basic_prove_∃_tac 2",
+	test,
+	⌜∃ f ⦁f⌝,
+	true),
+	("basic_prove_∃_tac 3",
+	test,
+	⌜∃ f ⦁ f ⇔ T⌝,
+	true),
+	("basic_prove_∃_tac 4",
+	test,
+	⌜∃ f ⦁ a = f⌝,
+	true),
+	("basic_prove_∃_tac 5",
+	test,
+	⌜∃ f ⦁ ∀ x ⦁ f x⌝,
+	true),
+	("basic_prove_∃_tac 6",
+	test,
+	⌜∃ f g h ⦁ (∀ x ⦁ f x = g) ∧ (∀ y ⦁ h (f  y))⌝,
+	true),
+	("basic_prove_∃_tac 7",
+	test,
+	⌜∃ g h f ⦁ (∀ x y z ⦁ f x y z = g y z x) ∧ (∀ a b c ⦁ h (f c a) b)⌝,
+	true),
+	("basic_prove_∃_tac 8",
+	test,
+	⌜∃ fst snd ⦁ ∀ x y ⦁ (fst(x,y) = x) ∧ (snd(x,y) = y)⌝,
+	true),
+	("basic_prove_∃_tac 9",
+	test,
+	⌜∃ app ⦁ ∀ p q r ⦁ (app [] q = q) ∧
+	(app (Cons p q) r = (Cons p (app q r))) ∧ T⌝,
+	true),
+	("basic_prove_∃_tac 10",
+	test,
+	⌜∃ app ⦁ (∀ q ⦁ (app [] q = q)) ∧
+	(∀ p q r ⦁ (app (Cons p q) r = (Cons p (app q r))))⌝,
+	true),
+	("basic_prove_∃_tac 11",
+	test,
+	⌜∃ mp ⦁ ∀ f ⦁ (mp f [] = []) ∧ (∀ p q ⦁ mp f (Cons p q) = Cons (f p) (mp f q))⌝,
+	true),
+	("basic_prove_∃_tac 12",
+	test,
+	⌜∃ ce ⦁∀ p q r s ⦁
+	(ce (Cons p r) (Cons q s) ⇔ (p = q) ∧ (ce r s)) ∧
+	(ce [] []) ∧
+	(¬ ce (Cons p r) []) ∧
+	(¬ ce [] (Cons p r))⌝,
+	true),
+	("basic_prove_∃_tac 13",
+	test,
+	⌜∃ fact ⦁ ∀ n ⦁ (fact 0 = 1) ∧ (fact (n+1) = (n + 1) *  fact n)⌝,
+	true),
+	("basic_prove_∃_tac 14",
+	test,
+	⌜∃ limit_it ⦁ ∀ n a x ⦁
+	(limit_it (n + 1) (Cons a x) = Cons a (limit_it n x)) ∧
+	(limit_it (n + 1) [] = []) ∧
+	(limit_it 0 [] = []) ∧
+	(limit_it 0 (Cons a x) = [])⌝,
+	true),
+	("basic_prove_∃_tac 15",
+	test,
+	⌜∃ limit_it ⦁ ∀ n a x ⦁
+	(limit_it (n + 1) (Cons a x) = Cons a (limit_it n x)) ∧
+	(limit_it (n + 1) [] = []) ∧
+	(limit_it 0 x = [])⌝,
+	true),
+	("basic_prove_∃_tac 16",
+	test,
+	⌜∃ f ⦁ ∀ x y ⦁ (f(InL x) = g x)∧ (f(InR y) = h y)⌝,
+	true),
+	("basic_prove_∃_tac 17",
+	test,
+	⌜∃ f ⦁f [] = 1⌝,
+	true),
+	("basic_prove_∃_tac 18",
+	test,
+	⌜∃ f ⦁∀ x a ⦁ f (Cons a x) = a⌝,
+	true),
+	("basic_prove_∃_tac 19",
+	test,
+	⌜∃ f ⦁∀ x a ⦁ f (a+1) = a⌝,
+	true),
+	("basic_prove_∃_tac 20",
+	test,
+	⌜∃ f ⦁f 0 = a⌝,
+	true),
+	("basic_prove_∃_tac 21",
+	test,
+	⌜∃ ce ⦁∀ p q r s ⦁
+	(ce (Cons p r, Cons q s) ⇔ (p = q) ∧ (ce (r, s))) ∧
+	(ce ([], [])) ∧
+	(¬ ce (Cons p r,[])) ∧
+	(¬ ce ([], Cons p r))⌝,
+	true)
+	];
+
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("basic_prove_∃_tac 58004",
+	basic_prove_∃_tac,
+	([],mk_t),
+	gen_fail_msg "basic_prove_∃_tac" 58004 []),
+	("basic_prove_∃_tac 58005",
+	basic_prove_∃_tac,
+	([],⌜∃ f ⦁ P f⌝),
+	gen_fail_msg "basic_prove_∃_tac" 58005 []),
+	("basic_prove_∃_tac 58006",
+	basic_prove_∃_tac,
+	([],⌜∃ f ⦁ f ∧ P⌝),
+	gen_fail_msg "basic_prove_∃_tac" 58006 [])
+	];
+=TEX
+\section{PROOF CONTEXTS}
+We first create a new theory:
+=SML
+open_theory "hol";
+delete_theory "mdt058_test_theory" handle (Fail _) => ();
+new_theory "mdt058_test_theory";
+new_type ("NARY",1);
+new_const("NNode",ⓣ('a NARY)LIST → 'a NARY⌝);
+new_const("NLeaf",ⓣ'a → 'a NARY⌝);
+val nary_axiom = new_axiom(["nary_axiom"],
+	⌜∀ node leaf ⦁ ∃⋎1 f ⦁
+	(∀ n ⦁ f (NLeaf n) = leaf n) ∧
+	(∀ l ⦁ f (NNode l) = node l (Map f l))⌝);
+
+new_type ("OPS",1);
+new_const("Op1",ⓣ'a OPS → 'a OPS → 'a OPS⌝);
+new_const("Op2",ⓣ'a OPS → 'a OPS → 'a OPS⌝);
+new_const("Op3",ⓣ'a OPS → 'a OPS⌝);
+new_const("Atom",ⓣ'a → 'a OPS⌝);
+val ops_axiom1 = new_axiom(["ops_axiom1"],
+	⌜∀ a op1 op2 ⦁ ∃⋎1 f ⦁
+	(∀ x ⦁ f (Atom x) = a x) ∧
+	(∀ p q ⦁ f (Op1 p q) = op1 p q (f p) (f q)) ∧
+	(∀ p q ⦁ f (Op2 p q) = op2 (f p) (f q) p q)⌝);
+val ops_axiom2 = new_axiom(["ops_axiom2"],
+	⌜∀ op1 ⦁ ∃ f ⦁ ∀ p ⦁ f (Op3 p) = op1 (f p)⌝);
+
+new_type("TRIPLE",3);
+val triple = new_const("Triple",ⓣ'a → 'b → 'c → ('a, 'b, 'c)TRIPLE⌝);
+val tripe1 = new_const("Tripe1",ⓣ('a, 'b, 'c)TRIPLE → 'a⌝);
+val tripe2 = new_const("Tripe2",ⓣ('a, 'b, 'c)TRIPLE → 'b⌝);
+val tripe3 = new_const("Tripe3",ⓣ('a, 'b, 'c)TRIPLE → 'c⌝);
+val tripe_rw = new_axiom(["tripe_rw"],
+	⌜∀ a b c x ⦁
+	(Triple(Tripe1 x)(Tripe2 x)(Tripe3 x) = x)
+	∧
+	(Tripe1(Triple a b c) = a)
+	∧
+	(Tripe2(Triple a b c) = b)
+	∧
+	(Tripe3(Triple a b c) = c)⌝);
+=TEX
+Now create a new context (incidentally testing $evaluate\_∃\_cd\_thm$:
+=SML
+new_pc "new_prove_∃";
+set_∃_vs_thms
+	[("Triple",([tripe1, tripe2, tripe3],tripe_rw))]
+	"new_prove_∃";
+set_∃_cd_thms ([nary_axiom, ops_axiom1, ops_axiom2] @ get_∃_cd_thms "new_prove_∃") "new_prove_∃";
+
+push_merge_pcs ["new_prove_∃", "'propositions","'paired_abstractions","prove_∃"];
+=TEX
+Now test it:
+=SML
+fun test tm = (concl(basic_prove_∃_rule tm) =$ tm);
+store_mt_results mt_run [
+	("basic_prove_∃_rule 1 a",
+	test,
+	⌜∃ g ⦁ ∀ p q a ⦁ (g (Op2 p q) ⇔ h p ∧ g q)
+	∧
+	(g (Op1 p q) ⇔ h q ∧ g p)
+	∧
+	g(Atom a) = (a=0)⌝,
+	true),
+	("basic_prove_∃_rule 2 a",
+	test,
+	⌜∃ sum_tree ⦁
+	(∀ n ⦁ sum_tree (NLeaf n) = n) ∧
+	(∀ l ⦁ sum_tree (NNode l) = Fold ($+) (Map sum_tree l) 0)⌝,
+	true),
+	("basic_prove_∃_rule 3 a",
+	test,
+	⌜∃ map_tree ⦁ ∀ f l n ⦁
+	(map_tree f (NLeaf n) = NLeaf (f n))
+	∧
+	(map_tree f (NNode l) = NNode (Map (map_tree f) l))⌝,
+	true),
+	("basic_prove_∃_rule 4 a",
+	test,
+	⌜∃ f ⦁ ∀ a b c n x ⦁ (f 0 (Triple a b c) ⇔ a ∧ b ∧ c) ∧
+		(f (n+1) x ⇔ h n ∧ f n x)⌝,
+	true),
+	("basic_prove_∃_rule 5 a",
+	test,
+	⌜∃ h ⦁ ∀ p ⦁ h (Op3 p) = ¬h p⌝,
+	true)
+	];
+=TEX
+\subsection{evaluate$\_$∃$\_$cd$\_$thm}
+Successful evaluation of this function is tested above.
+Failures:
+=SML
+store_mt_results mt_run_fail [
+	("evaluate_∃_cd_thm 58007",
+	evaluate_∃_cd_thm,
+	t_thm,
+	gen_fail_msg "evaluate_∃_cd_thm" 58007 ["⊢ T"]),
+	("evaluate_∃_cd_thm 58008",
+	evaluate_∃_cd_thm,
+	asm_rule ⌜∀ P ⦁ ∃⋎1 f ⦁ P f⌝,
+	gen_fail_msg "evaluate_∃_cd_thm" 58008
+		["∀ P⦁ ∃⋎1 f⦁ P f ⊢ ∀ P⦁ ∃⋎1 f⦁ P f"]),
+	("evaluate_∃_cd_thm 58009",
+	evaluate_∃_cd_thm,
+	asm_rule ⌜∀ P⦁ ∃⋎1 f⦁ g 0 = P f⌝,
+	gen_fail_msg "evaluate_∃_cd_thm" 58009
+		["∀ P⦁ ∃⋎1 f⦁ g 0 = P f ⊢ ∀ P⦁ ∃⋎1 f⦁ g 0 = P f"]),
+	("evaluate_∃_cd_thm 58021",
+	evaluate_∃_cd_thm,
+	asm_rule ⌜∀ P R⦁ ∃⋎1 f⦁ (f 0 = P f) ∧
+		(f 0 = R f) ⌝,
+	gen_fail_msg "evaluate_∃_cd_thm" 58021
+		[("∀ P R⦁ ∃⋎1 f⦁ f 0 = P f ∧ f 0 = R f " ^
+		"⊢ ∀ P R⦁ ∃⋎1 f⦁ f 0 = P f ∧ f 0 = R f")]),
+	("evaluate_∃_cd_thm 58023",
+	evaluate_∃_cd_thm,
+	asm_rule ⌜∀ P⦁ ∃⋎1 f⦁ f 0 = R⌝,
+	gen_fail_msg "evaluate_∃_cd_thm" 58023
+		["∀ P⦁ ∃⋎1 f⦁ f 0 = R ⊢ ∀ P⦁ ∃⋎1 f⦁ f 0 = R"]),
+	("evaluate_∃_cd_thm 58024",
+	evaluate_∃_cd_thm,
+	asm_rule ⌜∀ a op1 ⦁ ∃ f ⦁ ∀ p ⦁ f (Op3 p) = op1 (f p)⌝,
+	gen_fail_msg "evaluate_∃_cd_thm" 58024
+		["∀ a op1⦁ ∃ f⦁ ∀ p⦁ f (Op3 p) = op1 (f p) ⊢ ∀ a op1⦁ ∃ f⦁ ∀ p⦁ f (Op3 p) = op1 (f p)"])
+	];
+=TEX
+
+\subsection{End of Tests}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+\end{document}
+
+
+

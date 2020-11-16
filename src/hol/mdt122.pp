@@ -1,0 +1,369 @@
+=IGN
+********************************************************************************
+mdt122.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+\documentclass[a4paper,12pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+\makeindex
+
+\def\Title{Unicode and UTF-8: Module Tests }
+
+\def\Abstract{\begin{center}
+{\bf Abstract}\par\parbox{0.7\hsize}
+{\small This document gives the module tests for utilities to support UTF-8 and Unicode.}
+\end{center}}
+
+\def\Reference{LEMMA1/HOL/MDT122}
+
+\def\Author{R.D. Arthan}
+
+\def\EMail{{\tt rda@lemma-one.com}}
+
+\def\Phone{+44 118 958 4409}
+
+\def\Fax{+44 118 956 1920}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+\begin{centering}
+
+
+
+\end{centering}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+%%%%% STANDARD RED-TAPE SECTIONS (MAY WANT TO INTERLEAVE SOME \newpage COMMANDS IN THESE)
+
+%%%%% CONTENTS:
+
+\subsection{Contents}
+
+\tableofcontents
+
+%%%%% REFERENCES:
+
+\newpage
+\subsection{References}
+
+\bibliographystyle{fmu}
+
+%%%%% CHANGE THE FOLLOWING AS NECESSARY (E.G., TO PICK UP daz.bib):
+{\raggedright
+\bibliography{fmu}
+}
+%%%%% CHANGES HISTORY:
+\subsection{Changes History}
+\begin{description}
+\item[2015/03/13]
+First working draft.
+\item[2015/03/15]
+Updates after beginning to use the interfaces in anger.
+\item[2015/03/26]
+Allowed for renamed and new functions.
+\item[2015/04/15]
+Now uses new date and version macros from doctex
+\item[2015/11/24]
+Made test data construction defensive against different interpretations of hexadecimal characters in strings.
+
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%%%%%  CHANGES FORECAST:
+
+\subsection{Changes Forecast}
+
+None.
+
+%%%%% DISTRIBUTION LIST
+
+\subsection{Distribution}
+
+Lemma 1 build system.
+
+\newpage
+
+\section{INTRODUCTION}
+\subsection{Scope}
+This document contains the module tests associated with the tools for querying the theory hierarchy to find theorems satisfying specified conditions.
+required by \cite{DS/FMU/IED/DTD122} and
+implemented in \cite{DS/FMU/IED/IMP122}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD040}.
+\subsubsection{Dependencies}
+The test material depends on \cite{DS/FMU/IED/DTD013} and \cite{DS/FMU/IED/IMP013}.
+
+\subsubsection{Deficiencies}
+None known.
+\section{INITIALISATION}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results ();
+structure C = SML97BasisLibrary.Char;
+=TEX
+\section{TEST CASES}
+\subsection{UTF-8}
+\begin{description}
+\item[Group A]
+Edge cases for encoding with hand-calculated inputs and outputs;
+\item[Group B]
+Edge cases for decoding with hand-calculated inputs and outputs;
+\item[Group C]
+Soak test for the encoder using the decoder as an oracle;
+\item[Group D]
+Soak test for the decoder using the encoder as an oracle.
+\item[Group E]
+Tests for error cases.
+\end{description}
+\subsection{Unicode}
+\begin{description}
+\item[Group F]
+Selected cases of {\Product} to Unicode with hand-calculated inputs and outputs;
+\item[Group G]
+Selected cases of Unicode to {\Product} with hand-calculated inputs and outputs;
+\item[Group H]
+Comprehensive tests that the translations are mutually inverse.
+\item[Group I]
+Tests for the utilities for translating UTF-8 strings and files.
+\end{description}
+\section{THE TESTS}
+=TEX
+\subsection{UTF-8}
+\subsubsection{Group A}
+=SML
+val encode_to_unicode_list = map (Unicode.fromInt o ord) o explode o unicode_to_utf8;
+store_mt_results
+mt_run [
+	("122.A.1", encode_to_unicode_list, 0wx000000, [0wx00]),
+	("122.A.2", encode_to_unicode_list, 0wx00007f, [0wx7f]),
+	("122.A.3", encode_to_unicode_list, 0wx000080, [0wxC2, 0wx80]),
+	("122.A.4", encode_to_unicode_list, 0wx0007ff, [0wxDF, 0wxBF]),
+	("122.A.5", encode_to_unicode_list, 0wx000800, [0wxE0, 0wxA0, 0wx80]),
+	("122.A.6", encode_to_unicode_list, 0wx00FFFF, [0wxEF, 0wxBF, 0wxBF]),
+	("122.A.7", encode_to_unicode_list, 0wx010000, [0wxF0, 0wx90, 0wx80, 0wx80]),
+	("122.A.8", encode_to_unicode_list, 0wx10FFFF, [0wxF4, 0wx8F, 0wxBF, 0wxBF])
+];
+=TEX
+\subsubsection{Group B}
+=SML
+fun string_stream ((s, i) : string * int) : char OPT * (string * int) = (
+	if	i < size s
+	then	(Value (String.sub(s, i)), (s, i + 1))
+	else	(Nil, (s, i))
+);
+fun utf8_to_unicode_s s = (
+	case utf8_to_unicode string_stream (s, 0) of
+		Value (Value w, (s, i)) => Value (w, String.extract(s, i, NONE))
+	|	_ => Nil
+);
+val decode_from_unicode_list = force_value o utf8_to_unicode_s o implode o map (chr o Unicode.toInt);
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("122.B.1", decode_from_unicode_list, [0wx00, 0wx21], (0wx000000, "!")),
+	("122.B.2", decode_from_unicode_list, [0wx7f, 0wx21], (0wx00007f, "!")),
+	("122.B.3", decode_from_unicode_list, [0wxC2, 0wx80, 0wx21], (0wx000080, "!")),
+	("122.B.4", decode_from_unicode_list, [0wxDF, 0wxBF, 0wx21], (0wx0007ff, "!")),
+	("122.B.5", decode_from_unicode_list, [0wxE0, 0wxA0, 0wx80, 0wx21], (0wx000800, "!")),
+	("122.B.6", decode_from_unicode_list, [0wxEF, 0wxBF, 0wxBF, 0wx21], (0wx00FFFF, "!")),
+	("122.B.7", decode_from_unicode_list, [0wxF0, 0wx90, 0wx80, 0wx80, 0wx21], (0wx010000, "!")),
+	("122.B.8", decode_from_unicode_list, [0wxF4, 0wx8F, 0wxBF, 0wxBF, 0wx21], (0wx10FFFF, "!"))
+];
+=TEX
+\subsubsection{Group C}
+=SML
+val all_cps = map Unicode.fromInt (interval 0 0x10FFFF);
+val all_encs = map unicode_to_utf8 all_cps;
+fun utf8_to_unicode_all s = (
+	let	fun aux acc st = (
+			case utf8_to_unicode string_stream st of
+				Value (Value w, st') => aux (w::acc) st'
+			|	Value (Nil, _) => rev acc
+			|	Nil => fail "" 0 []
+		);
+	in	aux [] (s, 0)
+	end
+);
+fun iter f n x = if n <= 0 then x else iter f (n - 1) (f x);
+fun riffle [] r = r
+|   riffle l [] = l
+|   riffle (x::l) (y::r) = x :: y :: riffle l r;
+fun shuffle xs = (
+	let	val m = length xs div 2;
+		val l = xs to (m - 1);
+		val r = xs from m;
+	in	riffle l r
+	end
+);
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("122.C.1", utf8_to_unicode_all, implode all_encs, all_cps),
+	("122.C.2", utf8_to_unicode_all, (implode o iter shuffle 5) all_encs, iter shuffle 5 all_cps)
+];
+=TEX
+\subsubsection{Group D}
+=TEX
+=SML
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("122.D.1", map (unicode_to_utf8 o fst o force_value o utf8_to_unicode_s), all_encs, all_encs)
+];
+=TEX
+\subsubsection{Group E}
+=SML
+store_mt_results
+mt_run_fail[
+	("122.E.1.1", unicode_to_utf8, 0wx110000, gen_fail_msg "unicode_to_utf8" 122001 [])
+];
+=TEX
+=SML
+val string_of_int_list = implode o map chr;
+store_mt_results
+mt_run [
+	("122.E.2.1", utf8_to_unicode_s, string_of_int_list[0xC0, 0x80, 0x80, 0x80, 0x80], Nil),
+	("122.E.2.2", utf8_to_unicode_s, string_of_int_list[0xFF, 0x80, 0x80, 0x80, 0x80], Nil),
+	("122.E.2.3", utf8_to_unicode_s, string_of_int_list[0xE0, 0x80, 0x80], Nil)
+];
+=TEX
+\subsection{Unicode}
+\subsubsection{Group F}
+=SML
+store_mt_results
+mt_run [
+	("122.F.1", pp_to_unicode, C.chr 0x00, 0wx000000),
+	("122.F.2", pp_to_unicode, C.chr 0x80, 0wx002286),
+	("122.F.3", pp_to_unicode, C.chr 0xff, 0wx00250C)
+];
+=TEX
+\subsubsection{Group G}
+=SML
+store_mt_results
+mt_run [
+	("122.G.1.1", basic_unicode_to_pp,  0wx000000, (Value o C.chr) 0x00),
+	("122.G.1.2", basic_unicode_to_pp,  0wx00007e, (Value o C.chr) 0x7e),
+	("122.G.1.3", basic_unicode_to_pp,  0wx002040, (Value o C.chr) 0xeb)
+];
+=TEX
+=SMLPLAIN
+store_mt_results
+mt_run [
+	("122.G.2.1", unicode_to_pp, 0wx00007e, chr 0x7e),
+	("122.G.2.2", unicode_to_pp, 0wx002040, chr 0xeb),
+	("122.G.2.3", unicode_to_pp, 0wx01FFFF, "%%x01FFFF%%")
+];
+=TEX
+=SMLPLAIN
+store_mt_results
+mt_run [
+	("122.G.3.1", unicode_to_keyword, 0wx000080, "%%x000080%%"),
+	("122.G.3.2", unicode_to_keyword, 0wx002040, "%%x002040%%"),
+	("122.G.3.3", unicode_to_keyword, 0wx01FFFF, "%%x01FFFF%%")
+];
+=TEX
+\subsubsection{Group H}
+=SML
+val ppcs =  map SML97BasisLibrary.Char.chr (interval 0 255 less 0x8b);
+val pp2u = (fn x => [x]) o pp_to_unicode;
+val cps = map pp2u ppcs;
+store_mt_results
+mt_run [
+	("122.H.1", sort int_order o map length,  cps, [1])
+];
+store_mt_results
+mt_run [
+	("122.H.2", map(force_value o basic_unicode_to_pp o hd),  cps, ppcs)
+];
+store_mt_results
+mt_run [
+	("122.H.3", map(pp2u o force_value o basic_unicode_to_pp o hd),  cps, cps)
+];
+=TEX
+\subsubsection{Group I}
+=SML
+store_mt_results
+mt_run [
+	("122.I.1.1", utf8_string_to_unicode,  "", []),
+	("122.I.1.2", utf8_string_to_unicode,  "\000cd\127", [0wx0, 0wx63, 0wx64, 0wx7f]),
+	("122.I.1.3", utf8_string_to_unicode,  string_of_int_list[0xdf, 0xbf], [0wx7ff])
+];
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+	("122.I.2.1", utf8_string_to_unicode,  string_of_int_list[0xbf, 0xdf],
+		gen_fail_msg "utf8_string_to_unicode" 122002 [])
+];
+=TEX
+=SML
+val ostrm = open_out "mdt122.txt";
+val _ = output(ostrm, string_of_int_list[0xdf, 0xbf]^"X\n");
+val _ = close_out ostrm;
+val istrm = open_in "mdt122.txt";
+store_mt_results
+mt_run [
+	("122.I.3.1", utf8_input, istrm, Value 0wx7ff),
+	("122.I.3.2", utf8_input, istrm, Value 0wx58),
+	("122.I.3.3", utf8_input, istrm, Value 0wxA),
+	("122.I.3.4", utf8_input, istrm, Nil)
+];
+val _ = close_in istrm;
+=TEX
+=SML
+val ostrm = open_out "mdt122.txt";
+val _ = output(ostrm, "\128\n");
+val _ = close_out ostrm;
+val istrm = open_in "mdt122.txt";
+store_mt_results
+mt_run_fail [
+	("122.I.4.1", utf8_input, istrm,
+		gen_fail_msg "utf8_input" 122002 [])
+];
+val _ = close_in istrm;
+val _ = ExtendedIO.system "rm mdt122.txt";
+=TEX
+\section{END OF TESTS}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+\end{document}
+
+
+
+
+
+
+
+

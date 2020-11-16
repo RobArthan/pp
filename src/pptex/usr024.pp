@@ -1,0 +1,944 @@
+=IGN
+********************************************************************************
+usr024.doc: this file is part of the PPDaz system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% usr024.doc   ℤ $Date: 2003/04/03 15:41:57 $ $Revision: 1.40 $ $RCSfile: usr024.doc,v $
+
+=TEX
+% usr024.doc   ℤ $Date: 2003/04/03 15:41:57 $ $Revision: 1.40 $ $RCSfile: usr024.doc,v $
+% \documentstyle[hol1,11pt,TQ]{article}
+\documentclass[a4paper,11pt]{article}
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+\makeindex
+
+\def\Title{Standard \LaTeX Document Style for \Product\ User Documentation}
+%\def\TPPheadtitle{}
+\def\Reference{DS/FMU/IED/USR024}
+
+=IGNORE
+Commands to process this document:
+
+docsml usr024.doc ; mv usr024.sml USR.sty
+docsml usr024.doc ; sed -e 's/[ 	]%.*$//' -e 's/^[ 	][ 	]*//' -e 's/[ 	][ 	]*$//' usr024.sml >! USR.sty
+doctex usr024 ; texdvi usr024
+texdvi usr024
+bibtex usr024
+dvipage usr024 &
+
+=TEX
+\def\Version{\VCVersion}
+\def\Date{\VCDate}
+\def\Author{R.B.Jones}
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+\def\Phone{C/O +44 7497 030682}
+
+\def\AbstractText{This document contains the \LaTeX{} document style
+	{\tt USR.sty} which is used for typesetting user documentation for \Product.}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\ftlinepenalty 1000
+\newcommand{\cs}[1]{{\tt \string#1}}
+\catcode`\_=\active
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\vfill
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{DOCUMENT CONTROL}
+
+\subsection{Contents List}
+\tableofcontents
+% \listoftables
+
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+
+\begin{description}
+\item[Issue 1.1 (1992/11/03)]
+	Initially set up by adaptation of TQa4.sty and TQ.sty
+\item[Issue 1.5 (1993/02/23)]
+	Blank page added after front page.
+	Changed to default to version 0.3.
+	Changed to not add MANUAL onto the name of the manual
+	Changed macros for use in referring to manuals within manuals, to use more verbose description and citation.
+	Added INSTALLATION and TYPESETTING manual references and removed LIBRARIES.
+\item[Issue 1.8 (1993/07/29)]
+	Change to default version number of 0.4.
+\item[Issues 1.9 (1993/08/12)-1.16 (1993/09/17)]
+	See SCCS commentary.
+\item[Issues 1.17 (1993/09/21)-1.18 (1993/10/26)]
+	Changed layout of general information page.
+\item[Issue 1.19 (1994/04/07)]
+Attempt to stop bottom from waggling by changing definition of oddfoot.
+\item[Issue 1.20 (1994/08/19)]
+Updated to work with LaTeX2e.
+\item[Issue 1.23 (1994/09/06)]
+Modified usr.sty to get proper odd and even page behaviour.
+\item[Issue 1.24 (1994/09/16)]
+Added mention of WWW to rear of 1st sheet of each manual.
+\item[Issue 1.30 (1997/05/30)]
+Updating dates, etc.
+\item[Issue 1.31 (1999/04/24)]
+Fixed {\LaTeX} errors (in this document, qua document).
+\item[Issue 1.36 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.37 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.38 (2002/10/17)] DAZ-specific updates to banner for open source release
+\item[Issue 1.39 (2002/10/17)] PPTex-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+\item[2015/04/29]
+Changes to tutorial manual titles.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+\subsection{Changes Forecast}
+
+None.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%********************************************************************
+%--------------------------------------------------------------------
+
+\newpage
+\section{GENERAL}
+\subsection{Scope}
+
+This document contains the \LaTeX{} style file {\tt USR.sty} for use in user documentation for the ProofPower system.
+
+%********************************************************************
+
+\subsection{Introduction}
+
+%\subsubsection{Purpose and Background}
+%\subsubsection{Dependencies}
+
+%--------------------------------------------------------------------
+
+\subsubsection{Interface}
+
+The interface to the style file is by quoting its name as an option in
+the document style command near the start of each document.
+It is intended for use with hol1.sty, but not with TQ.sty.
+
+The simplest way to produce the style file is to run the following
+shell commands:
+
+=GFTSHOW
+	docsml usr024.doc
+	mv usr024.sml USR.sty
+=TEX
+
+The style file may be compacted by the following shell commands which
+remove most \LaTeX{} comments plus all leading and trailing spaces and
+tabs on each line.  (Note, each pair of square braces contain one space
+and one tab character.)
+
+=GFTSHOW
+	docsml usr024.doc
+	sed -e 's/[ 	]%.*$//' -e 's/^[ 	][ 	]*//' -e 's/[ 	][ 	]*$//' \
+		usr024.sml >! USR.sty
+=TEX
+
+%\subsubsection{Algorithms}
+%\subsubsection{Possible Enhancements}
+%\subsubsection{Deficiencies}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{IDENTIFICATION}
+
+Whenever the macro package is loaded it will identify itself on the
+terminal and in the log file.  Note the positioning of the percent and
+newline characters to avoid unnecessary spaces in the message and the
+loss of significant text when the style file is being used when (in
+SCCS terminology) it is `out for editing'.
+
+=SMLPLAIN LaTeX
+% User documentation style file USR.sty.  $Date: 2003/04/03 15:41:57 $ $Revision: 1.40 $ $RCSfile: usr024.doc,v $
+\typeout{Issue $Revision: 1.40 $
+dated $Date: 2003/04/03 15:41:57 $.%
+}
+=TEX
+\section{PAGE SIZE AND LAYOUT}
+To get vertical space between paragraphs, and no hanging indents.
+
+=SMLPLAIN LaTeX
+\advance\parskip by 0.5\baselineskip
+\parindent 0pt
+
+=TEX
+From Article.sty, page size information.
+Original sizes from Article.sty are shown after the current values
+
+=SMLPLAIN LaTeX
+\oddsidemargin 25pt   % was 46 pt
+\evensidemargin 25pt  % was 0pt
+\marginparwidth 0pt   % was 0pt
+
+\columnsep 10pt
+\columnseprule 0pt
+\hoffset -36pt
+\marginparpush 5pt
+\marginparsep 0pt
+\textheight = 9.7in
+\textwidth 6.6in
+\topmargin 0pt
+\topsep 0pt
+\voffset -0.6in
+
+=IGN
+\hsize=159.2truemm
+\ifAfour \vsize=246.2truemm \else \vsize=228.6truemm \fi
+
+=TEX
+The default is to use a large amount of the page, but this is not compatible with programs like `dvisun' which expect `\hoffset=0pt' and `\voffset=0pt'.
+To allow viewing the file complete with its headers and LHS margin use the macro `\\USRsmallpage'.
+Note that page boundaries will change if this macro is used, because of the changes to `\verb"\`textheight"' and `\verb"\textwidth"'.
+
+=SMLPLAIN LaTeX
+\def\USRsmallpage{%
+\textheight = 8.5in
+\textwidth 6in
+\advance\hoffset by 0.3in
+\advance\voffset by 0.6in
+}
+
+=TEX
+\section{MATH INDENTATION}
+
+=SMLPLAIN LaTeX
+\setlength{\mathindent}{\tabcolsep}
+\font\elvtt  = cmtt10   \@halfmag % typewriter
+\addtolength{\mathindent}{\the\fontdimen2\elvtt}
+\addtolength{\mathindent}{\the\fontdimen2\elvtt}
+\addtolength{\mathindent}{\the\fontdimen2\elvtt}
+
+\headheight 16pt
+\headsep 20pt
+\footheight 12pt
+\footskip 13mm
+
+% ---------------------------------------------------------------------
+% FOOTNOTES: footnotes are in 10 point font.
+%
+% put 12+1-1 points between text and rule
+% put 10pt between at start of footnote
+% foot note rule is 40mm long
+% ---------------------------------------------------------------------
+
+\skip\footins 12pt plus 2pt minus 2pt
+\footnotesep 10pt
+\def\footnoterule{\kern-3\p@ \hrule width 40mm \kern 2.6\p@}
+
+% ---------------------------------------------------------------------
+% FLOATS
+% ---------------------------------------------------------------------
+
+\floatsep 12pt plus 2pt minus 2pt
+\textfloatsep  20pt plus 2pt minus 4pt
+\intextsep 12pt plus 2pt minus 2pt
+\@maxsep 20pt
+
+% ---------------------------------------------------------------------
+% Make "@" a "letter" for definitions that follow
+% ---------------------------------------------------------------------
+
+\makeatletter
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% LaTeX default shows dates as (eg)  `May 26, 1989'
+\def\today{\number\day\space\ifcase\month\or
+January\or February\or March\or April\or May\or June\or
+July\or August\or September\or October\or November\or December\fi
+\space\number\year}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%  `\FormatDate{}' formats a date in the style: `YY/MM/DD', as
+%	produced by sccs and similar, in the form `DD Monthname 19YY'.
+%	If the argument is empty (as in `\FormatDate{}') then today's
+%	date is used.  Thus a good way to use it in an sccs controlled
+%	document is with the `percent E percent' keyword (for the
+%	next few lines `%' will be shown as `$' so that sccs will not
+%	expand `$E$' in this explanatory text):
+%		\FormatDate{$E$
+%		}
+%	So that if the $E$ macro has not been expanded you get today's
+%	date, because the first `percent' is taken as TeX's start of
+%	comment.
+%
+%	Note the `\number#3\relax\space' for the day.  The `\number#3'
+%	part removes any leading zeroes and trailing spaces in argument
+%	3.  Leading zeroes come from SCCS.  Trailing spaces may come
+%	from the `$E$\n}' where the `\n' is treated as a space, in an
+%	alternative form of `{$E$$\n}' the extra `$' (actually `%')
+%	means that there is no space.  The definition of `\number' is
+%	that is allows, and consumes <one optional space> (see the
+%	TeXbook, page 269), without the `\relax' then that space may be
+%	the explicit one we give here.  The combination of `\number'
+%	and `\relax' means that trailing spaces are suppressed, and
+%	that one space is included between day and month.
+
+\def\@FormatDateAux#1/#2/#3.{%
+	\number#3\relax\space % Day
+	\ifcase#2{}?#2?\or % Month
+	January\or February\or March\or April\or
+	May\or June\or July\or August\or
+	September\or October\or November\or December\else
+	?#2?\fi\space
+	\ifnum#1>99{}#1\else\ifnum#1>9{}19#1\else190#1\fi\fi} % Year
+
+\def\FormatDate#1{{%
+	\def\arg{#1}%
+	\def\cmp{}%
+	\ifx\arg\cmp
+		\@FormatDateAux{\number\year}/{\number\month}/{\number\day}.%
+	\else
+		\expandafter\@FormatDateAux#1.\fi}}
+
+
+% These macros are called by the user to set up parts of the front page
+% Most are simple one parameter macros, the exceptions are:
+%
+% These macros are called after the \begin{document}.
+
+\def\release{}
+\def\uniqueid{}
+\def\buildyear{}
+\def\USR@FPisbns{\ }
+\def\USR@FPisbnl{\ }
+
+\input{usr024_data.tex}
+
+\def\USRmanual#1{\def\USR@FPmanual{#1}}
+\def\USRref#1{\def\USR@FPref{#1}}
+\def\USRversion#1{\def\USR@FPversion{#1}}
+\def\USRcopyright#1{\def\USR@FPcopyright{#1}}
+\def\USRuniqueid#1{\def\USR@FPuniqueid{#1}}
+\def\USRisbns#1{\def\USR@FPisbns{ISBN-10: #1}}
+\def\USRisbnl#1{\def\USR@FPisbnl{ISBN-13: #1}}
+\USRversion{\release}
+\USRcopyright{2000--\buildyear}
+\USRuniqueid{\tiny {\uniqueid}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Front Page macro
+\def\makeUSRfrontpage{%
+
+\begin{titlepage}
+
+\vspace*{2in}
+
+\begin{center}
+
+{\Huge
+\vfill
+
+\hbox to \textwidth{\hfill ProofPower \hfill}
+
+\vfill
+
+\USR@FPmanual
+
+\vfill
+}
+
+\vspace*{2in}
+
+\hbox to \textwidth{\hfill \USR@FPversion \hfill}
+
+\end{center}
+
+\begin{center}
+{\bf Copyright \copyright\ :  Lemma 1 Ltd. \USR@FPcopyright}
+\end{center}
+\end{titlepage}
+
+\newpage
+\setcounter{page}{0}
+
+\vspace*{1.8in}
+
+\hbox to \textwidth{\hfill\hbox{\hsize = 4.25in\vtop{
+
+Information on the current status of {\Product} is available on the World-Wide Web, at URL:
+
+}}\hfill}
+
+\vspace{2\parskip}
+
+\hbox to \textwidth{\hfill\hbox{\hsize = 3.8in\vtop{
+
+{\tt http://www.lemma-one.com/ProofPower/index/index.html}
+
+}}\hfill}
+
+
+\vfill
+
+\hbox to \textwidth{\hfill\hbox{\raggedright\hsize = 4.25in\vtop{
+
+This document is published by:
+
+}}\hfill}
+
+\vspace{2\parskip}
+
+\hbox to \textwidth{\hfill\hbox{\raggedright\hsize = 2.5in\vtop{
+
+Lemma 1 Ltd.\\
+27, Brook St.\\
+Twyford\\
+Berkshire\\
+UK\\
+RG10 9NX\\
+e-mail: {\tt rda@lemma-one.com}
+\\}}\hfill}
+
+
+\vfill
+
+\hbox to \textwidth{\hfill\hbox{\raggedright\hsize = 4.25in\vtop{
+
+Many people have contributed in one way or another to the {\Product} documentation.
+Particular acknowledgments are due to the following contributors:
+
+}}\hfill}
+
+\vspace{2\parskip}
+
+\hbox to \textwidth{\hfill\hbox{\raggedright\hsize = 2.5in\vtop{
+Mark Adams \\
+Rob Arthan \\
+Kevin Blackburn \\
+Phil Clayton \\
+Adrian Hammon \\
+Adrian Hayward \\
+Roger Bishop Jones \\
+Dave King \\
+Gill Prout \\
+Geoff Scullard \\
+Roger Stokes \\
+Piotr Trojanek
+\\}}\hfill}
+
+\vfill
+
+\hbox to \textwidth{\hfill\hbox{\raggedright\hsize = 4.25in\vtop{
+\USR@FPisbns\\
+\USR@FPisbnl
+\\}}\hfill}
+
+\vfill
+
+\hbox to \textwidth{\hfill\hbox{\raggedright\hsize = 4.25in\vtop{
+
+{\USR@FPuniqueid}
+
+}}\hfill}
+
+%\vspace*{2in}
+
+\newpage
+
+}
+% ---------------------------------------------------------------------
+% CHAPTER HEADINGS (deriving from Larry Paulson)
+% ---------------------------------------------------------------------
+
+\def\@rulehead#1{\hrule height1pt \vskip 14pt \Large \bf
+   #1 \vskip 14pt\hrule height1pt}
+
+\def\@makechapterhead#1{ { \parindent 0pt
+\ifnum \c@secnumdepth >\m@ne \raggedright\large\bf \if@mainmatter \@chapapp{} \thechapter \fi \hfill \thepage \par
+ \vskip 8pt \fi \raggedright \@rulehead{#1} \par
+ \nobreak \vskip 50pt } }
+
+\def\@makeschapterhead#1{{ \parindent 0pt {\large\bf\phantom{Chapter}} \par
+   \vskip 8pt \raggedright
+ \@rulehead{#1} \par \nobreak \vskip 50pt }
+}
+
+% ---------------------------------------------------------------------
+% PAGE FOOT, on pages that start a new chapter
+% ---------------------------------------------------------------------
+
+\def\USRfoot{\smallskip\vbox{%
+			\baselineskip 0pt
+			\hbox to \textwidth
+{\bf \copyright\ Lemma 1 Ltd. {\USR@FPcopyright} \hfill \USR@FPversion\ - \USR@FPmanual \hfill \USR@FPref}}}
+
+\def\ps@plain{\let\@mkboth\@gobbletwo
+\def\@oddfoot{\USRfoot}
+\let\@evenfoot\@oddfoot
+\def\@evenhead{}
+\def\@oddhead{}
+}
+
+% ---------------------------------------------------------------------
+% PAGE HEADINGS
+% ---------------------------------------------------------------------
+
+\def\ps@headings{
+	\def\@oddfoot{\bf \copyright\ Lemma 1 Ltd. {\USR@FPcopyright} \hfill \USR@FPversion\ - \USR@FPmanual \hfill \USR@FPref}
+	\def\@evenfoot{\@oddfoot}
+	\def\@evenhead{\vbox{\hbox to \textwidth{\bf\thepage\hfil\bf\leftmark
+	}\vskip-\prevdepth\vskip 4.5pt\hrule height0.9pt}}
+	\def\@oddhead{\vbox{\hbox to \textwidth{\bf\rightmark\hfil\bf
+	\thepage}\vskip-\prevdepth\vskip 4.5pt\hrule height0.9pt}}
+	\def\chaptermark##1{\markboth {{\ifnum \c@secnumdepth
+>\m@ne
+\if@mainmatter\@chapapp\ \thechapter. \ \fi\fi ##1}}{
+\if@mainmatter\relax\else ##1\fi}}
+	\def\sectionmark##1{\markright
+{{\ifnum \c@secnumdepth >\z@
+\thesection. \ \fi ##1}}}}
+
+% \tableofcontents and \thebibliography:  To omit the lines
+% saying CONTENTS and REFERENCES.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Table of contents
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\def\tableofcontents{{\parskip=0pt\@starttoc{toc}}}
+
+\def\thebibliography#1{\list
+ {[\arabic{enumi}]}{\settowidth\labelwidth{[#1]}\leftmargin\labelwidth
+ \advance\leftmargin\labelsep
+ \usecounter{enumi}}
+ \def\newblock{\hskip .11em plus .33em minus -.07em}
+ \sloppy\clubpenalty4000\widowpenalty4000
+ \sfcode`\.=1000\relax}
+\let\endthebibliography=\endlist
+
+% \renewcommand:  To get a full width separating line.
+\renewcommand{\footnoterule}{\kern-3pt
+  \hrule \kern 2.6pt} % the \hrule is .4pt high
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Part
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\def\part{\cleardoublepage \thispagestyle{empty} \if@twocolumn \onecolumn
+\@tempswatrue \else \@tempswafalse \fi \hbox{}\vfil \bgroup \centering
+\secdef\@part\@spart}
+
+\def\@endpart{\par\egroup \vfil\newpage \if@twoside \hbox{}
+\thispagestyle{empty}
+ \newpage
+ \fi \if@tempswa \twocolumn \fi}
+
+\ps@headings  %to override previous
+
+% ---------------------------------------------------------------------
+% To make the index
+% ---------------------------------------------------------------------
+
+\def\theindex{\@restonecoltrue\if@twocolumn\@restonecolfalse\fi
+\columnseprule \z@
+\columnsep 35pt\twocolumn[\@makeschapterhead{Index}]
+ \@mkboth{Index}{Index}\thispagestyle{plain}
+ \addcontentsline{toc}{chapter}{Index}
+ \parindent\z@
+ \parskip\z@ plus .3pt\relax\let\item\@idxitem}
+\def\@idxitem{\par\hangindent 40pt}
+\def\subitem{\par\hangindent 40pt \hspace*{20pt}}
+\def\subsubitem{\par\hangindent 40pt \hspace*{30pt}}
+\def\endtheindex{\if@restonecol\onecolumn\else\clearpage\fi}
+
+% ---------------------------------------------------------------------
+% Other Indexing commands
+%
+% autoindex is defined for indexing the thing in \DOC{thing}.
+% It translates \_ in thing to \string \_.
+% ---------------------------------------------------------------------
+
+\def\makeindex{\if@filesw \newwrite\@indexfile
+  \immediate\openout\@indexfile=\jobname.idx
+  \def\index{\@bsphack\begingroup
+             \def\protect####1{\string####1\space}\@sanitize
+             \@wrindex\@indexfile}
+  \def\autoindex{\@bsphack\begingroup
+             \def\protect####1{\string####1\space}
+             \def\_{\string\_}\@sanitize
+             \@wrindex\@indexfile}\typeout
+  {Writing index file \jobname.idx }\fi}
+
+\def\@wrindex#1#2{\let\thepage\relax
+   \xdef\@gtempa{\write#1{\string
+      \indexentry{#2}{\thepage}}}\endgroup\@gtempa
+   \if@nobreak \ifvmode\nobreak\fi\fi\@esphack}
+
+\def\index{\@bsphack\begingroup \@sanitize\@index}
+\def\autoindex{\@bsphack\begingroup \@sanitize\@index}
+
+\def\@index#1{\endgroup\@esphack}
+
+% ---------------------------------------------------------------------
+% Enumerate environment for proofs in drules.tex
+% ---------------------------------------------------------------------
+
+\def\proof{\ifnum \@enumdepth >0 \@toodeep\else
+      \advance\@enumdepth \@ne
+      \edef\@enumctr{enum\romannumeral\the\@enumdepth}\list
+      {\csname label\@enumctr\endcsname}{\usecounter
+        {\@enumctr}\setlength{\itemsep}{0.0mm}
+        \setlength{\baselineskip}{13pt}
+        \def\makelabel##1{\hss\llap{##1}}}\fi}
+
+\let\endproof =\endlist
+
+% ---------------------------------------------------------------------
+% Make "@" an "other" again
+% ---------------------------------------------------------------------
+\makeatother
+
+% ---------------------------------------------------------------------
+% Preliminary settings etc.
+% ---------------------------------------------------------------------
+
+\renewcommand{\topfraction}{0.9}	  % 0.9 of the top page can be fig.
+\renewcommand{\bottomfraction}{0.9}	  % 0.9 of the bottom page can be fig.
+\renewcommand{\textfraction}{0}	  % 0 of the page must contain text
+\setcounter{totalnumber}{4}	 	  % max of 4 figures per page
+\setcounter{secnumdepth}{3}		  % number sections down to level 3
+\setcounter{tocdepth}{2}		  % toc contains numbers to level 2
+\flushbottom				  % text extends right to the bottom
+=TEX
+
+\section{DESCRIPTION MANUAL}
+
+=SMLPLAIN LaTeX
+% =====================================================================
+%
+% Macros for typesetting the ProofPower user manuals
+%
+% =====================================================================
+
+% ---------------------------------------------------------------------
+% Abbreviations for words and phrases
+% ---------------------------------------------------------------------
+
+\newcommand\VERSION{{\small\tt \USR@FPversion}}
+\newcommand\TYPESETTING{{\Product} {\em Document Preparation} \cite{DS/FMU/IED/USR001}}
+\newcommand\TUTORIAL{{\Product} {\em Introductory Tutorial} \cite{DS/FMU/IED/USR004}}
+\newcommand\DESCRIPTION{{\Product} {\em Description Manual} \cite{DS/FMU/IED/USR005}}
+\newcommand\REFERENCE{{\Product} {\em Reference Manual} \cite{LEMMA1/HOL/USR029}}
+\newcommand\HOLREFERENCE{{\ProductHOL} {\em Reference Manual} \cite{LEMMA1/HOL/USR029}}
+\newcommand\ZREFERENCE{{\ProductZ} {\em Reference Manual} \cite{LEMMA1/ZED/USR030}}
+\newcommand\INSTALLATION{{\Product} {\em Installation and Operation} \cite{DS/FMU/IED/USR007}}
+\newcommand\EXTENDERS{{\Product} {\em System Extenders Guide} \cite{DS/FMU/IED/USR008}}
+\newcommand\ZTUTORIAL{{\Product} {\em Z Tutorial} \cite{DS/FMU/IED/USR011}}
+\newcommand\HTUTORIAL{{\Product} {\em HOL Tutorial} \cite{DS/FMU/IED/USR013}}
+\newcommand\SOFTSERV{{\Product} {\em Software and Services} \cite{DS/FMU/IED/USR014}}
+\newcommand\PROBOPS{{\Product} {\em Known Errors and Problems} \cite{DS/FMU/IED/USR015}}
+\newcommand\PRICES{{\Product} {\em Prices} \cite{DS/FMU/IED/USR016}}
+\newcommand\METHODS{{\Product} {\em Methods and Case Studies} \cite{DS/FMU/IED/USR017}}
+\newcommand\XPPUSERGUIDE{{\Product} {\tt Xpp} {\em User Guide} \cite{LEMMA1/XPP/USR031}}
+
+\newcommand\CNUSERGUIDE{{\Product} {\em Compliance Tool User Guide} \cite{ISS/HAT/DAZ/USR501}}
+\newcommand\CNINSTALLATION{{\Product} {\em Compliance Tool Installation and Operation} \cite{ISS/HAT/DAZ/USR502}}
+\newcommand\CNPROVINGVCS{{\Product} {\em Compliance Tool --- Proving VCs} \cite{ISS/HAT/DAZ/USR503}}
+\newcommand\CNNOTATION{{\Product} {\em Compliance Notation Language Description} \cite{ISS/HAT/DAZ/USR504}}
+
+\def\HOL{{\small HOL}}
+%\def\ICLHOL{{\small ICL HOL}}
+\def\LCF{{\small LCF}}
+\def\LCFLSM{{\small LCF{\kern-.2em}{\normalsize\_}{\kern0.1em}LSM}}
+\def\PPL{{\small PP}{\kern-.095em}$\lambda$}
+\def\PPLAMBDA{{\small PPLAMBDA}}
+\def\ML{{\small ML}}
+\def\SML{{\small Standard ML}}
+
+\newcommand\adhoc{\mbox{\it ad hoc}}
+\newcommand\eg{\mbox{e{.}g{.}}}
+\def\Eg{{\it E.g.}}
+\newcommand\ie{\mbox{i{.}e{.}}}
+\def\Ie{{\it I.e.}}
+\newcommand\etal{{\it et al.\/}}
+\newcommand\etc{\mbox{etc{.}}}
+\newcommand\viz{\mbox{viz{.}}}
+\def\see#1#2{{\em see\/} #1}
+
+% ---------------------------------------------------------------------
+% Simple abbreviations and macros for mathematical typesetting
+% ---------------------------------------------------------------------
+
+\newcommand\fun{{\to}}
+\newcommand\prd{{\times}}
+
+\newcommand\conj{\ \wedge\ }
+\newcommand\disj{\ \vee\ }
+\newcommand\imp{ \Rightarrow }
+\newcommand\eqv{\ \equiv\ }
+\newcommand\cond{\rightarrow}
+\newcommand\vbar{\mid}
+\newcommand\turn{\ \vdash\ }
+\newcommand\hilbert{\varepsilon}
+\newcommand\eqdef{\ \equiv\ }
+
+\newcommand\natnums{\mbox{${\sf N}\!\!\!\!{\sf N}$}}
+\newcommand\bools{\mbox{${\sf T}\!\!\!\!{\sf T}$}}
+
+\newcommand\p{$\prime$}
+\newcommand\f{$\forall$\ }
+\newcommand\e{$\exists$\ }
+
+\newcommand\orr{$\vee$\ }
+\newcommand\negg{$\neg$\ }
+
+\newcommand\arrr{$\rightarrow$}
+\newcommand\hex{$\sharp $}
+
+\newcommand{\uquant}[1]{\forall #1.\ }
+\newcommand{\equant}[1]{\exists #1.\ }
+\newcommand{\hquant}[1]{\hilbert #1.\ }
+\newcommand{\iquant}[1]{\exists ! #1.\ }
+\newcommand{\lquant}[1]{\lambda #1.\ }
+
+\newcommand{\leave}[1]{\\[#1]\noindent}
+\newcommand\entails{\mbox{\rule{.3mm}{4mm}\rule[2mm]{.2in}{.3mm}}}
+
+% ---------------------------------------------------------------------
+% Font-changing commands
+% ---------------------------------------------------------------------
+
+\newcommand{\theory}[1]{\hbox{{\small\tt #1}}}
+
+\newcommand{\con}[1]{{\sf #1}}
+\newcommand{\rul}[1]{{\tt #1}}
+\newcommand{\ty}[1]{{\sl #1}}
+
+\newcommand{\ml}[1]{\mbox{{\def\_{\char'137}\small\tt #1}}}
+\newcommand\ms{\tt}
+\newcommand{\s}[1]{{\small #1}}
+
+\newcommand{\pin}[1]{{\bf #1}}
+\def\m#1{\mbox{\normalsize$#1$}}
+
+% ---------------------------------------------------------------------
+% Abbreviations for particular mathematical constants etc.
+% ---------------------------------------------------------------------
+
+\newcommand\T{\con{T}}
+\newcommand\F{\con{F}}
+\newcommand\OneOne{\con{One\_One}}
+\newcommand\OntoSubset{\con{Onto\_Subset}}
+\newcommand\Onto{\con{Onto}}
+\newcommand\TyDef{\con{Type\_Definition}}
+\newcommand\Inv{\con{Inv}}
+\newcommand\com{\con{o}}
+\newcommand\Id{\con{I}}
+\newcommand\MkPair{\con{Mk\_Pair}}
+\newcommand\IsPair{\con{Is\_Pair}}
+\newcommand\Fst{\con{Fst}}
+\newcommand\Snd{\con{Snd}}
+\newcommand\Suc{\con{Suc}}
+\newcommand\Nil{\con{Nil}}
+\newcommand\Cons{\con{Cons}}
+\newcommand\Hd{\con{Hd}}
+\newcommand\Tl{\con{Tl}}
+\newcommand\Null{\con{Null}}
+\newcommand\ListPrimRec{\con{List\_Prim\_Rec}}
+
+
+\newcommand\SimpRec{\con{Simp\_Rec}}
+\newcommand\SimpRecRel{\con{Simp\_Rec\_Rel}}
+\newcommand\SimpRecFun{\con{Simp\_Rec\_Fun}}
+\newcommand\PrimRec{\con{Prim\_Rec}}
+\newcommand\PrimRecRel{\con{Prim\_Rec\_Rel}}
+\newcommand\PrimRecFun{\con{Prim\_Rec\_Fun}}
+
+\newcommand\bool{\ty{bool}}
+\newcommand\num{\ty{num}}
+\newcommand\ind{\ty{ind}}
+\newcommand\lst{\ty{list}}
+
+% ---------------------------------------------------------------------
+% \minipagewidth = \textwidth minus 1.02 em
+% ---------------------------------------------------------------------
+
+\newlength{\minipagewidth}
+\setlength{\minipagewidth}{\textwidth}
+\addtolength{\minipagewidth}{-1.02em}
+
+% ---------------------------------------------------------------------
+% Macros for little HOL sessions displayed in boxes.
+%
+% Usage: (1) \setcounter{sessioncount}{1} resets the session counter
+%
+%	 (2) \begin{session}\begin{verbatim}
+%	      .
+%	       < lines from hol session >
+%	      .
+%	     \end{verbatim}\end{session}
+%
+%            typesets the session in a numbered box.
+% ---------------------------------------------------------------------
+
+\newlength{\hsbw}
+\setlength{\hsbw}{\textwidth}
+\addtolength{\hsbw}{-\arrayrulewidth}
+\addtolength{\hsbw}{-\tabcolsep}
+\newcommand\HOLSpacing{13pt}
+
+\newcounter{sessioncount}
+\setcounter{sessioncount}{1}
+
+\newenvironment{session}{\begin{flushleft}
+ \begin{tabular}{@{}|c@{}|@{}}\hline
+ \begin{minipage}[b]{\hsbw}
+ \vspace*{-.5pt}
+ \begin{flushright}
+ \rule{0.01in}{.15in}\rule{0.3in}{0.01in}\hspace{-0.35in}
+ \raisebox{0.04in}{\makebox[0.3in][c]{\footnotesize\sl \thesessioncount}}
+ \end{flushright}
+ \vspace*{-.25in}
+ \begingroup\small\baselineskip\HOLSpacing}{\endgroup\end{minipage}\\ \hline
+ \end{tabular}
+ \end{flushleft}
+ \stepcounter{sessioncount}}
+
+% ---------------------------------------------------------------------
+% Macro for boxed ML functions, etc.
+%
+% Usage: (1) \begin{boxed}\begin{verbatim}
+%	        .
+%	        < lines giving names and types of mk functions >
+%	        .
+%	     \end{verbatim}\end{boxed}
+%
+%            typesets the given lines in a box.
+%
+%            Conventions: lines are left-aligned under the "g" of begin,
+%	     and used to highlight primary reference for the ml function(s)
+%	     that appear in the box.
+% ---------------------------------------------------------------------
+
+\newenvironment{boxed}{\begin{flushleft}
+ \begin{tabular}{@{}|c@{}|@{}}\hline
+ \begin{minipage}[b]{\hsbw}
+% \vspace*{-.55in}
+ \vspace*{.06in}
+ \begingroup\small\baselineskip\HOLSpacing}{\endgroup\end{minipage}\\ \hline
+ \end{tabular}
+ \end{flushleft}}
+
+% ---------------------------------------------------------------------
+% Macro for unboxed ML functions, etc.
+%
+% Usage: (1) \begin{hol}\begin{verbatim}
+%	        .
+%	        < lines giving names and types of mk functions >
+%	        .
+%	     \end{verbatim}\end{hol}
+%
+%            typesets the given lines exactly like {boxed}, except there's
+%	     no box.
+%
+%            Conventions: lines are left-aligned under the "g" of begin,
+%	     and used to display ML code in verbatim, left aligned.
+% ---------------------------------------------------------------------
+
+\newenvironment{hol}{\begin{flushleft}
+ \begin{tabular}{c@{}@{}}
+ \begin{minipage}[b]{\hsbw}
+% \vspace*{-.55in}
+ \vspace*{.06in}
+ \begingroup\small\baselineskip\HOLSpacing}{\endgroup\end{minipage}\\
+ \end{tabular}
+ \end{flushleft}}
+
+% ---------------------------------------------------------------------
+% Emphatic brackets
+% ---------------------------------------------------------------------
+
+\newcommand\leb{\lbrack\!\lbrack}
+\newcommand\reb{\rbrack\!\rbrack}
+
+
+%These macros were included by jac1: they are used in two of the index entries
+
+\def\per{\ml{\%}}
+\def\pes{\ml{\%<}}
+\def\pee{\ml{>\%}}
+
+%These macros were included by ap; they are used in Chapters 9 and 10
+%of the HOL DESCRIPTION
+
+\newcommand{\inds}%standard infinite set
+ {\mbox{\rm I}}
+
+\newcommand{\ch}%standard choice function
+ {\mbox{\rm ch}}
+
+\newcommand{\den}[1]%denotational brackets
+ {[\![#1]\!]}
+
+\newcommand{\two}%standard 2-element set
+ {\mbox{\rm 2}}
+
+% ---------------------------------------------------------------------
+% technical terms (keep in alphabetic order please)
+% ---------------------------------------------------------------------
+
+\def\destsimpletype{{\it DEST\_SIMPLE\_TYPE\/}}
+\def\fixitydeclaration{{\it fixity declaration\/}}
+\def\goal{{\it GOAL\/}}
+\def\hol{{\it HOL\/}}
+\def\holconst{{\it HOLCONST\/}}
+\def\hollabprod{{\it HOLLABPROD\/}}
+\def\kwic{{\it KWIC\/}}
+\def\lamabstr{$λ-abstraction$}
+\def\lcfparadigm{{\it LCF paradigm\/}}
+\def\metalanguage{{\it metalanguage\/}}
+\def\proof{{\it PROOF\/}}
+\def\proofcontext{{\it proof context\/}}
+\def\subgoal{{\it subgoal\/}}
+\def\tactic{{\it TACTIC\/}}
+\def\tactical{{\it TACTICAL\/}}
+\def\term{{\it TERM\/}}
+\def\theorem{{\it theorem\/}}
+\def\thm{{\it THM\/}}
+\def\thmtactic{{\it THM\_TACTIC\/}}
+\def\thmtactical{{\it THM\_TACTICAL\/}}
+\def\type{{\it TYPE\/}}
+\def\typeconstructor{{\it TYPE constructor\/}}
+\def\typevariable{{\it TYPE variable\/}}
+\def\welltyped{{\it well typed\/}}
+
+=TEX
+\end{document}
+

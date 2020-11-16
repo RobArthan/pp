@@ -1,0 +1,259 @@
+=IGN
+********************************************************************************
+dtd060.doc: this file is part of the PPZed system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  dtd060.doc  ℤ $Date: 2005/09/13 11:53:20 $ $Revision: 1.14 $ $RCSfile: dtd060.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of the Z Lexical Analyser}
+
+\def\AbstractText{This document contains the detailed design of the lexical analyser for HOL/Z.}
+
+\def\Reference{DS/FMU/IED/DTD060}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design of the Z Lexical Analyser}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD060}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.14 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2005/09/13 11:53:20 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design of
+%% LaTeX2e port: the lexical analyser for HOL/Z.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.4 (1992/04/16)] First Issue.
+\item[Issue 1.5 (1992/06/12)] Removed fixity handling, which is now done in \cite{DS/FMU/IED/DTD079}.
+\item[Issue 1.6 (1992/06/12)--1.8 (1992/07/15)] Bug fixing and tidying.
+\item[Issue 1.9 (1999/03/07)] Updates for port to SML/NJ.
+\item[Issue 1.10 (2002/01/23)] Support for left associative operators.
+
+
+\item[Issue 1.11 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.12 (2002/10/17)] PPZed-specific updates for open source release
+\item[Issue 1.13 (2005/09/09)] Added new forms of stubs in templates.
+\item[Issue 1.14 (2005/09/13)] Option to require distinguishing subscripts on all schema operations.
+\item[Issue 1.15 (2006/04/20)] Added support for floating point literals
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported PPZed to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the detailed design
+of the lexical analyser for HOL/Z.
+The high level design for this material is given in \cite{DS/FMU/IED/HLD018}. The lexis is defined in \cite{DS/FMU/IED/DEF007}.
+\subsection{Introduction}
+The lexical analyser maps input from the reader/writer,
+\cite{DS/FMU/IED/DTD005}, onto a data type $Z\_TOKEN$, defined
+in this document, and suitable for use by the Z parser, \cite{DS/FMU/IED/DTD061}.
+
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/HLD018}.
+\subsection{Dependencies}
+This document depends on the implementation of HOL types and terms
+\cite{DS/FMU/IED/IMP003}, for denoting anti-quoted HOL terms.
+\subsection{Possible Enhancements}
+None.
+\subsection{Deficiencies}
+None known.
+\section{PREAMBLE}
+=DOC
+signature ⦏ZLex⦎ = sig
+=DESCRIBE
+This is the signature of the structure which contains the lexical analyser
+for HOL/Z.
+=USES
+For use by the Z parser.
+=ENDDOC
+
+\section{DATA TYPES}
+\subsection{Interface with Reader/Writer}
+
+The reader/writer~\cite{DS/FMU/IED/DTD005} converts source text into list of items of the datatype $INPUT$ defined
+in \cite{DS/FMU/IED/DTD015}.
+
+\subsection{Interface with Parser}
+
+The following type, $Z\_TOKEN$, represents all of the lexical elements
+that make up the concrete syntax of the ICL~Z language
+of~\cite{DS/FMU/IED/DEF007} plus an end of input $ZTEos$ element.
+=DOC
+datatype ⦏Z_TOKEN⦎	=
+
+⦏ZTAqTm⦎ of TERM	|⦏ZTId⦎ of string	|⦏ZTDecor⦎ of string
+|⦏ZTChar⦎ of string	|⦏ZTString⦎ of string	|⦏ZTNumber⦎ of INTEGER
+|⦏ZTFloat⦎ of INTEGER * INTEGER * INTEGER
+|⦏ZTAx⦎		|⦏ZTSch⦎	|⦏ZTEnd⦎	|⦏ZTIs⦎	|⦏ZTSt⦎	|⦏ZTBar⦎
+|⦏ZTAmpersand⦎	|⦏ZTλ⦎	|⦏ZTμ⦎
+|⦏ZTPre⦎	|⦏ZTΔ⦎	|⦏ZTΞ⦎	|⦏ZTPipe⦎ 	|⦏ZT↾⦎ 	|⦏ZT⨾⦎	|⦏ZTLet⦎
+|⦏ZTFun⦎	|⦏ZTGen⦎	|⦏ZTRel⦎	|⦏ZTLeftAssoc⦎	| ⦏ZTRightAssoc⦎
+|⦏ZTLbrace⦎	|⦏ZTRbrace⦎	|⦏ZTLbrack⦎	|⦏ZTRbrack⦎
+|⦏ZTLsqbrack⦎	|⦏ZTRsqbrack⦎
+|⦏ZT⟨⦎	|⦏ZT⟩⦎	|⦏ZTComma⦎	|⦏ZTDots⦎	|⦏ZTDot⦎	|⦏ZTSlash⦎
+|⦏ZTBSlash⦎	|⦏ZTFreeTyDef⦎	|⦏ZTColon⦎	|⦏ZTSemi⦎	|⦏ZTUnderScore⦎
+|⦏ZTUnderScoreQuery⦎	|⦏ZTUnderScoreExclam⦎
+|⦏ZTVert⦎	|⦏ZTConjecture⦎	|⦏ZT≜⦎	|⦏ZT⦁⦎
+|⦏ZT×⦎	|⦏ZTθ⦎	|⦏ZTEos⦎
+|⦏ZT∀⦎ of bool	|⦏ZT∃⦎ of bool	|⦏ZT∃⋎1⦎ of bool
+|⦏ZT¬⦎ of bool	|⦏ZT∧⦎  of bool	|⦏ZT∨⦎  of bool
+|⦏ZT⇔⦎  of bool	|⦏ZT⇒⦎ of bool;
+=DESCRIBE
+The datatype $Z\_TOKEN$ is used to communicate lexical
+information between the Z lexical analyser and the
+Z parser.
+
+For compatibility with the Z standard and with earlier versions of {\Product},
+the keywords associate with fixity paragraphs are only treated as such when
+they appear exactly where they would in a fixity paragraph. Consequently,
+the corresponding $Z\_TOKEN$s are put in by the parser rather than the
+lexical analyser (which treats these as ordinary identifiers).
+=ENDDOC
+
+=TEX
+\section{THE LEXICAL ANALYSER}
+=TEX
+=DOC
+	val ⦏z_lex⦎ : Lex.INPUT list -> Z_TOKEN list
+=DESCRIBE
+The function $z\_lex$ provides the lexical analysis functionality for
+the Z user interface.
+
+The parameter is the input to be lexically analysed.
+=FAILURE
+60003	Z lexical analyser or reader/writer error detected (?0)
+60004	Ill-formed keyword symbol
+60005	?0 is not a valid character literal (must contain exactly one character)
+60006	Error code ?0 reported by reader/writer
+60007	Ill-formed subscript
+60008	Input contains an unrecognised symbol
+=FAILUREC
+Error message $60006$ occurs, e.g.,
+when a keyword symbol has been entered incorrectly
+and is preceded by a more comprehensive error
+message from the reader/writer.
+=ENDDOC
+\section{EPILOGUE}
+=SML
+end (* of structure ZLex *);
+=TEX
+
+\section{TEST POLICY}
+The module tests for this module are to follow the guidelines
+laid down in the quality plan~\cite{DS/FMU/IED/PLN008}.
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
+
+

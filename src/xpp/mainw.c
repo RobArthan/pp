@@ -4,7 +4,7 @@
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
  *
- * mainw.c: this file is part of the PPTex system
+ * mainw.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2002 Lemma 1 Ltd.
  *

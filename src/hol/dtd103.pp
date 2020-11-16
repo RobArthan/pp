@@ -1,0 +1,264 @@
+=IGN
+********************************************************************************
+dtd103.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  ℤ
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design for Conjecture Database}
+
+\def\AbstractText{This document contains the detailed design for the facilities for managing conjectures.}
+
+\def\Reference{DS/FMU/IED/DTD103}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Detailed Design for Conjecture Database}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD103}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.9 $%%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2006/09/18 11:29:59 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.B.~Jones & HAT Manager}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document contains the detailed design for the
+%% LaTeX2e port: facilities for managing conjectures.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issues 1.1 (1994/10/28)-1.3 (1994/10/31)]
+First drafts.
+\item[Issue 1.4 (1994/11/07)]
+Level numbers now stored with the conjectures.
+\item[Issue 1.5 (1996/01/29)]
+SCCS keywords reinserted.
+\item[Issue 1.6 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.7 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.8 (2006/01/17)] Added the new conjecture management facilities.
+\item[Issue 1.9 (2006/09/18)] {\em is\_proved\_conjecture} etc. now fail if theory is not in scope rather than giving wronng answers.
+\item[Issue 1.10 (2006/10/18)] Corrected typo.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the detailed design for the Conjectures Database module for ICL HOL.
+The high level design for this material is given in \cite{DS/FMU/IED/HLD008}.
+
+\subsection{Introduction}
+Principally to support the conjecture paragraphs of Z, a simple system allowing conjectures to be stored in a theory is required.
+This document defines a simple programmer's interface to such a system.
+
+
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/HLD008}.
+\subsection{Dependencies}
+The module is dependent on the interface to the abstract data type $THM$, \cite{DS/FMU/IED/DTD012}.
+\subsection{Possible Enhancements}
+Currently, when a user deletes a constant or a type which appears in a conjecture, the conjecture is deleted.
+It might be better to design a scheme which warned the user before taking any destructive action.
+\subsection{Deficiencies}
+None known.
+\section{DISCUSSION}
+The requirement is to support the conjecture paragraph form in Z
+in a useful fashion.
+This may as well be done by providing an analogous facility for HOL
+and exploiting it in Z.
+
+The idea is to use the user data in a theory to hold any conjectures
+which the user has recorded.
+
+A tricky point about the implementation is that deletion of constants
+and types should probably cause conjectures involving those constants
+and types to be deleted.
+This could be done either by marking the conjectures with the relevant level number (in which case the facility would probably have to be implemented in \cite{DS/FMU/IED/IMP012}, where $delete\_const$ and $delete\_type$ are defined).
+Alternatively, the `on kernel state change' stuff can be used to notify the package implementing conjectures of deletions and it can then work through the conjectures removing those which refer to the deleted object.
+This latter approach has been chosen for simplicity.
+
+
+\section{CONJECTURE FUNCTIONS}
+=SML
+signature ⦏Conjectures⦎ = sig
+=TEX
+
+=DOC
+val ⦏new_conjecture⦎ : (string list * TERM) -> unit;
+val ⦏get_conjecture⦎: string -> string -> TERM;
+val ⦏get_conjectures⦎: string -> (string list * (int * TERM)) list;
+val ⦏delete_conjecture⦎: string -> TERM;
+val ⦏delete_all_conjectures⦎: unit -> unit;
+=DESCRIBE
+$new\_conjecture(keys, tm)$ stores the boolean term $tm$ as a conjecture in the
+current theory under keys $keys$.
+If any of the keys is also the key of a theorem saved in the current theory,
+then each such theorem must prove the conjecture, i.e., its conclusion must be the same as $tm$  and it must have an empty assumption list.
+
+
+$delete\_conjecture\,key$ deletes the conjecture stored in the current theory under key $key$.
+It returns the deleted conjecture.
+
+$delete\_all\_conjectures()$ deletes all the conjectures stored in the current theory.
+This may be used if, for some reason, the data structure used to store the conjectures becomes corrupted.
+
+Note, when a constants or a type is deleted from a theory, conjectures that contain the deleted constant or type are automatically deleted from the current theory.
+Message 103804 is used as a comment to inform the user when this happens.
+
+=SEEALSO
+{\em save\_thm}, {\em list\_save\_thm}, {\em is\_proved\_conjecture}
+=FAILURE
+3031	?0 is not of type ⓣBOOL⌝
+6031	Key list may not be empty
+20601	There is no theory called ?0
+103101	The theorem ?0 does not prove the conjecture with key ?1
+103801	Key ?0 has already been used for a conjecture in the current theory
+103802	There is no conjecture called ?0 in theory ?1
+103803	The conjectures database in theory ?0 is corrupt
+	(use delete_all_conjectures to clear).
+103804	Deletion of ?0 has caused deletion of conjecture?1: ?2
+=ENDDOC
+
+=DOC
+val ⦏is_proved_conjecture⦎: string -> string -> bool;
+val ⦏get_proved_conjectures⦎: string -> string list;
+val ⦏get_unproved_conjectures⦎: string -> string list;
+=DESCRIBE
+
+$is\_proved\_conjecture\,thy\,key$ returns true if the conjecture with key $key$ in theory $thy$ has been proved (i.e., there is a theorem stored under the same key in the theory which has the conjecture as its conclusion and has no assumptions).
+
+$get\_proved\_conjectures\,thy$ (resp. $get\_unproved\_conjectures\,thy$) returns the list of conjectures in theory $thy$ which have
+(resp. have not) been proved in the sense described above.
+
+=SEEALSO
+{\em save\_thm}, {\em list\_save\_thm}, {\em new\_conjecture}
+=FAILURE
+20601	There is no theory called ?0
+103101	This theorem does not prove the conjecture stored under key ?0
+103102	The theorem with key ?0 does not prove this conjecture
+103103	Theory ?0 is not in scope
+103802	There is no conjecture called ?0 in theory ?1
+103803	The conjectures database in theory ?0 is corrupt
+	(use delete_all_conjectures to clear).
+=ENDDOC
+
+\end{document}
+
+
+
+
+
+=SML
+end (* of signature Conjectures *);
+=TEX
+\section{TEST POLICY}
+The module is to be tested according to the general criteria laid down in the quality plan, \cite{DS/FMU/IED/PLN008}.
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
+
+
+

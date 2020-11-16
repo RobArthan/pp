@@ -1,0 +1,310 @@
+=IGN
+********************************************************************************
+usr013.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+% usr013.doc ℤ $Date: 2002/10/17 16:20:01 $ $Revision: 2.9 $ $RCSfile: usr013.doc,v $
+% COPYRIGHT (c) Lemma 1 Ltd.
+\sloppy
+\def\SCCSissue{$Revision: 2.9 $%
+}
+\def\ignore#1{}
+\ignore{
+=SML
+set_flag("ignore_warnings", true);
+open_theory "hol";
+set_pc"hol2";
+=TEX
+}
+
+% COPYRIGHT (c) Lemma 1 Ltd.
+
+% \documentstyle[11pt,hol1,fleqn,USR]{book}
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+
+\ftlmargin 0.5in
+\ftrmargin 0.5in
+
+\def\SCCSversion{\VCVersion}
+\def\SCCSdate{\VCDate}
+
+\USRmanual{HOL Tutorial}
+\USRref{USR013}
+\USRisbns{1514276860}
+\USRisbnl{978-1514276860}
+
+\raggedbottom
+\ftlinepenalty=9999
+\makeindex
+
+\begin{document}
+
+\makeUSRfrontpage
+
+\underscoreoff
+
+\chapter*{CONTENTS}
+
+\tableofcontents
+
+\pagebreak
+
+\setcounter{chapter}{-1}
+
+\chapter{ABOUT THIS PUBLICATION} \label{intro}
+\section{Purpose}
+
+This document, one of several making up the user documentation for the \Product\ system,  contains a tutorial on the use of \Product\ for specification and proof in Higher Order Logic ({\hol}).
+
+The objectives of this tutorial are:
+
+\begin{itemize}
+\item
+to describe the basic principles and concepts underlying ProofPower
+\item
+to enable the student to write simple specifications and undertake elementary proofs in {\hol} using ProofPower
+\item
+to enable the student to make effective use of the reference documentation
+\end{itemize}
+
+\section{Readership}
+
+This document is intended to be among the first to be read by new users of {\Product}, and is designed either for use with the {\Product} {\hol} course, or for independent self tuition.
+
+\section{Related Publications}
+
+A bibliography is given at the end of this document.  Publications relating specifically to {\Product} are:
+
+\begin{enumerate}
+\item {\em \ {\TUTORIAL}};
+\item {\em \ {\ZTUTORIAL}};
+\item {\em \ {\DESCRIPTION}};
+\item {\em \ {\REFERENCE}};
+\item {\em \ {\INSTALLATION}};
+\item {\em \ {\TYPESETTING}}.
+\end{enumerate}
+
+\section{Area Covered}
+
+This document consists of notes appropriate for the introductory \ProductHOL\ course, which gives an idea of the way \Product\ is used for checking specifications and conducting proofs in {\ProductHOL}.
+
+After working through  this tutorial, the reader should be capable of using {\Product} with {\ProductHOL} for simple tasks, and should be able to make effective use of the {\Product} documentation where necessary for approaching more difficult problems.
+
+The tutorial should enable users of \Product\ to become familiar with the following subjects:
+
+\begin{enumerate}
+\item
+The dialect of {\hol} supported by the \Product\ system (which we call {\ProductHOL}) and its manipulation via the metalanguage.
+\item
+Forward proof and derived rules of inference.
+\item
+Goal directed proof, tactics and tacticals.
+\end{enumerate}
+
+=IGN
+{\bf Outline}
+
+\begin{itemize}
+\item
+Introduction
+
+{
+\begin{itemize}
+\item
+an overview of ProofPower
+\item
+propositional and predicate calculus proofs
+\end{itemize}
+}
+\item
+Specification using {\Product-HOL}
+
+{
+\begin{itemize}
+\item
+Primitive Syntax for TYPEs and TERMs
+\item
+Derived Syntax for TYPEs and TERMs
+\item
+Paragraphs (declarations) and Theories
+\end{itemize}
+}
+\item
+Proof in {\hol}
+
+{
+\begin{itemize}
+\item
+Basics of Proof
+\item
+Rules, Conversions, Tactics...
+\item
+Stripping, Rewriting
+\item
+Induction
+\end{itemize}
+}
+\end{itemize}
+
+=TEX
+
+\section{Prerequisites}
+
+Prior acquaintance with first order predicate logic and a functional programming language would be an advantage.
+
+Some familiarity with:
+\begin{itemize}
+\item
+first order predicate calculus
+=GFT
+⌜(∀x⦁ P x ⇒ R x) ⇒ ((∀ x⦁ P x) ⇒ (∀x⦁ R x))⌝;
+=TEX
+\item
+elementary set theory
+=GFT
+⌜∀a b c⦁ a ∩ (b ∩ c) = (a ∩ b) ∩ c⌝;
+=TEX
+\item
+functional programming
+=SML
+fun	fact 0 = 1
+|	fact n = n * (fact (n - 1));
+=TEX
+\end{itemize}
+
+A suitable text for an introduction to the predicate calculus and elementary set theory is {\it Software Engineering Mathematics} \cite{woodcock88}.
+A good account of Standard ML may be found in {\it ML for the Working Programmer} \cite{paulson91}.
+
+A gentler introduction to {\Product} may be found in {\TUTORIAL}, which though not strictly pre-requisite can beneficially be read before these tutorial notes.
+In particular, chapter 1 of {\TUTORIAL}, which describes basic interaction with {\Product}, is recommended, since this topic is not touched upon in any depth here.
+
+\section{How To Use This Tutorial}\label{HowToUseThisTutorial}
+
+It is intended that this document will allow {\Product} users who have not attended the {\Product-HOL} course to work through the course material independently.
+In that case the material could be read in conjunction with the course OHP transparencies \cite{ds/fmu/ied/usr022}.
+
+The best way to learn about {\Product} is by doing things with it.
+
+The two kinds of things which you can do while working through these tutorial notes are:
+
+\begin{itemize}
+\item
+Do the set exercises.
+
+To make it easier to do the exercises the installation procedure for {\Product} results in the establishment of a {\Product} database called `\verb!example_hol!', which contains the results of executing all of this tutorial document except the material in Chapter \ref{Solutions} where the solutions to the exercises may be found.
+To do the exercises the reader should attempt to set up his own version of the solutions document (`\verb!usr013S.doc!') by working interactively in a {\Product} session using a copy of database \verb!example_hol!.
+
+This is best done using a writeable copy of the database so that you can save the database after completing some of the exercises and then resume from that point later.
+This can be done as follows:
+
+\begin{verbatim}
+       cp $PPHOME/db/example_hol.polydb .
+       chmod +w example_hol.polydb
+\end{verbatim}
+
+Here, $\$PPHOME$ is an environment variable which should be set up to be the pathname of the directory in which {\Product} has been installed.
+
+If you wish to use the X interface for {\Product}, {\tt xpp}, you can now
+start your {\Product} session by starting X if necessary and then giving
+the UNIX command:
+
+\begin{verbatim}
+       xpp -d example_hol
+\end{verbatim}
+
+{\tt xpp} will come up running {\Product} on your copy of the database and with its editor set up to work on a new, empty, script in which you can build
+up your solutions.
+
+\item
+Replay the illustrative material.
+
+This is best done using the source of the tutorial OHP transparencies, \verb!usr022_slides.doc!.
+It can be done running on database \verb!example_hol!, though you will find that some of the material will be rejected because definitions have already been made.
+Alternatively you can work from a clean database, but then you may find problems if you miss out any of the material.
+E.g., to work on the existing database using {\tt xpp}, you might use the command:
+
+\begin{verbatim}
+       xpp -f $PPHOME/doc/usr022_slides.doc -d example_hol
+\end{verbatim}
+
+The illustrative material can be replayed in a batch mode, but this is not very instructive.
+\end{itemize}
+
+In both of these use of the source documents avoids unnecessary re-keying of material, and should be loaded into a text editor and used by copy-and-paste.
+
+Two alternative approaches to working through the exercise material are:
+
+\begin{itemize}
+\item
+Follow the transparencies.
+
+Consulting the tutorial notes as necessary for further information, while using copy-and-paste on the OHP source file ({\tt usr022_slides.doc}) to replay the illustrations and do the exercises.
+
+\item
+Follow the tutorial notes.
+
+Work through the tutorial notes (using a {\tt .dvi} previewer or hard copy) and the exercises as presented in this document.
+Source documents are supplied for the exercises (Chapter \ref{Exercises}, file {\tt usr013X.doc}) and solutions (Chapter \ref{Solutions}, file {\tt usr013S.doc}).
+
+\end{itemize}
+
+In either case it is best to build up your own document containing your solutions to the exercises and any experiments you might wish to undertake.
+{\Product} does not keep any record of what you type into it, and so if you want to do it again you will need to keep a copy of your script.
+
+\section{Acknowledgements}
+
+ICL gratefully acknowledges its debt to the many researchers (both academic and industrial) who have provided intellectual capital on which ICL has drawn in the development of \Product.
+
+We are particularly indebted to Mike Gordon of The University of Cambridge, for his leading role in some of the research on which the development of \Product\ has built, and for his positive attitude towards industrial exploitation of his work.
+
+The \Product\ system is a proof tool for Higher Order Logic which builds upon ideas arising from research carried out at the Universities of Cambridge and Edinburgh, and elsewhere.
+In particular the logic supported by the system is (at an abstract level) identical to that implemented in the Cambridge HOL system \cite{gordon93}, and the paradigm adopted for implementation of proof support for the language follows that adopted by Cambridge HOL, originating with the LCF system developed at Edinburgh \cite{gordon79}.
+The functional language `Standard ML' used both for the implementation and as an interactive metalanguage for proof development, originates in work at Edinburgh, and has been developed to its present state by an international group of academic and industrial researchers.
+The implementation of Standard ML on which \Product\ is based was itself originally implemented by David Matthews at the University of Cambridge, and is now commercially marketed by Abstract Hardware Limited.
+
+The \Product{} system also supports specification and proof in the Z language, developed at the University of Oxford.
+We are therefore also indebted to the research at Oxford (and elsewhere) which has contributed to the development of the Z language.
+\pagebreak
+
+% INTRODUCTION
+\include{usr013A}
+
+\include{usr013B}
+
+\include{usr013C}
+
+\include{usr013D}
+
+\include{usr013E}
+
+\include{usr013F}
+
+\include{usr013G}
+
+\include{usr013H}
+
+\include{usr013X}
+
+\include{usr013S}
+\chapter*{REFERENCES}
+\addcontentsline{toc}{chapter}{REFERENCES}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\twocolumn
+\chapter*{INDEX}
+\addcontentsline{toc}{chapter}{INDEX}
+\small
+\printindex
+\end{document}
+

@@ -1,0 +1,667 @@
+=IGN
+********************************************************************************
+mdt013.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Test Cases and Code for the Module Test Harness}
+
+\def\AbstractText{This document comprises test cases and test code/data for testing the module test harness described in the document DS/FMU/IED/DTD013.}
+
+\def\Reference{DS/FMU/IED/MDT013}
+
+\def\Author{D.J. King}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Test Cases and Code for the Module Test Harness}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT013}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 2.7 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Approved}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document comprises test cases and test code/data for
+%% LaTeX2e port: testing the module test harness described in the document
+%% LaTeX2e port: DS/FMU/IED/DTD013.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1 (1991/04/24)-1.3 (1991/04/25)]
+Initial drafts.
+
+\item[Issue 2.1 (1991/09/17) (17 September 1991)]
+This is an approved version of issue 1.3.
+\item [Issue 2.2 (1992/04/14) (14th April 1992)]
+Changes required by CR0017, using new fonts.
+\item [Issue 2.3 (1992/07/20) (20th July 1992)]
+Made uniform with other module tests.
+\item [Issue 2.4 (1993/02/23) (23rd February 1993)]
+Reacted to change in implementation (text, and missing messages).
+\item [Issue 2.5 (1999/02/22)]
+Update for SML97.
+\item[Issue 2.6 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.7 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 2.8 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+
+This document comprises test cases and test code/data for
+testing the module test harness specified in \cite{DS/FMU/IED/DTD013}.
+
+\subsection{Introduction}
+
+\subsubsection{Background and Purpose}
+
+This document contains the test code and test data for
+testing the module test harness. Most of the implementation
+of the ICL HOL product will be tested by tests written
+for use with the module test harness described in
+\cite{DS/FMU/IED/DTD013}. It is essential therefore that the
+test harness itself correctly highlights faults and
+errors in the product implementation and reports them
+in a manner which helps the developer quickly identify
+where the error is occurring, and how to reproduce the error.
+The harness could be used to test itself. This approach
+would be dubious. It would be easy to construct a
+harness which always returned true whether or not the harness
+worked. This harness if used to test itself would indicate that
+it works, when in fact it did nothing of the sort.
+
+The aim of these tests is to demonstrate that the functions
+contained within the test harness operate according to
+specification, by using mechanisms as independent to the
+way the harness is implemented as possible.
+For example, where the harness might use a ref pointer
+to store a cumulative register of the results so far produced,
+the tests here would for example use recursion to store
+the results (i.e. on the stack), in order to
+demonstrate the correct functionality. The organisation of
+these tests is inevitably not as evident as in test documents
+which use the harness. This is a consequence of not using
+the harness, and also indicates the sort of benefit resulting
+from the harness's use in other circumstances.
+
+A variable mdt013 is used to accumulate test results throughout
+the running of the tests in this document. It contains
+a list of test case - boolean pairs, indicating which
+test cases passed and which failed. The list is constructed
+manually as the test progress, and its value at the
+end of the tests should be inspected to see the
+success or failure of each of the tests carried out.
+
+=SML
+val mdt013 = [];
+=TEX
+
+\subsubsection{Dependencies}
+
+These tests demonstrates the correctness (or otherwise) of
+the test harness as implemented in \cite{DS/FMU/IED/IMP013}, and
+its corresponding detailed design document, \cite{DS/FMU/IED/DTD013}.
+
+\subsubsection{Possible Enhancements}
+
+Futher tests will need to be produced on occassion that
+the test harness is extended in some way.
+
+\subsubsection{Deficiencies}
+
+There are no known deficiencies.
+
+\section{TEST CASES}
+
+\begin{description}
+
+\item[ModuleTest.1]
+Test that {\it init\_mt\_results} correctly initialises the
+results store to an empty list.
+
+\item[ModuleTest.2]
+Test that {\it store\_mt\_results} correctly stores results and that
+those results match those printed by the function {\it get\_mt\_results}.
+
+\item[ModuleTest.3]
+Test that {\it store\_mt\_results\_show} returns the
+expected results when executed, and that the results are
+appended to the results store correctly (by using the
+function {\it get\_mt\_results}).
+
+\item[ModuleTest.4]
+Test that {\it summarize\_mt\_results} returns an ``ok'' string if all
+the results in the result store record passes, it returns a
+string identifying failed cases.
+
+\item[ModuleTest.5]
+Test that {\it gen\_fail\_msg} for given parameters correctly
+generates a failure message. Ensure that this also works for
+string substitution in error messages (as described in
+\cite{DS/FMU/IED/DTD002}).
+
+\item[ModuleTest.6]
+Test that {\it mt\_runf} returns expected outputs when
+provided with a) a set of simple testcases, whose expected
+results are a different type to that which the functions
+within the test cases yield, together with b) a function which
+in some way compares the output of a function with the
+expected result and returns a boolean value.
+
+\item[ModuleTest.7]
+Test that {\it mt\_run} returns expected outputs when
+given test cases for known-to-be-correct functions and
+some simple data.
+
+\item[ModuleTest.8a]
+Test that {\it mt\_run\_fail} records a passed test when a
+function raises the exception ``Fail'' and
+the message matches that expected.
+
+\item[ModuleTest.8b]
+Test that  {\it mt\_run\_fail} records a failure when
+a function raises the exception ``Error''.
+
+\item[ModuleTest.8c]
+Test that  {\it mt\_run\_fail} records a failure when
+a function does not raise an exception.
+
+\item[ModuleTest.9a]
+Test that {\it mt\_run\_error} records a passed test when a
+function raises the exception ``Error'' and
+the message matches that expected.
+
+\item[ModuleTest.9b]
+Test that  {\it mt\_run\_error} records a failure when
+a function raises the exception ``Fail''.
+
+\item[ModuleTest.9c]
+Test that  {\it mt\_run\_error} records a failure when
+a function does not raise an exception.
+
+\end{description}
+
+
+\section{TESTING THE STORING AND PRINTING OF TEST RESULTS}
+
+The files are loaded.
+=SML
+use_file "dtd013";
+use_file "imp013";
+=TEX
+
+\subsection{init\_mt\_results}
+
+The testing of the code which stores and prints test
+results is difficult without using other parts of the
+test harness. The accumulator is not available to
+use since it is not present in the signature. We therefore
+take the approach that if the storing and printing of results
+behaves in an expected way when given particular inputs,
+then we believe the functionality to be correct.
+
+First we test that $init\_mt\_results$ clears the area.
+
+=SML
+init_mt_results();
+val mdt013 =
+	if get_mt_results() = nil
+	then ("ModuleTest.1a",true)::mdt013
+	else
+		("ModuleTest.1a",false)::mdt013;
+=TEX
+
+Next we put something into the store, check that something
+is in there, and clear it again using init\_mt\_results, and check
+that the store has indeed been cleared.
+
+=SML
+fun manufac_res x = [("TCASE",true)];
+fun manufac_res2 x = [("TCASE2",true)];
+store_mt_results manufac_res 0;
+val mdt013 =
+	if get_mt_results() = nil
+	then ("ModuleTest.1b",false)::mdt013
+	else
+		("ModuleTest.1b",true)::mdt013;
+init_mt_results();
+val mdt013 =
+	if get_mt_results() = nil
+	then ("ModuleTest.1c",true)::mdt013
+	else
+		("ModuleTest.1c",false)::mdt013;
+=TEX
+
+\subsection{store\_mt\_results and get\_mt\_results}
+
+Next we store a known result and print it recording
+true if the printed version matches that which we stored.
+
+=SML
+store_mt_results manufac_res 0;
+val mdt013 = if get_mt_results() = [("TCASE",true)]
+	then ("ModuleTest.2a",true)::mdt013
+	else
+		("ModuleTest.2a",false)::mdt013;
+store_mt_results manufac_res 0;
+val mdt013 = if get_mt_results() = [("TCASE",true),("TCASE",true)]
+	then ("ModuleTest.2b",true)::mdt013
+	else
+		("ModuleTest.2b",false)::mdt013;
+=TEX
+
+\subsection{store\_mt\_results\_show}
+
+We do the same thing but using the store\_mt\_results\_show
+function. We check that the output of this function is
+correct, and then that it has also correctly stored
+the results.
+
+=SML
+fun manufac_res1 x = [("TCASE1",false)];
+val mdt013 = if store_mt_results_show manufac_res1 0
+		= [("TCASE1",false)]
+	then ("ModuleTest.3a",true)::mdt013
+	else
+		("ModuleTest.3a",false)::mdt013;
+
+val mdt013 = if get_mt_results()
+		= [("TCASE",true),("TCASE",true),("TCASE1",false)]
+	then ("ModuleTest.3b",true)::mdt013
+	else
+		("ModuleTest.3b",false)::mdt013;
+=TEX
+
+\subsection{summarize\_mt\_results}
+
+We now check that summarise results returns the expected
+values given a) a list recording that one test failed and
+b) a list recording that two tests worked ok.
+
+=SML
+
+val mdt013 = if summarize_mt_results() =
+	"++++ Duplicated test identities: TCASE ++++\n\n++++ The following module tests failed: TCASE1 ++++\n\n"
+	then ("ModuleTest.4a",true)::mdt013
+	else
+		("ModuleTest.4a",false)::mdt013;
+init_mt_results();
+store_mt_results manufac_res 0;
+val mdt013 = if get_mt_results() = [("TCASE",true)]
+	then ("ModuleTest.4b",true)::mdt013
+	else
+		("ModuleTest.4b",false)::mdt013;
+store_mt_results manufac_res2 0;
+val mdt013 = if get_mt_results() = [("TCASE",true),("TCASE2",true)]
+	then ("ModuleTest.4c",true)::mdt013
+	else
+		("ModuleTest.4c",false)::mdt013;
+val mdt013 = if summarize_mt_results() =
+		"All module tests passed."
+	then ("ModuleTest.4d",true)::mdt013
+	else
+		("ModuleTest.4d",false)::mdt013;
+=TEX
+
+\section{TESTING THE GENERATION OF TEST DATA}
+
+There is at present only one function which generates
+test data, {\it gen\_fail\_msg}.
+
+\subsection{gen\_fail\_msg}
+
+Here we wish to test the function {\it gen\_fail\_msg}
+which will generate a failure/error message string from
+its parameters and by consulting the database of error
+messages. The first thing we do is to ensure that
+we have a message in the database, and that we know what
+it is.
+
+=SML
+val msgid=1000;
+val msgtext = "Module Test Error";
+pp'change_error_message {id=msgid, text=msgtext};
+=TEX
+
+Next we generate expected output for a fail exception.
+
+=SML
+val fail_output = fail "mdt013" msgid []
+	handle Fail msg => get_message msg;
+=TEX
+
+Now we test that message generated by {\it gen\_fail\_msg}
+matches the expected output.
+
+=SML
+val mdt013 =
+	if (gen_fail_msg "mdt013" msgid []) = fail_output
+	then ("ModuleTest.5a",true)::mdt013
+	else
+		("ModuleTest.5a",false)::mdt013;
+=TEX
+We repeat the test once more, but for messages which
+involve substitution of strings as described
+in \cite{DS/FMU/IED/DTD002}.
+
+=SML
+val msgtext = "Module Test Error ?0 ?1 ?2 ?0";
+pp'change_error_message {id=msgid, text=msgtext};
+val fail_output = fail "mdt013" msgid [(fn () => "arg0"),(fn () => "arg1"),(fn () => "arg2"),
+	(fn () => "arg3")]
+	handle Fail msg => get_message msg;
+=TEX
+=SML
+val mdt013 =
+	if (gen_fail_msg "mdt013" msgid ["arg0","arg1","arg2"])
+	= fail_output
+	then ("ModuleTest.5b",true)::mdt013
+	else
+		("ModuleTest.5b",false)::mdt013;
+
+=TEX
+Now check for missing arguments:
+=SML
+val fail_output = fail "mdt013" msgid [(fn () => "arg0"),(fn () => "arg1"),(fn () => "BAD1")]
+	handle Fail msg => get_message msg;
+=TEX
+=SML
+val mdt013 =
+	if (gen_fail_msg "mdt013" msgid ["arg0","arg1"])
+	= fail_output
+	then ("ModuleTest.5c",true)::mdt013
+	else
+		("ModuleTest.5c",false)::mdt013;
+
+=TEX
+
+\section{FUNCTIONS WHICH RUN THE TESTS}
+
+\subsection{mt\_runf}
+
+First we set up a new data type constructed from an int.
+We write a function which compares the value of the new type
+with an int, and if they are equal, returns true, else returns
+false.
+
+=SML
+datatype REL = Rel of int;
+
+fun is_eq (i : int, r as Rel n) = i = n;
+val r1 = Rel 4;
+val r2 = Rel 6;
+=TEX
+
+The test data used simply comprises arithmetic functions,
+values for input, and expected outputs of a different type.
+The aim is to check that {\it mt\_runf} correctly uses
+the function {\it is\_eq} to check the result.
+
+=SML
+fun testdata ()= [
+("ModuleTest.6b",(curry (op + )) 3, 1, r1),
+("ModuleTest.6a",(curry (op * )) 2, 3, r2)
+];
+
+val mdt013 = (mt_runf is_eq (testdata()))@mdt013;
+=TEX
+
+
+\subsection{mt\_run}
+
+As in the previous test, we use test data which is constructed
+out of known-to-work functions, {\it hd} and {\it tl}.
+
+=SML
+
+fun testdata () = [
+("TC1",hd, [3,4,5,6], 3),
+("TC2",hd, [2,4,6,8,10], 4),
+("TC3",(hd o rev), [3,4,5,6], 6),
+("TC4",(hd o rev), [2,4,6,8,10], 10)
+];
+val res = [("TC1", true), ("TC2", false), ("TC3", true), ("TC4", true)];
+val mdt013 = if mt_run (testdata ())= res
+	then
+		("ModuleTest.7a",true)::mdt013
+	else
+		("ModuleTest.7a",false)::mdt013;
+=TEX
+
+\subsection{mt\_run\_fail}
+
+Before carrying out this test, we need to check that
+the database of error messages contains at least one message,
+and that we know what it is.
+
+=SML
+val msgid=1000;
+val msgtext = "Module Test Error";
+pp'change_error_message {id=msgid, text=msgtext};
+=TEX
+
+=SML
+fun testdata () = [
+("TC1",fail "mdt013" msgid, [], gen_fail_msg "mdt013" msgid []),
+("TC2",fail "any" msgid, [], gen_fail_msg "any" msgid [])
+];
+
+val res = [("TC1",true),("TC2",true)];
+val mdt013 = if mt_run_fail (testdata()) = res
+	then
+		("ModuleTest.8a",true)::mdt013
+	else
+		("ModuleTest.8a",false)::mdt013;
+=TEX
+
+We jump onto the next test case group briefly, since
+the data set up here is suitable.
+
+=SML
+val res = [("TC1",false),("TC2",false)];
+val mdt013 = if mt_run_error (testdata()) = res
+	then
+		("ModuleTest.9b",true)::mdt013
+	else
+		("ModuleTest.9b",false)::mdt013;
+=TEX
+
+Finally, we check that if we are expecting a Fail exception
+to be raised, and one isn't then an error is recorded.
+
+=SML
+fun testdata () = [
+("TC1",hd, [3,4,5], gen_fail_msg "mdt013" msgid [])
+];
+
+val res = [("TC1",false)];
+val mdt013 = if mt_run_fail (testdata()) = res
+	then
+		("ModuleTest.8c",true)::mdt013
+	else
+		("ModuleTest.8c",false)::mdt013;
+=TEX
+
+\subsection{mt\_run\_error}
+
+We construct test data which when evaluated with raise
+Error exceptions.
+
+=SML
+fun testdata () = [
+("TC1",error "mdt013" msgid, [], gen_fail_msg "mdt013" msgid []),
+("TC2",error "any" msgid, [], gen_fail_msg "any" msgid [])
+];
+
+val res = [("TC1",true),("TC2",true)];
+val mdt013 = if mt_run_error (testdata()) = res
+	then
+		("ModuleTest.9a",true)::mdt013
+	else
+		("ModuleTest.9a",false)::mdt013;
+=TEX
+
+We jump back to the previous test case group briefly, since
+the data set up here is suitable, and we missed it out then.
+
+=SML
+val res = [("TC1",false),("TC2",false)];
+val mdt013 = if mt_run_fail (testdata()) = res
+	then
+		("ModuleTest.8b",true)::mdt013
+	else
+		("ModuleTest.8b",false)::mdt013;
+=TEX
+
+Finally, we check that if we are expecting an Error exception
+to be raised, and one isn't then an error is recorded.
+
+=SML
+fun testdata () = [
+("TC1",hd, [3,4,5], gen_fail_msg "mdt013" msgid [])
+];
+
+val res = [("TC1",false)];
+val mdt013 = if mt_run_error (testdata()) = res
+	then
+		("ModuleTest.9c",true)::mdt013
+	else
+		("ModuleTest.9c",false)::mdt013;
+=TEX
+
+Finally, we summarize the results manually.
+
+=SML
+fun all_ran nil = true
+  | all_ran ((a,b)::xs) = (
+	if b = false
+	then
+		false
+	else
+		all_ran xs);
+
+val mdt013 = rev mdt013;
+val mdt013_summary = all_ran mdt013;
+=TEX
+
+If the value of {\it mdt013\_summary} is true, then
+the module test harness has passed its module tests.
+
+Now let's fake all the above into a sequence of conventional module tests:
+=SML
+init_mt_results();
+store_mt_results Combinators.I mdt013;
+diag_string(summarize_mt_results());
+=TEX
+
+%\newpage
+%\twocolumn[\section{INDEX OF DEFINED TERMS}]
+%\printindex
+\end{document}
+
+
+

@@ -1,0 +1,983 @@
+=IGN
+********************************************************************************
+dtd030.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design for the Subgoal Package}
+
+\def\AbstractText{This document gives a detailed design for the subgoal package in ICL HOL. This allows tactics to be used in a backward proof mechanism.}
+
+\def\Reference{DS/FMU/IED/DTD030}
+
+\def\Author{K. Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: \TPPtitle{Detailed Design for the Subgoal Package}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Detailed Design for the Subgoal Package}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD030}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.26 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2003/04/02 11:21:15 $ %
+%% LaTeX2e port: }}  %% Mandatory field
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document gives a detailed design for the
+%% LaTeX2e port: subgoal package in ICL HOL.
+%% LaTeX2e port: This allows tactics to be used in a backward proof mechanism.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Project Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{Document Control}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/06/25)]
+First version.
+\item [Issue 1.2 (1991/06/27)]
+Major changes after RDA comments.
+\item [Issue 1.3 (1991/06/28)]
+Main Goal stack made ``infinite''.
+Operations that change the number of states on this stack now inform the
+user about the current number.
+Added $top\_thm$.
+Added a relabelling feature to $modify\_goal\_state\_thm$.
+\item [Issue 1.4 (1991/07/09)]
+Changes during implementation.
+\item [Issue 1.5 (1991/07/10)]
+Changes during testing.
+Added $pp'ts\_thm$.
+Corrected errors.
+\item [Issue 1.6 (1991/07/15)]
+Capitalised error messages.
+\item [Issue 1.7 (1991/07/22)]
+Changed format of goal printing.
+Added $before\_kernel\_state\_change$ material.
+Changes following comments on issue 1.6.
+Added message 30058.
+$top\_current\_goal$ becomes $top\_goal$.
+Mentioned sensitivity to additional assumptions
+in deficiencies section.
+\item [Issue 1.8 (1991/07/22)]
+Fixed a typo.
+\item [Issue 1.9 (1991/07/23)]
+Fixed reproduction of message 30058.
+\item [Issue 1.10 (1991/08/02)]
+Changes after comments.
+Various clarifications, and a strengthening of the requirements
+on an acceptable main goal.
+\item [Issue 1.11 (1991/08/16)]
+Withdraw some checks from $push\_goal$.
+Rearrange some messages.
+\item [Issue 1.12 (1991/09/25),1.13 (1991/09/25)]
+Improved error messages,
+added a ``quiet'' mode,
+and added setting type context based on current subgoal.
+\item [Issue 1.14 (1991/10/22)]
+Improved error messages.
+\item [Issue 1.15 (1992/01/17)]
+Changes to $subgoal\_package\_quiet$, effect of duplicate free variables in goal, no longer observes kernel state change, message 30055.
+
+\item[Issue 1.16 (1992/01/20)] Updated to use new fonts.
+\item [Issue 1.17 (1992/03/18)]
+Added $set\_goal$.
+\item [Issue 1.18 (1992/06/26) (June 26th 1992)]
+Undo stacks persist over pushing and popping goals,
+added $subgoal\-\_package\-\_size$.
+\item [Issue 1.19 (1992/06/29) (June 26th 1992)]
+Minor tidying.
+\item [Issue 1.20 (1992/07/24) (24th July 1992)]
+Added message 30018.
+\item [Issue 1.22 (1993/01/07) (15th December 1992)]
+Added $pending\_reset\_subgoal\_package$.
+\item [Issue 1.23 (1999/02/12) (7th January 1993)]
+Added mention of flag defaults.
+\item[Issue 1.24 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.25 (2002/10/17)] PPHol-specific updates for open source release.
+\item[Issue 1.26 (2003/04/02)] New error message to clarify the situation when a tactic generates a hypothesis
+that cannot be interpreted as a goal.
+\item[Issue 1.27 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains a detailed design for the
+subgoaling package.
+This is called for in \cite{DS/FMU/IED/HLD009}.
+The design is
+implemented in \cite{DS/FMU/IED/IMP030}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains a detailed design for the
+subgoal package in Release 001 of ICL HOL.
+This document is based on the discussion document
+\cite{DS/FMU/IED/WRK018}.
+\subsubsection{Dependencies}
+Loading this document is dependent on those
+files indicated as preceding it in the ICL HOL release 001 makefile.
+In particular it depends on \cite{DS/FMU/IED/IMP009},
+in which
+the type abbreviations $TACTIC$, $GOAL$ and $PROOF$ are defined.
+\subsubsection{Deficiencies}
+The document mixes functions which are tools for the naive user
+and those for the advanced system builder, which makes for an uneven presentation.
+
+To be handled properly by the subgoal package the proofs given by tactics must be written to be insensitive to additional assumptions to those requested being present
+in its argument theorems.
+This will be true of all ICL supplied tactics,
+and is likely to be true of any tactic, but
+certain coding techniques may cause problems.
+\subsubsection{Possible Enhancements}
+The subgoal package as stated provides no direct link to
+whatever conversion package becomes available.
+It may be that the interface already provided is sufficient to
+link the two packages, or a later release of this document may
+provide a more specific link.
+
+The package does not contain any integral help system:
+such as tactic suggestions.
+This is because in release 001 the appropriate level of functionality could be satisfactorily provided outside of the
+package.
+If the help system was to maintain, for instance, a window
+offering tactic suggestions based on the current goal,
+then this, or some notification mechanism, would need to be embedded within the system.
+\subsubsection{General Comments}
+All functions require all their arguments to begin evaluation,
+unless otherwise noted.
+
+Note also that the order of declaration given in this document will
+not necessarily reflect the order of implementation in
+\cite{DS/FMU/IED/IMP030}.
+
+\newpage
+\section{DISCUSSION}
+Some of the following is originally covered in \cite{DS/FMU/IED/DTD009}.
+
+A {\em tactic} is a function which attempts to {\em achieve}, or progress the achievement of, a goal.
+Here a {\em goal} is just a sequent (of type $SEQ$),
+and achievement would be providing a theorem which achieves the goal.
+Here, roughly speaking,
+a theorem, $\Gamma⊢t$, {\em achieves} a goal, $gl$,
+iff. $gl = (\Gamma, t)$.
+The assumptions of a goal are associated with a numeric label, the first in the list of assumptions of a goal being labelled ``1'',
+the second ``2'', etc.
+
+Given a goal of a form which it finds acceptable, a tactic
+returns a list of new goals (often referred to as
+the {\em subgoals}), together with a {\em proof}, i.e. a function
+value which given theorems achieving the subgoals can compute a theorem
+matching the original goal.
+
+A {\em goal state} contains the state of a proof within the subgoal package.
+In particular it contains the goals yet to be achieved,
+and a theorem embodying the inference work so far.
+A user invokes the subgoal package by setting a {\em main goal}:
+which is the sequent they wish to achieve by a theorem.
+This produces an initial {\em goal state}, that is
+pushed onto
+the {\em main goal stack}.
+It is an infinite stack (within memory bounds).
+The user may ``pop'' main goals from this stack either by achieving and then popping, or by abandoning (dropping) the current main goal.
+The {\em current goal state} is the top entry of the main goal stack.
+
+A goal state has a {\em current goal},
+and the user will {\em apply} tactics to the current goal of the
+current goal state.
+If the tactic returns some subgoals then the ``first'' of these
+will become the new current goal.
+If the tactic produces a theorem
+that achieves the current goal
+(i.e. the list of subgoals it generates is empty), then the {\em next goal}
+will become the current one
+(the next goal to a goal of a given label is defined in \ref{NextGoal}).
+The successful application of a tactic and of most other commands that affect the goal state will result in the
+current goal state being pushed onto the subgoal package's {\em undo buffer},
+and a new goal state, based on the tactics application, becomes the current one
+(replacing the previous ``current goal state'' at the top of the main goal stack).
+The user may then {\em undo} such commands by retrieving past
+goal states from the undo buffer to the limit of the buffer.
+If the buffer fills to its limit for an individual main goal, which may be set by the user,then it will discard the oldest goal states to make room for new ones.
+Note that an undo buffer is associated with each
+main goal,
+and so, for example, pushing a goal onto the main goal stack,
+and then dropping it
+will restore the original undo buffer contents, as well as its
+goal.
+The free variables of the current goal are, by default, used to maintain a type context (set $set\_ti\_context$)
+to simplify the typing of new terms using these variables.
+The feature can be truned off by $set\-\_subgoal\-\_package\-\_ti\-\_context$ $false$.
+
+Each goal within a goal state will have one or more {\em labels},
+by which the goal may be referred to.
+The labels will be presented to and input from the user as strings, consisting of natural numbers, separated by dots.
+The numbers indicate a subgoal of the goal indicated to the
+left of the number, e.g. ``1.2.3'' is the third subgoal of the
+goal labelled ``1.2''.
+If a goal has a single subgoal, that subgoal inherits the goals label.
+If the main goal is set normally (using $push\_goal$)
+then the single current goal will have label ``''
+(i.e. the empty string).
+
+The current goal state has as one component the current {\em goal state theorem}, which embodies the results of all successful tactic applications since the setting of the current main goal.
+If the main goal has been achieved then the goal state's {\em achieved theorem} is the theorem whose sequent is the main goal.
+
+When discussing the internal handling of goals we need to refer to a {\em term form} of our ({\em sequent form}) goals.
+These two forms are semantically equivalent.
+The term form uses the constant $pp'TS$ as a place marker for the sequent's turnstile.
+\section{THE SUBGOAL PACKAGE}
+=DOC
+signature ⦏SubgoalPackage⦎ = sig
+=DESCRIBE
+This provides the subgoal package, which provides an interactive backward proof mechanism, based on the application of
+tactics.
+=FAILURE
+30009	There are no goals to prove
+30017	Label ?0 has no corresponding goal
+30023	?0 cannot be interpreted as a goal
+30028	Label may not contain ?0, as less than 1
+30041	Label ?0 has been superseded
+30042	Label may not contain 0
+30043	Label ?0 has been achieved
+30045	Label cannot be empty
+30055	The last change to the subgoal package state was made in
+	a context which is no longer valid
+30056	The current goal contains distinct free variables
+	with the same names but different types, the names being ?0,
+	and a typing context is being maintained.
+	These free variables have not been put in the typing context
+30059	The current goal contains two or more distinct free variables
+	with the same name but different types, the name being ?0,
+	and a typing context is being maintained.
+	These free variables have not been put in the typing context
+30061	The tactic generated an invalid proof (?0). The goal state has not been changed
+=FAILUREC
+These messages are common to various functions in this
+document.
+Message 30055  indicates that the goal state theorem failed
+the $valid\_thm$ test: this could be a theory out of scope,
+a deletion of a definition, etc.
+Messages 30056 and 30057 are just for the user's information,
+though they should give cause to worry.
+=ENDDOC
+The following design errors should never occur - they are an act of ``defensive programming'':
+=FAILURE
+30015	DESIGN ERROR : duplicated label in labelled
+30021	DESIGN ERROR : goal is unprintable
+30031	DESIGN ERROR : superseded label in labelled
+30044	DESIGN ERROR : length of main_goal_stack ≠ length of undo_buffer
+=TEX
+\subsection{Type of Goal State}
+=DOC
+type ⦏GOAL_STATE⦎;
+=DESCRIBE
+This is an abstract data type that embodies a goal state,
+in particular it contains which goals are yet to be achieved
+and a theorem embedding the inference work so far.
+The subgoal package has a current goal state, a stack of
+goal states for different main goals, and a buffer of goal states to allow some operations to be undone.
+=SEEALSO
+$print\_goal\_state$
+=ENDDOC
+\subsection{Starting a New Main Goal}
+=DOC
+val ⦏push_goal⦎ : GOAL -> unit;
+=DESCRIBE
+Sets a new current main goal, creating an appropriate goal state and pushing it
+onto the main goal stack.
+The current (and only) goal in the new goal state will be the main goal, with label ``''.
+The current goal will be displayed.
+The current undo buffer will also be stacked, and a new empty
+one made current.
+=SEEALSO
+$set\_goal$
+=FAILURE
+30002	The conclusion of the goal, ?0, is not of type BOOL
+30003	An assumption of the goal, ?0, is not of type BOOL
+30004	Two assumption of the goal (?0 and ?1) are α-convertible
+30058	Two distinct variables with name ?0 occur free in the goal
+=ENDDOC
+The following is used to format the output of this, and various other functions:
+=FAILURE
+30001	Now ?0 goal?1 on the main goal stack
+=TEX
+Error 30058 reflects a design decision that though the subgoal package could handle such a goal, the user of
+the package is likely to be sooner or later confused
+by the clashes.
+A work around if the user really wishes to have a theorem with such clashes is to prove a theorem
+with different names using the subgoal package, and use $inst\_term\_rule$,
+$\alpha_conv$, etc, on the result.
+=DOC
+val ⦏set_goal⦎ : GOAL -> unit;
+=DESCRIBE
+This first discards, if it exists, the current main goal
+(but not any previously pushed main goals).
+It then sets a new current main goal, creating an appropriate goal state and pushing it
+onto the main goal stack.
+The current (and only) goal in the new goal state will be the main goal, with label ``''.
+The current goal will be displayed.
+The current undo buffer will also be stacked, and a new empty
+one made current.
+=GFT Defn
+set_goal gl = (drop_main_goal() handle (Fail _) => ();
+	push_goal gl);
+=USES
+In restarting a proof that has ``gone wrong'', perhaps by
+=GFT
+set_goal(top_main_goal());
+=TEX
+=SEEALSO
+$push\_goal$
+=FAILURE
+30002	The conclusion of the goal, ?0, is not of type BOOL
+30003	An assumption of the goal, ?0, is not of type BOOL
+30004	Two assumption of the goal (?0 and ?1) are α-convertible
+30058	Two distinct variables with name ?0 occur free in the goal
+=ENDDOC
+=DOC
+val ⦏push_goal_state_thm⦎ : THM -> unit;
+=DESCRIBE
+Given a theorem that is of the form of a goal state theorem
+(e.g. gained by $top\_goal\_state\_thm$, q.v.),
+set a new current main goal to be the conclusion of the input theorem
+(viewed as a term form goal).
+The current goal in the new goal state will be the first assumption of the input theorem, viewed as a term form goal.
+If it is the only assumption of the theorem argument then the corresponding goal will have label ``'';
+otherwise label ``1'',
+and the other assumptions of the theorem will become subsequent goals with labels ``2'',``3'',...
+This new goal state is pushed onto the main goal stack.
+The current undo buffer will also be stacked, and a new empty
+one made current.
+=USES
+For the advanced user, interested in partial proof.
+=FAILURE
+30005	?0 cannot be viewed as a goal state theorem
+30058	Two distinct variables with name ?0 occur free in the goal
+=ENDDOC
+The following are used to format the output for this, and
+various other functions:
+=FAILURE
+30047	Current goal is:
+30048	Current main goal has been achieved
+=TEX
+\subsection{Applying Tactics}
+\label{NextGoal}
+In discussing the following we need the concept of the {\em next goal}.
+If ``label'' is a valid label
+(i.e. a string of dot separated natural numbers),
+and ``n'' a string representation of an integer then the next goal of a goal labelled ``label.n'' is :
+\begin{itemize}
+\item
+If there are yet-to-be-achieved goals labelled ``label.m$\ldots$'', where $n\ <\ m$,
+then the goal of these labelled with the ``smallest'' suffix will be the next goal.
+\item
+Otherwise, if there are yet-to-be-achieved goals labelled ``label.m$\ldots$'', where $m\ <\ n$,
+then the goal of these labelled with the ``smallest'' suffix will be the next goal.
+\item
+Otherwise the next goal to label ``label.n'' is recursively defined as the ``next'' goal to the label ``label''.
+\end{itemize}
+Thus if we have the labels ``1.2'',``1.3.1'',``1.3.2'',``2.2'',``3'', and ``4.1'' in a goal state,
+then the next label to ``1.3.1'' is ``1.3.2'',
+the next to ``1.3.2'' is ``1.3.1'',
+the next to ``2.2'' is ``3'',
+and the next to ``4.1'' is ``1.2'.
+=DOC
+val ⦏apply_tactic⦎ : TACTIC -> unit;
+val ⦏a⦎ : TACTIC -> unit;
+=DESCRIBE
+$apply\_tactic$ applies a tactic to the current goal,
+and $a$ is an alias for it.
+If successful, the previous goal state will be put in the undo buffer, and the new goal state, current goal, etc,
+will be based on the tactic's application.
+If the tactic returns some subgoals then the ``first'' of these
+will become the new current goal.
+If there is only one subgoal it will inherit the label of the previous current goal, otherwise if the old label was ``label'' then it will be considered in the goal state as superseded,
+and the new subgoals will be labeled ``label.1'', ``label.2'', etc.
+If it produces a theorem
+that achieves the current goal
+(i.e. the list of subgoals is empty), then the ``next'' goal
+will become the current one,
+and the previous goal's label will be noted as achieved.
+
+The subgoals created, or if none, the ``next'' goal, will be displayed, using the format of $print\_goal$(q.v.),
+but with goal labels also given.
+Following the display of the new goals the subgoal package will issue warning messages about these goals if they are
+somehow ``suspicious'': for example it will warn if the
+goal state is not changed by applying the tactic.
+
+Warning 30018 will be issued if the tactic requests more subgoals than the number set by control $tactic\-\_subgoal\-\_warning$.
+This allows the user to avoid processing and printing large numbers of subgoals when these are probably unwanted.
+=SEEALSO
+$print\_goal$ for the display format of the goals.
+=FAILURE
+30007	There is no current goal
+30008	Result of tactic, ?0, did not match the current goal
+30018	Tactic has requested ?0 subgoals, which exceeds the threshold
+	set by tactic_subgoal_warning
+=ENDDOC
+=DOC
+(* ⦏tactic_subgoal_warning⦎ : integer control *)
+=DESCRIBE
+Warning 30018 will be issued by $apply\_tactic$ (and $a$)
+if the tactic requests more subgoals than the number set by this control.
+This allows the user to avoid processing and printing large numbers of subgoals when these are probably unwanted.
+The default value is 20.
+If the value is less than zero then the warning will never be issued.
+=ENDDOC
+
+The following are used to format the output from this function:
+=FAILURE
+30006	The subgoal ?0 is α-convertible to its goal
+30029	Tactics proof introduced the subgoal ?0 but did not request it as a subgoal
+30030	Tactics proof introduced the subgoal ?0, did
+	did not request it as a subgoal, and the
+	resulting subgoal is duplicated as goal?1 labelled ?2
+30032	The subgoal ?0 duplicates goal?1 labelled ?2
+30033	Tactic requested the following unnecessary subgoal:
+30034	Tactic did not change the goal state
+30035	Current goal achieved, next goal is:
+30036	Current and main goal achieved
+30037	Tactic produced ?0 subgoal?1:
+=TEX
+The following design error should never occur - it is an act of ``defensive programming'':
+=FAILURE
+30020	DESIGN ERROR : corrupted goal state
+=TEX
+\subsection{The Results of the Package}
+=DOC
+val ⦏pop_thm⦎ : unit -> THM;
+=DESCRIBE
+If the top achieved theorem
+is available
+(i.e. the theorem whose sequent is the main goal has been achieved),
+this function returns it,
+and then pops the previous goal state (if any) off the main goal stack,
+restoring its current goal and labelling.
+If present, the new current top goal will be displayed in the format used by $print\_goal$.
+If the current proof is incomplete the function fails, having no effect.
+
+If the user wishes to examine the top achieved theorem without
+popping the main goal stack, then they should use $top\_thm$ (q.v.).
+
+The user will be informed if main goal has changed from the initially set main goal, by using $modify\_goal\_state\_thm$(q.v.).
+=SEEALSO
+$save\_pop\_thm$, $top\_thm$
+=FAILURE
+30010	The subgoal package is not in use
+30011	The current proof is incomplete
+=ENDDOC
+The following is used in this and other functions display:
+=FAILURE
+30024	The main goal has changed from the initially set main goal
+=TEX
+=DOC
+val ⦏top_thm⦎ : unit -> THM;
+=DESCRIBE
+If the top achieved theorem
+(i.e. the theorem whose sequent is the main goal has been achieved)
+is available, this function returns it,
+without affecting the current goal state.
+If the current proof is incomplete the function fails.
+
+The user will be informed if main goal has changed from the initially set main goal, by using $modify\_goal\_state\_thm$(q.v.).
+=SEEALSO
+$pop\_thm$, $save\_pop\_thm$
+=FAILURE
+30010	The subgoal package is not in use
+30011	The current proof is incomplete
+=ENDDOC
+=DOC
+val ⦏save_pop_thm⦎ : string -> THM;
+=DESCRIBE
+If the top achieved theorem
+is available
+(i.e. the theorem whose sequent is the main goal has been achieved),
+this function returns it,
+as well as saving it under the given string key on the current theory,
+and then pops the previous goal state (if any) of the main goal stack,
+restoring its current goal and labelling.
+If present, the new current top goal will be displayed in the format used by $print\_goal$.
+If the current proof is incomplete, or the key is already used in the current theory, the function fails, having no effect.
+
+The user will be informed if main goal has changed from the initially set main goal, by using $modify\_goal\_state\_thm$(q.v.).
+
+The user will be informed if main goal has changed from the initially set main goal, by using $modify\_goal\_state\_thm$(q.v.).
+=SEEALSO
+$pop\_thm$, $top\_thm$
+=FAILURE
+30010	The subgoal package is not in use
+30011	The current proof is incomplete
+=FAILUREC
+Failures also as $save\_thm$, but given as originating from this function.
+=ENDDOC
+=DOC
+val ⦏top_goal_state_thm⦎ : unit -> THM;
+=DESCRIBE
+This returns the goal state theorem of the current goal state.
+It is a partial proof of the main goal, though in a somewhat unwieldy form,
+as it encodes the main goal, and its other goals in a term form.
+It may be simplified by using $simplify\_goal\_state\_thm$(q.v.).
+The theorem is suitable for setting a new main goal, by using $push\_goal\_state\_thm$(q.v.).
+The user is informed if the goal state has achieved its theorem
+The user will also be informed if main goal has changed from the initially set main goal, by using $modify\_goal\_state\_thm$(q.v.).
+=USES
+For the advanced user, interested in partial proofs.
+=FAILURE
+30010	The subgoal package is not in use
+=ENDDOC
+We use the following to format the user's output:
+=FAILURE
+30038	Goal state has achieved its theorem
+=TEX
+=DOC
+val ⦏simplify_goal_state_thm⦎ : THM -> THM;
+=DESCRIBE
+This will simplify a goal state theorem
+(e.g from $top\_goal\_state\_thm$, q.v.), stripping off assumptions from the conclusion of the theorem up to the turnstile place marker, then removing the place marker itself in both conclusion and assumptions.
+=USES
+For the advanced user, interested in partial proofs.
+=FAILURE
+30005	?0 cannot be viewed as a goal state theorem
+=ENDDOC
+=DOC
+val ⦏drop_main_goal⦎ : unit -> GOAL;
+=DESCRIBE
+Pop the current goal state from the main goal stack
+throwing away it and any work upon it,
+and
+making the previous entry on the stack the new current goal state,
+displaying the current top goal, if appropriate.
+The function returns the main goal dropped.
+=FAILURE
+30010	The subgoal package is not in use
+=ENDDOC
+\subsection{Undoing and Redoing}
+=DOC
+val ⦏undo⦎ : int -> unit;
+=DESCRIBE
+$undo$ $n$ will take the $n$th entry from the undo buffer, if there are sufficient,
+as the current goal state.
+Attempting to go past the end of the buffer will cause a failure, rather than a partial undoing.
+A single $undo$ command can itself be undone by $redo$(q.v.),
+but otherwise entries on the undo buffer between its start and the $n$th entry will be discarded.
+
+Note that the undo buffer is stacked on starting a new main goal (e.g. with $push\_goal$), and unstacked on popping the current
+main goal (e.g. with $pop\_thm$ or $drop\_main\_goal$).
+=FAILURE
+30010	The subgoal package is not in use
+30012	Attempted to undo ?0 time?1 with only ?2 entr?3 in the undo buffer
+30013	Must undo a positive number of times
+=ENDDOC
+=DOC
+val ⦏redo⦎ : unit -> unit;
+=DESCRIBE
+If the last command to affect the goal state was an $undo$(q.v.)
+then this command will undo its effect
+(including leaving the undo buffer in its previous form,
+without mention of the $undo$ or $redo$).
+=FAILURE
+30014	The last command to affect the goal state was not an undo
+=ENDDOC
+\subsection{Navigation}
+=DOC
+val ⦏set_labelled_goal⦎ : string -> unit;
+=DESCRIBE
+If the string is a valid label in the current goal state,
+then set the corresponding goal as the current goal,
+and then display it.
+=FAILURE
+30010	The subgoal package is not in use
+30016	?0 is not of the form "n1.n2....nm"
+=ENDDOC
+\subsection{Handling Goal States}
+=DOC
+val ⦏top_goal_state⦎ : unit -> GOAL_STATE;
+=DESCRIBE
+This provides the current goal state as a value:
+note that a goal state does not contain an undo buffer,
+and thus function does not return the current undo buffer.
+=SEEALSO
+$push\_goal\_state$
+=FAILURE
+30010	The subgoal package is not in use
+=ENDDOC
+=DOC
+val ⦏push_goal_state⦎ : GOAL_STATE -> unit;
+=DESCRIBE
+If the value given is ``well-formed'', then this function pushes the current goal state onto the main goal stack,
+and sets the given value as the current goal state.
+The most likely reason that a goal state value is ill-formed
+is that it is not being pushed in the same context as it was formed, e.g. it was formed in a theory that is now out of scope, e.g. because the user has changed theory since
+the states creation.
+The current undo buffer will also be stacked, and a new empty
+one made current.
+=SEEALSO
+$top\_goal\_state$
+=ENDDOC
+=DOC
+val ⦏pending_reset_subgoal_package⦎ : unit -> unit -> unit;
+=DESCRIBE
+This function, applied to $()$ takes a snapshot of
+ the current subgoal package state - its stack of goal states, undo and redo buffers,
+and implicitly the current goal label, etc.
+This snapshot, if then applied to $()$ will overwrite
+the then current subgoal package state with the snapshot.
+This does not reset, e.g., the current theory to the one at the time of taking the snapshot, so care must be taken in using this function.
+=USES
+Primarily in saving the subgoal package state between sessions of
+\Product{}, via $save\-\_and\-\_quit$.
+=ENDDOC
+\subsection{Information Requests}
+The format of a printed goal has been chosen with two aims in mind:
+\begin{itemize}
+\item
+All the constituents of the goal should be easily identified,
+accessed, and seperable.
+Thus each assumption is labelled; the goal is separated by a blank line and given a distinct label;
+and the first few columns of the output will only contain
+labels.
+\item
+We expect to have to display large goals, which will overflow the screen, and thus are careful to ensure the likely important material will be on screen by preference.
+Thus the conclusion of the goal is displayed last, and the
+first assumption second from last.
+The first assumption will usually be the latest addition to the asumption list, and therefore more likely to be of interest than the oldest assumption.
+\end{itemize}
+=DOC
+val ⦏print_goal⦎ : GOAL -> unit;
+=DESCRIBE
+Display a goal (i.e. a conclusion and a list of assumptions)
+in the manner of the other subgoal package functions.
+This presents the list of assumptions in the goal first, numbered by their position, and
+in reverse order,
+and then the conclusion, distinguished from the assumptions by a turnstile.
+=EXAMPLE
+(* 	3 *)	⌜a ⇒ ¬ b⌝
+(* 	2 *)	⌜a ⇒
+		 a ⇒
+		 a ⇒ b⌝
+(*	1 *)	⌜¬ b ⇒ a⌝
+
+(*	?⊢ *)	⌜a ∨ b⌝
+
+=TEX
+where $⌜¬\ b\ ⇒\ a⌝$ is the first assumption, and the second assumption is too long to fit on one line.
+Then with no assumptions:
+=EXAMPLE
+(*	?⊢ *)	⌜a ∨ b⌝
+
+=TEX
+
+=ENDDOC
+The following four messages are methods of parameterising the
+output of the subgoal package.
+See \cite{DS/FMU/IED/IMP030} for details.
+Note that messages 30053, 30054, 30057 have two spaces after their last printed character,
+and messages 30052, 30054 and 30057 should have ``?0'' set to
+``$\backslash n$'' in the implementation (regardless of whether ``?0'' is present in the message below)
+.
+In sumary their uses are:
+
+\begin{tabular}{| l | l|} \hline
+30052 & Format a goal label \\
+30053 & Format an assumption label \\
+30054 & Format a conclusion label if there are assumptions \\
+30057 & Format a conclusion label if no assumptions \\ \hline
+\end{tabular}
+
+=FAILURE
+30052	?0(* *** Goal "?1" *** *)?0
+30053	(* ?0 *)
+30054	?0(* ?1?⊢ *)
+30057	(* ?1?⊢ *)
+=TEX
+=DOC
+val ⦏top_main_goal⦎ : unit -> GOAL;
+=DESCRIBE
+Return the current main goal: the objective of the current proof attempt.
+=FAILURE
+30025	There is no current main goal
+=ENDDOC
+=DOC
+val ⦏top_goal⦎ : unit -> GOAL;
+=DESCRIBE
+Returns the current goal of the current goal state: the goal to which a tactic will be applied.
+=FAILURE
+30026	There is no current goal
+=ENDDOC
+=DOC
+val ⦏print_current_goal⦎ : unit -> unit;
+=DESCRIBE
+Displays, with its label, the current goal of the current goal state: the goal to which a tactic will be applied.
+=FAILURE
+30026	There is no current goal
+=ENDDOC
+=DOC
+val ⦏top_current_label⦎ : unit -> string;
+=DESCRIBE
+Returns the label of the current goal: the goal to which a tactic will be applied.
+=FAILURE
+30026	There is no current goal
+=ENDDOC
+=DOC
+val ⦏top_labelled_goal⦎ : string -> GOAL;
+=DESCRIBE
+Returns the goal with the given label, should it exist in the current goal state.
+Note that superseded and achieved goals are not available from the goal state.
+=FAILURE
+30016	?0 is not of the form "n1.n2....nm"
+=ENDDOC
+=DOC
+val ⦏get_asm⦎ : int -> TERM;
+=DESCRIBE
+$get\_asm$ $n$ returns the $n$th assumption of the current goal.
+=FAILURE
+30026	There is no current goal
+30027	There is no assumption ?0 in the current goal
+=ENDDOC
+=DOC
+val ⦏top_goals⦎ : unit -> (string list * GOAL)list;
+=DESCRIBE
+Returns all the goals yet to be achieved, and their associated labels (they may have more than one), in the current goal state.
+=USES
+To determine what goals are left to achieve.
+=FAILURE
+30010	The subgoal package is not in use
+=ENDDOC
+=DOC
+val ⦏print_goal_state⦎ : GOAL_STATE -> unit;
+=DESCRIBE
+Display the given goal state.
+This displays the main goal, the goals yet to be proven,
+and the current goal.
+=ENDDOC
+We use the following text strings in formatting the output
+of $print\_goal\_state$:
+=FAILURE
+30049	Main goal is:
+30050	Goals to be proven are:
+=TEX
+=DOC
+val ⦏subgoal_package_size⦎ : unit -> int;
+=DESCRIBE
+This returns the size of the subgoal package's storage,
+in words - where one word is four bytes.
+
+This facility is not available in all versions of {\Product}.
+The function will produce the following warning message and return
+$-1$ in this case
+=FAILURE
+30060	This function is not supported in this version of ProofPower
+=ENDDOC
+=ENDDOC
+\subsection{Parameterising the Subgoal Package}
+=DOC
+(* ⦏undo_buffer_length⦎ : int *)
+=DESCRIBE
+This is a system control, handled by $set\_int\_control$, etc,
+which sets the maximum number of entries that can be held on
+the undo buffer for each main goal: i.e. how many tactic applications, etc, may be undone.
+It is initially set to 12,
+and cannot be made negative.
+Any changes to this parameter will take immediate
+effect upon the undo buffers stored for all the
+main goals, i.e. if necessary they will be shortened
+at the point of changing the value, rather
+than at the point of, e.g., applying a new tactic.
+=ENDDOC
+=DOC
+(* ⦏subgoal_package_quiet⦎ : bool *)
+=DESCRIBE
+This is a system control, handled by $set\_flag$.
+If set to false (the default) then the package narrates its progress as
+described in the design of its components.
+If set to true then the package will cause no output other
+than the actual results of functions.
+This includes, e.g., $print\_goal$ and $apply\_tactic$.
+=USES
+For running the package offline.
+=ENDDOC
+This is $true$ during the system build, but set to its default, $false$, in \cite{DS/FMU/IED/IMP036}.
+
+=DOC
+(* ⦏subgoal_package_ti_context⦎ : bool *)
+=DESCRIBE
+$subgoal\_package\_ti\_context$ is a system control flag, as handled by $set\_flag$, etc.
+If set to true (the default) then the type context will be set and maintained,
+via $set\_ti\_context$(q.v.), to be just the free variables of the
+current goal, each time the current goal changes.
+If false, then the type context will be cleared and left
+unchanged by goal state changes.
+If the current goal has free variables with the same name and differing
+types this will cause $set\_ti\_context$ to ignore those
+variables, raising the comment message 30056.
+=ENDDOC
+\subsection{Modifying the Goal State Theorem}
+=DOC
+val ⦏modify_goal_state_thm⦎ : (THM -> THM) -> ((string list * GOAL)list) -> unit;
+=DESCRIBE
+$modify\_goal\_state\_thm$ $rule$ $label$ is a powerful hook into the subgoal package that works as follows:
+\begin{enumerate}
+\item
+Extract the goal state theorem
+\item
+Apply a user-supplied inference rule $rule$ to the theorem.
+\item
+Make a new goal state, in which the goal state theorem is this
+ new theorem.
+\item
+In the new goal state any goals found
+(up to $\alpha$-conversion) in the association list $label$
+will be labelled with their corresponding labels in the association list.
+Multiple entries for the same goal in the list will cause the labels to be
+accumulated, resulting in duplicated goals in the new goal state.
+If $top\_goals()$ (q.v.) is used for this association list
+then all unchanged goals will gain their original labels.
+\item
+Label otherwise unlabelled goals with unused single natural number labels (the first available ones from the list ``1'', ``2'',...)
+\item
+Treat this new goal state as if it had been created by a tactics application, e.g. it becomes the current goal state,
+the previous goal state is put on the undo list, the user is
+told the next goal to prove, etc.
+\end{enumerate}
+
+This will issue a warning on its use should the main goal have changed, and on attempting to extract
+an achieved, or goal state, theorem from a goal state that
+is derived from the modified one.
+This is so that the user is warned that the result of an apparently successful $pop\_thm$ is not
+an achievement of the initially set main goal.
+=USES
+This function is intended for system builders wishing to write extensions to the package that change the overall proof tree, not an individual goal.
+=FAILURE
+30039	Two labels clash: ?0 and ?1
+30040	Duplicate labels ?0 given for different terms
+30051	Inference rule returned '?0' which is not a goal state theorem
+=ENDDOC
+
+Two example uses of it are:
+\begin{enumerate}
+\item
+Add an assumption to the main goal ``on the fly''.
+This would involve adding the assumption to the
+conclusion of the goal state theorem,
+as well as to each goal's assumption list (held in a term form).
+This will save on having to restart the subgoal package if the original main
+goal was not satisfiable, but an additional assumption
+would allow it to become so.
+\item
+Combine two goals into one, by having the inference rule
+``merge'' the two assumptions representing the goals,
+into a single  term form goal.
+\end{enumerate}
+Both these uses could allow the proof structure to be recovered
+using the $label$ association list.
+\subsection{Supporting Theory}
+=DOC
+(* ⦏pp'TS⦎ *)
+=DESCRIBE
+The theory will contain a constant named $pp'TS$,
+defined by a definition with key ``pp'TS''.
+=GFT Definition
+⊢ ∀ x ⦁ (pp'TS x) ⇔ x
+=TEX
+This is used in creating a term form goal.
+Using this constant explicitly within the subgoal
+package may cause unexpected behaviour.
+=USES
+THe definition may be used when analysing goal state theorems, or using
+$modify\-\_goal\-\_state\-\_thm$ (q.v.) - both operations
+are only for the advanced user or extender of the system.
+=ENDDOC
+\section{END OF THE SIGNATURE}
+=SML
+end; (* signature of SubgoalPackage *)
+=TEX
+\section{TEST POLICY}
+The functions in this document should be tested according to the criteria given in
+\cite{DS/FMU/IED/PLN008}.
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+

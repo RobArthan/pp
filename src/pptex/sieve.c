@@ -62,6 +62,52 @@ Implement support for utf8 file and unicode characters
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+\subsection{Change History}
+
+Apologies for the loss of change history over the period in which utf8 support
+has been under developmnent, I hope now to resume some measure of historical
+note.
+
+05/07/2019 
+
+It was originally intended that sieve be capable (at least for a transition period)
+of reading files either in "ext" or utf8 and of writing files eiyher in "ext" or utf8 (independently selectable, to that tranlations would be supported).
+This is tricky so we have stepped back from that generality.
+Translations are now handled by pp_file_conv (built on the same code base),
+and so sieve itself no longer needs to support that functionality, and can be built
+to operate either with "ext" input and output or with utf8 input and output.
+The present version, as I write, seems OK for "ext" (ProofPower builds),
+but is deficient in its processing of utf8 input for utf8 output, and this defect is
+what I am now seeking to remedy.
+
+THe main reason for this is the the mistaken design choice that utf8 output should be
+triggered by an option on the cat action (so that different types of content might
+have different output types (e.g. utf8 for SML but not for tex files).
+This doesn't work for the simple reason that not all output, even for SML, is created
+by cat!
+
+With the simplification that all output be uniform (i.e. all ext or all utf8) the
+choice between them need not be triggred by parameters in the .svf file, but can
+be driven by the "-u" command line parameter.
+So now all the rest of code has to be changed for utf8 processing, not just cat.
+
+The first step in this which I am now engaged in is the reading of utf8 .svf files,
+and the first part of that is changing the data structures so that they can hold unicode.
+
+9/2019
+
+Correction to mlchar mode in utf8 mode.
+
+03/10/2019
+
+Changing to default utf8 rather than ext (see {\it main}).
+
+29/12/2019
+
+Expect and read keyword files in utf8 when other files are in utf8.
+Select default keyword file appropriate to encoding.
+(this fixes a bug arising from reading keyword files and compiling regexes in macros in the C locale and then executing them in a utf8 locale).
+
 \section{SIEVE PROGRAM}
 
 \subsection{Initial Declarations}
@@ -78,17 +124,20 @@ Implement support for utf8 file and unicode characters
 #include <errno.h>
 #include <regex.h>
 #include <unistd.h>
+#include <locale.h>
+#include <wctype.h>
+#include <wchar.h>
+
 #include "utf8module.h"
 #ifdef __CYGWIN__
-#include <locale.h>
 #endif
 
 #define MAX_CAT (80+1)
 #define MAX_ACTION 20
 #define NOT_FOUND (-1)
 
-#define STEER_FILE "sieveview"
 #define KEYWORD_FILE "sievekeyword"
+#define UKEYWORD_FILE "utf8skw"
 
 #define PPHOME "PPHOME"
 #define PPETCPATH "PPETCPATH"
@@ -111,9 +160,6 @@ char *coprlemma1 =
 #endif
      " Copyright Lemma 1 Ltd.";
 
-#define FPRINTF (void)fprintf
-#define PRINTF (void)printf
-#define PUTC (void)putc
 /*
 
 
@@ -124,8 +170,7 @@ Macro {\tt PrNN_SIZE} is described with function {\tt copy_PrNN} in section~\ref
 */
 #define PrNN_SIZE 7
 
-int copy_PrNN(char *str, int code);
-
+int copy_PrNN(wchar_t *str, int code);
 
 extern int getopt(int argc, char *const argv[], const char *optstring);
 extern char *optarg;
@@ -142,9 +187,9 @@ Mostly we have declare before use, but there are a few exceptions!
 
 */
 void main_convert(
-	char *in_line,
+	wchar_t *in_line,
 	int flags,
-	char *out_line,
+	wchar_t *out_line,
 	int lenout_line,
 	struct file_data *file_F);
 /*
@@ -156,6 +201,7 @@ Global variables used in argument processing.
 
 */
 char view_option[MAX_LINE_LEN+1];
+wchar_t *wview_option;
 /*
 
 
@@ -221,7 +267,7 @@ void
 usage(void)
 {
     FPRINTF(stderr,
-	"usage: %s [-l|v] [-d debug-level] [-f steering_file] [-K] [-k keyword_file] view\n",
+	"usage: %s [-u|-e] [-l|v] [-d debug-level] [-f steering_file] [-K] [-k keyword_file] view\n",
 	program_name);
     FPRINTF(stderr, "%s version: %s\n", program_name, coprlemma1);
 }
@@ -246,8 +292,45 @@ init_signals(void)
 }
 /*
 
+\subsection{Queing and printing unknown unicode characters}
 
+*/
 
+typedef struct node {
+   wchar_t code;
+   struct node *previous;
+} node_t;
+
+node_t *unicode_list = NULL;
+
+void unknown_code(wchar_t code) {
+   node_t *scan = unicode_list;
+   while(scan){
+     if (scan->code == code)return;
+     scan = scan->previous;
+   };
+   node_t *new_node = malloc(sizeof(node_t));
+   if (!new_node) return;
+   new_node->code = code;
+   new_node->previous = unicode_list;
+   unicode_list = new_node;
+}
+
+void code_warnings(void) {
+  if (unicode_list){
+    FPRINTF(stderr, "Unicode characters not assigned to a keyword:");
+    while(unicode_list){
+      node_t *temp = unicode_list->previous;
+      FPRINTF(stderr, " %C:%x", unicode_list->code, unicode_list->code);
+      free(unicode_list);
+      unicode_list = temp;
+    };
+    FPRINTF(stderr, "\n");
+  };
+  return;
+};
+
+/*
 \subsection{Input Files}
 
 The input file controls are now located in the utf8module, so that it can use them in processing the keyword file.
@@ -304,85 +387,94 @@ of options available.
 
 */
 typedef struct{
-	char *name;
+	wchar_t *name;
 	int flag;
 } options_available;
-/*
+
+/* verbatim
 The {\tt flags} may take one of the following values.
 
 Lines are to be processed for the verbatim-like formal text
 	environments.  This flag implies {\tt OPT_LATEX} and {\tt OPT_CHAR}.
 */
 #define OPT_VERBATIM 1
-/*
 
-
+/* latex
 Text is to be processed for the verbatim-like formal text
 	environments, only with this flag set are the LaTeX conversions
 	applied.  This option is automatically set with {\tt
 	OPT_VERBATIM}.
-
-
 */
 #define OPT_LATEX 1024
-/*
+
+/* kw
 Percent keywords are to be understood.
 */
 #define OPT_KW 2
-/*
+
+/* char
 Convert extended characters, but not percent keywords, to their
 	\LaTeX{} form.  This option is automatically set with {\tt
 	OPT_VERBATIM}.
 */
 #define OPT_CHAR 4
-/*
+
+/* delindex
 Modifies options {\tt OPT_KW} and {\tt OPT_VERBATIM} so that
 	extended characters and percent keywords for indexing are
 	deleted.
 */
 #define OPT_DELINDEX 8
-/*
+
+/* ml_char
 Extended characters, but not percent keywords, are converted to
 	their Standard ML string form.  This option is not compatible
 	with {\tt OPT_KW} or {\tt OPT_VERBATIM}.
 */
-#define OPT_ML_CHAR 16
-/*
+#define OPT_MLCHAR 16
+
+/* warn_kw
 Issue a warning message when unknown keywords are
 	found.  Only meaningful when {\tt OPT_KW} is set.
 */
 #define OPT_WARN_KW 32
-/*
+
+/* flag_kw
 Convert unknown keywords to a call on the \LaTeX{} macro
 	\verb|\UnknownKeyword|.  Only meaningful when {\tt OPT_KW} and
 	{\tt OPT_VERBATIM} are set.
 */
 #define OPT_FLAG_KW 64
-/*
+
+/* verb_alone
 Lines containing at least one character of type {\tt verbalone}
 	plus any number of {\tt white} characters have a reduced
 	verbatim-like processing where the line ends are not marked.
 */
 #define OPT_VERB_ALONE 128
-/*
-Where possible keywords are converted to their corresponding
+
+/* conv_kw
+Where possible, keywords are converted to their corresponding
 	extended character.
 */
-#define OPT_CONV_KW 256
-/*
+#define OPT_CONVKW 256
+
+/* white
 Convert extended characters of class {\tt white} to a
 	space character.  When {\tt OPT_KW} is set also convert the
 	keywords.
 */
 #define OPT_WHITE 512
-/*
+
+/* conv_ext
 Convert extended characters to keywords.
 */
 #define OPT_CONV_EXT 2048
-/*
-Convert extended characters to keywords.
+
+/* utf8out
+Convert extended characters and keywords to utf8 unicode.
 */
-#define OPT_UTF8_OUT 4096
+#define OPT_UTF8OUT 4096
 /*
 
 \end{itemize}
@@ -393,32 +485,32 @@ Other checks are made in the startup function, {\tt initialize}.
 
 */
 #define AND_FLAGS	(	OPT_CHAR \
-			&	OPT_CONV_KW \
+			&	OPT_CONVKW \
 			&	OPT_DELINDEX \
 			&	OPT_FLAG_KW \
 			&	OPT_KW \
 			&	OPT_LATEX \
-			&	OPT_ML_CHAR \
+			&	OPT_MLCHAR \
 			&	OPT_VERBATIM \
 			&	OPT_VERB_ALONE \
 			&	OPT_WARN_KW \
 			&	OPT_WHITE \
 			&	OPT_CONV_EXT \
-			&	OPT_UTF8_OUT \
+			&	OPT_UTF8OUT \
 			)
 #define OR_FLAGS	(	OPT_CHAR \
-			|	OPT_CONV_KW \
+			|	OPT_CONVKW \
 			|	OPT_DELINDEX \
 			|	OPT_FLAG_KW \
 			|	OPT_KW \
 			|	OPT_LATEX \
-			|	OPT_ML_CHAR \
+			|	OPT_MLCHAR \
 			|	OPT_VERBATIM \
 			|	OPT_VERB_ALONE \
 			|	OPT_WARN_KW \
 			|	OPT_WHITE \
 			|	OPT_CONV_EXT \
-			|	OPT_UTF8_OUT \
+			|	OPT_UTF8OUT \
 			)
 
 #if AND_FLAGS != 0
@@ -433,19 +525,18 @@ get_options below.
 
 */
 options_available cat_options[] = {
-	{"char", OPT_CHAR},
-	{"convkw", OPT_CONV_KW | OPT_KW},
-	{"convext", OPT_CONV_EXT},
-	{"delindex", OPT_DELINDEX},
-	{"kw", OPT_KW},
-	{"kwflag", OPT_FLAG_KW},
-	{"kwwarn", OPT_WARN_KW},
-	{"latex", OPT_LATEX | OPT_CHAR},
-	{"mlchar", OPT_ML_CHAR},
-	{"verbalone", OPT_VERB_ALONE},
-	{"utf8out", OPT_UTF8_OUT},
-	{"verbatim", OPT_VERBATIM | OPT_LATEX | OPT_CHAR},
-	{"white", OPT_WHITE},
+	{L"char", OPT_CHAR},
+	{L"convkw", OPT_CONVKW | OPT_KW},
+	{L"convext", OPT_CONV_EXT},
+	{L"delindex", OPT_DELINDEX},
+	{L"kw", OPT_KW},
+	{L"kwflag", OPT_FLAG_KW},
+	{L"kwwarn", OPT_WARN_KW},
+	{L"latex", OPT_LATEX | OPT_CHAR},
+	{L"mlchar", OPT_MLCHAR},
+	{L"verbalone", OPT_VERB_ALONE},
+	{L"verbatim", OPT_VERBATIM | OPT_LATEX | OPT_CHAR},
+	{L"white", OPT_WHITE},
 	{NULL, 0}
 };
 /*
@@ -455,8 +546,8 @@ arg_options
 
 */
 options_available arg_options[] = {
-	{"delindex", OPT_DELINDEX},
-	{"latex", OPT_LATEX | OPT_CHAR},
+	{L"delindex", OPT_DELINDEX},
+	{L"latex", OPT_LATEX | OPT_CHAR},
 	{NULL, 0}
 };
 /*
@@ -470,35 +561,35 @@ characters that are not keywords indicate errors.
 
 */
 int
-get_options(options_available *opts, char *filt)
+get_options(options_available *opts, wchar_t *filt)
 {
 	int ikw;
 	int ans = 0;
 
-	char wrkstr[MAX_LINE_LEN+1];
-	char *start_kw, *end_kw;
+	wchar_t wrkstr[MAX_LINE_LEN+1];
+	wchar_t *start_kw, *end_kw;
 
-	start_kw = skip_space(filt);
+	start_kw = wskip_space(filt);
 
 	while(start_kw[0] != '\0') {
-		end_kw = find_space(start_kw);
-		string_n_copy(wrkstr, start_kw, end_kw - start_kw);
+		end_kw = wfind_space(start_kw);
+		wstring_n_copy(wrkstr, start_kw, end_kw - start_kw);
 		*(wrkstr + (end_kw - start_kw)) = '\0';
 
 		ikw = 0;
 
-		while(opts[ikw].name != NULL && strcmp(opts[ikw].name, wrkstr) != 0) {
+		while(opts[ikw].name != NULL && wcscmp(opts[ikw].name, wrkstr) != 0) {
 			ikw++;
 		}
 
 		if(opts[ikw].name != NULL) {
 			ans |= opts[ikw].flag;
 		} else {
-			grumble("unexpected keyword '%s'", wrkstr, &view_F, True);
+			wgrumble(L"unexpected keyword '%S'", wrkstr, &view_F, True);
 			return(0);						/* RETURN */
 		}
 
-		start_kw = skip_space(end_kw);
+		start_kw = wskip_space(end_kw);
 	}
 
 	return(ans);
@@ -514,13 +605,13 @@ Validate the options set for the "cat" action.
 void
 check_cat_options(int flags)
 {
-	if(flags & OPT_VERBATIM && flags & OPT_ML_CHAR)
+	if(flags & OPT_VERBATIM && flags & OPT_MLCHAR)
 		grumble1("conflicting options: 'verbatim' and 'mlchar'", &view_F, True);
 
-	if(flags & OPT_LATEX && flags & OPT_ML_CHAR)
+	if(flags & OPT_LATEX && flags & OPT_MLCHAR)
 		grumble1("conflicting options: 'latex' and 'mlchar'", &view_F, True);
 
-	if(flags & OPT_CONV_EXT && flags & OPT_ML_CHAR)
+	if(flags & OPT_CONV_EXT && flags & OPT_MLCHAR)
 		grumble1("conflicting options: 'convext' and 'mlchar'", &view_F, True);
 
 	if(flags & OPT_VERBATIM && flags & OPT_CONV_EXT)
@@ -529,7 +620,7 @@ check_cat_options(int flags)
 	if(flags & OPT_LATEX && flags & OPT_CONV_EXT)
 		grumble1("conflicting options: 'latex' and 'convext'", &view_F, True);
 
-	if(flags & OPT_VERBATIM && flags & OPT_CONV_KW)
+	if(flags & OPT_VERBATIM && flags & OPT_CONVKW)
 		grumble1("conflicting options: 'verbatim' and 'convkw'", &view_F, True);
 
 	/* Need both OPT_VERBATIM and OPT_KW for OPT_FLAG_KW */
@@ -553,14 +644,14 @@ show_options(FILE *fp, int flags)
 #define SHOW_OPT(f, s) if(flags & f) (void)fputs(s, fp)
 	SHOW_OPT(OPT_CHAR, " char");
 	SHOW_OPT(OPT_CONV_EXT, " convext");
-	SHOW_OPT(OPT_CONV_KW, " convkw");
+	SHOW_OPT(OPT_CONVKW, " convkw");
 	SHOW_OPT(OPT_DELINDEX, " delindex");
 	SHOW_OPT(OPT_KW, " kw");
 	SHOW_OPT(OPT_FLAG_KW, " kwflag");
 	SHOW_OPT(OPT_WARN_KW, " kwwarn");
 	SHOW_OPT(OPT_LATEX, " latex");
-	SHOW_OPT(OPT_ML_CHAR, " mlchar");
-	SHOW_OPT(OPT_UTF8_OUT, " utf8out");
+	SHOW_OPT(OPT_MLCHAR, " mlchar");
+	SHOW_OPT(OPT_UTF8OUT, " utf8out");
 	SHOW_OPT(OPT_VERB_ALONE, " verbalone");
 	SHOW_OPT(OPT_VERBATIM, " verbatim");
 	SHOW_OPT(OPT_WHITE, " white");
@@ -577,10 +668,9 @@ entries in the array must be sorted on the {\tt name} field so that
 function {\tt find_action} works.  This ordering is checked in function
 {\tt check\-_program\-_initializations}.
 
-
 */
 struct actions_available{
-	char *name;
+	wchar_t *name;
 	int arg_type;
 #define ARGS_NO 0
 #define ARGS_YES 1
@@ -603,17 +693,17 @@ struct actions_available{
 } actions_available [] ={
 	/* these names must be sorted so that "find_action" works */
 	/* name		arg		copy	code			options */
-	{  "append", 		ARGS_YES,	0,	APPEND_ACT,	NULL },
-	{  "argoptions",	ARGS_YES,	0,	ARG_ACTIONS,	arg_options },
-	{  "arguments",	ARGS_YES,	0,	ARGS_SET_UP,	NULL },
-	{  "cat",		ARGS_OPT,	1,	CAT_ACT,		cat_options },
-	{  "echo",		ARGS_YES,	0,	ECHO_ACT,		NULL },
-	{  "echonl",		ARGS_YES,	0,	ECHONL_ACT,	NULL },
-	{  "filter",		ARGS_YES,	1,	FILTER_ACT,	NULL },
-	{  "ignore",		ARGS_NO,	1,	IGNORE_ACT,	NULL },
-	{  "mlstring",		ARGS_NO,	1,	ML_STRING_ACT,	NULL },
-	{  "nl",		ARGS_NO,	0,	NL_ACT,		NULL },
-	{  "write",		ARGS_YES,	0,	WRITE_ACT,	NULL },
+	{  L"append", 		ARGS_YES,	0,	APPEND_ACT,	NULL },
+	{  L"argoptions",	ARGS_YES,	0,	ARG_ACTIONS,	arg_options },
+	{  L"arguments",	ARGS_YES,	0,	ARGS_SET_UP,	NULL },
+	{  L"cat",		ARGS_OPT,	1,	CAT_ACT,		cat_options },
+	{  L"echo",		ARGS_YES,	0,	ECHO_ACT,		NULL },
+	{  L"echonl",		ARGS_YES,	0,	ECHONL_ACT,	NULL },
+	{  L"filter",		ARGS_YES,	1,	FILTER_ACT,	NULL },
+	{  L"ignore",		ARGS_NO,	1,	IGNORE_ACT,	NULL },
+	{  L"mlstring",		ARGS_NO,	1,	ML_STRING_ACT,	NULL },
+	{  L"nl",		ARGS_NO,	0,	NL_ACT,		NULL },
+	{  L"write",		ARGS_YES,	0,	WRITE_ACT,	NULL },
 
 };
 
@@ -628,12 +718,12 @@ corresponding entry in actions_available.
 
 */
 int
-find_action(char *act_name)
+find_action(wchar_t *act_name)
     {
 	int i;
 	int ans;
 	for(i=0; i<NUM_ACTIONS; i++) {
-		ans = strcmp(act_name, actions_available[i].name);
+		ans = wcscmp(act_name, actions_available[i].name);
 		if(ans == 0) return(i);					/* RETURN */
 			/* Next line requires that the "actions_available" be sorted */
 		else if(ans < 0) return(NOT_FOUND);			/* RETURN */
@@ -646,7 +736,7 @@ find_action(char *act_name)
 \HOLindexEntry{decode_action}
 
 */
-char *
+wchar_t *
 decode_action(int act_code)
     {
 	int i;
@@ -654,7 +744,7 @@ decode_action(int act_code)
 		if(actions_available[i].code == act_code)
 			return(actions_available[i].name);			/* RETURN */
 	}
-	return("??");
+	return(L"??");
     }
 /*
 
@@ -669,7 +759,7 @@ dump_actions_available(void)
 
 	(void)printf("  %ld actions available\n", (long) NUM_ACTIONS);
 	for(i=0; i<NUM_ACTIONS; i++) {
-		(void)printf("%5d %10s %2d %2d %4d = %s",
+		(void)printf("%5d %10S %2d %2d %4d = %S",
 			i,
 			actions_available[i].name,
 			actions_available[i].arg_type,
@@ -678,7 +768,7 @@ dump_actions_available(void)
 			decode_action(actions_available[i].code));
 
 		if(i>0) {
-			if(strcmp(actions_available[i-1].name, actions_available[i].name) >= 0)
+			if(wcscmp(actions_available[i-1].name, actions_available[i].name) >= 0)
 				(void)fputs("        <== out of order\n", stdout);
 			else PUTC('\n', stdout);
 		} else PUTC('\n', stdout);
@@ -688,7 +778,7 @@ dump_actions_available(void)
 			(void)fputs("        Options:", stdout);
 			j = 0;
 			while(opts[j].name != NULL) {
-				(void)printf("    %s %d", opts[j].name, opts[j].flag);
+				(void)wprintf(L"    %S %d", opts[j].name, opts[j].flag);
 				j++;
 			}
 			PUTC('\n', stdout);
@@ -717,7 +807,7 @@ cat\-_filt\-_action}.
 typedef struct{
 	short action_type;
 			/* One of the "..._ACT" macro values */
-	char *action_str;
+	wchar_t *action_str;
 			/* hold the string argument for the action type, ie the
 				string to be echoed or the filter to execute */
 	short opt_flags;
@@ -728,12 +818,11 @@ typedef struct{
 #define CFA_WRITE 2
 #define CFA_APPEND 4
 #define CFA_FILE_MACROS 8
-	char *op_file;
+	wchar_t *op_file;
 } cat_filt_action;
-/*
-*/
+
 typedef    struct{
-	    char *cat;
+	    wchar_t *cat;
 	    short num_actions;
 			/* <0	=> view not wanted for this run */
 			/* 0	=> no filter, no actions, so do a "cat" */
@@ -781,12 +870,12 @@ int		max_cat;
 void
 initialize_table(void)
     {
-	table[0].cat = "Ignoring text";
+	table[0].cat = L"Ignoring text";
 	table[0].num_actions = 1;
 	table[0].has_copy_action = 1;
 	table[0].is_one_liner = 1;
 	table[0].cfa[0].action_type = IGNORE_ACT;
-	table[0].cfa[0].action_str = "";
+	table[0].cfa[0].action_str = L"";
 	table[0].min_args = 0;
 	table[0].max_args = 0;
 	table[0].extra_flags = 0;
@@ -802,17 +891,17 @@ print_table_entry(cat_filt *tab, FILE *fp)
 {
 	int j;
 	int num_acts;
-	char *cat;
+	wchar_t *cat;
 
 	cat = tab->cat;
 	num_acts = tab->num_actions;
 
 	if(num_acts < 0) {
-		FPRINTF(fp, "%s is not wanted in current view\n", cat);
+		FPRINTF(fp, "%S is not wanted in current view\n", cat);
 	} else if(num_acts == 0) {
-		FPRINTF(fp, "%s is just copied\n", cat);
+		FPRINTF(fp, "%S is just copied\n", cat);
 	} else {
-		FPRINTF(fp, "%s", cat);
+		FPRINTF(fp, "%S", cat);
 		if(tab->min_args>0 || tab->max_args>0) {
 			FPRINTF(fp, "  allows %d", tab->min_args);
 			if(tab->min_args != tab->max_args)
@@ -842,24 +931,34 @@ print_table_entry(cat_filt *tab, FILE *fp)
 			SHOW_CFA(CFA_WRITE, " write");
 			SHOW_CFA(CFA_APPEND, " append");
 			if(cf->op_file != NULL)
-				FPRINTF(fp, " %s '%s'",
+				FPRINTF(fp, " %s '%S'",
 					cf->cfa_flags & CFA_WRITE ? ">" : ">>",
 					cf->op_file);
 #undef SHOW_CFA
 
-			FPRINTF(fp, ")  %s\n", cf->action_str);
+			FPRINTF(fp, ")  %S\n", cf->action_str);
 		}
 	}
 }
 
 int
-look_up(char *cat)
+look_up(wchar_t *cat)
 {
 	int i;
+	
 	for(i = 1; i < max_cat; ++i) {
-	    if(!(strcmp(cat, table[i].cat))) {
-		return(i);							/* RETURN */
-	    }
+
+	  /*
+	  if (debug & D_UTF8) {
+	    WPRINTF(L"look_up: cat = %S, i = %i, table[i].cat = %S\n",
+		    cat, i, table[i].cat);
+	  };
+	  */	  
+
+	  if(!(wcscmp(cat, table[i].cat))) {
+	    
+	    return(i);							/* RETURN */
+	  }
 	};
 	return(NOT_FOUND);
 }
@@ -890,7 +989,7 @@ print_table(void)
 		(void)printf("%d categories just copied:\n", num_copied);
 		for(i = 0; i < max_cat; ++i) {
 			num_acts = table[i].num_actions;
-			if(num_acts == 0) (void)printf("        %s\n",
+			if(num_acts == 0) (void)printf("        %S\n",
 				table[i].cat);
 		}
 	}
@@ -900,7 +999,7 @@ print_table(void)
 			num_not_wanted);
 		for(i = 0; i < max_cat; ++i) {
 			num_acts = table[i].num_actions;
-			if(num_acts < 0) (void)printf("        %s\n",
+			if(num_acts < 0) (void)printf("        %S\n",
 				table[i].cat);
 		}
 	}
@@ -940,13 +1039,13 @@ argument~0 refers to the directive name.
 
 typedef struct{
 	int num_dl_args;
-	char *cat;		/* category of directive line */
-	char *dl_words[MAX_DIR_ARGS+1];
+	wchar_t *cat;		/* category of directive line */
+	wchar_t *dl_words[MAX_DIR_ARGS+1];
 				/* These may validly be NULL */
-	char dl_line[MAX_LINE_LEN+1];
+	wchar_t dl_line[MAX_LINE_LEN+1];
 				/* Storage for the strings for "cat" and "dl_words[]" */
 
-	char dir_line[MAX_LINE_LEN+1];
+	wchar_t dir_line[MAX_LINE_LEN+1];
 				/* Holds a copy of the original line */
 
 				/* 	These next declarations relate to the currently
@@ -963,14 +1062,13 @@ typedef struct{
 #define FP_PIPE 2
 #define FP_OTHERFILE 3
 } dir_info;
-/*
-*/
+
 void
 init_directive_line(dir_info *di)
 {
 	int i;
 
-	di->dl_words[0] = di->cat = "";
+	di->dl_words[0] = di->cat = L"";
 	di->num_dl_args = 0;
 	for(i=1; i<=MAX_DIR_ARGS; i++) di->dl_words[i] = NULL;
 	di->table_index = 0;
@@ -981,6 +1079,38 @@ init_directive_line(dir_info *di)
 	di->cur_fp = stdout;
 	di->cur_fp_class = FP_STDOUT;
 }
+
+
+/*
+---------------
+print_directive
+---------------
+
+for diagnostic purposes only.
+
+*/
+
+void
+print_directive(dir_info *di){
+  int i;
+  int j;
+  int ch;
+  (void)wprintf(L"Found directive '%S' with %d arguments\n",
+	       di->cat, di->num_dl_args);
+  
+  for(i=0; i<=di->num_dl_args; i++) {
+    (void)printf("    %d %4ld '", i,
+		 (long)wcslen(di->dl_words[i]));
+    for(j=0; (ch = (di->dl_words[i][j]) & 0xFF) != '\0'; j++) {
+      if((isascii(ch) && isprint(ch)) || ch > 127)
+	PUTC(ch, stdout);
+      else (void)printf("\\%03o", ch);
+    }
+    PUTC('\'', stdout);
+    PUTC('\n', stdout);
+  }
+}
+
 
 /* Function not used, but it may be nice one day
 void
@@ -1040,9 +1170,9 @@ details of how the macro text should be copied or converted.
 int
 copy_macro_arg(
 	int flags,
-	char *out_line,
+	wchar_t *out_line,
 	int orig_outp,
-	char *macro,
+	wchar_t *macro,
 	int maxlen)
 {
 	int outp = orig_outp;
@@ -1060,13 +1190,13 @@ copy_macro_arg(
 			ans = outp-orig_outp;
 		} else {
 			main_convert(macro,
-				flags | OPT_KW | OPT_CONV_KW,
+				flags | OPT_KW | OPT_CONVKW,
 				&(out_line[outp]),
 				maxlen - outp,
 				&main_F);
-			outp = strlen(out_line);
+			outp = wcslen(out_line);
 		}
-		ans = strlen(&(out_line[orig_outp]));
+		ans = wcslen(&(out_line[orig_outp]));
 	}
 
 	return(ans);
@@ -1084,20 +1214,20 @@ parameters are found in {\tt di}.
 void
 expand_macro(
 	dir_info *di,
-	char    *in_line,
-	char    *out_line,
+	wchar_t    *in_line,
+	wchar_t    *out_line,
 	int	lenout_line)
 {
-	char ch;
+	wchar_t ch;
 	int outp = 0;
 	int flags = table[di->table_index].extra_flags;
 
 	if(debug & D_EXPAND) {
-		(void)printf("expand_macro: '%s'  max_len=%d\n", in_line, lenout_line);
+		(void)printf("expand_macro: '%S'  max_len=%d\n", in_line, lenout_line);
 	}
 
-	while((ch = in_line[0]) != '\0' && outp < lenout_line) {
-		if(ch == '$') {
+	while((ch = in_line[0]) != L'\0' && outp < lenout_line) {
+		if(ch == L'$') {
 			/* Macro invocation */
 			int i;
 
@@ -1121,7 +1251,7 @@ expand_macro(
 			case '9':
 				/* Copy a specific argument */
 				outp += copy_macro_arg(flags, out_line, outp,
-					di->dl_words[ch - '0'], lenout_line);
+					di->dl_words[ch - L'0'], lenout_line);
 				break;
 
 			case '$':
@@ -1153,7 +1283,7 @@ expand_macro(
 				break;
 
 			default:
-				internal_error("category %s ", di->tab->cat);
+				winternal_error(L"category %S ", di->tab->cat);
 				FPRINTF(stderr,
 					"unexpected '$%c' in action %d of\n",
 					ch, di->cur_act_index);
@@ -1167,7 +1297,7 @@ expand_macro(
 	}
 
 	if(outp >= lenout_line-1) {
-		error("macro expansion line length overflow, source line '%s'", in_line);
+	        werror(L"macro expansion line length overflow, source line '%S'", in_line);
 		EXIT(27);						
 	}
 
@@ -1195,7 +1325,7 @@ void
 initialize(void)
 {
 	int i;
-	char pr_test[PrNN_SIZE+PrNN_SIZE];
+	wchar_t pr_test[PrNN_SIZE+PrNN_SIZE];
 #ifdef __CYGWIN__
 	setlocale(LC_ALL, "C.ISO88591");
 #endif
@@ -1245,7 +1375,7 @@ check_program_initializations(void)
 	order_wrong = 0;
 	flag_zero = 0;
 	for(i=1; i<NUM_ACTIONS; i++) {
-		if(strcmp(actions_available[i-1].name, actions_available[i].name) >= 0)
+		if(wcscmp(actions_available[i-1].name, actions_available[i].name) >= 0)
 			order_wrong = 1;
 
 		if(actions_available[i].options != NULL) {
@@ -1294,13 +1424,13 @@ conclude_steerfile(void)
 		if(tab->min_args == -1) tab->min_args = 0;
 		if(tab->max_args == -1) tab->max_args = 0;
 		if(tab->max_args < tab->min_args) {
-			internal_error("min-max args out of order, cat %s",tab->cat);
+			winternal_error(L"min-max args out of order, cat %S",tab->cat);
 			print_table_entry(tab, stderr);
 			stop_prog = 1;
 		}
 
 		if(tab->num_actions > 0 && ! tab->has_copy_action) {
-			grumble("no copy action for category %s in current view",
+			wgrumble(L"no copy action for category %S in current view",
 				tab->cat, &view_F, False);
 		}
 	}
@@ -1329,37 +1459,42 @@ the wanted view then using_view is non zero.
 
 */
 void
-overwrite(int tab_ent, int using_view, char *filt)
+overwrite(int tab_ent, int using_view, wchar_t *filt)
 {
-	char *text;
+	wchar_t *text;
 	cat_filt *tab = &table[tab_ent];
-	unsigned len_filt = strlen(filt);
+	unsigned len_filt = wcslen(filt)*sizeof(wchar_t);
+
+	if (debug & D_UTF8) {
+	  WPRINTF(L"overwrite: tab_ent = %i, using_view = %i, filt = %S, len_filt = %i\n",
+		  tab_ent, using_view, filt, len_filt);
+	};
 
 	if(using_view) {
 		if(len_filt == 0) {
 			tab->has_copy_action = 0;
 			tab->num_actions = 0;
 			tab->is_one_liner = 0;
-		} else if(strcmp(filt, "ignore") == 0) {
+		} else if(wcscmp(filt, L"ignore") == 0) {
 			tab->has_copy_action = 1;
 			tab->num_actions = 1;
 			tab->is_one_liner = 1;
 			tab->cfa[0].action_type = IGNORE_ACT;
-			tab->cfa[0].action_str = "";
-		} else if(strcmp(filt, "cat") == 0) {
+			tab->cfa[0].action_str = L"";
+		} else if(wcscmp(filt, L"cat") == 0) {
 			tab->has_copy_action = 1;
 			tab->num_actions = 1;
 			tab->is_one_liner = 1;
 			tab->cfa[0].action_type = CAT_ACT;
-			tab->cfa[0].action_str = "";
+			tab->cfa[0].action_str = L"";
 			tab->cfa[0].opt_flags = 0;
 		} else {
 			tab->has_copy_action = 1;
-			text = malloc_and_check(len_filt+1, 101);
+			text = malloc_and_check(len_filt+sizeof(wchar_t), 101);
 			tab->is_one_liner = 1;
 			tab->num_actions = 1;
 			tab->cfa[0].action_type = FILTER_ACT;
-			(void)strcpy(text, filt);
+			(void)wcscpy(text, filt);
 			tab->cfa[0].action_str = text;
 		}
 	} else {
@@ -1385,14 +1520,23 @@ finding of directive lines.  Perhaps we should use another character
 flag, see section~\ref{CharacterFlags}, rather than treat the percent
 character specially here.
 
-
 */
+
 int
-insert(char *cat, int using_view, char *filt)
+insert(wchar_t *cat, int using_view, wchar_t *filt)
 {
-	char *text;
-	unsigned len_cat = strlen(cat);
-	int first_char = cat[0] & 0xFF;
+	wchar_t *text;
+	unsigned len_cat = wcslen(cat);
+	wchar_t fst_char = cat[0];
+	wchar_t first_char = main_F.utf8 ? uni_to_pp(fst_char) : fst_char;
+
+	if (first_char < 0) first_char = 0; /* no ext code */
+
+	if (debug & D_UTF8) {
+	  WPRINTF(L"insert: cat = %S, using_view = %i, first_char = %C%s, filt = %S\n",
+		  cat, using_view, first_char,
+		  (IS_DIRECTIVE_CHAR(first_char)? "(D)" : ""), filt);
+	};
 
 	if(max_cat >= MAX_CAT) {
 	    error1("too many categories");
@@ -1400,23 +1544,27 @@ insert(char *cat, int using_view, char *filt)
 	};
 
 	if(!IS_DIRECTIVE_CHAR(first_char) || first_char == '%') {
-		grumble("category name '%s' does not start with a directive character",
+		wgrumble(L"category name '%S' does not start with a directive character",
 			cat, &view_F, True);
 	}
 
 	if(len_cat > 1 && kwi.char_code[first_char] != NULL
 			&& kwi.char_code[first_char]->act_kind == KW_DIRECTIVE) {
-		grumble("badly formed category name '%s'", cat,  &view_F, True);
-		FPRINTF(stderr, "\tcharacter '%c' is a category name on its own\n",
+		wgrumble(L"badly formed category name '%S'", cat,  &view_F, True);
+		WFPRINTF(stderr, L"\tcharacter '%C' is a category name on its own\n",
 			first_char);
 	}
 
-	text = malloc_and_check(len_cat+1, 102);
-	(void)strcpy(text, cat);
+	text = malloc_and_check((len_cat+1)*sizeof(wchar_t), 102);
+	(void)wcscpy(text, cat);
 	table[max_cat].cat = text;
 	table[max_cat].min_args = -1;
 	table[max_cat].max_args = -1;
 
+	if (debug & D_UTF8) {
+	  WPRINTF(L"insert: max_cat = %i, table[max_cat].cat = %S\n", max_cat, table[max_cat].cat);
+	};
+	
 	overwrite(max_cat, using_view, filt);
 
 	++max_cat;
@@ -1433,13 +1581,17 @@ in the category table at {\tt tab_ent}.  The arguments are in
 
 */
 void
-arguments_decode(int tab_ent, char *filt)
+arguments_decode(int tab_ent, wchar_t *filt)
 {
 	int l_min, l_max;
 	int decoded = 0;
-	int len_filt = strlen(filt);
+	int len_filt = wcslen(filt);
 
 	int scan_ans, chars_used;
+	
+	if (debug & D_UTF8) {
+	  WPRINTF(L"arguments_decode: filt = %S len_filt = %i\n", filt, len_filt);
+	};
 
 	if(table[tab_ent].num_actions > 0) {
 		grumble1("arguments entry must come first", &view_F, True);
@@ -1453,11 +1605,22 @@ arguments_decode(int tab_ent, char *filt)
 	}
 	len_filt++;
 
-	scan_ans = sscanf(filt, "%d %d%n", &l_min, &l_max, &chars_used);
+	scan_ans = swscanf(filt, L"%d%d%n", &l_min, &l_max, &chars_used);
 
-	if(scan_ans == 2 && chars_used == len_filt) decoded = 1;
+	if (debug & D_UTF8) {
+	  WPRINTF(L"arguments_decode: scan_ans = %i, l_min = %i, l_max = %i, chars_used = %i\n", scan_ans, l_min, l_max, chars_used);
+	};
+
+	/* there appears to be a bug in swscanf on macos which is getting chars used incorrect.
+The work-around sggested by rda is to drop the space which formerly appeared in the above format string */
+	
+	if(scan_ans == 2  && chars_used == len_filt) decoded = 1;
 	else {
-		scan_ans = sscanf(filt, "%d%n", &l_min, &chars_used);
+		scan_ans = swscanf(filt, L"%d%n", &l_min, &chars_used);
+
+		if (debug & D_READ_STEER_LINE) {
+		  WPRINTF(L"arguments_decode: scan_ans = %i, l_min = %i, chars_used = %i\n", scan_ans, l_min, chars_used);
+	};
 
 		if(scan_ans == 1 && chars_used == len_filt) {
 			decoded = 1;
@@ -1499,7 +1662,7 @@ any macro calls, 0 otherwise.
 
 */
 int
-verify_macro_calls(int max_args, char *filt)
+verify_macro_calls(int max_args, wchar_t *filt)
 {
 	int has_macros = 0;
 	int i;
@@ -1568,15 +1731,19 @@ int
 decode_action_line(
 	int tab_ent,
 	int using_view,
-	char *line,
+	wchar_t *line,
 	int depth)
 {
 	cat_filt *tab = &table[tab_ent];
-	char *action_name;
-	char *filt;
-	char *text;
+	wchar_t *action_name;
+	wchar_t *filt;
+	wchar_t *text;
 	int act_idx;
 	unsigned len_filt;
+
+	if(debug & D_UTF8)
+	  (void)printf("decode_action_line: tab_ent=%i using_view=%i depth=%i line=%S\n",
+		       tab_ent, using_view, depth, line);
 
 	if(depth > 1) {
 		grumble1("too many output options", &view_F, True);
@@ -1588,11 +1755,11 @@ decode_action_line(
 		return(0);							/* RETURN */
 	}
 
-	action_name = skip_space(line);
+	action_name = wskip_space(line);
 
-	filt = split_at_space(action_name);
+	filt = wsplit_at_space(action_name);
 
-	len_filt = strlen(filt);
+	len_filt = wcslen(filt);
 
 	act_idx = find_action(action_name);
 	if(act_idx == NOT_FOUND) {
@@ -1629,11 +1796,17 @@ decode_action_line(
 				actions_available[act_idx].options, filt);
 		} else if(actions_available[act_idx].code == WRITE_ACT ||
 				actions_available[act_idx].code == APPEND_ACT) {
-			/* Argument in "filt" is a file name, remaining
+
+		  /* Argument in "filt" is a file name, remaining
 				text is the real action line */
 
-			char *action_body = split_at_space(filt);
+			wchar_t *action_body = wsplit_at_space(filt);
 
+			if(debug & D_UTF8)
+			  (void)wprintf(L"decode_action_line: action_body = %S, filt = %S, depth = %d\n",
+					action_body, filt, depth);
+
+			
 			if(decode_action_line(tab_ent, using_view, action_body, depth+1)) {
 				/* Have added the action body into "tab", now add the
 					output qualifier */
@@ -1643,7 +1816,12 @@ decode_action_line(
 				cf->cfa_flags |=
 					(actions_available[act_idx].code == WRITE_ACT)
 					? CFA_WRITE : CFA_APPEND;
-				cf->op_file = strdup(filt);
+				cf->op_file = wcsdup(filt);
+				
+				if(debug & D_UTF8)
+				  (void)wprintf(L"decode_action_line: cf->op_file = %S, cf->cfa_flags = %x\n",
+					cf->op_file, cf->cfa_flags);
+
 				if(verify_macro_calls(tab->max_args, filt))
 					cf->cfa_flags |= CFA_FILE_MACROS;
 
@@ -1674,7 +1852,7 @@ decode_action_line(
 			}
 
 			tab->cfa[act_num].action_type = actions_available[act_idx].code;
-			tab->cfa[act_num].action_str = "";
+			tab->cfa[act_num].action_str = L"";
 			tab->cfa[act_num].opt_flags = 0;
 
 			switch(actions_available[act_idx].code) {
@@ -1688,8 +1866,8 @@ decode_action_line(
 			case ECHO_ACT :
 			case FILTER_ACT:
 				if(len_filt != 0) {
-					text = malloc_and_check(len_filt+1, 103);
-					(void)strcpy(text, filt);
+				  text = malloc_and_check((len_filt+1)*sizeof(wchar_t), 103);
+					(void)wcscpy(text, filt);
 					tab->cfa[act_num].action_str = text;
 					if(verify_macro_calls(tab->max_args, filt))
 						tab->cfa[act_num].cfa_flags
@@ -1722,11 +1900,12 @@ written to several places whilst sieving.
 void
 open_output(dir_info *di, cat_filt_action *cf)
 {
-	static char *file_name_area = NULL;
+	static wchar_t *file_name_area = NULL;
+	static char *utf8_file_name = NULL;
 	int file_name_length = 0;
 
 	if(file_name_area == NULL) {
-		file_name_area = malloc_and_check(MACRO_EXP_SIZE+1, 104);
+	  file_name_area = malloc_and_check((MACRO_EXP_SIZE+1)*(sizeof(wchar_t)), 104);
 	}
 
 	di->cur_fp = stdout;
@@ -1734,35 +1913,38 @@ open_output(dir_info *di, cat_filt_action *cf)
 
 	if(cf->cfa_flags & (CFA_WRITE | CFA_APPEND)) {
 		if(debug & D_OPEN_OUTPUT) {
-			(void)printf("open_output: flags=%d  start_name=%s\n",
+			(void)wprintf(L"open_output: flags=%d  start_name=%S\n",
 				cf->cfa_flags, cf->op_file);
 		}
 
 		if(cf->cfa_flags & CFA_FILE_MACROS) {
 			expand_macro(di, cf->op_file, file_name_area, MACRO_EXP_SIZE);
 		} else {
-			string_n_copy(file_name_area, cf->op_file, MACRO_EXP_SIZE);
+			wstring_n_copy(file_name_area, cf->op_file, MACRO_EXP_SIZE);
 		}
 
-		file_name_length = strlen(file_name_area);
+		file_name_length = wcslen(file_name_area);
 		if(file_name_length > limits.file_name_area)
 			limits.file_name_area = file_name_length;
 
-		if(file_name_length<=0 || *(find_space(file_name_area)) != '\0') {
-			error("faulty file name '%s' created for redirection", file_name_area);
+		if(file_name_length<=0 || *(wfind_space(file_name_area)) != '\0') {
+			werror(L"faulty file name '%S' created for redirection", file_name_area);
 			EXIT(33);
 		}
 
+		utf8_file_name = unicode_seq_to_utf8(file_name_area);
+		
 		if(debug & D_OPEN_OUTPUT) {
-			(void)printf("open_output: flags=%d  real_name=%s\n",
+			(void)wprintf(L"open_output: flags=%d  real_name=%S\n",
 				cf->cfa_flags, file_name_area);
 		}
 
 		di->cur_fp_class = FP_OTHERFILE;
-		di->cur_fp = fopen(file_name_area,
+		di->cur_fp = fopen(utf8_file_name,
 			cf->cfa_flags & CFA_WRITE ? "w" : "a");
+		/* free(utf8_file_name); */
 		if(di->cur_fp == NULL) {
-			unix_error("cannot create file '%s'", file_name_area);
+			wunix_error(L"cannot create file '%S'", file_name_area);
 			EXIT(31);
 		}
 	}
@@ -1811,8 +1993,8 @@ reset_output(dir_info *di)
 
 \HOLindexEntry{do_non_copy_actions}
 {\tt do_non_copy_actions} :  Do the next actions of the current
-category until either all are done or until a non-copy action is
-found.  Return the index of the non-copy action or an index past the
+category until either all are done or until a copy action is
+found.  Return the index of the copy action or an index past the
 last action.  The current category and next action number are found
 from argument {\tt di}.  Argument {\tt fp} gives the output stream
 for those cases where the action does not state its own output stream.
@@ -1823,11 +2005,11 @@ int
 do_non_copy_actions(dir_info *di)
 {
 	cat_filt *tab = di->tab;
-	static char *macro_exp_area = NULL;
-	char *op_text = "";
+	static wchar_t *macro_exp_area = NULL;
+	wchar_t *op_text = L"";
 
 	if(macro_exp_area == NULL) {
-		macro_exp_area = malloc_and_check(MACRO_EXP_SIZE+1, 105);
+	  macro_exp_area = malloc_and_check((MACRO_EXP_SIZE+1)*(sizeof(wchar_t)), 105);
 	}
 
 	while(di->cur_act_index < tab->num_actions) {
@@ -1843,9 +2025,10 @@ do_non_copy_actions(dir_info *di)
 		}
 
 		if(tab->cfa[di->cur_act_index].cfa_flags & (CFA_WRITE | CFA_APPEND)) {
+		  if(debug & D_UTF8) print_directive(di);
 			/* Open a new stream for this output */
-			open_output(di, &(tab->cfa[di->cur_act_index]));
-			new_stream = 1;
+		  open_output(di, &(tab->cfa[di->cur_act_index]));
+		  new_stream = 1;
 		}
 
 		switch(tab->cfa[di->cur_act_index].action_type) {
@@ -1857,7 +2040,7 @@ do_non_copy_actions(dir_info *di)
 				expand_macro(di, op_text, macro_exp_area, MACRO_EXP_SIZE);
 				op_text = macro_exp_area;
 				if(limits.opt_list) {
-					int op_len = strlen(op_text);
+					int op_len = wcslen(op_text);
 					if(op_len > limits.non_copy_length)
 						limits.non_copy_length = op_len;
 				}
@@ -1869,18 +2052,18 @@ do_non_copy_actions(dir_info *di)
 
 		switch(tab->cfa[di->cur_act_index].action_type) {
 		case ECHO_ACT :
-			(void)fputs(op_text, di->cur_fp);
+			(void)fputws(op_text, di->cur_fp);
 			break;							/* BREAK */
 
 		case ECHONL_ACT :
-			(void)fputs(op_text, di->cur_fp);
+			(void)fputws(op_text, di->cur_fp);
 									/* FALL THROUGH */
 		case NL_ACT :
-			(void)fputs("\n", di->cur_fp);
+			(void)fputws(L"\n", di->cur_fp);
 			break;							/* BREAK */
 
 		default:
-			internal_error("in table for category %s", tab->cat);
+			winternal_error(L"in table for category %S", tab->cat);
 			FPRINTF(stderr, "  unknown action code %d\n",
 				tab->cfa[di->cur_act_index].action_type);
 			print_table_entry(tab, stderr);
@@ -1918,7 +2101,7 @@ complete_actions(dir_info *di)
 	di->cur_act_index++;
 	di->cur_act_index = do_non_copy_actions(di);
 	if(di->cur_act_index < tab->num_actions) {
-		internal_error("actions not completed for category:%s", tab->cat);
+		winternal_error(L"actions not completed for category:%S", tab->cat);
 		FPRINTF(stderr, "\tprocessed %d actions but category has %d actions\n",
 				di->cur_act_index, tab->num_actions);
 		print_table_entry(tab, stderr);
@@ -1947,7 +2130,7 @@ to `\verb|\egroup|'.
 
 */
 int
-copy_PrNN(char *str, int code)
+copy_PrNN(wchar_t *str, int code)
 {
 	int d1 = (code & 0xF0) >> 4;
 	int d2 = (code & 0x0F);
@@ -1988,7 +2171,7 @@ left unchanged.
 */
 
 void
-mlstring(char *line, FILE    *fp)
+mlstring(wchar_t *line, FILE *fp)
 {
 	int ch;
 	int j;
@@ -2017,17 +2200,21 @@ mlstring(char *line, FILE    *fp)
 				if(isascii(ch) && isgraph(ch)) {
 					PUTC(ch, fp);
 				} else {
-					FPRINTF(fp, "\\%03d", ch & 0xFF);
+       if (ch > 0xFF) WFPRINTF(stderr, L"Warning: mlstring invoked on unicode character %c\n", ch);
+       else	FPRINTF(fp, "\\%03d", ch & 0xFF);
 				}
 		}
 	}
 	PUTC('\n', fp);
 }
 /*
-------------
-main_convert
-------------
+================
+main_convert_ext
+================
 Provides the conversion routine used for most things.
+
+This version is for ext files, main_convert_uni does utf8 files.
+
 If it is called with no flags set it just copies the text through
 unchanged.
 
@@ -2048,10 +2235,10 @@ for TeX.
 #define MAX_TEX_ARG_NESTING (16)
 
 void
-main_convert(
-	char *in_line,
+main_convert_ext(
+	wchar_t *in_line,
 	int flags,
-	char *out_line,
+	wchar_t *out_line,
 	int lenout_line,
 	struct file_data *file_F)
 {
@@ -2062,14 +2249,14 @@ main_convert(
 	int opt_do_latex = flags & OPT_LATEX;
 	int opt_do_line_verbatim = flags & OPT_VERBATIM;
 	int opt_do_kw = flags & OPT_KW;
-	int opt_conv_kw = flags & OPT_CONV_KW;
-	int opt_do_ml_char = flags & OPT_ML_CHAR;
+	int opt_conv_kw = flags & OPT_CONVKW;
+	int opt_do_ml_char = flags & OPT_MLCHAR;
 	int opt_do_conv_ext = flags & OPT_CONV_EXT;
 	int opt_do_char = flags & OPT_CHAR;
 	int opt_kw_warn = flags & OPT_WARN_KW;
 	int opt_flag_kw = opt_do_kw && opt_do_latex && (flags & OPT_FLAG_KW);
 	int opt_do_white = flags & OPT_WHITE;
-	int opt_utf8_out = flags & OPT_UTF8_OUT;
+/*	int opt_utf8out = flags & OPT_UTF8OUT; */
 	int tex_arg_stack[MAX_TEX_ARG_NESTING];
 	int tex_arg_stack_head = -1;
 
@@ -2077,13 +2264,20 @@ main_convert(
 
 	lenout_line -= MAIN_LEEWAY;
 
-	/* Possibly override "opt_do_line_verbatim" when "OPT_VERB_ALONE" set. */
+	if(debug & D_MAIN_CONVERT_CH)
+	  (void)printf("main_convert_ext: flags=x%03x\n", flags);
+
+        /* Possibly override "opt_do_line_verbatim" whenll "OPT_VERB_ALONE" set. */
+
 	if(flags & OPT_VERB_ALONE) {
 		int all_alone = 1;
 		int found_white_space = 0;
 		int c_va = 0;
-		while(all_alone && (ch = (in_line[inp] & 0xFF)) != '\0') {
-			if(ch == '%' && opt_do_kw) {
+		if(debug & D_MAIN_CONVERT_CH)
+		  (void)printf("main_convert_ext(ova): afc=%d%d%d",
+			       all_alone, found_white_space, c_va);
+		while(all_alone && (ch = (in_line[inp] & 0xFF)) != L'\0') {
+		    if(ch == L'%' && opt_do_kw) {
 				int kwlen;
 				int kwindex;
 
@@ -2097,6 +2291,10 @@ main_convert(
 					inp += kwlen;
 				} else all_alone = 0;
 			} else {
+		      
+		    if(debug & D_MAIN_CONVERT_CH)
+		      (void)printf("!%d,%x,%x,%d!", inp, in_line[inp], ch, IS_VERB_ALONE_CH(ch));
+		    
 				if(IS_VERB_ALONE_CH(ch)) c_va++;
 				else if(kwi.char_code[ch] != NULL &&
 						kwi.char_code[ch]->act_kind == KW_WHITE)
@@ -2106,6 +2304,8 @@ main_convert(
 				else all_alone = 0;
 				inp ++;
 			}
+		    if(debug & D_MAIN_CONVERT_CH)
+		      (void)printf("/%d%d%d", all_alone, found_white_space, c_va);
 		}
 
 		if(c_va == 0) all_alone = 0;
@@ -2113,6 +2313,10 @@ main_convert(
 			grumble1("white space characters found on verbalone line", file_F, True);
 		}
 		opt_do_line_verbatim = ! all_alone;
+
+		if(debug & D_MAIN_CONVERT_CH)
+		  (void)printf("\nmain_convert_ext: all_alone = %i opt_do_line_verbatim = %i\n",
+			       all_alone, opt_do_line_verbatim);
 	}
 
 	inp = outp = 0;
@@ -2126,10 +2330,10 @@ main_convert(
 	while((ch = (in_line[inp] & 0xFF)) != '\0' && outp < lenout_line) {
 		int top_inp = inp;  /* To test that the code below increments "inp" */
 		regex_t *tex_arg = NULL;
-		char tex_arg_sense;
+		wchar_t tex_arg_sense;
 
 		if(debug & D_MAIN_CONVERT_CH)
-			(void)printf("main_convert: inp=%d  ch=%d:%c  outp=%d\n",
+			(void)printf("main_convert_ext: inp=%d  ch=%d:%c  outp=%d\n",
 				inp, ch, ch, outp);
 
 		while(tex_arg_stack_head >= 0 && inp == tex_arg_stack[tex_arg_stack_head]) {
@@ -2138,6 +2342,7 @@ main_convert(
 		}
 		
 		switch(ch) {
+
 		case '%': if(opt_do_kw) {
 				int kwlen;
 				int kwindex;
@@ -2154,24 +2359,22 @@ main_convert(
 					struct keyword_information *curkw
 						= &kwi.keyword[kwindex];
 
-					if((curkw->act_kind == KW_INDEX)
-							&& opt_del_index) {
+					if(opt_del_index && (curkw->act_kind == KW_INDEX)) {
 						/* Suppress it */
 						/* I.e., do nothing. */
 					} else if(opt_do_white && curkw->act_kind
 							== KW_WHITE) {
 						/* Replace with a space */
-						out_line[outp++] = ' ';
+						out_line[outp++] = L' ';
 					} else if(opt_do_char && curkw->macro != NULL && kwlen != 2) {
 						/* Convert it to LaTeX form */
-						outp += copy_string(curkw->macro,
+						outp += wcopy_string(curkw->macro,
 							&out_line[outp], lenout_line-outp);
 						tex_arg = curkw->tex_arg;
 						tex_arg_sense = curkw->tex_arg_sense;
 					} else if(opt_do_latex && curkw->ech != -1) {
 						/* Convert to LaTeX form */
-						outp += copy_PrNN(&out_line[outp],
-							curkw->ech);
+						outp += copy_PrNN(&out_line[outp], curkw->ech);
 					} else if(opt_do_char && curkw->ech != -1) {
 						/* Convert to LaTeX form */
 						outp += copy_PrNN(&out_line[outp],
@@ -2183,17 +2386,17 @@ main_convert(
 						out_line[outp++] = curkw->ech;
 					} else if(opt_do_latex && curkw->ech == -1) {
 						/* Replace with latex macro of same name */
-						out_line[outp++] = '{';
+						out_line[outp++] = L'{';
 						{
 						  int tp = outp;
 						  outp += copy_keyword(&in_line[inp], kwlen,
 								       &out_line[outp], lenout_line-outp, 0);
-						  out_line[tp] = '\\';
+						  out_line[tp] = L'\\';
 						}
-						out_line[outp-1] = '}';
+						out_line[outp-1] = L'}';
 					} else {
 						/* Just copy the keyword */
-						outp += copy_keyword(&in_line[inp], kwlen,
+						outp += copy_keyword_uni(&in_line[inp], kwlen,
 							&out_line[outp], lenout_line-outp, 0);
 					}
 					inp += kwlen;
@@ -2201,36 +2404,36 @@ main_convert(
 					/* Unknown, but well-formed, keyword */
 					if(opt_flag_kw) {
 						/* Copy the keyword without its percent chars */
-						outp += copy_string("\\UnknownKeyword{",
+						outp += wcopy_string(L"\\UnknownKeyword{",
 							&out_line[outp], lenout_line-outp);
-						outp += copy_keyword(&in_line[inp], kwlen,
+						outp += copy_keyword_uni(&in_line[inp], kwlen,
 							&out_line[outp], lenout_line-outp, 1);
-						out_line[outp++] = '}';
+						out_line[outp++] = L'}';
 					} else if(opt_do_latex) {
 						/* Copy the keyword but protect its percent
 							characters.  Note that "MAIN_LEEWAY"
 							allows us to add the protected percents */
-						out_line[outp++] = '\\';
-						out_line[outp++] = '%';
+						out_line[outp++] = L'\\';
+						out_line[outp++] = L'%';
 
-						outp += copy_keyword(&in_line[inp], kwlen,
+						outp += copy_keyword_uni(&in_line[inp], kwlen,
 							&out_line[outp], lenout_line-outp, 1);
 
-						out_line[outp++] = '\\';
-						out_line[outp++] = '%';
+						out_line[outp++] = L'\\';
+						out_line[outp++] = L'%';
 					} else {
 						/* Just copy the keyword */
-						outp += copy_keyword(&in_line[inp], kwlen,
+						outp += copy_keyword_uni(&in_line[inp], kwlen,
 							&out_line[outp], lenout_line-outp, 0);
 					}
 					inp += kwlen;
 				} else {
 					/* Mall-formed keyword */
 					if(opt_flag_kw) {
-						outp += copy_string("\\MalFormedKeyword",
+						outp += wcopy_string(L"\\MalFormedKeyword",
 							&out_line[outp], lenout_line-outp);
 					}
-					if(opt_do_latex) out_line[outp++] = '\\';
+					if(opt_do_latex) out_line[outp++] = L'\\';
 					out_line[outp++] = '%';
 					inp++;
 				}
@@ -2244,36 +2447,36 @@ main_convert(
 			}
 			break;							/* BREAK */
 
-		case  '\\':
-			if(opt_do_latex) outp += copy_string("\\Backslash{}",
+		case  L'\\':
+			if(opt_do_latex) outp += wcopy_string(L"\\Backslash{}",
 				&out_line[outp], lenout_line-outp);
 			else out_line[outp++] = ch;
 			inp++;
 			break;							/* BREAK */
 
-		case  '^':
+		case  L'^':
 			if(opt_do_latex) outp +=
-				copy_string("\\Circumflex{}", &out_line[outp],
+				wcopy_string(L"\\Circumflex{}", &out_line[outp],
 				 lenout_line-outp);
 			else out_line[outp++] = ch;
 			inp++;
 			break;							/* BREAK */
 
-		case  '~':
-			if(opt_do_latex) outp += copy_string("\\Twiddles{}", &out_line[outp],
+		case  L'~':
+			if(opt_do_latex) outp += wcopy_string(L"\\Twiddles{}", &out_line[outp],
 				lenout_line-outp);
 			else out_line[outp++] = ch;
 			inp++;
 			break;							/* BREAK */
 
-		case  '{':
-		case  '}':
-		case  '_':
-		case  '#':
-		case  '&':
-		case  '$':
+		case  L'{':
+		case  L'}':
+		case  L'_':
+		case  L'#':
+		case  L'&':
+		case  L'$':
 			/* Characters with special meaning to LaTeX must be escaped. */
-			if(opt_do_latex) out_line[outp++] = '\\';
+			if(opt_do_latex) out_line[outp++] = L'\\';
 			out_line[outp++] = ch;
 			inp++;
 			break;							/* BREAK */
@@ -2287,7 +2490,7 @@ main_convert(
 			} else if(opt_do_white && curkw != NULL
 					&& curkw->act_kind == KW_WHITE) {
 				/* Replace with a space */
-				out_line[outp++] = ' ';
+				out_line[outp++] = L' ';
 			} else if(ch > 127) {
 				if(opt_do_ml_char) {
 					int dig_unit = ch % 10;
@@ -2296,14 +2499,14 @@ main_convert(
 					int hundreds = (tens - dig_ten) / 10;
 					int dig_hun = hundreds % 10;
 
-					out_line[outp++] = '\\';
-					out_line[outp++] = dig_hun + '0';
-					out_line[outp++] = dig_ten + '0';
-					out_line[outp++] = dig_unit + '0';
+					out_line[outp++] = L'\\';
+					out_line[outp++] = dig_hun + L'0';
+					out_line[outp++] = dig_ten + L'0';
+					out_line[outp++] = dig_unit + L'0';
 				} else if(opt_do_char) {
 					if(curkw != NULL && curkw->macro != NULL) {
 						/* Convert it to LaTeX form */
-						outp += copy_string(curkw->macro,
+						outp += wcopy_string(curkw->macro,
 							&out_line[outp], lenout_line-outp);
 					} else {
 						outp += copy_PrNN(&out_line[outp], ch);
@@ -2314,8 +2517,8 @@ main_convert(
 					}
 				} else if (opt_do_conv_ext) {
 					if(curkw != NULL && curkw->name != NULL) {
-						/* Convert it to LaTeX form */
-						outp += copy_string(curkw->name,
+						/* Output keyword untouched */
+						outp += wcopy_string(curkw->name,
 							&out_line[outp], lenout_line-outp);
 					} else {
 						out_line[outp++] = ch;
@@ -2332,7 +2535,7 @@ main_convert(
 		}
 
 		if(top_inp >= inp) {
-			internal_error("main_convert spinning", "");
+			internal_error("main_convert_ext spinning", "");
 			spin_count --;
 			if(spin_count > 0) {
 				FPRINTF(stderr,
@@ -2347,7 +2550,7 @@ main_convert(
 				PUTC('\n', stderr);
 			} else {
 				out_line[outp++] = '\0';
-				FPRINTF(stderr, "in_line: '%s'\nout_line: '%s'\n",
+				FPRINTF(stderr, "in_line: '%S'\nout_line: '%S'\n",
 					in_line, out_line);
 				EXIT(35);					/* EXIT */
 			}
@@ -2357,8 +2560,8 @@ main_convert(
 			int eflags = REG_NOTBOL;
 			int error_code;
 			regmatch_t pmatch;
-			error_code = regexec(tex_arg, &in_line[inp], 1, &pmatch, eflags);
-			out_line[outp++] = '{';
+			error_code = sv_regwexec(tex_arg, &in_line[inp], 1, &pmatch, eflags);
+			out_line[outp++] = L'{';
 			tex_arg_stack_head += 1;
 			if(tex_arg_sense == KW_RE_MATCH) {
 				if(error_code == 0 && pmatch.rm_so == 0) {
@@ -2370,7 +2573,7 @@ main_convert(
 				if(error_code == 0) {
 					tex_arg_stack[tex_arg_stack_head] = inp + pmatch.rm_so;
 				} else {
-					tex_arg_stack[tex_arg_stack_head] = strlen(in_line);
+					tex_arg_stack[tex_arg_stack_head] = wcslen(in_line);
 				}
 			}
 		} else if (tex_arg != NULL) {
@@ -2406,12 +2609,417 @@ main_convert(
 	}
 
 	if(debug & D_MAIN_CONVERT_CH) {
-		(void)printf("main_convert: was: %s\n", in_line);
-		(void)printf("main_convert: now: %s\n", out_line);
+		(void)printf("main_convert_ext: was: %S\n", in_line);
+		(void)printf("main_convert_ext: now: %S\n", out_line);
 	}
 }
 /*
+----------------
+main_convert_uni
+----------------
 
+This is a version of the main_convert routine which works from a unicode
+input line.
+
+Provides the conversion routine used for most things.
+If it is called with no flags set it just copies the text through
+unchanged.
+
+Various conversions are supported, they are described with the
+definitions of the options flags in section~\ref{ActionOptions}.
+
+*/
+
+void
+main_convert_uni(
+	unicode *in_line,
+	int flags,
+	wchar_t *out_line,
+	int lenout_line,
+	struct file_data *file_F)
+{
+	int inp = 0;
+	int outp = 0;
+	int ch;
+	int opt_del_index = flags & OPT_DELINDEX;
+	int opt_do_latex = flags & OPT_LATEX;
+	int opt_do_line_verbatim = flags & OPT_VERBATIM;
+	int opt_do_kw = flags & OPT_KW;
+	int opt_conv_kw = flags & OPT_CONVKW;
+	int opt_do_ml_char = flags & OPT_MLCHAR;
+	int opt_do_conv_ext = flags & OPT_CONV_EXT;
+	int opt_do_char = flags & OPT_CHAR;
+	int opt_kw_warn = flags & OPT_WARN_KW;
+	int opt_flag_kw = opt_do_kw && opt_do_latex && (flags & OPT_FLAG_KW);
+	int opt_do_white = flags & OPT_WHITE;
+ /*	int opt_utf8out = flags & OPT_UTF8OUT; */
+	int tex_arg_stack[MAX_TEX_ARG_NESTING];
+	int tex_arg_stack_head = -1;
+
+	int spin_count = 5;
+
+	lenout_line -= MAIN_LEEWAY;
+
+	/* Possibly override "opt_do_line_verbatim" when "OPT_VERB_ALONE" set. */
+	if(flags & OPT_VERB_ALONE) {
+		int all_alone = 1;
+		int found_white_space = 0;
+		int c_va = 0;
+		while(all_alone && (ch = in_line[inp]) != 0) {
+			if(ch == L'%' && opt_do_kw) {
+				int kwlen;
+				int kwindex;
+
+				kwindex = get_hol_kw_uni(&in_line[inp], &kwlen, opt_kw_warn, file_F);
+				if(kwindex>=0) {
+					int kwty = kwi.keyword[kwindex].act_kind;
+					if(kwty == KW_VERB_ALONE) c_va++;
+					else if(kwty == KW_WHITE) { /* Do nothing */ }
+					else all_alone = 0;
+					inp += kwlen;
+				} else all_alone = 0;
+			} else {
+			  int chext = unicode_to_ext(ch);
+			  if(debug & D_UTF8)
+			    (void)printf("main_convert_uni (A): inp=%d chext=%d ch=%d:%c outp=%d\n",
+					 inp, chext, ch, ch, outp);
+			  if (chext>=0) {
+			    if(IS_VERB_ALONE_CH(chext)) c_va++;
+			    else if(kwi.char_code[chext] != NULL &&
+				    kwi.char_code[chext]->act_kind == KW_WHITE)
+			      { /* Do nothing */ }
+			    else if(iswascii(ch) && iswspace(ch))
+			      { found_white_space = 1; }
+			    else all_alone = 0;
+			  }
+			  else all_alone = 0;
+			  inp ++;
+			}
+		}
+
+		if(c_va == 0) all_alone = 0;
+		else if(found_white_space) {
+			grumble1("white space characters found on verbalone line", file_F, True);
+		}
+		opt_do_line_verbatim = ! all_alone;
+	}
+
+	inp = outp = 0;
+
+	if(opt_do_line_verbatim) {
+		/* Add start of line text */
+		out_line[outp++] = '\\';
+		out_line[outp++] = '+';
+	}
+
+	while((ch = in_line[inp]) != 0 && outp < lenout_line) {
+	  int chext = uni_to_pp(ch);
+	  struct keyword_information *curkw = unicode_to_kwi(ch);
+
+	  int top_inp = inp;  /* To test that the code below increments "inp" */
+	  regex_t *tex_arg = NULL;
+	  wchar_t tex_arg_sense;
+
+	  if(debug & D_MAIN_CONVERT_CH)
+	    (void)printf("main_convert_uni (B): inp=%d  ch=%d:%c chext=%d outp=%d\n",
+			 inp, ch, ch, chext, outp);
+	  
+	  while(tex_arg_stack_head >= 0 && inp == tex_arg_stack[tex_arg_stack_head]) {
+	    out_line[outp++] = '}';
+	    tex_arg_stack_head -= 1;
+	  }
+	  
+	  switch(ch) {
+	  case L'%': if(opt_do_kw) {
+	      int kwlen;
+	      int kwindex;
+	      
+	      kwindex = get_hol_kw_uni(&in_line[inp], &kwlen, opt_kw_warn, file_F);
+	      
+	      /* Three cases: (1) known keyword, (2)
+		 well-formed but unknown keyword,
+		 (3) mal-formed keyword */
+	      
+	      
+	      if(kwindex>=0) {
+		/* Known keyword */
+		struct keyword_information *curkw
+		  = &kwi.keyword[kwindex];
+		
+		if((opt_del_index && curkw->act_kind == KW_INDEX)) {
+		  /* Suppress it */
+		  /* I.e., do nothing. */
+		} else if(opt_do_white && curkw->act_kind
+			  == KW_WHITE) {
+		  /* Replace with a space */
+		  out_line[outp++] = ' ';
+		} else if(opt_do_char && curkw->macro != NULL && kwlen != 2) {
+		  /* Convert it to LaTeX form */
+		  outp += wcopy_string(curkw->macro,
+				      &out_line[outp], lenout_line-outp);
+		  tex_arg = curkw->tex_arg;
+		  tex_arg_sense = curkw->tex_arg_sense;
+		} else if(opt_do_latex && curkw->ech != -1) {
+		  /* Convert to LaTeX form */
+		  outp += copy_PrNN(&out_line[outp],
+				    curkw->ech);
+		} else if(opt_do_char && curkw->ech != -1) {
+		  /* Convert to LaTeX form */
+		  outp += copy_PrNN(&out_line[outp],
+				    curkw->ech);
+		  tex_arg = curkw->tex_arg;
+		  tex_arg_sense = curkw->tex_arg_sense;
+		} else if(opt_conv_kw && curkw->uni != -1) {
+		  /* Replace with the unicode character */
+		  out_line[outp++] = curkw->uni;
+		} else if(opt_do_latex && curkw->uni == -1) {
+		  /* Replace with latex macro of same name */
+		  out_line[outp++] = L'{';
+		  {
+		    int tp = outp;
+		    outp += copy_keyword_uni(&in_line[inp], kwlen,
+					     &out_line[outp], lenout_line-outp, 0);
+		    out_line[tp] = L'\\';
+		  }
+		  out_line[outp-1] = L'}';
+		} else {
+		  /* Just copy the keyword */
+		  outp += copy_keyword_uni(&in_line[inp], kwlen,
+					   &out_line[outp], lenout_line-outp, 0);
+		}
+		inp += kwlen;
+	      } else if(kwlen>0) {
+		/* Unknown, but well-formed, keyword */
+		if(opt_flag_kw) {
+		  /* Copy the keyword without its percent chars */
+		  outp += wcopy_string(L"\\UnknownKeyword{",
+				      &out_line[outp], lenout_line-outp);
+		  outp += copy_keyword_uni(&in_line[inp], kwlen,
+					   &out_line[outp], lenout_line-outp, 1);
+		  out_line[outp++] = L'}';
+		} else if(opt_do_latex) {
+		  /* Copy the keyword but protect its percent
+		     characters.  Note that "MAIN_LEEWAY"
+		     allows us to add the protected percents */
+		  out_line[outp++] = L'\\';
+		  out_line[outp++] = L'%';
+		  
+		  outp += copy_keyword_uni(&in_line[inp], kwlen,
+			  &out_line[outp], lenout_line-outp, 1);
+		  
+		  out_line[outp++] = L'\\';
+		  out_line[outp++] = L'%';
+		} else {
+		        /* Just copy the keyword */
+		        outp += copy_keyword_uni(&in_line[inp], kwlen,
+				&out_line[outp], lenout_line-outp, 0);
+		}
+		inp += kwlen;
+	      } else {
+		/* Mall-formed keyword */
+		if(opt_flag_kw) {
+		        outp += wcopy_string(L"\\MalFormedKeyword",
+				&out_line[outp], lenout_line-outp);
+		}
+		if(opt_do_latex) out_line[outp++] = L'\\';
+		out_line[outp++] = L'%';
+		inp++;
+	      }
+	    } else {
+	      /* Do not try to recognize percent keywords, just
+		 copy them through.  Note that percent signs
+		 may need to be escaped with a '\' */
+	      if(opt_do_latex) out_line[outp++] = L'\\';
+	      out_line[outp++] = ch;
+	      inp++;
+	    }
+	    break;							/* BREAK */
+	    
+	  case  L'\\':
+	    if(opt_do_latex) outp += wcopy_string(L"\\Backslash{}",
+						 &out_line[outp], lenout_line-outp);
+	    else out_line[outp++] = ch;
+	    inp++;
+	    break;							/* BREAK */
+	    
+	  case  L'^':
+	    if(opt_do_latex) outp +=
+			       wcopy_string(L"\\Circumflex{}", &out_line[outp],
+					   lenout_line-outp);
+	    else out_line[outp++] = ch;
+	    inp++;
+	    break;							/* BREAK */
+	    
+	  case  L'~':
+	    if(opt_do_latex) outp += wcopy_string(L"\\Twiddles{}", &out_line[outp],
+						 lenout_line-outp);
+	    else out_line[outp++] = ch;
+	    inp++;
+	    break;							/* BREAK */
+	    
+	  case  L'{':
+	  case  L'}':
+	  case  L'_':
+	  case  L'#':
+	  case  L'&':
+	  case  L'$':
+	    /* Characters with special meaning to LaTeX must be escaped. */
+	    if(opt_do_latex) out_line[outp++] = L'\\';
+	    out_line[outp++] = ch;
+	    inp++;
+	    break;							/* BREAK */
+	    
+	  default: {
+	    if (curkw != NULL) {
+	      /* 
+		 We have a unicode character which is assigned to a keyword.
+	      */
+	      size_t kwlen = wcslen(curkw->name);
+	      if(opt_del_index && curkw->act_kind == KW_INDEX) {
+		/* Suppress it, i.e., do nothing. */
+	      } else if(opt_do_white && curkw->act_kind == KW_WHITE) {
+		/* Replace with a space */
+		out_line[outp++] = L' ';
+	      } else if(ch < 128) {out_line[outp++] = ch;
+	      } else if(opt_do_ml_char && chext >12){/* DO ML CHAR */
+		  int dig_unit = chext % 10;
+		  int tens = (chext - dig_unit) / 10;
+		  int dig_ten = tens % 10;
+		  int hundreds = (tens - dig_ten) / 10;
+		  int dig_hun = hundreds % 10;
+		  
+		  out_line[outp++] = L'\\';
+		  out_line[outp++] = dig_hun + L'0';
+		  out_line[outp++] = dig_ten + L'0';
+		  out_line[outp++] = dig_unit + L'0';
+	      } else if (opt_do_char){/* DO CHAR */
+		if(curkw->macro != NULL) {
+		  /* Convert it to LaTeX form */
+		  outp += wcopy_string(curkw->macro,
+				       &out_line[outp], lenout_line-outp);
+		  tex_arg = curkw->tex_arg;
+		  tex_arg_sense = curkw->tex_arg_sense;
+		} else out_line[outp++] = ch;
+	      } else if (opt_do_conv_ext) {
+		  if(curkw->name != NULL) {
+		    /* Output keyword untouched */
+		    outp += wcopy_string(curkw->name,
+					 &out_line[outp], lenout_line-outp);
+		  } else out_line[outp++] = ch;
+	      } else out_line[outp++] = ch;
+	      inp++;
+	      break;							/* BREAK */
+	    } else {
+	      /* no keyword */
+	      out_line[outp++] = ch;
+	      if(ch > 127) unknown_code(ch);
+	      inp++;
+	    } /* End of conditional */
+	  } /* End of switch:default */
+	  } /* End of switch */
+	    
+	  if (top_inp >= inp) {
+	    internal_error("main_convert_uni spinning", "");
+	    spin_count --;
+	    if(spin_count > 0) {
+	      FPRINTF(stderr,
+		      "%3d:  top_inp=%d  inp=%d  outp=%d  ch=%d",
+		      spin_count, top_inp, inp, outp, ch);
+	      if(isascii(ch) && isgraph(ch)) {
+		PUTC('=', stderr);
+		PUTC('\'', stderr);
+		PUTC(ch, stderr);
+		PUTC('\'', stderr);
+	      }
+	      PUTC('\n', stderr);
+	    } else {
+	      out_line[outp++] = '\0';
+	      FPRINTF(stderr, "in_line: '%S'\nout_line: '%S'\n",
+		      in_line, out_line);
+	      EXIT(35);					/* EXIT */
+	    }
+	  }
+	  
+	  if(tex_arg != NULL && tex_arg_stack_head < MAX_TEX_ARG_NESTING) {
+	    int eflags = REG_NOTBOL;
+	    int error_code;
+	    regmatch_t pmatch;
+	    error_code = sv_regwexec(tex_arg, &in_line[inp], 1, &pmatch, eflags);
+	    out_line[outp++] = '{';
+	    tex_arg_stack_head += 1;
+	    if(tex_arg_sense == KW_RE_MATCH) {
+	      if(error_code == 0 && pmatch.rm_so == 0) {
+		tex_arg_stack[tex_arg_stack_head] = inp + pmatch.rm_eo;
+	      } else {
+		tex_arg_stack[tex_arg_stack_head] = inp;
+	      }
+	    } else {
+	      if(error_code == 0) {
+		tex_arg_stack[tex_arg_stack_head] = inp + pmatch.rm_so;
+	      } else {
+		tex_arg_stack[tex_arg_stack_head] = wcslen(in_line);
+	      }
+	    }
+	  } else if (tex_arg != NULL) {
+	    grumble1("TeX argument stack overflow", file_F, True);
+	  }
+	} /* end of while */
+	
+	if(outp >= lenout_line) {
+	  grumble1("output line too large after macro expansion etc", file_F, True);
+	  EXIT(34);
+	}
+	
+	
+	/* The next few lines MUST not add more than "MAIN_LEEWAY" characters */
+	lenout_line += MAIN_LEEWAY;
+	
+	while(tex_arg_stack_head >= 0) {
+	  out_line[outp++] = '}';
+	  tex_arg_stack_head -= 1;
+	}
+	
+	if(opt_do_line_verbatim) {
+	  /* Add end of line text */
+	  out_line[outp++] = '\\';
+	  out_line[outp++] = '\\';
+	}
+	
+	out_line[outp++] = '\0';
+	
+	if(outp >= lenout_line-1) {
+	  internal_error("output line too large", "");
+	  EXIT(40);
+	}
+	
+	if(debug & D_MAIN_CONVERT_CH) {
+	  (void)printf("main_convert_uni: was: %S\n", in_line);
+	  (void)printf("main_convert_uni: now: %S\n", out_line);
+	}
+}
+	  
+/*
+===================
+main_convert
+===================
+
+
+*/
+
+void
+main_convert(
+	wchar_t *in_line,
+	int flags,
+	wchar_t *out_line,
+	int lenout_line,
+	struct file_data *file_F)
+{
+  if (file_F->utf8) main_convert_uni (in_line, flags, out_line, lenout_line, file_F);
+  else main_convert_ext (in_line, flags, out_line, lenout_line, file_F);
+}
+
+ 
+/*
 ================
 Sieving Routines
 ================
@@ -2421,19 +3029,21 @@ process_line
 Handles each non-directive line, it selects the appropriate type of processing.
 Function main_sieve is in overall control of the sieving phase of the program.
 */
-void
-process_line(char *line, dir_info *di)
-{
-	static char *convert_area = NULL;
-	char *op_text = line;
-	int a_flags = di->tab->cfa[di->cur_act_index].opt_flags;
 
+void
+process_line(wchar_t *line, dir_info *di)
+{
+        static wchar_t *convert_area = NULL;
+	wchar_t *op_text = line;
+	int cai = di->cur_act_index;
+	int a_flags = di->tab->cfa[cai].opt_flags;
+	
 	if(convert_area == NULL) {
-		convert_area = malloc_and_check(MACRO_EXP_SIZE+1, 107);
+	  convert_area = malloc_and_check((MACRO_EXP_SIZE+1)*(sizeof(wchar_t)), 107);
 	}
 
 	if(debug & D_PROCESS_LINE) {
-		(void)printf("process_line action#=%d  flags=0x%04x %4d: '%s'\n",
+		(void)printf("process_line action#=%d  flags=0x%04x %4d: '%S'\n",
 			di->cur_act_index, a_flags, main_F.line_no, line);
 	}
 
@@ -2443,26 +3053,41 @@ process_line(char *line, dir_info *di)
 		break;								/* BREAK */
 
 	case FILTER_ACT :
-		FPRINTF(di->cur_fp, "%s\n", op_text);
+		FPRINTF(di->cur_fp, "%S\n", op_text);
 		break;								/* BREAK */
 
 	case CAT_ACT :
 	  /* if(a_flags) */ {
-	  main_convert(op_text, a_flags, convert_area,
+	  /*
+       	  if(! main_F.utf8) ext_seq_to_unicode(op_text, main_F.code_line);
+	  main_convert_uni(main_F.code_line, a_flags, convert_area,
 		       MACRO_EXP_SIZE, &main_F);
 	  if(limits.opt_list) {
-	    int ca_len = strlen(convert_area);
+	    int ca_len = wcslen(convert_area);
 	    if(ca_len > limits.process_line_len)
 	      limits.process_line_len = ca_len;
 	  }
 	  op_text = convert_area;
-	}
-	  if (a_flags & OPT_UTF8_OUT) {
-	    if (debug & D_UTF8){message1("UTF8:process_line 1");};
-	    output_ext_as_utf8(op_text, di->cur_fp);
-	    if (debug & D_UTF8){message1("UTF8:process_line 2");};
+	  */
+	  main_convert(main_F.cur_line, a_flags, convert_area,
+		       MACRO_EXP_SIZE, &main_F);
+	  if(limits.opt_list) {
+	    int ca_len = wcslen(convert_area);
+	    if(ca_len > limits.process_line_len)
+	      limits.process_line_len = ca_len;
 	  }
-	  else FPRINTF(di->cur_fp, "%s\n", op_text);
+	  op_text = convert_area;
+	  
+	  if(debug & D_PROCESS_LINE)(void)printf("process_line op_text='%S'\n", op_text);
+	  
+	}
+	  
+/*	  
+	  if (a_flags & OPT_UTF8OUT) {
+	  output_ext_as_utf8(op_text, di->cur_fp);
+	  } else
+*/
+	  FPRINTF(di->cur_fp, "%S\n", op_text);
 	  break;								/* BREAK */
 
 	case ML_STRING_ACT :
@@ -2470,8 +3095,8 @@ process_line(char *line, dir_info *di)
 		break;								/* BREAK */
 
 	default :
-		internal_error("category %s ", di->tab->cat);
-		FPRINTF(stderr, "unexpected action type %d at line %d: %s\n",
+		winternal_error(L"category %S ", di->tab->cat);
+		FPRINTF(stderr, "unexpected action type %d at line %d: %S\n",
 			di->current_action, main_F.line_no, line);
 		print_table_entry(di->tab, stderr);
 		EXIT(18);							/* EXIT */
@@ -2480,7 +3105,7 @@ process_line(char *line, dir_info *di)
 
 	if(feof(di->cur_fp) || ferror(di->cur_fp)) {
 		error_top();
-		FPRINTF(stderr, "i/o error on write operation at line %d: %s\n",
+		FPRINTF(stderr, "i/o error on write operation at line %d: %S\n",
 			main_F.line_no, op_text);
 		EXIT(11);							/* EXIT */
 	}
@@ -2501,16 +3126,22 @@ These are set into the given {\tt di}.
 void
 set_up_for_copy_action(dir_info *di)
 {
-	static char *expanded_filter = NULL;
+	static wchar_t *expanded_filter = NULL;
 	int cur_action = di->tab->cfa[di->cur_act_index].action_type;
 
 	if(expanded_filter == NULL) {
-		expanded_filter = malloc_and_check(MACRO_EXP_SIZE+1, 106);
+	  expanded_filter = malloc_and_check((MACRO_EXP_SIZE+1)*(sizeof(wchar_t)), 106);
 	}
 
 	di->cur_fp = stdout;
 	di->cur_fp_class = FP_STDOUT;
 
+	if(debug & D_ACTIONS) {
+	  wchar_t acts[3];
+	  swprintf(acts, 3, L"%i", cur_action); 
+	  wmessage(L"set up for copy action: %S", acts);
+	};
+	
 	switch(cur_action) {
 
 	case IGNORE_ACT :
@@ -2524,10 +3155,10 @@ set_up_for_copy_action(dir_info *di)
 				break;						/* BREAK */
 
 	case FILTER_ACT :{
-				char *filt = di->tab->cfa[di->cur_act_index].action_str;
+				wchar_t *filt = di->tab->cfa[di->cur_act_index].action_str;
 
 				if(debug & D_ACTIONS)
-					message("Filtering text with: %s", filt);
+					wmessage(L"Filtering text with: %S", filt);
 
 			    	di->current_action = FILTER_ACT;
 
@@ -2536,28 +3167,32 @@ set_up_for_copy_action(dir_info *di)
 					expand_macro(di, filt, expanded_filter,
 						MACRO_EXP_SIZE);
 					if(limits.opt_list) {
-						int filt_len = strlen(expanded_filter);
+						int filt_len = wcslen(expanded_filter);
 						if(filt_len > limits.process_line_len)
 							limits.process_line_len = filt_len;
 					}
 					filt = expanded_filter;
-					if(debug & D_ACTIONS) message(
-						"    which expands to: %s", filt);
+					if(debug & D_ACTIONS) wmessage(
+						L"    which expands to: %S", filt);
 				}
 
 				di->cur_fp_class = FP_PIPE;
-				di->cur_fp = popen(filt, "w");
+				{
+				  char *command = unicode_seq_to_utf8(filt);			 
+				  di->cur_fp = popen(command, "w");
+				  /*  free(command); */
+				};
 				if(di->cur_fp == NULL) {
-					unix_error("cannot execute filter %s", filt);
+					wunix_error(L"cannot execute filter %S", filt);
 					EXIT(10);				/* EXIT */
 				};
 
 				break;						/* BREAK */
 			}
 
-	default :		internal_error("category %s ", di->cat);
+	default :		winternal_error(L"category %S ", di->cat);
 				FPRINTF(stderr,
-					"unexpected action number %d at line %d: %s",
+					"unexpected action number %d at line %d: %S",
 					di->cur_act_index, main_F.line_no, main_F.cur_line);
 				print_table_entry(di->tab, stderr);
 				EXIT(17);					/* EXIT */
@@ -2580,7 +3215,7 @@ set_up_new_category(dir_info *di)
 	di->table_index = look_up(di->cat);
 	if(di->table_index < 0) {
 		/* Unknown category */
-		grumble("skipping unknown category %s", di->cat, &main_F, True);
+		wgrumble(L"skipping unknown category %S", di->cat, &main_F, True);
 		di->tab = &table[0];
 		di->current_action = IGNORE_ACT;
 	} else {
@@ -2589,66 +3224,69 @@ set_up_new_category(dir_info *di)
 
 		if(table[di->table_index].num_actions < 0) {
 			/* Suppress this category */
-			di->current_action = IGNORE_ACT;
+		  if(debug & D_UTF8) wgrumble(L"skipping no-action category %S", di->cat, &main_F, True);
+		  di->current_action = IGNORE_ACT;
 		} else if(di->num_dl_args < di->tab->min_args ||
-				di->num_dl_args > di->tab->max_args) {
-			/* Wrong number of arguments, suppress the category */
-			grumble("%s arguments, ignoring category",
-				di->num_dl_args < di->tab->min_args
-					? "insufficient" : "too many",
-				&main_F, True);
-			if(di->tab->min_args == 0 && di->tab->max_args == 0) {
-				FPRINTF(stderr, "\tas %d,  but 0 argument allowed\n",
-					di->num_dl_args);
-			} else {
-				FPRINTF(stderr,
-					"\thave %d args,  require %d <= args <= %d\n",
-					di->num_dl_args, di->tab->min_args,
-					di->tab->max_args);
-			}
-			di->tab = &table[0];
-			di->current_action = IGNORE_ACT;
+			  di->num_dl_args > di->tab->max_args) {
+		  /* Wrong number of arguments, suppress the category */
+		  grumble("%s arguments, ignoring category",
+			  di->num_dl_args < di->tab->min_args
+			  ? "insufficient" : "too many",
+			  &main_F, True);
+		  if(di->tab->min_args == 0 && di->tab->max_args == 0) {
+		    FPRINTF(stderr, "\tas %d,  but 0 argument allowed\n",
+			    di->num_dl_args);
+		  } else {
+		    FPRINTF(stderr,
+			    "\thave %d args,  require %d <= args <= %d\n",
+			    di->num_dl_args, di->tab->min_args,
+			    di->tab->max_args);
+		  }
+		  di->tab = &table[0];
+		  di->current_action = IGNORE_ACT;
 		} else {
-			/* Known category which is wanted in current view */
-			di->current_action = UNKNOWN_ACT;
-			di->cur_act_index = 0;
-
-			di->cur_act_index = do_non_copy_actions(di);
-
-			if(di->tab->num_actions == 0) { /* just copy */
-		  if (debug & D_UTF8){message1("UTF8:set_up_new_category: just copy");};
-				di->current_action = CAT_ACT;
-			} else if(di->tab->num_actions < 0
-					|| di->tab->num_actions > MAX_ACTION) {
-				internal_error("category %s ", di->cat);
-				FPRINTF(stderr,
-					" unexpected number of actions at line %d: %s\n",
-					main_F.line_no, main_F.cur_line);
-				print_table_entry(di->tab, stderr);
-				EXIT(13);					/* EXIT */
-			} else if(di->cur_act_index > di->tab->num_actions) {
-				internal_error("no copying action with category %s", di->cat);
-				FPRINTF(stderr, "  line %d: %s",
-					main_F.line_no, main_F.cur_line);
-				print_table_entry(di->tab, stderr);
-				EXIT(15);					/* EXIT */
-			} else {
-				/* Must flush the results of any previous actions
-					before invoking the filter. */
-		  if (debug & D_UTF8){message1("UTF8:set_up_new_category: about to fflush");};
-				if(fflush(di->cur_fp) != 0) {
-		  if (debug & D_UTF8){message1("UTF8:set_up_new_category: fflush failed");};
+		  /* Known category which is wanted in current view */
+		  di->current_action = UNKNOWN_ACT;
+		  di->cur_act_index = 0;
+		  
+		  di->cur_act_index = do_non_copy_actions(di);
+		  
+		  if(di->tab->num_actions == 0) { /* just copy */
+		    if (debug & D_UTF8) message1("UTF8:set up new category: just copy");
+		    di->current_action = CAT_ACT;
+		  } else if(di->tab->num_actions < 0
+			    || di->tab->num_actions > MAX_ACTION) {
+		    winternal_error(L"category %S ", di->cat);
+		    FPRINTF(stderr,
+			    " unexpected number of actions at line %d: %S\n",
+			    main_F.line_no, main_F.cur_line);
+		    print_table_entry(di->tab, stderr);
+		    EXIT(13);					/* EXIT */
+		  } else if(di->cur_act_index > di->tab->num_actions) {
+		    winternal_error(L"no copying action with category %S", di->cat);
+		    FPRINTF(stderr, "  line %d: %S",
+			    main_F.line_no, main_F.cur_line);
+		    print_table_entry(di->tab, stderr);
+		    EXIT(15);					/* EXIT */
+		  } else {
+		    /* Must flush the results of any previous actions
+		       before invoking the filter. */
+		    if(debug & D_UTF8) message1("set_up_new_category: about to fflush");
+		    if(fflush(di->cur_fp) != 0) {
 					unix_error("i/o error reported on flush operation", "");
 					EXIT(16);				/* EXIT */
 				};
-		  if (debug & D_UTF8){message1("UTF8:set_up_new_category: fflush-ed OK");};
 
-				set_up_for_copy_action(di);
+		    set_up_for_copy_action(di);
+		    
+		    if (debug & D_UTF8){message1("set_up_new_category: complete");};
 			}
 		}
 		/* Bottom of known category */
 	}
 }
+
+
 /*
 ---------------------
 decode_directive_line
@@ -2686,114 +3324,147 @@ The category name is built as follows.
 	plus the word immediately after it.
 
 \end{itemize}
+
+Where the view file is in unicode rather than using the extended character set, the processing is essentially the same.
+Only unicode characters corresponding to ext characters are allowed to start or to be directives, and various data structures (e.g. the character flags)  continue to be indexed by the corresponding ext characters, and therefore to restrict the relevant characteristics to those characters.
+
+At this stage checking whether a line is a directive is more costly because of the need to look up unicode characters > 127 occuring at the start of a line using a binary chop to get any corresponding ext character.
+
 */
 int
 decode_directive_line(
-	char *line,	/* in: text */
+	wchar_t *line,	/* in: text */
 	dir_info *di	/* updated */)
 {
-	char	*next_arg;
+	wchar_t	*next_arg;
 	int start_copy_dest = 1;
 	int start_copy_source = 1;
+	struct keyword_information *curkw;
 
-	if(	!IS_DIRECTIVE_CHAR(line[0])
-	||	(line[0] == '%' && !IS_SND_CHAR_DIR_KW(line[1]))
-	||	(line[0] == '=' && isascii(line[1]) && isspace(line[1]))) {
-		/* Quickly exclude most cases */
-		return(0);							/* RETURN */
+	/* Quickly exclude some cases */
+	if(
+	   (line[0] == L'%' &&
+	            (line[1] > 128 || !IS_SND_CHAR_DIR_KW(line[1])))
+	   || (line[0] == L'=' &&
+	            (isascii(line[1]) && isspace(line[1])))
+	   || ((line[0] < 128 || !view_F.utf8) && !IS_DIRECTIVE_CHAR(line[0]))) {
+	  return(0);							/* RETURN */
 	}
+
+	if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line[A]: line = %S",line);};
 
 	init_directive_line(di);
-
+	    
 	if(line[0] == '%') {
-		/* Might be a keyword directive.  This is the most difficult case to identify.
-			We already know that the character after the percent is used by some
-			directives (from the test with "IS_SND_CHAR_DIR_KW" above). */
+	  /* Might be a keyword directive.  This is the most difficult case to identify.
+	     We already know that the character after the percent is used by some
+	     directives (from the test with "IS_SND_CHAR_DIR_KW" above). */
+	  
+	  int kwlen = 0;
+	  int kwindex;
+	  int dir_kw_type;
+	  
+	  di->dl_line[kwlen++] = '%';
+	  
+	  while(kwlen<=kwi.max_kw_len && line[kwlen] != L'\0' &&
+		line[kwlen] != L'%') {
+	    di->dl_line[kwlen] = line[kwlen];
+	    kwlen++;
+	  }
+	  
+	  if(line[kwlen] != '%') {
+	    /* White space or end of line before the closing
+	       percent required for a proper keyword */
+	    return(0);						/* RETURN */
+	  }
+	  
+	  /* Got a well formed keyword in "di->dl_line" */
+	  
+	  di->dl_line[kwlen++] = '%';
+	  di->dl_line[kwlen] = '\0';
+	  
+	  kwindex = find_keyword(di->dl_line);
+	  
+	  if(kwindex<0) {
+	    /* Unknown keyword */
+	    return(0);						/* RETURN */
+	  }
+	  
+	  dir_kw_type = kwi.keyword[kwindex].act_kind;
+	  
+	  if(dir_kw_type != KW_DIRECTIVE && dir_kw_type != KW_START_DIR) {
+	    /* Not a directive keyword */
+	    return(0);						/* RETURN */
+	  }
+	  
+	  /* It is a directive line.  Put the corresponding directive
+	     character into "di->dl_line" then append the rest of the
+	     line ready for chopping it up.  Note that the directive
+	     starts with the first character of "di->dl_line" */
+	  
+	  if(kwi.keyword[kwindex].ech == -1) {
+	    winternal_error(L"directive keyword '%S' has no ext character", di->dl_line);
+	    EXIT(28);
+	  }
+	  
+	  di->dl_line[0] = view_F.utf8
+	    ? kwi.keyword[kwindex].uni
+	    : kwi.keyword[kwindex].ech;
+	  
+	  /* For cases where the character is a category name in its own
+	     right we add a space after the character so that the chopping
+	     will keep the directive and the first word separate */
+	  
+	  if(dir_kw_type == KW_DIRECTIVE) {
+	    di->dl_line[1] = L' ';
+	    start_copy_dest = 2;
+	  }
 
-		int kwlen = 0;
-		int kwindex;
-		int dir_kw_type;
-
-		di->dl_line[kwlen++] = '%';
-
-		while(kwlen<=kwi.max_kw_len && line[kwlen] != '\0' &&
-				line[kwlen] != '%') {
-			di->dl_line[kwlen] = line[kwlen];
-			kwlen++;
-		}
-
-		if(line[kwlen] != '%') {
-			/* White space or end of line before the closing
-				percent required for a proper keyword */
-			return(0);						/* RETURN */
-		}
-
-		/* Got a well formed keyword in "di->dl_line" */
-
-		di->dl_line[kwlen++] = '%';
-		di->dl_line[kwlen] = '\0';
-
-		kwindex = find_keyword(di->dl_line);
-
-		if(kwindex<0) {
-			/* Unknown keyword */
-			return(0);						/* RETURN */
-		}
-
-		dir_kw_type = kwi.keyword[kwindex].act_kind;
-
-		if(dir_kw_type != KW_DIRECTIVE && dir_kw_type != KW_START_DIR) {
-			/* Not a directive keyword */
-			return(0);						/* RETURN */
-		}
-
-		/* It is a directive line.  Put the corresponding directive
-			character into "di->dl_line" then append the rest of the
-			line ready for chopping it up.  Note that the directive
-			starts with the first character of "di->dl_line" */
-
-		if(kwi.keyword[kwindex].ech == -1) {
-			internal_error("directive keyword '%s' has no character", di->dl_line);
-			EXIT(28);
-		}
-
-		 di->dl_line[0] = kwi.keyword[kwindex].ech;
-
-		/* For cases where the character is a category name in its own
-			right we add a space after the character so that the chopping
-			will keep the directive and the first word separate */
-
-		if(dir_kw_type == KW_DIRECTIVE) {
-			di->dl_line[1] = ' ';
-			start_copy_dest = 2;
-		}
-
-		start_copy_source = kwlen;
+	  start_copy_source = kwlen;
 	} else {
-		/* Must be a directive line, copy it into "dl_line"
-			ready to be chopped up */
+	  /* Not a keyword.
+	     Unless it is unicode > 127 it will be a directive character.
+	     So we just need to check whether it is a directive in that case.
+	  */
+	  wchar_t first_char = line[0];
+	  short first_char_ech;
+	  
+	  di->dl_line[0] = first_char;
 
-		int first_char = line[0] & 0xFF;
+	  /* establish the ext code if there is one */
+	  
+	  if (view_F.utf8 && first_char > 127) {
+	      curkw = unicode_to_kwi(first_char);
+	      first_char_ech = (curkw == NULL) ? -1 : curkw->ech;
+	  } else first_char_ech = first_char;
 
-		di->dl_line[0] = first_char;
+	  /* then check if it is a directive character */
+	  
+	  if (first_char_ech == -1 || !IS_DIRECTIVE_CHAR(first_char_ech)) return 0;    /* RETURN */
 
-		if(kwi.char_code[first_char] != NULL &&
-				kwi.char_code[first_char]->act_kind == KW_DIRECTIVE) {
-			di->dl_line[1] = ' ';
-			start_copy_dest = 2;
-		}
+	  /* adjustments for single character directives */
+	    
+	  if(kwi.char_code[first_char_ech] != NULL &&
+				kwi.char_code[first_char_ech]->act_kind == KW_DIRECTIVE) {
+	    di->dl_line[1] = L' ';
+	    start_copy_dest = 2;
+	  };
+	  
+	  if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line: directive = %S", line);};
+	  
+	  /*  copy it into "dl_line" ready to be chopped up */
+	
+	  start_copy_source = 1;
+	};
 
-		start_copy_source = 1;
-	}
-
-	/* Now have in the first character of "di->dl_line" the extended
+	/* Now we have in the first character of "di->dl_line" the extended
 		character that starts the directive.  If we have "KW_DIRECTIVE"
 		then this character is followed by a space, when
 		"KW_START_DIR" there is no space since the character is the
 		simply the first character of the directive.  */
 
 	main_convert(&(line[start_copy_source]),
-		OPT_KW | OPT_CONV_KW | OPT_WARN_KW | OPT_WHITE,
+		OPT_KW | OPT_CONVKW | OPT_WARN_KW | OPT_WHITE,
 		&(di->dl_line[start_copy_dest]),
 		MAX_LINE_LEN-start_copy_dest,
 		&main_F);
@@ -2802,7 +3473,7 @@ decode_directive_line(
 
 	/* Make a copy of the original directive line for the "$&" macro */
 
-	string_n_copy(di->dir_line, line, MAX_LINE_LEN+1);
+	wstring_n_copy(di->dir_line, line, MAX_LINE_LEN+1);
 
 	/* Now have "di->dl_line" containing the directive line where a
 		leading percent keyword has been replaced by the corresponding
@@ -2815,9 +3486,12 @@ decode_directive_line(
 
 	di->dl_words[0] = next_arg = di->cat;
 
+	if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line: next_arg = %S\n", next_arg);};
+	
 	while(di->num_dl_args<MAX_DIR_ARGS &&
-			*(next_arg = split_at_space(next_arg)) != '\0') {
+			*(next_arg = wsplit_at_space(next_arg)) != '\0') {
 		di->num_dl_args++;
+		if (debug & D_DECODE_DIR_LINE){wmessage(L"decode_directive_line: next_arg = %S\n", next_arg);};
 		di->dl_words[di->num_dl_args] = next_arg;
 	}
 
@@ -2831,7 +3505,7 @@ decode_directive_line(
 		trailing white space. */
 
 	if(di->dl_words[MAX_DIR_ARGS] != NULL) {
-		char *arg = di->dl_words[MAX_DIR_ARGS];
+		wchar_t *arg = di->dl_words[MAX_DIR_ARGS];
 		int inp = 0;
 		int outp = 0;
 		int in_ch;
@@ -2852,17 +3526,18 @@ decode_directive_line(
 		arg[outp] = '\0';
 	}
 
-	if(debug & D_DECODE_DIR_LINE) {
+	if(debug & D_DECODE_DIR_LINE) print_directive(di);
+/*	
 		int i;
 		int j;
 		int ch;
 
-		(void)printf("Found directive '%s' with %d arguments\n",
+		(void)printf("Found directive '%S' with %d arguments\n",
 			di->cat, di->num_dl_args);
 
 		for(i=0; i<=di->num_dl_args; i++) {
 			(void)printf("    %d %4ld '", i,
-				(long)strlen(di->dl_words[i]));
+				(long)wcslen(di->dl_words[i]));
 			for(j=0; (ch = (di->dl_words[i][j]) & 0xFF) != '\0'; j++) {
 				if((isascii(ch) && isprint(ch)) || ch > 127)
 					PUTC(ch, stdout);
@@ -2871,10 +3546,10 @@ decode_directive_line(
 			PUTC('\'', stdout);
 			PUTC('\n', stdout);
 		}
-	}
-
-	return(1);
+*/
+	return(1);  
 }
+
 /*
 -----------------
 is_same_directive
@@ -2887,12 +3562,12 @@ is_same_directive(dir_info *old, dir_info *new)
 {
 	int i;
 
-	if(strcmp(old->cat, new->cat) != 0) return(0);
+	if(wcscmp(old->cat, new->cat) != 0) return(0);
 
 	if(old->num_dl_args != new->num_dl_args) return(0);
 
 	for(i=1; i<=old->num_dl_args; i++) {
-		if(strcmp(old->dl_words[i], new->dl_words[i]) != 0) return(0);
+		if(wcscmp(old->dl_words[i], new->dl_words[i]) != 0) return(0);
 	}
 
 	return(1);
@@ -2921,24 +3596,24 @@ main_sieve(void)
 	dir_info *next_di = &di_area_2;
 
 	main_F.fp = stdin;
-	if(debug & D_UTF8) message("main_sieve: main_F.name = %s", main_F.name);
 
 	init_directive_line(c_di);
 
 	if(debug) PRINTF("main_sieve: processing %s from %s\n",
 			 main_F.utf8 ? "utf8 input" : "ext input", main_F.name);
+
 	while( (!feof(main_F.fp)) && (!ferror(main_F.fp)) ) {
-	  	(void)read_line_as_ext(&main_F);
-	/*      (void)simple_read_line(main_F.cur_line, MAX_LINE_LEN, &main_F); */
-		main_F.line_no ++;
+	  (void)simple_wread_line((wchar_t *)&main_F.cur_line, MAX_LINE_LEN, &main_F);
+		
+		/*		main_F.line_no ++; */
 
 		if(debug & D_READ_SOURCE_LINE) {
-			(void)printf("%s %d: %s\n", main_F.name,
-				main_F.line_no, main_F.cur_line);
+			(void)printf("%s %d(%ld): %S\n", main_F.name,
+				     main_F.line_no, wcslen(main_F.cur_line), main_F.cur_line);
 		}
 
 		if(limits.opt_list) {
-			int len = strlen(main_F.cur_line);
+			int len = wcslen(main_F.cur_line);
 			if(len > limits.source_file)
 				limits.source_file = len;
 		}
@@ -2946,6 +3621,8 @@ main_sieve(void)
 		if(decode_directive_line(main_F.cur_line, next_di)) {
 			/* Found a directive line */
 
+		  if(debug & D_DECODE_DIR_LINE) message1("Found a directive line");
+		  
 			/* Check if it is the same as the current directive.
 				"Same" means that the category and all of
 				its arguments are identical */
@@ -2974,6 +3651,7 @@ main_sieve(void)
 			}
 			/* Bottom of found a directive line */
 		} else {
+		  if(debug & D_READ_SOURCE_LINE) message1("main_sieve: about to process line");
 		  process_line(main_F.cur_line, c_di);
 		}
 		/* Bottom of while loop */
@@ -2994,13 +3672,15 @@ Read the body of the steering file.
 void
 read_view_file(char *name)
 {
-	char line[MAX_LINE_LEN+1];
-	char cat_area[MAX_LINE_LEN+1];
+	wchar_t line[MAX_LINE_LEN+1];
+	wchar_t cat_area[MAX_LINE_LEN+1];
 	int tab_ent = NOT_FOUND;
-	char view[MAX_LINE_LEN+1];
+	wchar_t view[MAX_LINE_LEN+1];
 	int using_view = 0;
-	char filt[MAX_LINE_LEN+1];
-	char *p, *q, *actname;
+	wchar_t filt[MAX_LINE_LEN+1];
+	wchar_t *p;
+	int c;
+	char *actname;
 
 	initialize_table();
 
@@ -3017,13 +3697,18 @@ read_view_file(char *name)
 	while( (!feof(view_F.fp)) && (!ferror(view_F.fp)) ) {
 		read_steering_line(line, &view_F);
 
+		if(debug & D_UTF8) {
+		  WPRINTF(L"read_view_file: line = '%S', length = %i\n", line, wcslen(line));
+		  fflush(stdout);
+		};
+
 		if(limits.opt_list) {
-			int len = strlen(line);
+			int len = wcslen(line);
 			if(len > limits.view_file)
 				limits.view_file = len;
 		}
 
-		p = skip_space(line);
+		p = wskip_space(line);
 		switch(*p) {
 		case '\0':
 		case '#':
@@ -3043,41 +3728,38 @@ read_view_file(char *name)
 			(void)decode_action_line(tab_ent, using_view, p, 0);
 		    } else {
 			/* First line of an entry */
-			char * cat = cat_area;
+			wchar_t * cat = cat_area;
 
 			/* Get the category.  Copy it first into "view" then convert any
 				percent keywords it has writing the result of that into
 				the correct place, namely "cat" */
-			q = find_space(p);
-			string_n_copy(view, p, q - p);
-			*(view + (q - p)) = '\0';
-			main_convert(view, OPT_KW | OPT_CONV_KW | OPT_WARN_KW,
+			c = wcount_to_space(p);
+			wstring_n_copy(view, p, c);
+			main_convert(view, OPT_KW | OPT_CONVKW | OPT_WARN_KW,
 				cat, MAX_LINE_LEN, &view_F);
 
 			/* Get the view */
-			p = skip_space(q);
-			q = find_space(p);
-			string_n_copy(view, p, q - p);
-			*(view + (q - p)) = '\0';
+			p = wskip_space(&p[c]);
+			c = wcount_to_space(p);
+			wstring_n_copy(view, p, c);
 
-			if(strlen(cat) == 0) {
+			if(wcslen(cat) == 0) {
 				grumble1("no category found", &view_F, True);
 			}
 
-			if(strlen(view) == 0) {
+			if(wcslen(view) == 0) {
 				grumble1("no view found", &view_F, True);
 			}
 
 			/* Check the test variable, if any */
-			p = skip_space(q);
-			if(*p == '?') { /* there is a test variable */
-				char testvarval[MAX_LINE_LEN+1];
-				char *v, *val, *envval;
-				p = skip_space(p+1);
-				q = find_space(p);
-				string_n_copy(testvarval, p, q - p);
-				*(testvarval + (q - p)) = '\0';
-				p = skip_space(q);
+			p = wskip_space(&p[c]);
+			if(*p == L'?') { /* there is a test variable */
+				wchar_t testvarval[MAX_LINE_LEN+1];
+				wchar_t *v, *val, *envval;
+				p = wskip_space(p+1);
+				c = wcount_to_space(p);
+				wstring_n_copy(testvarval, p, c);
+				p = wskip_space(&p[c]);
 				v = testvarval;
 				while(*v && *v != '=') { ++v;}
 				if (*v == '=') {
@@ -3086,20 +3768,35 @@ read_view_file(char *name)
 				} else {
 					val = 0;
 				}
-				envval = getenv(testvarval);
+				{char *ntvv = unicode_seq_to_utf8(testvarval);
+				  envval = utf8_seq_to_unicode(getenv(ntvv));
+				  free(ntvv);
+				}
 				using_view =
-					envval &&
-					!strcmp(view, view_option) &&
-					(val == 0 || !strcmp(val, envval));
+				  envval &&
+				  !wcscmp(view, wview_option) &&
+				  (val == 0 || !wcscmp(val, envval));
+				free(envval);
 			} else {
-				using_view = !strcmp(view, view_option);
+				using_view = !wcscmp(view, wview_option);
 			}
 
 			/* p will now be the filter, if any */
-			(void)strcpy(filt, p);
+			(void)wcscpy(filt, p);
+
+
+			if (debug & D_UTF8) {
+			  WPRINTF(L"read_view_file: cat = %S\n", cat);
+			};
 
 			/* See what we know about this view */
 			tab_ent = look_up(cat);
+
+			if (debug & D_UTF8) {
+			  WPRINTF(L"read_view_file: cat = %S, tab_ent = %i, filt = %S\n",
+				  cat, tab_ent, filt);
+			};
+
 			if(tab_ent == NOT_FOUND) {
 				tab_ent = insert(cat, using_view, filt);
 			} else if(using_view) {
@@ -3170,22 +3867,28 @@ int
 main(int argc, char **argv)
 {
 	int option;
-	char *steering_file = STEER_FILE;
+	char *steering_file = "";
 	char *keyword_files[MAX_KEYWORD_FILES];
+	char *ppcharset=getenv("PPCHARSET");
+	short eu_flags = 0;
 
-	limits.num_keyword_files = 0;
-	keyword_files[limits.num_keyword_files++] = KEYWORD_FILE;
 	program_name = argv[0];
 	
 	initialize();
-
+	
+	keyword_files[0] = UKEYWORD_FILE;
+	limits.num_keyword_files = 1;
+	
 	check_program_initializations();
 
 	main_F.utf8 = False;
-	while((option = getopt(argc, argv, "d:f:Kk:luv")) != -1) {
+	while((option = getopt(argc, argv, "d:ef:Kk:luv")) != -1) {
 	    switch(option) {
 		case 'd':
 		    debug |= atoi(optarg);
+		    break;							/* BREAK */
+	        case 'e': /* ext i/o */
+		    eu_flags += 1;
 		    break;							/* BREAK */
 		case 'f':
 		    steering_file = optarg;
@@ -3205,8 +3908,8 @@ main(int argc, char **argv)
 		case 'l':
 		    limits.opt_list = 1;
 		    break;							/* BREAK */
-		case 'u':
-		    main_F.utf8 = True;
+	        case 'u': /* utf8 i/o */
+		    eu_flags += 2;
 		    break;							/* BREAK */
 		case 'v':
 		    FPRINTF(stderr, "%s: version %s\n", program_name,
@@ -3218,6 +3921,38 @@ main(int argc, char **argv)
 		   EXIT(1);							/* EXIT */
 	    }
 	}
+
+/*
+
+The choice of keyword and view files is determined either by the -f -K and -k flags or by a default, which depends on the character encioding.
+
+1) if the -f option is used it determines the view file, if the -K flag is used the default keyword file is not used.
+
+otherwise
+2) if the -e or -u flags are used they determine a default keyword and view file for ext or utf8 resp.
+otherwise
+3) if the PPCHARSET environment variable is "ext" then the default view for ext is selected.
+otherwise that for utf8
+
+The defaults are, for ext: sieveview sievekeyword, for utf8: utf8svf utf8svf.
+
+The character set for reading and writing is determined by the command line flags or,
+if not thus determined, by the $PPCHARSET environment,
+and failing that defaults to utf8.
+
+*/	
+	if (eu_flags > 0) main_F.utf8 = (eu_flags > 1);
+	else if (ppcharset == NULL || !strcmp(ppcharset,"ext"))  main_F.utf8 = True;
+	else main_F.utf8 = False;
+	
+	view_F.utf8 = main_F.utf8;
+	keyword_F.utf8 = main_F.utf8;
+	
+	if(*steering_file == 0)
+	  steering_file = view_F.utf8 ? "utf8svf" : "sieveview";
+	
+	if (keyword_files[0] != NULL && !keyword_F.utf8)
+	  keyword_files[0] = KEYWORD_FILE;
 
 	if(debug) {
 		int i;
@@ -3239,6 +3974,7 @@ main(int argc, char **argv)
 		EXIT(3);							/* EXIT */
 	};
 	(void)strcpy(view_option, argv[argc-1]);
+	wview_option = utf8_seq_to_unicode(argv[argc-1]);
 
 	if(debug & D_INIT_TABLES) {
 		dump_actions_available();
@@ -3246,7 +3982,15 @@ main(int argc, char **argv)
 
 	if(debug) message("Processing for view %s", view_option);
 
+	setlocale(LC_ALL, main_F.utf8 ?  "en_GB.UTF-8" : "C.ISO88591");
+
+	if(debug) message("Locale set to %s",
+			  (main_F.utf8 ? "en_GB.UTF-8" : "C.ISO88591"));
+
 	read_keyword_files(keyword_files);
+
+	if(debug & (D_SHOW_SIEVE_TABLE | D_SHOW_FULL_SIEVE_TABLE)) print_table();
+	
 
 	read_view_file(steering_file);
 	conclude_steerfile();
@@ -3283,6 +4027,7 @@ main(int argc, char **argv)
 		EXIT(39);							/* EXIT */
 	}
 
+	code_warnings();
 	EXIT(0);								/* EXIT */
 
     }

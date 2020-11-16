@@ -1,0 +1,1128 @@
+=IGN
+********************************************************************************
+imp035.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Implementation for the Theory Design Support Tools}
+
+\def\AbstractText{This document implements the tools for supporting theory designs, allowing such designs to be both type-checked, and checked against a theory implementation.}
+
+\def\Reference{DS/FMU/IED/IMP035}
+
+\def\Author{K. Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: \TPPtitle{Implementation for the Theory Design Support Tools}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Implementation for the Theory Design Support Tools}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/IMP035}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.20 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $ %
+%% LaTeX2e port: }}  %% Mandatory field
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: % \TPPauthors{K.~Blackburn & WIN01\\D.J.~King & WIN01}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document implements the tools for supporting theory designs, allowing such designs to be both type-checked, and checked against a theory implementation.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Project Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1991/08/01)]
+First version.
+\item [Issue 1.2 (1991/09/23)]
+Reacted to issue 1.3 of \cite{DS/FMU/IED/DTD035}.
+
+\item[Issue 1.3 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.4 (1992/01/23)]
+Some rewording, changed signature of $req\-\_type\-\_abbrev$,
+corrected error message of $req\-\_const$, changed $(list\_)\-req\_axiom$ and $(list\_)\-req\_defn$.
+\item [Issue 1.5 (1992/04/09) (8th April 1992)]
+Changes required by CR0016.
+\item [Issue 1.6 (1992/04/14) (13th April 1992)]
+Changes due to CR0017.
+\item [Issue 1.7 (1992/05/22) (22nd May 1992)]
+Bug fix.
+\item [Issue 1.8 (1992/05/27) (27th May 1992)]
+Removed uses of $PolyML.makestring$.
+\item [Issue 1.9 (1992/06/02)]
+Added $tc\_thms\_only$ flag.
+\item [Issue 1.10 (1992/06/16) (7th July 1992)]
+Various minor changes.
+\item [Issue 1.11 (1992/07/07) (14th September 1992)]
+Correcting $req\_consistency\_thm$.
+\item [Issue 1.11 (1992/07/07) (1st October 1992)]
+Upgrading $req\_consistency\_thm$.
+\item [Issue 1.14 (1992/10/30) (30th October 1992)]
+Make reloadable once more.
+\item [Issue 1.15 (1993/02/23) (23rd February 1993)]
+Highlighted errors.
+\item [Issue 1.16 (1993/07/19)]
+Added $tc\_not\_thms$ flag.
+\item [Issue 1.17 (1995/04/05)]
+Fixed bug in $req\_language$.
+\item [Issue 1.18 (1999/02/24)]
+Update for SML97.
+\item[Issue 1.19 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.20 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.21 (2005/05/07)] HOL now supports left-associative operators.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains an implementation of the Standard ML tools that support the production of theory designs.
+They will be complimented by some shell scripts for
+document stripping.
+The tools and techniques described should be used
+to document all ICL supplied theories.
+However, the tools do not form part of a release of ICL HOL.
+The design is in \cite{DS/FMU/IED/DTD035}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains an implementation of the Standard ML tools that support the production of theory designs.
+They will be complimented by some shell scripts for
+document stripping.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+
+\section{THE THEORY DESIGN PACKAGE}
+=SML
+structure ⦏TheoryDesignSupport⦎ : TheoryDesignSupport = struct
+=TEX
+
+\subsection{Types}
+We want the fixity type material from structure Lex, so:
+=SML
+open Lex;
+=TEX
+=SML
+
+type ⦏THEORY_DESIGN⦎ = {name : string OPT,
+	language : string OPT,
+	parents : string list,
+	consts : (string * TYPE) list,
+	types : (string * int) list,
+	axioms : (string * SEQ) list,
+	defns : (string * SEQ) list,
+	thms : (string * SEQ) list,
+	fixity : (string * Lex.FIXITY) list,
+	terminators : string list,
+	aliases : (string * TERM) list,
+	type_abbrevs : (string * string list * TYPE) list};
+
+datatype ⦏MODE⦎ = Declare | Check;
+=TEX
+\subsection{Assignable Variables}
+The mode of use of the design:
+=SML
+val ⦏req_flag⦎ : MODE ref = ref Check;	
+=TEX
+=SML
+local
+val ⦏thms_only⦎ : bool ref = ref false;	
+in
+val _ = new_flag{
+		name="tc_thms_only",
+		check=(fn _ => true),
+		control=thms_only,
+		default = (fn _ => false)}
+	handle (Fail _) =>
+	(set_flag("tc_thms_only", false); ());
+end;
+local
+val ⦏not_thms⦎ : bool ref = ref false;	
+in
+val _ = new_flag{
+		name="tc_not_thms",
+		check=(fn _ => true),
+		control=not_thms,
+		default = (fn _ => false)}
+	handle (Fail _) =>
+	(set_flag("tc_not_thms", false); ());
+end;
+=TEX
+The theory design data so far:
+=SML
+val ⦏theory_design⦎ : THEORY_DESIGN ref = ref {
+	name = Nil, language = Nil, parents = [],
+	consts = [], types = [], axioms = [],
+	defns = [], thms = [],
+	fixity = [], terminators = [], aliases = [],
+	type_abbrevs = []};
+=TEX
+Two specialised variants of $diff$:
+=SML
+fun ⦏ss_diff⦎ ((s1 : (string * SEQ) list), (s2 : (string * SEQ) list)) = (
+	s1 drop (fn x => present (fn ((a,b),(c,d)) => (a = c) andalso
+		b =# d) x s2)
+);
+=TEX
+=SML
+fun ⦏ta_diff⦎ ((s1 : (string * string list * TYPE) list),
+	(s2 : (string * string list * TYPE) list)) = (
+	s1 drop (fn x => present (fn ((a,b,c),(d,e,f)) => a = d andalso
+		b = e andalso c =: f) x s2)
+);
+=TEX
+\subsection{Starting and Stopping}
+=SML
+fun ⦏initialise_td_results⦎ (() : unit) : unit = (
+	theory_design := {
+		name = Nil, language = Nil, parents = [],
+		consts = [], types = [], axioms = [],
+		defns = [], thms = [],
+		fixity = [], terminators = [], aliases = [],
+		type_abbrevs = []};
+	()
+);
+=TEX
+=SML
+local
+	open Combinators;
+	fun process_ns ((nm_lst, thm) :: x) = (
+		map (fn nm => (nm, dest_thm thm)) nm_lst @ process_ns x)
+	| process_ns [] = [];
+
+	fun fm_ns (nm, ((asms, gl):SEQ)) : string = (
+		format_list I
+		(nm ::
+		 (map string_of_term asms) @
+		 ["⊢ ", string_of_term gl])
+		"\n\t");
+
+	fun string_fix Binder = "Binder"
+	| string_fix (Infix (LeftAssoc, n)) = "Left Infix "^string_of_int n
+	| string_fix (Infix (RightAssoc, n)) = "Right Infix "^string_of_int n
+	| string_fix Nonfix = "Nonfix"
+	| string_fix (Postfix n) = "Postfix "^string_of_int n
+	| string_fix (Prefix n) = "Prefix "^string_of_int n;
+in
+fun ⦏td_results⦎  (give_mismatch:bool) : bool = (
+let	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+
+	val name = case oname of
+		Nil => fail "summarize_td_results" 35001 []
+		| Value name => name;
+(*
+=TEX
+Output a suitable message:
+=SML
+*)
+	val warned : bool ref = ref false;
+	fun om n lst = (
+		if give_mismatch
+		then diag_line(get_error_message n (name :: lst))
+		else ();
+		warned := true);
+(*
+=TEX
+Compare two sets in a standard manner:
+=SML
+*)
+	fun compare s1 s2 ldiff fmt miss add = (
+	let	val sideeffect = (case (ldiff (s1, s2)) of
+		[] => ()
+		| lst => om miss [format_list fmt lst ";\n"]);
+		val sideeffect = (case (ldiff (s2, s1)) of
+		[] => ()
+		| lst => om add [format_list fmt lst ";\n"]);
+	in
+		()
+	end);
+(*
+=TEX
+Now do the tests:
+=SML
+*)
+	val sideeffect = (case olanguage of
+		Nil => if get_current_language () = "HOL"
+			then ()
+			else om 35017 [get_current_language (), "HOL"]
+				
+		| Value language => if get_current_language () = language
+			then ()
+			else om 35017 [get_current_language (), language]);
+
+	val sideeffect = if not (get_flag "tc_thms_only") then (
+			compare parents (get_parents name)
+			(op diff) I 35002 35003;
+
+			compare consts (map dest_const (get_consts name))
+			(fn (l1,l2) =>
+				l1 drop (fn x => present (fn ((a,b),(c,d)) =>
+				a = c andalso b =: d) x l2))
+			(fn (nm,ty) => nm^":"^
+				string_of_type ty)
+			35004 35005;
+
+			compare types
+			(map ((I ** length) o dest_ctype) (get_types name))
+			(op diff)
+			(fn (nm,ar) => nm^" of arity "^string_of_int ar)
+			35006 35007;
+
+			compare axioms
+			(process_ns (get_axioms name))
+			ss_diff
+			fm_ns
+			35008 35009;
+
+			compare defns
+			(process_ns (get_defns name))
+			ss_diff
+			fm_ns
+			35010 35011;
+
+			compare terminators
+			(get_terminators name)
+			(op diff)
+			I
+			35012 35013;
+
+			compare aliases
+			(get_aliases name)
+			(fn (l1,l2) =>
+			l1 drop (fn x => present (fn ((a,b),(c,d)) =>
+				a = c andalso b =$ d) x l2))
+			(fn (nm,tm) => nm^" for " ^
+				string_of_term tm)
+			35031 35032;
+
+			compare type_abbrevs
+			(map (fn (x,(y,z)) => (x,y,z))(get_type_abbrevs name))
+			ta_diff
+			(fn (nm,nml,ty) => (nm^" with " ^
+				format_list I nml "," ^
+				" and " ^ string_of_type ty))
+			35033 35034
+			) else ();
+
+	val sideeffect = if not (get_flag "tc_not_thms") then (
+			compare thms
+			(process_ns (get_thms name))
+			ss_diff
+			fm_ns
+			35014 35015
+			) else ();
+(*
+=TEX
+First get a list of all the names we have fixity information for, either in design, or in real theory.
+=SML
+*)
+	val fix_names = list_cup [get_binders name,
+		get_nonfixes name,
+		map snd (get_prefixes name),
+		map snd (get_postfixes name),
+		map snd (get_left_infixes name),
+		map snd (get_right_infixes name),
+		map fst fixity];
+(*
+=TEX
+Now check fixity of each name, note that both $get\_fixity$ and this document default to $Nonfix$.
+=SML
+*)
+	val side_effect = if not (get_flag "tc_thms_only") then (
+			map
+			(fn nm => let val dfix = lassoc4 fixity Nonfix nm;
+				val tfix = get_fixity nm;
+			in
+				if dfix = tfix
+				then ()
+				else om 35016 [nm,string_fix tfix, string_fix dfix]
+			end)
+			fix_names; ()
+			) else ();
+in
+	(if give_mismatch
+	then	(if (!warned)
+		then diag_line(get_error_message 35036 [name])
+		else diag_line(get_error_message 35035 [name]))
+	else ();
+	not(!warned))
+end);
+end;
+=TEX
+Now use this two-way function to give the interface functions:
+=SML
+fun ⦏summarize_td_results⦎ () : unit = (
+	td_results true;
+	()
+);
+fun ⦏theory_check_success⦎ () : bool = (
+	case (!req_flag) of
+	Declare => true
+	| Check => td_results false
+);
+=TEX
+\subsection{Require Functions}
+=SML
+fun ⦏moan35101⦎ (caller : string) : unit = (
+	if	not (get_flag "tc_thms_only")
+	then	()
+	else	comment caller 35101 [fn () => caller]
+);
+=TEX
+=SML
+fun ⦏req_name⦎ (nm : string) (oparent : string OPT) : unit = (
+let	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => ()
+		| (Value name) => fail "req_name" 35020 [fn () => name];
+in
+	case (!req_flag) of
+	Declare => (case oparent of
+(*
+=TEX
+In declare mode we should be able to open the parent and
+new theory without interference from sealed hierarchies.
+
+No parents - this means the name should be ``min'', or
+at least already exists.
+=SML
+*)
+		Nil => (open_theory nm
+			handle complaint =>
+			divert complaint "open_theory" "req_name" 35030 [fn () => nm];
+			theory_design := {
+			name = Value nm, language = olanguage,
+			parents = [], consts = consts,
+			types = types, axioms = axioms,
+			defns = defns,
+			thms = thms, fixity = fixity,
+			terminators = terminators, aliases = aliases,
+			type_abbrevs = type_abbrevs})
+(*
+=TEX
+Some parents, the normal mode:
+=SML
+*)
+		| Value parent => (((open_theory parent;
+			new_theory nm)
+			handle complaint =>
+			list_divert complaint "req_name"[
+				("open_theory", 35018, [fn () => parent]),
+				("new_theory", 35019, [fn () => nm])]);
+			theory_design := {
+			name = Value nm, language = olanguage,
+			parents = [parent], consts = consts,
+			types = types, axioms = axioms,
+			defns = defns,
+			thms = thms, fixity = fixity,
+			terminators = terminators, aliases = aliases,
+			type_abbrevs = type_abbrevs})
+	)
+(*
+=TEX
+Now when $req\_flag$ is $Check$.
+In check mode we may not be able to open the parent and
+new theory without interference from sealed hierarchies.
+=SML
+*)
+	| Check => (case oparent of
+(*
+=TEX
+No parents - this means the name should be ``min'', or
+at least already exists.
+=SML
+*)
+		Nil => ((get_theory_status nm
+			handle complaint =>
+			divert complaint "get_theory_status" "req_name" 35030 [fn () => nm]);
+			(open_theory nm
+			handle (Fail _) =>
+			open_theory "basic_hol");
+			theory_design := {
+			name = Value nm, language = olanguage,
+			parents = [], consts = consts,
+			types = types, axioms = axioms,
+			defns = defns,
+			thms = thms, fixity = fixity,
+			terminators = terminators, aliases = aliases,
+			type_abbrevs = type_abbrevs})
+(*
+=TEX
+Some parents, the normal mode:
+=SML
+*)
+		| Value parent => ((get_theory_status nm
+			handle complaint =>
+			divert complaint "get_theory_status" "req_name" 35030 [fn () => nm]);
+			(open_theory nm
+			handle (Fail _) =>
+			open_theory "basic_hol");
+			theory_design := {
+			name = Value nm, language = olanguage,
+			parents = [parent], consts = consts,
+			types = types, axioms = axioms,
+			defns = defns,
+			thms = thms, fixity = fixity,
+			terminators = terminators, aliases = aliases,
+			type_abbrevs = type_abbrevs})
+	)
+end
+);
+=TEX
+=SML
+fun ⦏req_language⦎ (lang : string) : unit = (
+let	val side_effect = moan35101"req_language";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_language" 35001 []
+		| (Value _) => ();
+	val side_effect = case olanguage of
+		(Value lang) => fail "req_language" 35037 [fn () => lang]
+		| Nil => ();
+	val side_effect = case (!req_flag) of
+		Declare => (set_current_language lang
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = Value lang,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+fun ⦏req_parent⦎ (parent : string) : unit = (
+let	val side_effect = moan35101"req_parent";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_parent" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => (new_parent parent
+			handle complaint =>
+			divert complaint "new_parent" "req_parent" 35021 [fn () => parent]
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = (parent :: parents), consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+fun ⦏req_const⦎ ((nm,ty) : string * TYPE) : unit = (
+let	val side_effect = moan35101"req_const";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_const" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => ((new_const (nm,ty);())
+			handle complaint =>
+			divert complaint "new_const" "req_const" 35022 [fn () => nm]
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = ((nm, ty) :: consts),
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+fun ⦏req_type⦎ ((nm,ar) : string * int) : unit = (
+let	val side_effect = moan35101"req_type";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_type" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => ((new_type (nm,ar);())
+			handle complaint =>
+			divert complaint "new_type" "req_type" 35038 [fn () => nm]
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = ((nm,ar) :: types), axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+local
+fun ⦏lreq_axiom⦎ ((nm,seq) : string * SEQ) : unit = (
+let	val side_effect = moan35101"req_axiom";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case (!req_flag) of
+		Declare => (if nm mem (map fst axioms)
+			then fail "req_axiom" 35023 [fn () => nm]
+			else ()
+		) | Check => ();
+	val side_effect = case oname of
+		Nil => fail "req_axiom" 35001 []
+		| (Value _) => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = ((nm,seq) :: axioms),
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+in
+fun ⦏req_axiom⦎ (([],seq) : string list * SEQ) : unit = (
+	fail "req_axiom" 35039 []
+) | req_axiom (nml,seq) = (
+	map (fn x => lreq_axiom (x, seq)) nml;
+	()
+);
+end;
+=TEX
+=SML
+local
+fun ⦏lreq_defn⦎ ((nm,seq) : string * SEQ) : unit = (
+let	val side_effect = moan35101"req_defn";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_defn" 35001 []
+		| (Value _) => ();
+	val lfrees = frees(snd seq) @ flat (map frees(fst seq));
+	val side_effect = if is_nil lfrees
+		then ()
+		else fail "req_defn" 35040
+			[fn () => format_list string_of_term lfrees ", ",
+			fn () => if length lfrees < 2
+				then "is"
+				else "are"];
+						
+	val side_effect = case (!req_flag) of
+		Declare => (if nm mem (map fst defns)
+			then fail "req_defn" 35024 [fn () => nm]
+			else ()
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = ((nm,seq) :: defns),
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+in
+fun ⦏req_defn⦎ (([],seq) : string list * SEQ) : unit = (
+	fail "req_defn" 35039 []
+) | req_defn (nml,seq) = (
+	map (fn x => lreq_defn (x, seq)) nml;
+	()
+);
+end;
+=TEX
+=SML
+fun ⦏req_thm⦎ ((nm,seq) : string * SEQ) : unit = (
+let	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_thm" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => (if nm mem (map fst thms)
+			then fail "req_thm" 35025 [fn () => nm]
+			else ()
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = ((nm,seq)::thms), fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+fun ⦏list_req_thm⦎ (([],seq) : string list * SEQ) : unit = (
+	fail "list_req_thm" 35039 []
+) | list_req_thm (nml,seq) = (
+	map (fn x => req_thm (x, seq)) nml;
+	()
+);
+=TEX
+The following implementation requires detailed knowledge of the
+implementation of $get\_spec$ from \cite{DS/FMU/IED/IMP046}.
+=SML
+local
+fun ⦏lintersect⦎ (a :: x) lst = (
+	if a mem lst
+	then a :: lintersect x lst
+	else lintersect x lst
+) | lintersect [] _ = [];
+in
+=TEX
+=SML
+fun ⦏req_consistency_thm⦎ (tm : TERM) : unit = (
+let	val (nm, _) = (dest_const (fst(strip_app tm)))
+		handle Fail _ => term_fail "req_consistency_thm" 35102 [tm];
+	val x_cons = nm ^ "_consistent";
+in
+	case (!req_flag) of
+	Declare => req_thm(x_cons,([],mk_t))
+	| Check => (
+let
+	val thy = get_const_theory nm
+		handle (Fail _) =>
+		term_fail "req_consistency_thm" 35102 [tm];
+	val defn = get_defn thy nm
+		handle (Fail _) =>
+		(get_axiom thy nm
+			handle (Fail _) =>
+			term_fail "req_consistency_thm" 35103 [tm]);
+	val (pred,c) = dest_bin_op "req_consistency_thm" 35103 "ConstSpec" (concl defn)
+			handle (Fail _) =>
+			term_fail "req_consistency_thm" 35103 [tm];
+	val poss_thys = (thy :: (lintersect (get_ancestors "-")
+		(get_descendants thy)))
+		less (get_current_theory_name()) ;
+	val find_cons = mapfilter
+		(fn lthy => get_thm lthy x_cons
+			handle (Fail _) =>
+			get_axiom lthy x_cons)
+		poss_thys;
+	val dummy = if is_nil find_cons
+		then ()
+		else fail "req_consistency_thm" 35104 [
+			fn () => string_of_term tm,
+			fn () => thm_theory(hd find_cons)];
+in
+	req_thm(x_cons,([],mk_app(mk_const("Consistent",
+		mk_→_type(type_of pred, BOOL)), pred)))
+end)
+end);
+end;
+=TEX
+=SML
+fun ⦏req_binder⦎ (nm : string) : unit = (
+let	val side_effect = moan35101"req_binder";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_binder" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => (if nm mem (map fst fixity)
+			then fail "req_binder" 35027 [fn () => nm]
+			else (declare_binder nm
+				handle complaint =>
+				pass_on complaint "declare_binder" "req_binder")
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = ((nm, Binder) :: fixity),
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+fun ⦏req_any_infix⦎ (assoc : ASSOC) ((prec,nm) : int * string) : unit = (
+let	val side_effect = moan35101"req_infix";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_infix" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => (if nm mem (map fst fixity)
+			then fail "req_infix" 35027 [fn () => nm]
+			else (declare_infix (prec,nm)
+				handle complaint =>
+				pass_on complaint "declare_infix" "req_infix")
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = ((nm, Infix (assoc, prec)) :: fixity),
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+val ⦏req_left_infix⦎   : (int * string) -> unit = req_any_infix LeftAssoc;
+val ⦏req_right_infix⦎   : (int * string) -> unit = req_any_infix RightAssoc;
+val ⦏req_infix⦎   : (int * string) -> unit = req_right_infix;
+=TEX
+=SML
+fun ⦏req_prefix⦎ ((prec,nm) : int * string) : unit = (
+let	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_prefix" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => (if nm mem (map fst fixity)
+			then fail "req_prefix" 35027 [fn () => nm]
+			else (declare_prefix (prec,nm)
+				handle complaint =>
+				pass_on complaint "declare_prefix" "req_prefix")
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = ((nm, Prefix prec) :: fixity),
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+fun ⦏req_postfix⦎ ((prec,nm) : int * string) : unit = (
+let	val side_effect = moan35101"req_postfix";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_postfix" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => (if nm mem (map fst fixity)
+			then fail "req_postfix" 35027 [fn () => nm]
+			else (declare_postfix (prec,nm)
+				handle complaint =>
+				pass_on complaint "declare_postfix" "req_postfix")
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = ((nm, Postfix prec) :: fixity),
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+fun ⦏req_nonfix⦎ (nm : string) : unit = (
+let	val side_effect = moan35101"req_nonfix";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_nonfix" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => (if nm mem (map fst fixity)
+			then fail "req_nonfix" 35027 [fn () => nm]
+			else (declare_nonfix nm
+				handle complaint =>
+				pass_on complaint "declare_nonfix" "req_nonfix")
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = ((nm, Nonfix) :: fixity),
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+fun ⦏req_terminator⦎ (nm : string) : unit = (
+let	val side_effect = moan35101"req_terminator";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_terminator" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => (if nm mem terminators
+			then fail "req_terminator" 35028 [fn () => nm]
+			else (declare_terminator nm
+				handle complaint =>
+				pass_on complaint "declare_terminator" "req_terminator")
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = (nm :: terminators), aliases = aliases,
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+fun ⦏req_alias⦎ ((nm,tm) : string * TERM) : unit = (
+let	val side_effect = moan35101"req_alias";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_alias" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => ((declare_alias (nm,tm)
+				handle complaint =>
+				pass_on complaint "declare_alias" "req_alias")
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = ((nm,tm)::aliases),
+		type_abbrevs = type_abbrevs}
+end);
+=TEX
+=SML
+fun ⦏req_type_abbrev⦎ ((nm,nml,ty) : string * string list * TYPE) : unit = (
+let	val side_effect = moan35101"req_type_abbrev";
+	val {name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = type_abbrevs} = !theory_design;
+	val side_effect = case oname of
+		Nil => fail "req_type_abbrev" 35001 []
+		| (Value _) => ();
+	val side_effect = case (!req_flag) of
+		Declare => (if nm mem (map (fn (x,_,_) => x) type_abbrevs)
+			then fail "req_type_abbrev" 35029 [fn () => nm]
+			else ((declare_type_abbrev (nm, nml, ty);())
+				handle complaint =>
+				pass_on complaint "declare_type_abbrev" "req_type_abbrev")
+		) | Check => ();
+in
+	theory_design := {
+		name = oname, language = olanguage,
+		parents = parents, consts = consts,
+		types = types, axioms = axioms,
+		defns = defns,
+		thms = thms, fixity = fixity,
+		terminators = terminators, aliases = aliases,
+		type_abbrevs = ((nm,nml,ty)::type_abbrevs)}
+end);
+=TEX
+\section{END OF THE STRUCTURE}
+=SML
+end; (* of structure TheoryDesignSupport *)
+open TheoryDesignSupport;
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+=IGN
+Statistics:
+
+open Sort;
+fun comp_stats (s1,n1) (s2,n2) = (
+	if n1 = n2
+	then string_order s1 s2
+	else (n1 - n2)
+);
+
+sort comp_stats (get_stats ());
+
+
+

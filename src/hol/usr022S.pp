@@ -1,0 +1,604 @@
+=IGN
+********************************************************************************
+usr022S.doc: this file is part of the PPHol system
+
+Copyright (c) 2002-Present Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+=TEX
+\documentclass[a4paper,12pt]{article}
+\usepackage{A4}
+\usepackage{ProofPower}
+\underscoreoff
+\title{PROOFPOWER-HOL COURSE EXERCISE FILE}
+\author{{\Product} Development Team}
+\begin{document}
+\maketitle
+
+The course exercises with skeletal solutions for you to fill in are
+given below. Record your answers to the exercises in this file.
+
+Hints and worked answers may be found in the file `usr022_slides.doc'
+
+Use the Search and Replace Tool (from the Tools Menu) to look for the
+string ``Exercises'' to find the beginning of each exercise set in this
+file or in `usr022_slides.doc'.
+
+% =====================================================================
+
+\section*{Exercises 0: Getting Started}
+Implement an ML function, $fact$, to compute factorials.
+=SML
+(* ??? *)
+=TEX
+Test your solution; e.g. execute:
+=SML
+fact 1;
+fact 1;
+fact 6;
+(* Enter further tests for your function here *)
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 1: Proof}
+First execute the following two commands:
+=SML
+open_theory"hol";
+set_pc "hol2";
+=TEX
+Now try to fill in the proofs below
+=SML
+set_goal([], (* *2.02 *) ⌜q ⇒ ( p ⇒ q)⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([], (* *3.01 *) ⌜p ∧ q ⇔ ¬(¬ p ∨ ¬ q)⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([], (* *4.1  *) ⌜p ⇒ q ⇔ ¬ q ⇒ ¬ p⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([], (* *5.1  *) ⌜p ∧ q ⇒ (p ⇔ q)⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([], (* *9.01 *) ⌜¬ (∀x⦁ φx) ⇔ (∃x⦁ ¬ φx)⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([], (* *9.07 *) ⌜(∀x⦁ φx) ∨ (∃y⦁ ψy) ⇔ (∀x⦁∃y⦁ φx ∨ ψy)⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([],  (* *10.01 *) ⌜(∃x⦁ φx) ⇔ ¬ (∀y⦁ ¬ φy)⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([],  (* *11.1  *) ⌜(∀x y⦁ φ(x,y)) ⇒ φ(z,w)⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([],  ⌜a ∩ {} = a \ a⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([],  ⌜a \ (b \ c) = (a \ b) ∪ (a ∩ c)⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([],  ⌜a \ (b ∩ c) = (a \ b) ∪ (a \ c)⌝);
+(* ??? *)
+=TEX
+=SML
+set_goal([],  ⌜¬ (a ⊂ b ∧ b ⊂ a)⌝);
+(* ??? *)
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 2: HOL Theory Explorations}
+Execute the commands below and inspect the output.
+You might like to copy some of the output into this file for future
+reference.
+=SML
+get_theory_names();
+=GFT
+(* You could copy the list of names here *)
+=SML
+open_theory"sets";
+print_theory"sets";
+=SML
+open_theory "bin_rel";
+(map concl o map snd o get_defns) "bin_rel";
+=SML
+dest_simple_term ⌜∀ r s⦁ r ⊕ s = (Dom s ⩤ r) ∪ s⌝;
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 3: Specification}
+Work these exercises by filling in the `???'s and executing
+the resulting commands.
+
+Create a new theory as a child of ``hol'':
+=TEX
+=SML
+open_theory"???";
+new_theory"???";
+=TEX
+Now fill in the blanks to give a specification of a function to add the
+elements of a list of numbers.
+=SML
+ⓈHOLCONST
+│	list_sum : ???
+├───────────────
+│	???
+■
+=TEX
+Test your specification:
+=SML
+rewrite_conv[get_spec⌜list_sum⌝] ⌜list_sum [1;2;3;4;5]⌝;
+(* Try some other cases here, if you like *)
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 4: Forward Proof}
+Replace each of the comments below with a forward proof of the stated theorem.
+=SML
+(* 1(a) Prove: b ⇒ c, a ⇒ b , a ⊢ c *)
+=SML
+(* 1(b) Prove: a ⇒ b ⇒ c, a, b ⊢ c *)
+=SML
+(* 2(a) Prove: ⊢ ¬ 0 + 1 = 0 *)
+=SML
+(* 2(b) Prove: ⊢ ¬ x*x + 1 = 0 *)
+=SML
+(* 3(a) Prove: ⊢ m ≤ i ∧ i ≤ n ⇒ m ≤ n *)
+=SML
+(* 4(a) Prove: ⊢ ¬ 0 < 1 ⇔ 1 ≤ 0 *)
+=SML
+(* 4(b) Prove: ⊢ ∀ n⦁ 3 ≤ x * x ∧ x * x ≤ n ⇒ 3 ≤ n *)
+=SML
+(* 5(a) Prove: ⊢ ∀ i m n⦁ i + m ≤ i + n ⇔ m ≤ n *)
+=SML
+(* 5(b) Prove: ⊢ ∀ m i n⦁ i + m ≤ i + n ⇔ m ≤ n *)
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 5: Rewriting with the Subgoal Package}
+Observe various aspects of rewriting by executing the following:
+
+With proof context ...
+=SML
+set_goal([],⌜a \ (b ∩ c) = (a \ b) ∪ (a \ c)⌝);
+a (rewrite_tac[]);
+=TEX
+without proof context ...
+=SML
+set_goal([],⌜a \ (b ∩ c) = (a \ b) ∪ (a \ c)⌝);
+a (pure_rewrite_tac[]);
+=TEX
+One layer at a time:
+=SML
+set_goal([],⌜a \ (b ∩ c) = (a \ b) ∪ (a \ c)⌝);
+a (once_rewrite_tac[]);
+a (once_rewrite_tac[]);
+a (once_rewrite_tac[]);
+=TEX
+Finish the proof by stripping:
+=SML
+a (REPEAT strip_tac);
+=TEX
+Extract the theorem (two different ways):
+=SML
+top_thm();
+pop_thm();
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 6: Combining Forward and Backward Proof}
+Prove the following results by rewriting using the goal package:
+=SML
+set_goal([],⌜x + y = y + x⌝);
+(* ??? *)
+=SML
+set_goal([],⌜x + y + z = (x + y) + z⌝);
+(* ??? *)
+=SML
+set_goal([],⌜z + y + x = y + z + x⌝);
+(* ??? *)
+=SML
+set_goal([],⌜x + y + z = y + z + x⌝);
+(* ??? *)
+=SML
+set_goal([],⌜x + y + z + v = y + v + z + x⌝);
+(* ??? *)
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 7: Stripping}
+Observe the effects of stripping by executing:
+=SML
+set_goal([],⌜p ∧ q ⇒ (p ⇔ q)⌝);
+a step_strip_tac;
+a step_strip_tac;
+a step_strip_tac;
+a step_strip_tac;
+(* ... ... ... *)
+=TEX
+Try this again in a very weak proof context:
+=SML
+push_pc"initial";
+set_goal([],⌜p ∧ q ⇒ (p ⇔ q)⌝);
+a step_strip_tac;
+a step_strip_tac;
+(* ... ... ... *)
+(* RESTORE PROOF CONTEXT WHEN YOU'VE DONE ===> *) pop_pc();
+=TEX
+Repeat exercise on more complex examples from PM and ZRM. E.g., ...
+=TEX
+=SML
+set_goal([], ⌜(∀x⦁ φx ⇔ ψx) ⇒ ((∀y⦁ φy) ⇔ (∀z⦁ ψz))⌝);
+a step_strip_tac;
+(* ... ... ... *)
+=TEX
+Following shows an ``advanced'' way of temporarily switching proof context.
+=SML
+set_goal([], ⌜(∀x⦁ φx ⇔ ψx) ⇒ ((∀y⦁ φy) ⇔ (∀z⦁ ψz))⌝);
+a (PC_T "initial" step_strip_tac);
+(* ... ... ... *)
+=SML
+set_goal([], ⌜⋃ {} = {}⌝);
+a step_strip_tac;
+(* ... ... ... *)
+=SML
+set_goal([], ⌜⋃ {} = {}⌝);
+a (PC_T "initial" step_strip_tac);
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 8: Induction}
+Prove the following (and save the results in ML variables for possible
+future use).
+=SML
+set_goal([], ⌜∀l1 ⦁ l1 @ [] = l1⌝);
+(* ??? *)
+val empty_append_thm = pop_thm();
+=SML
+set_goal([], ⌜∀l1 l2 ⦁ Rev (l1 @ l2) = (Rev l2) @ (Rev l1)⌝);
+(* ??? *)
+=SML
+set_goal([], ⌜∀f l1 l2 ⦁ Map f (l1 @ l2) = (Map f l1) @ (Map f l2)⌝);
+(* ??? *)
+=SML
+set_goal([], ⌜∀l1 l2⦁ Length (l1 @ l2) = Length l1 + Length l2⌝);
+(* ??? *)
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 9: TACTICALs}
+1. Write and test a tactic which does strip_tac three times.
+=SML
+val strip3_tac = ??? ;
+=SML
+set_goal([],⌜(a ⇒ b ⇒ c) ⇒ a ⇒ b ⇒ c⌝);
+a strip3_tac;
+=SML
+set_goal([],⌜(a ⇒ b) ⇒ a ⇒ c⌝);
+a strip3_tac;
+=TEX
+2. Write and test a tactic which does strip_tac up to three times.
+=SML
+val stripto3_tac = ??? ;
+=SML
+set_goal([],⌜(a ⇒ b ⇒ c) ⇒ a ⇒ b ⇒ c⌝);
+a stripto3_tac;
+=SML
+set_goal([],⌜(a ⇒ b) ⇒ a ⇒ c⌝);
+a stripto3_tac;
+=TEX
+Write a tactic which takes two arguments:
+var: a term which is a variable, and,
+thl: a list of theorems.
+The tactic is to perform an inductive proof of a theorem concerning lists by:
+(a) stripping the goal
+(b) inducting on the variable
+and (c) rewriting with the assumptions and the list of theorems.
+Use your tactic to shorten the earlier proofs about lists.
+=SML
+fun list_induct_tac var thl = ??? ;
+=TEX
+E.g.,
+=SML
+set_goal([],⌜∀l1 l2 l3 ⦁ (l1 @ l2) @ l3 = l1 @ (l2 @ l3)⌝);
+a (list_induct_tac ⌜l1:'a LIST⌝ [append_def]);
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 10: strip_asm_tac etc.}
+Use strip_asm_tac$ (with ∀_elim and ℕ_cases_thm) or $cases_tac
+to prove the following:
+=SML
+(* 1(a) *) set_goal([], ⌜∀x⦁(if x = 0 then 1 else x) > 0⌝);
+(* ??? *)
+=SML
+(* 1(b) *) set_goal([], ⌜∀x y⦁(if x < y + 1 then x else y) < y + 1⌝);
+(* ??? *)
+=SML
+(* 1(c) *) set_goal([], ⌜∀a b⦁a ≤ (if a ≤ b then b else a)⌝);
+(* ??? *)
+=SML
+(* 1(d) *) set_goal([], ⌜∀a⦁a = 0 ∨ 1 ≤ a⌝);
+(* ??? *)
+=TEX
+Using
+(i) swap_asm_concl_tac
+and (ii) lemma_tac give two different proofs of each of:
+=SML
+(* 2(a)(i) *)
+set_goal([], ⌜(∀x y⦁x ≤ y ⇒  P(x, y)) ⇒ (∀x y⦁x = y ⇒  P(x, y))⌝);
+(* Proof with swap_asm_concl_tac ??? *)
+=SML
+(* 2(b)(i) *)
+set_goal([], ⌜(∀x y⦁f x ≤ f y ⇒  x ≤ y) ⇒ (∀x y⦁f x = f y ⇒ x ≤ y)⌝);
+(* Proof with swap_asm_concl_tac ??? *)
+=SML
+(* 2(a)(ii) *)
+set_goal([], ⌜(∀x y⦁x ≤ y ⇒  P(x, y)) ⇒ (∀x y⦁x = y ⇒  P(x, y))⌝);
+(* Proof with lemma_tac ??? *)
+=SML
+(* 2(b)(ii) *)
+set_goal([], ⌜(∀x y⦁f x ≤ f y ⇒  x ≤ y) ⇒ (∀x y⦁f x = f y ⇒ x ≤ y)⌝);
+(* Proof with lemma_tac ??? *)
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 11 : Forward Chaining}
+1. Experiment with the various all_ and asm_ variants of fc\_tac
+to prove the following goals:
+=SML
+(* 1(a) *) set_goal([], ⌜∀a b c d⦁a ≤ b ∧ b ≤ c ∧ c ≤ d ⇒ a ≤ d⌝);
+(* ??? *)
+=SML
+(* 1(b) *) set_goal([], ⌜∀X Y Z⦁X ⊆ Y ∧ Y ⊆ Z ⇒ X ⊆ Z⌝);
+=TEX
+(In each of the above, what is the minimum number of applications
+of a forward chaining tactic required and why?)
+=TEX
+2. Can you use forward chaining to simplify the proof of the
+following example from exercises 10:
+=SML
+set_goal([], ⌜(∀x y⦁f x ≤ f y ⇒  x ≤ y) ⇒ (∀x y⦁f x = f y ⇒ x ≤ y)⌝);
+(* ??? *)
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 12: Proof Contexts}
+1. Using $REPEAT\,strip\_tac$ and $asm\_rewrite\_tac$ prove:
+=SML
+set_goal([], ⌜(∀x y⦁f(x, y) = (y, x)) ⇒ ∀x y⦁f(f (x, y)) = (x, y)⌝);
+(* ??? *)
+=TEX
+Now set the proof context to ``predicates'' and prove it again:
+=SML
+set_pc"predicates";
+set_goal([], ⌜(∀x y⦁f(x, y) = (y, x)) ⇒ ∀x y⦁f(f (x, y)) = (x, y)⌝);
+(* ??? *)
+(* RESTORE PROOF CONTEXT WHEN YOU'VE DONE ===> *) set_pc"hol2";
+=TEX
+2. Prove the following:
+=SML
+set_goal([], (* (a) *) ⌜{(x, y) | ¬x = 0 ∧ y = 2*x} ⊆ {(x, y) | x < y}⌝);
+(* ??? *)
+=SML
+set_goal([], (* (b) *) ⌜{(x, y) | x ≥ 2 ∧ y = 2*x} ⊆ {(x, y) | x + 1 < y}⌝);
+(* ??? *)
+=SML
+set_goal([], (* (c) *) ⌜A ∪ (B ∩ C) = (A ∪ B) ∩ (A ∪ C)⌝);
+(* ??? *)
+=SML
+set_goal([], (* (d) *) ⌜∀m⦁{i | m ≤ i ∧ i < m + 3} = {m; m+1; m+2}⌝);
+(* ??? *)
+=SML
+set_goal([], (* (e) *) ⌜{i | 5*i = 6*i} = {0}⌝);
+(* ??? *)
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 13: Case Study}
+These exercises require you to execute the following commands
+and specification paragraphs first:
+=SML
+new_theory"vm";
+ⓈHOLLABPROD VM_State─────────────────
+│	takings			: ℕ;
+│	stock			: ℕ;
+│	price			: ℕ;
+│	cash_tendered		: ℕ
+■─────────────────────────────
+
+ⓈHOLCONST
+│	vm : VM_State → VM_State
+├──────────────────
+│∀st⦁	vm st
+│=	if	stock st = 0
+│	then	MkVM_State
+│		(takings st) (stock st) (price st) 0
+│	else	if cash_tendered st < price st
+│	then	st
+│	else	if cash_tendered st = price st
+│	then	MkVM_State
+│		(takings st + cash_tendered st)
+│		(stock st - 1) (price st) 0
+│	else	MkVM_State
+│		(takings st) (stock st) (price st) 0
+■
+ⓈHOLCONST
+│	value : VM_State → ℕ
+├─────────────────────────────
+│∀st⦁value st = takings st + stock st * price st
+■
+ⓈHOLCONST
+│	vm_ok : (VM_State → VM_State) SET
+├─────────────────
+│	vm_ok
+│=	{	trf
+│	|	∀cb s p ct⦁
+│		let	s1 = MkVM_State cb s p ct
+│		in let	s2 = trf s1
+│		in	value s2 ≥ value s1}
+■
+=SML
+val run_vm = rewrite_conv[get_spec⌜vm⌝, get_spec⌜MkVM_State⌝];
+=TEX
+Now for the exercises.
+
+1. Experiment with the model by using run_vm to see what it does on various
+test data. What does the vending machine do if the price is set to 0?
+=SML
+run_vm ⌜vm (MkVM_State ??? ??? ??? ???)⌝;
+(* ... ... ... *)
+=TEX
+2. Prove that the model of the vending machine satisfies its critical
+requirements. I.e., prove:
+=SML
+set_goal([], ⌜vm ∈ vm_ok⌝);
+(* ??? *)
+=TEX
+
+% =====================================================================
+
+\section*{Exercises 14: Additional Exercises}
+1. Use contr_tac and spec_asm_tac and rewriting to prove
+=SML
+set_goal([], ⌜∀m⦁∃n⦁ m < n⌝);
+(* ??? *)
+=TEX
+2. Use ∃_tac to give a more natural solution to the last problem:
+=SML
+set_goal([], ⌜∀m⦁∃n⦁ m < n⌝);
+(* ??? *)
+=TEX
+3. Prove:
+=SML
+set_goal([], ⌜∀f : ℕ → (ℕ → ℕ)⦁∃g⦁∀i⦁¬f i = g⌝);
+(* ??? *)
+=TEX
+4(a). Execute the following lines one at a time to see what happens:
+=SML
+eq_sym_conv ⌜1 + 1 + 1 = 3⌝;
+eq_sym_conv ⌜∀x⦁x + x + x = 3*x⌝;
+ONCE_MAP_C eq_sym_conv ⌜∀x⦁x + x + x = 3*x⌝;
+=TEX
+4(b). Prove:
+=SML
+set_goal([], ⌜∀f:'a→'b→'a⦁(∀x y⦁x = f x y) ⇒ f = CombK⌝);
+(* ??? *)
+=TEX
+5. Prove:
+=SML
+set_goal([], ⌜∀i j⦁0 < i ⇒ (i * j) Div i = j⌝);
+(* ??? *)
+=TEX
+6. Execute the following paragraph:
+ⓈHOLCONST
+│	σ : ℕ → ℕ
+├──────────────
+│	σ 0 = 0
+│ ∧	∀i⦁ σ(i+1) = σ i + (i + 1)
+■
+=TEX
+Check that the paragraph has been proved consistent automatically
+using get_spec:
+=SML
+get_spec⌜σ⌝;
+=TEX
+Now prove:
+=SML
+set_goal([], ⌜∀i⦁σ i = (i*(i + 1)) Div 2⌝);
+(* ??? *)
+=TEX
+7. Construct a paragraph defining a function φ such that for positive i,
+φ i is the i-th element of the Fibonacci sequence,
+1, 1, 2, 3, 5, \ldots, where each number is the sum of the previous
+two. Does the system automatically prove the consistency of your
+definition?
+ⓈHOLCONST
+│	φ : ℕ → ℕ
+├────────────
+│ 	???
+■
+=TEX
+8. If you did the previous exercise, delete the function φ you defined (using delete_const.
+=SML
+delete_const⌜φ⌝;
+=TEX
+Enter the following paragraphs which define φ using an auxiliary function γ:
+ⓈHOLCONST
+│	γ : ℕ → (ℕ × ℕ)
+├────────────
+│	γ 0 = (0, 1)
+│ ∧	∀i⦁γ(i+1) = let (a, b) = γ i in (b, a + b)
+│	
+■
+ⓈHOLCONST
+│	φ : ℕ → ℕ
+├────────────
+│ 	∀i⦁φ i = Fst (γ i)
+│	
+■
+=TEX
+Prove that $φ$ does indeed compute the Fibonacci numbers:
+=SML
+set_goal([], ⌜
+	φ 0 = 0
+∧	φ 1 = 1
+∧	∀i⦁φ(i+2) = φ(i+1) + φ i
+⌝);
+=TEX
+9. Delete the function γ (and hence the function φ) defined in the
+previous exercise:
+=SML
+delete_const⌜γ⌝;
+=TEX
+Enter the following paragraph which gives the natural definition of
+$φ$:
+ⓈHOLCONST
+│	φ : ℕ → ℕ
+├────────────
+│	φ 0 = 0
+│ ∧	φ 1 = 1
+│ ∧	∀i⦁φ(i+2) = φ(i+1) + φ i
+■
+Examine the theorem that $get\_spec$ returns for $φ$:
+=SML
+get_spec⌜φ⌝;
+=TEX
+Discharge the consistency caveat for φ:
+=SML
+push_consistency_goal⌜φ⌝;
+(* ??? *)
+save_consistency_thm ⌜φ⌝ (pop_thm());
+=TEX
+
+
+
+
+\end{document}
+

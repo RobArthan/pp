@@ -1,0 +1,493 @@
+=IGN
+********************************************************************************
+mdt067.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% ℤ $Revision: 1.11 $ $RCSfile: mdt067.doc,v $ $Date: 2002/10/17 15:10:58 $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for Resolution Facilities}
+
+\def\AbstractText{A set of module tests are given for the the automatic existence proof tools.}
+
+\def\Reference{DS/FMU/IED/MDT067}
+
+\def\Author{K.Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests for Resolution Facilities}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Module Tests for Automatic Existence Proofs}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT067}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.11 $ %
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $ %
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{ML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & Project Manager}
+%% LaTeX2e port: \TPPabstract{A set of module tests are given for the
+%% LaTeX2e port: the automatic existence proof tools.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (1992/04/09)]
+First draft.
+\item [Issue 1.2 (1992/04/09),1.3 (1992/04/10) (9th April 1992)]
+Changes required by CR0016.
+\item [Issue 1.4 (1992/04/14) (14th April 1992)]
+Changes required by CR0017.
+\item [Issue 1.5 (1992/05/13) (13th May 1992)]
+Changed signature of $get\_spec$.
+\item [Issue 1.6 (1992/05/14) (14th May 1992)]
+Tidying up proof contexts.
+\item [Issue 1.12 (2002/10/17) (20th May 1992)]
+Rearranging build proof contexts.
+\item[Issue 1.8 (1992/06/24) (24th June 1992)]
+Renamings from issue 1.6 of \cite{DS/FMU/IED/WRK038},
+mostly proof context name changes.
+\item[Issue 1.9 (1992/12/15) (14th December 1992)]
+Changes to allow tests to be run on a parent database.
+\item[Issue 1.10 (1999/02/24)]
+Update for SML97.
+\item[Issue 1.11 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.12 (2002/10/17)] PPHol-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+\subsection{Changes Forecast}
+Empower more of the tests currently in ``=IGN'' sections,
+as well as .
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the resolution tools.
+The design is in \cite{DS/FMU/IED/DTD067}
+and it is
+implemented in \cite{DS/FMU/IED/IMP067}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module testing of the material given a design in \cite{DS/FMU/IED/DTD067},
+following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+
+\subsubsection{Dependencies}
+This document is derived from the detailed design in \cite{DS/FMU/IED/DTD067},
+and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP067}.
+\subsubsection{Deficiencies}
+Many functions not tested, or tested inadequately..
+\section{TEST CASES}
+We test each function of the signature of \cite{DS/FMU/IED/DTD067}
+in turn, where possible in the same order as in the design document, testing both successful, and all error, cases.
+
+Then we give some sample resolution problems, both
+to test the system and give informal benchmarks.
+\section{PROLOGUE}
+Initialise the test package:
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+init_mt_results();
+=TEX
+=SML
+open Resolution;
+open_theory "hol";
+new_theory "mdt067_test";
+push_merge_pcs ["'propositions","'paired_abstractions"];
+=TEX
+\section{THE TESTS OF COMPONENT FUNCTIONS}
+\section{RESOLUTION PROBLEMS}
+=SML
+fun ⦏thm_less⦎ thms1 thms2 = (
+let	val cthms2 = map dest_thm thms2;
+in
+	thms1 drop (fn thm => present (op =#) (dest_thm thm) cthms2)
+end);
+=TEX
+Transitivity, Symmetry and existence of images
+implies reflixity:
+
+Using set of support:
+=SML
+store_mt_results mt_run [
+	("basic_res_rule 1",
+	is_f o concl o hd o basic_res_rule 5
+	 [(asm_rule ⌜(¬ R (x:'a) x)⌝)],
+	[(asm_rule ⌜(∀ x y z:'a ⦁ R x y ∧ R y z ⇒ R x z)⌝),
+	(asm_rule ⌜(∀ x y:'a ⦁ R x y ⇒ R y x)⌝),
+	(asm_rule ⌜∀ x :'a⦁ R x (f x:'a)⌝)],
+	true)];
+=TEX
+without:
+=SML
+store_mt_results mt_run [
+	("basic_res_rule 2",
+	is_f o concl o hd o basic_res_rule 5
+	[(asm_rule ⌜(¬ R (x:'a) x)⌝),
+	(asm_rule ⌜(∀ x y z:'a ⦁ R x y ∧ R y z ⇒ R x z)⌝),
+	(asm_rule ⌜(∀ x y:'a ⦁ R x y ⇒ R y x)⌝),
+	(asm_rule ⌜∀ x :'a⦁ R x (f x:'a)⌝)],
+	[],
+	true)];
+=TEX
+=SML
+val gl1 = ([ ⌜(∀ x y z:'a ⦁ R x y ∧ R y z ⇒ R x z)⌝,
+	 ⌜(∀ x y:'a ⦁ R x y ⇒ R y x)⌝,
+	 ⌜∀ x :'a⦁ R x (f x:'a)⌝],
+	⌜(∀ x:'a ⦁ R x x)⌝);
+
+push_goal gl1;
+a(basic_res_tac 5 []);
+store_mt_results (mt_runf (op =#)) [
+	("basic_res_tac 1",
+	dest_thm o pop_thm,
+	(),
+	gl1)];
+=TEX
+Moore's Three Blocks Problem (Formal Methods in Artificial Intelligence, p81)
+=SML
+store_mt_results mt_run [
+	("basic_res_rule 3",
+	is_f o concl o hd o basic_res_rule 5
+	[
+	(asm_rule ⌜on(A:'box,B:'box):BOOL⌝),
+	(asm_rule ⌜on(B:'box,C:'box):BOOL⌝),
+	(asm_rule ⌜green(A:'box):BOOL⌝),
+	(asm_rule ⌜¬ green(C:'box)⌝),
+	(asm_rule ⌜∀ x y:'box⦁ (green x ∧ on(x,y)) ⇒ green y⌝)
+	],
+	[],
+	true)];
+=TEX
+Or
+=SML
+val gl2:GOAL = ([],⌜on(A:'box,B:'box) ∧ on(B:'box,C:'box) ∧
+	green(A:'box) ∧ ¬ green(C:'box)
+	⇒
+	¬ ∀ x y ⦁ ¬ (green x ∧ ¬ green y ∧ on(x,y))⌝);
+
+push_goal gl2;
+a(strip_tac THEN basic_res_tac 5 []);
+store_mt_results (mt_runf (op =#)) [
+	("basic_res_tac 2",
+	dest_thm o pop_thm,
+	(),
+	gl2)];
+=TEX
+Examples from chapter 6 of Wos's book.
+
+Predicate based set theory:
+
+Try:
+=TEX
+ⓈHOLCONST
+IsPredGroup : (('a × 'a × 'a) → BOOL) → ('a × 'a → 'a) → 'a → ('a → 'a) → BOOL
+├
+∀ (p:('a × 'a × 'a) → BOOL) (prod:'a × 'a → 'a) (e:'a) (inv:'a → 'a) ⦁
+	IsPredGroup p prod e inv ⇔
+	((∀ x ⦁ p (e,x,x)) ∧
+	(∀ x ⦁ p (x,e,x)) ∧
+	(∀ x ⦁ p (inv x,x,e)) ∧
+	(∀ x ⦁ p (x, inv x, e)) ∧
+	(∀ x y z u v w ⦁ p(x, y, u) ∧ p (y, z, v) ∧ p(u, z, w) ⇒ p(x,v,w)) ∧
+	(∀ x y z u v w ⦁ p(x, y, u) ∧ p (y, z, v) ∧ p(x, v, w) ⇒ p(u, z, w)) ∧
+	(∀ x y ⦁ p(x, y, prod(x,y))) ∧
+	(∀ x y u v ⦁ p(x,y,u) ∧ p(x,y,v) ⇒ (u = v)) ∧
+	(∀ x :'a⦁ x = x) ∧
+	(∀ x y:'a ⦁ (x = y) ∨ ¬(x = y)) ∧
+	(∀ x y z:'a ⦁ (x = y) ∧ (y = z) ⇒ (x = z)) ∧
+	(∀ x y:'a ⦁ (x = y) ⇒ (y = x)) ∧
+	(∀ u v x y ⦁ (u = v) ∧ p(u,x,y) ⇒ p(v,x,y)) ∧
+	(∀ u v x y ⦁ (u = v) ∧ p(x,u,y) ⇒ p(x,v,y)) ∧
+	(∀ u v x y ⦁ (u = v) ∧ p(x,y,u) ⇒ p(x,y,v)) ∧
+	(∀ u v x ⦁ (u = v) ⇒ (prod(u,x) = prod(v,x))) ∧
+	(∀ u v x ⦁ (u = v) ⇒ (prod(x,u) = prod(x,v))) ∧
+	(∀ u v ⦁ (u = v) ⇒ (inv u = inv v)))
+■
+A sample group:
+=SML
+val pthms = strip_∧_rule (once_rewrite_rule[get_spec ⌜IsPredGroup⌝ ]
+	(asm_rule ⌜IsPredGroup P Prod E Inv⌝));
+=TEX
+ⓈHOLCONST
+IsEqGroup : ('a × 'a → 'a) → 'a → ('a → 'a) → BOOL
+├
+∀ (e:'a) (inv:'a → 'a)(prod:'a × 'a → 'a) ⦁
+	IsEqGroup prod e inv ⇔
+	((∀ x :'a⦁ prod(e,x) = x) ∧
+	(∀ x :'a ⦁ prod(x,e) = x) ∧
+	(∀ x :'a ⦁ prod(inv x, x) = e) ∧
+	(∀ x :'a ⦁ prod(x, inv x) = e) ∧
+	(∀ x y z  :'a⦁ prod(x,prod(y,z)) = prod(prod(x,y),z)) ∧
+	(∀ x :'a⦁ x = x) ∧
+	(∀ x y z:'a ⦁ (x = y) ∧ (y = z) ⇒ (x = z)) ∧
+	(∀ x y:'a ⦁ (x = y) ⇒ (y = x)) ∧
+	(∀ u v x ⦁ (u = v) ⇒ (prod(u,x) = prod(v,x))) ∧
+	(∀ u v x ⦁ (u = v) ⇒ (prod(x,u) = prod(x,v))) ∧
+	(∀ u v ⦁ (u = v) ⇒ (inv u = inv v)))
+■
+A sample group:
+=SML
+val ethms = strip_∧_rule (once_rewrite_rule[get_spec ⌜IsEqGroup⌝]
+	(asm_rule ⌜IsEqGroup Prod E Inv⌝));
+=TEX
+Sanity tests:
+=SML
+val rest = ethms;
+val sos = [asm_rule ⌜¬(e':'a = E)⌝,
+	asm_rule ⌜E:'a = e'⌝];
+store_mt_results mt_run [
+	("basic_res_rule 7",
+	is_f o concl o hd o basic_res_rule 5
+	sos,
+	rest,
+	true)];
+=TEX
+=SML
+val rest = pthms @
+	[asm_rule ⌜E:'a = e'⌝];
+val sos = [asm_rule ⌜¬(e':'a = E)⌝];
+store_mt_results mt_run [
+	("basic_res_rule 4",
+	is_f o concl o hd o basic_res_rule 3
+	sos,
+	rest,
+	true)];
+=TEX
+Some negated goals:
+
+Identity is unique (as predicate):
+=SML
+⌜∀ e' :'a ⦁ (∀ x:'a ⦁ P(e',x,x)) ∧ (∀ x ⦁ P(x,e',x))
+	⇒
+	(e' = E)⌝;
+=TEX
+Stripped and contradicted
+=SML
+val rest = pthms @ [
+	asm_rule ⌜(∀ x:'a ⦁ P(e':'a,x,x))⌝,
+	asm_rule ⌜(∀ x:'a ⦁ P(x,e':'a,x))⌝];
+val sos = [asm_rule ⌜¬(e':'a = E)⌝];
+store_mt_results mt_run [
+	("basic_res_rule 5",
+	is_f o concl o hd o basic_res_rule 5
+	sos,
+	rest,
+	true)];
+=TEX
+Identity is unique(via equality):
+=SML
+⌜∀ e' :'a ⦁ (∀ x:'a ⦁ Prod(e',x) = x) ∧ (∀ x ⦁ Prod(x,e') = x)
+	⇒
+	(e' = E)⌝;
+=TEX
+Stripped and contradicted (too slow? at the moment)
+=IGN
+val rest = ethms @
+	[asm_rule ⌜¬(e':'a = E)⌝];
+val sos = [asm_rule ⌜(∀ x :'a⦁ Prod(x,e':'a) = x)⌝];
+store_mt_results mt_run [
+	("basic_res_rule 6",
+	is_f o concl o hd o basic_res_rule 5
+	sos,
+	rest,
+	true)];
+=TEX
+Left inverse of a term is also its right inverse(predicate):
+=SML
+⌜∀ x x':'a ⦁ P(x,x',E) ⇒ P(x',x,E)⌝;
+=TEX
+Stripped and contradicted
+=IGN
+val rest = pthms @ [asm_rule ⌜P(x:'a,x':'a,E:'a):BOOL⌝];
+val sos = [asm_rule ⌜¬ P(x':'a,x:'a,E:'a)⌝];
+thm_less (basic_res_rule 10 sos rest) (sos @ rest);
+=TEX
+Try a different set of support:
+=IGN
+val rest = pthms;
+val sos = [asm_rule ⌜P(x:'a,x':'a,E:'a):BOOL⌝,
+	asm_rule ⌜¬ P(x':'a,x:'a,E:'a)⌝];
+thm_less (basic_res_rule 10 sos rest) (sos @ rest);
+=TEX
+
+Left inverse of a term is also its right inverse(equality):
+=SML
+⌜∀ x x':'a ⦁ P(x,x',E) ⇒ P(x',x,E)⌝;
+=TEX
+Stripped and contradicted
+=IGN
+val rest = ethms @ [asm_rule ⌜Prod(x:'a,x':'a) :'a = E⌝];
+val sos = asm_rule ⌜¬(Prod(x':'a,x:'a):'a = E)⌝;
+hd(basic_res_rule 10 sos rest);
+=TEX
+If the square of every element is the identity, then the
+group is commutative (predicate):
+=SML
+⌜(∀ x :'a ⦁ P(x,x,E)) ⇒ (∀ x y v: 'a ⦁ P(x, y, v) ⇒ P(y, x, v))⌝;
+=TEX
+Stripped and contradicted
+=IGN
+val rest = pthms @ [asm_rule ⌜(∀ x :'a ⦁ P(x,x,E:'a))⌝,
+	asm_rule ⌜P(x:'a,y:'a,v:'a):BOOL⌝];
+val sos = [asm_rule ⌜¬ P(y:'a,x:'a,v:'a)⌝];
+hd (basic_res_rule 10 sos rest);
+=TEX
+If the square of every element is the identity, then the
+group is commutative (equality):
+=SML
+⌜(∀ x :'a ⦁ Prod(x,x) = E) ⇒ (∀ x y: 'a ⦁ Prod(x, y) = Prod(y,x))⌝;
+=TEX
+Stripped and contradicted
+=IGN
+val rest = pthms @ [asm_rule ⌜(∀ x :'a ⦁ Prod(x,x):'a = E)⌝];
+val sos = [asm_rule ⌜¬ (Prod(x:'a,y:'a):'a = Prod(y,x))⌝];
+hd (basic_res_rule 10 sos rest);
+=TEX
+=SML
+val gl3 :GOAL = ([],⌜
+	(∃z⦁ p z)∧(∃z⦁ q z)
+	⇒	(((∀z⦁ p z ⇒ r z) ∧ (∀z⦁ q z ⇒ s z))
+		⇔ (∀z w⦁ p z ∧ q w ⇒ r z ∧ s w))
+		⌝);
+push_goal gl3;
+a(basic_res_tac 1 []);
+undo 1;
+a(basic_res_tac 2 []);
+undo 1;
+a(basic_res_tac 3 []);
+store_mt_results (mt_runf (op =#)) [
+	("basic_res_tac 3",
+	dest_thm o pop_thm,
+	(),
+	gl3)];
+=TEX
+=SML
+val gl4 : GOAL = ([],⌜
+	epsilon ⊆ alpha ∧ eta ⊆ beta ∧ ( alpha ∩ beta = {})
+	⇒ ((epsilon ∪ eta)\ alpha=eta) ∧
+		((epsilon ∪ eta)\ beta=epsilon)
+		⌝);
+push_goal gl4;
+a (rewrite_tac (map (get_defn "sets") ["⊆", "\\", "∪", "∩", "∈", "Empty"]));
+a (basic_res_tac 5 []);
+store_mt_results (mt_runf (op =#)) [
+	("basic_res_tac 4",
+	dest_thm o pop_thm,
+	(),
+	gl4)];
+=TEX
+=SML
+push_goal gl4;
+a (rewrite_tac (map (get_defn "sets") ["⊆", "\\", "∪", "∩", "∈", "Empty"]));
+a (contr_tac THEN basic_res_tac1 5 []);
+store_mt_results (mt_runf (op =#)) [
+	("basic_res_tac1 1",
+	dest_thm o pop_thm,
+	(),
+	gl4)];
+=TEX
+=SML
+push_goal gl4;
+a (rewrite_tac (map (get_defn "sets") ["⊆", "\\", "∪", "∩", "∈", "Empty"]));
+a (basic_res_tac2 5 []);
+store_mt_results (mt_runf (op =#)) [
+	("basic_res_tac2 1",
+	dest_thm o pop_thm,
+	(),
+	gl4)];
+=TEX
+=SML
+push_goal gl4;
+a (rewrite_tac (map (get_defn "sets") ["⊆", "\\", "∪", "∩", "∈", "Empty"]));
+a (contr_tac THEN basic_res_tac3 10 []);
+store_mt_results (mt_runf (op =#)) [
+	("basic_res_tac3 1",
+	dest_thm o pop_thm,
+	(),
+	gl4)];
+=TEX
+\subsection{End of Tests}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+\end{document}
+
+
+

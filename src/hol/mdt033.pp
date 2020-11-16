@@ -1,0 +1,493 @@
+=IGN
+********************************************************************************
+mdt033.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  mdt033.doc  ℤ $Date: 2002/10/17 16:20:01 $ $Revision: 1.5 $ $RCSfile: mdt033.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Module Tests for Theory Lister}
+
+\def\AbstractText{This document comprises test cases and test code/data for testing the theory lister described in the document DS/FMU/IED/DTD033.}
+
+\def\Reference{DS/FMU/IED/MDT033}
+
+\def\Author{R.D. Arthan}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % TQtemplate.tex
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+\def\Hide#1{}
+%% LaTeX2e port: \def\Bool{``$\it{:}bool\,$''}
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: %\TPPvolume{}
+%% LaTeX2e port: %\TPPpart{}
+%% LaTeX2e port: \TPPtitle{Module Tests for Theory Lister}  %% Mandatory field
+%% LaTeX2e port: \TPPref{DS/FMU/IED/MDT033}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 1.5 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $
+%% LaTeX2e port: }}  %% Mandatory field (with sensible default)
+%% LaTeX2e port: \TPPstatus{Draft}			%% Mandatory field
+%% LaTeX2e port: \TPPtype{Specification}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{
+%% LaTeX2e port: This document comprises test cases and test code/data for
+%% LaTeX2e port: testing the theory lister described in the document
+%% LaTeX2e port: DS/FMU/IED/DTD033.}
+%% LaTeX2e port: %\TPPabstractB{}
+%% LaTeX2e port: %\TPPabstractC{}
+%% LaTeX2e port: %\TPPabstractD{}
+%% LaTeX2e port: %\TPPabstractE{}
+%% LaTeX2e port: %\TPPabstractF{}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port:       Library \\ R.D. Arthan\\ D.J. King}}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \TPPsetsizes
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: 
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: 
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issues 1.1 (1992/11/25)--1.16]
+First drafts.
+\item[Issue 1.17]
+Update for SML97.
+\item[Issue 1.4 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.5 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 1.6 (2012/03/17)] Allowed for use of type abbreviations in pretty-printer.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+% \subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+
+This document comprises test cases and test code/data for
+testing the theory lister as specified in \cite{DS/FMU/IED/DTD033}.
+
+\subsection{Introduction}
+
+\subsubsection{Background and Purpose}
+This document is intended to supply module tests for the theory lister
+as defined in \cite{DS/FMU/IED/DTD033} and implemented
+in \cite{DS/FMU/IED/IMP033}. The tests are intended to meet
+the requirements for tests identified in the quality plan
+\cite{DS/FMU/IED/PLN008}.
+
+\subsubsection{Dependencies}
+
+These tests depend on
+the test harness as implemented in DS/FMU/IED/IMP013, and
+its corresponding detailed design document, DS/FMU/IED/DTD013.
+The tests require the theory HOL defined in \cite{DS/FMU/IED/DTD045}
+to be present.
+\subsubsection{Possible Enhancements}
+
+None known.
+
+\subsubsection{Deficiencies}
+
+The tests given here do little more than a basic sanity check.
+The pleasantness of the format of the theory listings on the screen or on paper
+cannot be automatically tested.
+\section{TEST CASES}
+\begin{description}
+\item[TheoryLister.1]
+In this group of tests correct operation of the three HOL lister functions
+is ``checked''.
+\item[TheoryLister.2]
+This group tests the error handling of the three HOL lister functions.
+\item[TheoryLister.3]
+This group checks that the flags and controls are there and, as far as
+can be done automatically, tests whether they have the desired effect.
+\item[TheoryLister.4]
+This group checks the correct operation of the generic lister in some
+simple cases.
+\item[TheoryLister.5]
+This group checks the error handling of the generic lister in some
+simple cases.
+\end{description}
+\section{PREAMBLE}
+=SML
+use_file "dtd013.sml";
+use_file "imp013.sml";
+val hol_ok = (open_theory "hol"; true) handle (Fail _) => false;
+init_mt_results();
+open ExtendedIO Sort ListerSupport;
+fun my_diff (ignore_order : bool)
+	 (file : string, expected : string) : bool = (
+	let	val chan = open_in file;
+		fun read_all () = (
+			case input_line chan of
+				"" => [""]
+			|	some => some :: read_all()
+		);
+		fun is_space ch = ch = " " orelse ch = "\t" orelse ch = "\n";
+		fun compare (ch1 :: more1) (ch2 :: more2) = (
+			if ch1 = ch2
+			then compare more1 more2
+			else (diag_line "*** mdt033: listing check failed";
+				diag_line ("read: " ^ implode((ch1 :: more1) to 40));
+				diag_line ("expected: " ^ implode((ch1 :: more2) to 40));
+			false)
+		) | compare [] [] = true
+		|   compare [] chs = (
+			diag_line "*** mdt033: listing check failed";
+			diag_line ("read: <end-of-file>");
+			diag_line ("expected: " ^ implode(chs to 40));
+			false
+		) |compare chs [] = (
+			diag_line "*** mdt033: listing check failed";
+			diag_line ("read: " ^ implode(chs to 40));
+			diag_line ("expected: <end-of-file>");
+			false
+		);
+		val contents = implode (read_all());
+		val s = if ignore_order then sort string_order else Combinators.I;
+		val ok = compare
+			(s(explode contents drop is_space))
+			(s(explode (translate_for_output expected) drop is_space));
+		val se = close_in chan;
+	in	ok
+	end	handle ex => (
+		diag_line ("*** mdt033: i/o error (" ^ string_of_exn ex ^") reported on " ^ file);
+		false
+		)
+);
+=TEX
+\section{THE TESTS}
+\subsection{Group 1}
+In this group of tests correct operation of the three HOL lister functions
+is ``checked''.
+=SML
+store_mt_results_show mt_run [
+	("mdt033.1.1", print_theory, "sets", ())
+];
+store_mt_results_show mt_run [
+	("mdt033.1.2", output_theory, {theory="sets", out_file="mdt033.thy.doc"}, ()),
+	("mdt033.1.3", output_theory1, {theory="sets", out_file="mdt033.thy.doc"}, ())
+];
+=TEX
+=SML
+new_theory"mdt033a";
+output_theory1{theory="mdt033a", out_file="mdt033.thy.doc"};
+val expected_1_4 =
+"=== The theory mdt033a ===\n" ^
+"--- Parents ---\n" ^
+"\t\thol" ^
+"=== End of listing of theory mdt033a ===\n";
+store_mt_results_show mt_run [
+	("mdt033.1.4", my_diff false, ("mdt033.thy.doc", expected_1_4), true)
+];
+=TEX
+=SML
+new_theory"mdt033b";
+new_axiom(["axiom"], mk_t);
+val expected_1_5 =
+"=== The theory mdt033b ===\n" ^
+"--- Parents ---\n" ^
+"\t\tmdt033a" ^
+"--- Axioms ---\n" ^
+"axiom\t\t⊢ T" ^
+"=== End of listing of theory mdt033b ===\n";
+store_mt_results_show mt_run [
+	("mdt033.1.5a", output_theory1, {theory="mdt033b", out_file="mdt033.thy.doc"}, ())
+];
+store_mt_results_show mt_run [
+	("mdt033.1.5", my_diff false, ("mdt033.thy.doc", expected_1_5), true)
+];
+=TEX
+=SML
+open_theory"mdt033a";
+declare_terminator"......";
+declare_alias("StringCons", ⌜Cons : STRING → STRING LIST → STRING LIST⌝);
+output_theory1{theory="mdt033a", out_file="mdt033.thy.doc"};
+val expected_1_6 =
+"=== The theory mdt033a ===\n" ^
+"--- Parents ---\n" ^
+"\t\thol" ^
+"--- Children ---\n" ^
+"\t\tmdt033b" ^
+"--- Aliases ---\n" ^
+"StringCons\tCons : STRING → STRING LIST → STRING LIST" ^
+"--- Terminators ---\n" ^
+"\t\t......" ^
+"=== End of listing of theory mdt033a ===\n";
+store_mt_results_show mt_run [
+	("mdt033.1.6", my_diff false, ("mdt033.thy.doc", expected_1_6), true)
+];
+=TEX
+=SML
+open_theory"mdt033b";
+undeclare_terminator"......";
+undeclare_alias("StringCons", ⌜Cons : STRING → STRING LIST → STRING LIST⌝);
+output_theory1{theory="mdt033b", out_file="mdt033.thy.doc"};
+val expected_1_7 =
+"=== The theory mdt033b ===\n" ^
+"--- Parents ---\n" ^
+"\t\tmdt033a" ^
+"--- Undeclared Aliases ---\n" ^
+"StringCons\tCons : STRING → STRING LIST → STRING LIST" ^
+"--- Undeclared Terminators ---\n" ^
+"\t\t......" ^
+"--- Axioms ---\n" ^
+"axiom\t\t⊢ T" ^
+"=== End of listing of theory mdt033b ===\n";
+store_mt_results_show mt_run [
+	("mdt033.1.7", my_diff false, ("mdt033.thy.doc", expected_1_7), true)
+];
+=TEX
+\subsection{Group 2}
+This group tests the error handling of the three HOL lister functions.
+=SML
+store_mt_results_show mt_run_fail [
+	("mdt033.2.1", print_theory, "non_existent_theory",
+		gen_fail_msg "print_theory" 33051 ["non_existent_theory"])
+];
+=TEX
+=SML
+store_mt_results_show mt_run_fail [
+	("mdt033.2.2", output_theory, {theory="non_existent_theory",
+					out_file="mdt033.thy.doc"},
+		gen_fail_msg "output_theory" 33051 ["non_existent_theory"]),
+	("mdt033.2.3", output_theory1, {theory="non_existent_theory",
+					out_file="mdt033.thy.doc"},
+		gen_fail_msg "output_theory1" 33051 ["non_existent_theory"])
+];
+=TEX
+=SML
+val insert_2_4 = (open_out "/"; "surely not!") handle ex => string_of_exn ex;
+store_mt_results_show mt_run_fail [
+	("mdt033.2.4.1", output_theory, {theory="hol",
+					out_file="/"},
+		gen_fail_msg "output_theory" 33101 ["/", insert_2_4]),
+	("mdt033.2.4.2", output_theory1, {theory="/hol",
+					out_file="/"},
+		gen_fail_msg "output_theory1" 33101 ["/", insert_2_4])
+];
+=TEX
+\subsection{Group 3}
+This group checks that the flags and controls are there and, as far as
+can be done automatically, tests whether they have the desired effect.
+=TEX
+=SML
+store_mt_results_show mt_run [
+	("mdt033.3.1", reset_flag, "sorted_listings", false)
+];
+=TEX
+=SML
+store_mt_results_show mt_run [
+	("mdt033.3.2", reset_int_control, "listing_indent", 2)
+];
+=TEX
+=SML
+open_theory"hol";
+new_theory"mdt033c";
+new_type("CDE", 0);
+new_type("DEF", 0);
+new_type("ABC", 0);
+new_type("BCD", 0);
+output_theory1{theory="mdt033c", out_file="mdt033.thy.doc"};
+val expected_3_3 =
+"=== The theory mdt033c ===\n" ^
+"--- Parents ---\n" ^
+"\t\thol" ^
+"--- Types ---\n" ^
+"CDE\n" ^
+"DEF\n" ^
+"ABC\n" ^
+"BCD\n" ^
+"=== End of listing of theory mdt033c ===\n";
+store_mt_results_show mt_run [
+	("mdt033.3.3", my_diff false, ("mdt033.thy.doc", expected_3_3), true)
+];
+=TEX
+=SML
+set_flag ("sorted_listings", true);
+output_theory1{theory="mdt033c", out_file="mdt033.thy.doc"};
+val expected_3_4 =
+"=== The theory mdt033c ===\n" ^
+"--- Parents ---\n" ^
+"\t\thol" ^
+"--- Types ---\n" ^
+"ABC\n" ^
+"BCD\n" ^
+"CDE\n" ^
+"DEF\n" ^
+"=== End of listing of theory mdt033c ===\n";
+store_mt_results_show mt_run [
+	("mdt033.3.4", my_diff false, ("mdt033.thy.doc", expected_3_4), true)
+];
+=TEX
+\subsection{Group 4}
+This group checks the correct operation of the generic lister in some
+simple cases.
+=SML
+val names = ["abbe","abbey","abbot","Abbott",
+"abbreviate","abc","abdicate","abdomen",
+"abdominal","abduct","Abe","abed",
+"Abel","Abelian","Abelson","Aberdeen",
+"Abernathy","aberrant","aberrate","abet",
+"abetted","abetting","abeyance","abeyant",
+"abhorred","abhorrent","abide","Abidjan",
+"Abigail","abject","ablate","ablaze",
+"able","ablution","Abner","abnormal",
+"Abo","aboard","abode","abolish",
+"abolition","abominable","abominate","aboriginal",
+"aborigine","aborning","abort","abound",
+"about","above","aboveboard","aboveground",
+"abovementioned","abrade","Abraham","Abram",
+"Abramson"];
+val tab1 = (["label1", "label2", "label3"], names);
+val tab2 = (["very_long_label"], names);
+fun make_tables () = Combinators.K [tab1, tab2];
+val pfs = gen_theory_lister [LSBanner, LSADTables(make_tables()), LSTrailer];
+val ot1 = #out1 pfs Combinators.I;
+=TEX
+=SML
+val pt = #print pfs Combinators.I;
+val ot = #out pfs Combinators.I;
+=TEX
+=SML
+open_theory"hol";
+ot1{theory="-", out_file="mdt033.thy.doc"};
+val expected_4 =
+"=== - ===\n" ^
+implode (fst tab1) ^
+implode (snd tab1) ^
+implode (fst tab2) ^
+implode (snd tab2) ^
+"=== End of listing of theory hol ===\n";
+store_mt_results_show mt_run [
+	("mdt033.4", my_diff true, ("mdt033.thy.doc", expected_4), true)
+];
+=TEX
+\subsection{Group 5}
+This group checks the error handling of the generic lister in some
+simple cases.
+=SML
+store_mt_results_show mt_run_fail [
+	("mdt033.5.1", pt, "non_existent_theory",
+		gen_fail_msg "gen_theory_lister" 33051 ["non_existent_theory"])
+];
+=TEX
+=SML
+store_mt_results_show mt_run_fail [
+	("mdt033.5.2", ot, {theory="non_existent_theory",
+					out_file="mdt033.thy.doc"},
+		gen_fail_msg "gen_theory_lister" 33051 ["non_existent_theory"]),
+	("mdt033.5.3", ot1, {theory="non_existent_theory",
+					out_file="mdt033.thy.doc"},
+		gen_fail_msg "gen_theory_lister" 33051 ["non_existent_theory"])
+];
+=TEX
+=SML
+store_mt_results_show mt_run_fail [
+	("mdt033.5.4.1", ot, {theory="hol",
+					out_file="/"},
+		gen_fail_msg "gen_theory_lister" 33101 ["/", insert_2_4]),
+	("mdt033.5.4.2", ot1, {theory="/hol",
+					out_file="/"},
+		gen_fail_msg "gen_theory_lister" 33101 ["/", insert_2_4])
+];
+
+=TEX
+\section{SUMMARY OF RESULTS}
+
+=SML
+if hol_ok
+then
+diag_string(summarize_mt_results())
+else
+(diag_string "*** mdt033 requires the theory hol from imp045 ***";
+diag_string "*** mdt033 was not able to test the theory lister ***");
+=TEX
+
+\end{document}
+val tab1 = (["label1", "label2", "label3"], names);
+val tab2 = (["very_long_label"], names);
+val ot1 = #out1 pfs Combinators.I;
+val pt = #print pfs Combinators.I;
+val pt = #print pfs Combinators.I;
+

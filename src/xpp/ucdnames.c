@@ -4,7 +4,7 @@
  *
  * ucdnames.c -  support for the Identify Unicode menu item
  *
- * ucdnames.c: this file is part of the PPTex system
+ * ucdnames.c: this file is part of the PPXpp package
  *
  * Copyright (c) 2019 Lemma 1 Ltd.
  *

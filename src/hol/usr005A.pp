@@ -1,0 +1,57 @@
+=IGN
+********************************************************************************
+usr005A.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% usr005A.doc   ℤ $Date: 2002/10/17 15:10:58 $ $Revision: 1.4 $ $RCSfile: usr005A.doc,v $
+=TEX
+In this chapter, the concrete representation of the \ProductHOL\ language is described.
+
+=IGN
+The \HOL\ system provides \ML\ types \ml{TYPE} and \ml{TERM} to represent
+types and terms of the \HOL\ logic%, as defined in Sections~\ref{types} and \ref{terms}, respectively
+.\footnote{Care must be taken to avoid confusion between ML types and types of the HOL logic: the ML type {\tt TYPE} represents types of the HOL logic in ML.}
+It also provides primitive \ML\ functions for creating and manipulating values of these types.
+The implementation of HOL in \Product follow the ``LCF paradigm'', due to Robin Milner\index{Milner, R.}.
+This means that theorems are represented as an abstract \ML\ type whose only pre-defined values are axioms, and whose only operations are rules of inference.
+Consequently the only way to construct theorems in \HOL\ is to apply rules of inference to axioms or existing theorems; hence the consistency of the logic is preserved.
+
+The purpose of the meta-language \ML\ is to provide a programming environment
+in which to build theorem proving tools to assist in the construction of
+proofs.  When the \HOL\ system is built, a range of useful theorems are
+pre-proved and a set of tools pre-defined. The basic system thus offers a rich
+initial environment; users can further enrich it by implementing their own
+application specific tools and building their own application specific
+theories.
+=TEX
+
+\section{Lexical Analysis}
+\label{Lexical Analysis}
+\input{def001C}
+
+\section{Concrete Syntax}
+\label{Concrete Syntax}
+\input{def001B}
+
+\section{Aliases and Overloading}
+\label{Aliases and Overloading}
+\input{def001D}
+
+\section{Type Abbreviations}
+\label{Type Abbreviations}
+\input{def001E}
+
+
+
+
+
+
+
+
+
+

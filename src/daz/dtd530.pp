@@ -1,0 +1,173 @@
+=TEX
+%   ℤ $Date: 2008/12/11 17:57:34 $ $Revision: 1.2 $ $RCSfile: dtd530.doc,v $
+=TEX
+\documentclass[a4paper,11pt]{article}
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{epsf}
+%\usepackage{fancyhdr}
+\makeindex
+
+\def\Xpp{{\tt xpp}}
+\def\Note#1{{\bf\footnotesize[Note: #1]}}
+\def\Author{R.D.~Arthan}
+\def\EMail{{\tt rda@lemma-one.com}}
+\def\Phone{+44 118 958 4409}
+\def\Title{Detailed Design: Evaluation Report Generator}
+\def\Reference{LEMMA1/DAZ/DTD530}
+\def\FrontPageTitle{{\huge Detailed Design \\---\\ Evaluation Report Generator}}
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+\begin{document}
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+\setcounter{section}{-1}
+\section{DOCUMENT CONTROL}
+
+\subsection{Contents}
+
+\tableofcontents
+
+%\pagebreak
+%\subsection{List of Tables}\label{ListofTables}
+%\listoftables
+\subsection{List of Figures}\label{ListofFigures}
+\listoffigures
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}
+\begin{description}
+
+\item[Issues 1.1 (2008/12/02)--1.3 (2008/12/14)] Initial drafts to first complete working version.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+\subsection{Changes Forecast}
+
+None under the current contract.
+
+\newpage
+
+%\subsection{Trademarks}
+
+\section{GENERAL}
+
+\subsection{Scope}
+
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+
+\subsubsection{Dependencies}
+
+This document depends on the Z generator module~\cite{ISS/HAT/DAZ/DTD507}.
+
+\subsubsection{Interface}
+
+The module provides an ML interface defined in this document.
+This is split into two parts: a programmer interface which provides a logical
+view of a report as an ML data structure and a user interface that provides tools for extracting human readable reports.
+
+\subsubsection{Possible Enhancements}
+None identified.
+
+\subsubsection{Deficiencies}
+None identified.
+
+\section{THE INTERFACE}
+\subsection{Prologue}
+=SML
+signature ⦏CNEvaluationReports⦎ = sig
+=TEX
+See~\cite{ISS/HAT/DAZ/DTD513} for the types used in the evaluation report generator.
+=SML
+include CNTypes1;
+=TEX
+=TEX
+\subsection{Report Interface}
+The following interfaces are proposed for extracting and working
+with the evaluation information:
+=DOC
+	val ⦏get_script_names⦎ : unit -> string list;
+	val ⦏get_ev_infos⦎ : string list -> EV_INFO S_DICT;
+	val ⦏string_of_scope⦎ : SCOPE -> string;
+	val ⦏scope_of_string⦎ : string -> SCOPE;
+=DESCRIBE
+{\em get\_script\_names} returns the names of the script theory for each of the scripts that have been processed.
+{theory\_of\_ev\_scope} converts a scope into the name of the corresponding theory.
+{\em get\_ev\_infos} produces the evaluation report
+information for a list of theories; the list of reports is presented as a dictionary mapping theory names to the relevant
+information. The dictionary is produced in lexicographic/alphabetic order of scope name or
+theory name with no duplication. (In this ordering,
+initial segments of theory names comprising upper-case Ada identifiers separated by ``$o$'' are treated like Ada expanded
+names. So, for example, ``$AoB'spec$'', ``$AoBxnon\_cn$'',
+and ``$ABoC'proc$'' sort in that order.)
+
+{\em string\_of\_scope} and {\em scope\_of\_theory} convert between the string representation of a scope (as used in theore names) and the ML representation.
+=FAILURE
+530001	Warning: invalid script name \"?0\" will be skipped
+530002	\"?0\" is not a valid scope name
+530003	Warning: unexpected theory name format \"?0\"
+530004	Invalid entry \"?0\" in Z generator state database
+530005	Internal error: lost key \"?0\" from state database
+530006	Internal error: ill-formed key \"?0\" in state database
+=ENDDOC
+=DOC
+	type ⦏EVAL_REPORT⦎;
+	val ⦏ev_infos_of_eval_report⦎ : EVAL_REPORT -> EV_INFO S_DICT;
+	val ⦏title_of_eval_report⦎ : EVAL_REPORT -> string;
+=DESCRIBE
+The abstract {\em EVAL\_REPORT} is a wrapper for the output of {\em get\_ev\_infos} together with a report title used in the user interface.
+We provide destructors for this type in the programming interface.
+=ENDDOC
+=TEX
+\subsection{User Interface}
+=DOC
+	val ⦏get_eval_report⦎ :
+		{title : string, theories : string list} -> EVAL_REPORT;
+	val ⦏print_eval_report⦎ : EVAL_REPORT -> unit;
+	val ⦏output_eval_report⦎ : {report : EVAL_REPORT, out_file : string} -> unit;
+	val ⦏output_eval_report1⦎ : {report : EVAL_REPORT, out_file : string} -> unit;
+=DESCRIBE
+These functions are used to create a report
+for assistance in evaluating a compliance argument.
+The type {\em EVAL\_REPORT} is an abstract type representing
+the logical contents of the report.
+To create a report first use {\em get\_eval\_report} to
+give a title to the report specifying the theories to be
+included in the report.
+The report can then be output to the screen using {\em print\_eval\_report} or to a file, either in {\em LaTeX} format using {\em cn\_output\_eval\_report}
+or in raw {\Product} text format using {\em cn\_output\_eval\_report1}.
+=ENDDOC
+=TEX
+\subsection{Epilogue}
+=SML
+end (* of signature CNEvaluationReports *);
+=TEX
+
+\twocolumn[\section{INDEX}\label{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+
+
+
+
+
+
+
+
+
+

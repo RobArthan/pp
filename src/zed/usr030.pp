@@ -1,0 +1,620 @@
+=IGN
+********************************************************************************
+usr030.doc: this file is part of the PPZed system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% usr006Z.doc   ℤ $Date: 2011/07/22 16:34:13 $ $Revision: 1.9 $ $RCSfile: usr030.doc,v $
+=IGNORE
+           % U s e f u l C o m m a n d s
+
+make -f zed.mkf usr030.dvi1
+make -f zed.mkf usr030.dvi
+
+=TEX
+
+%\documentstyle[hol1,11pt,fleqn,USR,ifthen]{book}
+\documentclass[a4paper,11pt]{book}
+\usepackage{ppusr}
+\usepackage{ProofPower}
+\usepackage{fleqn}
+\def\SCCSversion{\VCVersion}
+\def\SCCSdate{\VCDate}
+
+
+
+
+\makeatletter
+
+\def\@StartFT{\begingroup
+	\setbox\ft@strutbox\hbox{\vrule height.7\baselineskip
+		depth.3\baselineskip width\z@}%
+	\thinmuskip=0mu
+	\medmuskip=0mu
+	\thickmuskip=0mu
+	\offinterlineskip  % included even though it sometimes screws up footers
+	\HOL@setchars
+	\let\+=\@start
+	\let\\=\@done
+	\ignorespaces}
+
+\makeatother
+
+\USRmanual{Z Reference Manual}
+\USRref{USR030}
+%\USRdate{\SCCSdate}
+\USRisbns{1511733160}
+\USRisbnl{978-1511733168}
+
+\raggedbottom
+\ftlinepenalty=9999
+\makeindex
+
+\title{\Product}
+\author{ }
+
+\setcounter{tocdepth}{2}
+\begin{document}
+\underscoreoff
+
+\makeUSRfrontpage
+
+\pagebreak
+
+\chapter*{CONTENTS}
+
+\tableofcontents
+
+\pagebreak
+
+\setcounter{chapter}{-1}
+
+\chapter{ABOUT THIS PUBLICATION} \label{intro}
+\section{Purpose}
+
+This document, one of several making up the user documentation for the \Product\ system, is the reference manual for the system.
+\section{Readership}
+
+This document is intended to be consulted by users already acquainted with the basic principles behind {\Product} who need detailed information on the behaviour of specific facilities provided by the system.
+It is not a tutorial for learning the basic  use of the system.
+A `keyword in context' index is supplied, which is useful for identifying the full range of facilities of a particular kind, provided that the reader is familiar with the naming conventions adopted in the development of \Product.
+
+
+\section{Related Publications}
+
+A bibliography is given at the end of this document.
+Publications relating specifically to \Product\ are:
+
+\begin{enumerate}
+\item {\em \ {\TUTORIAL}}, tutorial covering the basic \Product{} system.
+\item {\em \ {\ZTUTORIAL}}, tutorial covering \Product{} Z support option.
+\item {\em \ {\INSTALLATION}};
+\item {\em \ {\TYPESETTING}}.
+\end{enumerate}
+
+\section{Assumptions}
+
+It is assumed that the reader has some prior acqaintance with {\Product} either by attending a course on {\Product} or by reading the tutorial.
+
+\section{Acknowledgements}
+
+ICL gratefully acknowledges its debt to the many researchers (both academic and industrial) who have provided intellectual capital on which ICL has drawn in the development of \Product.
+
+We are particularly indebted to Mike Gordon of The University of Cambridge, for his leading role in some of the research on which the development of \Product\ has built, and for his positive attitude towards industrial exploitation of his work.
+
+The \Product\ system is a proof tool for Higher Order Logic which builds upon ideas arising from research carried out at the Universities of Cambridge and Edinburgh, and elsewhere.
+In particular the logic supported by the system is (at an abstract level) identical to that implemented in the Cambridge HOL system \cite{gordon93}, and the paradigm adopted for implementation of proof support for the language follows that adopted by Cambridge HOL, originating with the LCF system developed at Edinburgh \cite{gordon79}.
+The functional language `Standard ML' used both for the implementation and as an interactive metalanguage for proof development, originates in work at Edinburgh, and has been developed to its present state by an international group of academic and industrial researchers.
+The implementation of Standard ML on which \Product\ is based was itself originally implemented by David Matthews at the University of Cambridge, and is now commercially marketed by Abstract Hardware Limited.
+
+The \Product{} system also supports specification and proof in the Z language, developed at the University of Oxford.
+We are therefore also indebted to the research at Oxford (and elsewhere) which has contributed to the development of the Z language.
+
+=IGN
+\chapter{USER INTERFACE}
+
+The contents of this section will be as indicated below.
+
+\begin{itemize}
+\item Services provided at the interface to the host operating system.
+\item \begin{enumerate}
+\item Standard ML.  What is documented here is what the user needs to
+	know to get into {\SML} in order subsequently to run the proof
+	development system, as opposed to what the user needs to know
+	to get into {\SML} in general.   This might be nothing.
+\item customization of screen and keyboard  to handle extended character sets.  What is documented here is how to switch on the facility, and what is the extended character set  and keyboard layout.
+\item preparation of literate scripts using standard text-editors, with
+	or without extended character sets.  What is documented here is
+	the use of the extended characters which are special delimiters
+	to mark off fragments, boxes etc. and all the \LaTeX macros
+	which are provided to represent pretty characters or for other
+	purposes.
+\item printing of literate scripts. What is documented here is how to get the fonts set up and how to use the preprocessors.
+\end{enumerate}
+\item Services provided at the interface to \SML.
+\item \begin{enumerate}
+\item The proof development system, as constituted by all the defined {\SML} objects  documented in the body of the
+ Reference Manual.  What might be documented here is the naming-conventions of \Cyte{DEF003}.
+\item input of HOL terms via the parser.  What is documented here is the use of  special quotes to invoke the parser and the BNF of the grammar of HOL terms, as in \Cyte{DEF001}.
+\item Use of the Z-like specification features, e.g. for $new\_specification$, for input of certain {\SML} expressions  and the automatically-performed proofs.   See  \Cyte{HLD010}.
+\item customization of the parser for user-defined lexis. See \Cyte{DEF001}
+\item output of HOL terms (via the pretty-printer).  What is to be documented here is what are the options for outputting a term. (Pretty-printed or not, with or without explicit types, etc, and how the pretty-printing may be customized ).
+\item input of  \SML text stripped out of a literate script. What is documented here is how to invoke the process, and what are the conditions on the literate script for it to be successful.
+\end{enumerate}
+\end{itemize}
+\pagebreak
+=TEX
+
+\pagebreak
+
+\chapter{UNIX INTERFACES}
+
+\input{25}
+\input{31}
+
+\pagebreak
+\chapter{PROGRAMMING UTILITIES}
+
+\pagebreak
+\section{Error Management}
+\input{2a}
+
+\section{Data Types}
+\input{1a}
+
+\pagebreak
+\section{Lists}
+\input{1b}
+
+\pagebreak
+\section{Functions}
+\input{1c}
+
+\pagebreak
+\section{Combinators}
+\input{1d}
+
+\pagebreak
+\section{Characters}
+\input{1f}
+
+\pagebreak
+\section{Simple Dictionary}
+\input{1g}
+
+\pagebreak
+\section{Efficient Dictionary}
+\input{1h}
+
+\pagebreak
+\section{Order-preserving Efficient Dictionary}
+\input{1o}
+
+\pagebreak
+\section{Orderings}
+\input{1p}
+
+\pagebreak
+\section{Sorting}
+\input{1k}
+
+\pagebreak
+\section{Sparse Arrays}
+\input{1l}
+
+\pagebreak
+\section{Dynamic Arrays}
+\input{1m}
+
+\pagebreak
+\section{Search Trees}
+\input{1q}
+
+\pagebreak
+\section{Arbitrary Magnitude Integer Arithmetic}
+\input{1n}
+
+\pagebreak
+\section{Compatibility with SML'90}
+\input{54}
+
+\pagebreak
+\chapter{SYSTEM FACILITIES}
+
+\pagebreak
+\section{System Control}
+\input{2b}
+
+\pagebreak
+\section{System Initialisation}
+\input{12}
+
+\pagebreak
+\section{Warnings}
+\input{46}
+
+\pagebreak
+\section{Profiling}
+\input{1i}
+
+\pagebreak
+\section{Timing}
+\input{1j}
+
+\pagebreak
+\chapter{INPUT AND OUTPUT}
+
+\section{The Reader/Writer}
+\input{47}
+
+\pagebreak
+\section{Output}
+\input{1e}
+
+\pagebreak
+\section{HOL Lexical Analysis}
+\input{48}
+
+\pagebreak
+\section{Pretty Printing}
+
+{\underscoreoff
+\input{45}
+}%\underscoreoff
+
+\pagebreak
+\section{Theory Lister}
+\input{4c}
+
+\pagebreak
+\section{Z Theory Lister}
+\input{49}
+
+\pagebreak
+\chapter{HOL TYPES AND TERMS}
+
+\section{Syntactic Manipulations}
+
+It should be noted that the functions documented in this section
+are drawn from two signatures, $TypesAndTerms$ and $icl'TypesAndTerms$.
+
+Since the former includes the latter, an object available under the
+name $xxx$, say, or in full $TypesAndTerms.xxx$, is also available
+under the name $icl'TypesAndTerms.xxx$. {} It is the intention that
+users should not access objects by names of the form
+$icl'TypesAndTerms.xxx$.
+In practice, since the structure $TypesAndTerms$ is open, the unqualified name $xxx$ will do unless you have redefined the name $xxx$.
+
+\input{3}
+
+\pagebreak
+\section{Discrimination Nets}
+\input{8}
+
+\pagebreak
+\chapter{THE MANAGEMENT OF THEORIES AND THEOREMS}
+\section{Standard ML Type Definitions}
+\input{4a}
+
+\pagebreak
+\section{Symbol Table}
+\input{9a}
+
+\pagebreak
+\section{The Kernel Interface}
+\input{4b}
+
+\pagebreak
+\section{Conjectures Database}
+\input{9b}
+
+\pagebreak
+\section{Theorem Finder}
+\input{58}
+
+\pagebreak
+\chapter{PROOF IN HOL}
+\section{General Inference Rules}
+\input{5}
+
+\pagebreak
+\section{Subgoal Package}
+\input{7}
+
+\pagebreak
+\section{General Tactics and Tacticals}
+\input{6}
+
+\pagebreak
+\section{Propositional Equational Reasoning}
+\input{43}
+
+\pagebreak
+\section{Algebraic Normalisation}
+\input{44}
+
+\pagebreak
+\section{First Order Resolution}
+\input{16}
+
+\pagebreak
+\section{Proof Contexts}
+\input{10}
+\input{30}
+
+\pagebreak
+\chapter{SUPPORT FOR Z}
+\section{Syntactic Manipulations}
+
+In the following descriptions of derived term constructors for Z it has been convenient to describe the effects of constructors using Z language quotations.
+In doing so quotations have sometimes been used which would not in fact be acceptable to the Z parser.
+The most frequent example of these is in quoting the declaration part of variable binding constructs in Z.
+The Z parser will not accept such declarations in isolation from the variable binding construct of which they form a part, but the most readable description of the effect of the constructor is obtained if we describe this as if the parser did accept such declarations in isolation.
+
+In practice the best way of obtaining the term corresponding to the declaration part of such a construct is to parse a horizontal schema containing the required declaration part, and then take it apart using the appropriate destructor.
+
+\input{35}
+
+\pagebreak
+\section{Reasoning about Predicates}
+\input{32}
+
+\pagebreak
+\section{Reasoning about Expressions}
+\input{33}
+
+\pagebreak
+\section{Reasoning about Schema Expressions}
+\input{34}
+
+\pagebreak
+\chapter{THEORIES}
+\section{Theory Listings}
+This section contains the listings of each theory.
+
+\makeatletter
+
+{\catcode`\ =\active%
+\gdef\SetActiveSpaces{\obeyspaces%
+\catcode`\ =\active%
+\def {\mskip\ftspaceskip}}}
+
+%\newenvironment{thlist}{\par\bgroup
+%  \@zedfonts\let\+=\relax\let\\=\cr
+%  \catcode`\^^I=4
+%  \SetActiveSpaces
+%  \halign\bgroup
+%  \hbox to 1.2in {$##$\hss}&&\hbox to 0.5in{$##$\hss}\hfil\cr}{\egroup\egroup}
+
+\makeatother
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+
+{
+\def\UL@begin{\underline{(}}
+\def\UL@end{\underline{)}}
+\input{15}
+}
+
+\pagebreak
+\section{Theory Related ML Values}
+
+This section contains various theory related ML values (e.g. the value of theorems bound to ML names, or special tactics of proof contexts associated with the theory).
+Where a theorem or definition is bound to an ML name the value of the theorem is to be found in the theory listing, only the ML name is given below.
+
+\subsection{Z Sets}
+{
+\def\UL@begin{\underline{(}}
+\def\UL@end{\underline{)}}
+\input{36}
+}
+\subsection{Z Relations}
+\input{37}
+\subsection{Z Functions}
+\input{38}
+\subsection{Z Numbers}
+\input{39}
+\subsection{Z Arithmetic Proof Support}
+\input{56}
+\subsection{Z Sequences}
+\input{40}
+\subsection{Z Finiteness and Sequences}
+\input{53}
+\subsection{Z Bags}
+\input{41}
+\subsection{Z Reals}
+\input{55}
+
+\pagebreak
+\backmatter
+\def\Chapter#1{\markboth{#1}{#1}\chapter{#1}}
+\Chapter{REFERENCES}
+%\addcontentsline{toc}{chapter}{REFERENCES}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\twocolumn
+\Chapter{INDEX}
+%\addcontentsline{toc}{chapter}{INDEX}
+\small
+
+\printindex
+
+\pagebreak
+
+\twocolumn
+\Chapter{KEYWORD INDEX}
+%\addcontentsline{toc}{chapter}{KEYWORD INDEX}
+\small
+
+{
+
+\makeatletter
+\set@width
+
+\parsep 0pt plus 1pt
+\sloppy
+\parfillskip=0pt
+\lineskip=0pt
+
+=IGN
+Our aim is to build a column with four pieces:
+	(1)~Text before the indexed word;
+	(2)~Vertical rule;
+	(3)~Indexed word plus following text;
+	(4)~Page number.
+To do this need to calculate some widths.  We have a width of
+\verb|\hsize| for these pieces.  For the page number we allocate a
+space of five digits
+
+=TEX
+\newdimen\NUMWD
+\setbox0=\hbox{0}%		% All digits are the same width
+\NUMWD=5\wd0%			% Allow five digits
+
+=IGN
+
+The text fields use most of the remaining space.
+
+=TEX
+\newdimen\COLWD
+\COLWD=\hsize
+\newdimen\SIDEWD
+\SIDEWD=\hsize
+
+\advance\SIDEWD by -\NUMWD	% Space for page number
+\advance\SIDEWD by -6.4pt	% From 2*"\kern 3pt" + "\vrule"
+\SIDEWD=0.5\SIDEWD		% Both columns are the same width
+
+\hsize=\SIDEWD
+
+\def\LeftDisc{\discretionary{\kern 1em}{}{}}			% E1
+\def\RightDisc{\discretionary{}{}{}}				% E2
+
+\def\LINE#1#2#3{%
+	\hbox to\COLWD{%
+		{%
+			\rightskip=0pt
+			\leftskip=0pt plus 1fill
+			\let\-=\LeftDisc			% E3
+			\hbox to \SIDEWD{%
+				\vbox{%				% A1
+					\noindent		% B1
+					\hfill
+					\strut			% D1
+					$\relax#2\relax$%	% F1
+					\strut			% D2
+				}%
+			}%
+		}%
+		\kern 3pt\vrule\relax\kern 3pt
+		{%
+			\rightskip=0pt plus 1fil
+			\leftskip=0pt
+			\let\-=\RightDisc			% E4
+			\hbox to \SIDEWD{%
+				\vtop{%				% A2
+					\hangindent=1em
+					\hangafter=1
+					\noindent		% B2
+					\strut			% D3
+					$\relax#1\relax$%	% F2
+					\penalty10000\hfill	% C1
+					\penalty10000\strut	% C2, D4
+					\penalty10000		% C3
+					\hbox to 0pt{%		% G1
+						\hbox to \NUMWD{%
+							\hfill
+							#3%	% A3
+						}%
+						\hss		% G2
+					}%
+				}%
+			}%
+		}%
+		\hfill						% H1
+	}%
+}
+
+\makeatother
+
+=IGN
+The macro \verb|\LINE| above is, unfortunately, large and nasty but
+this seems necessary given the output we wish to achieve.  The list
+below discusses various features of the macro where the paragraph
+labels relate to comments on the body of the macro.
+
+\begin{description}
+
+\item[General ] --- Percent signs are placed at the end of most of the
+	lines `just in case'.  We are building a set of nested boxes
+	where we want to be careful to exclude `rubbish' spaces which
+	may upset the carefully made width calculations.
+
+\item[A1, A2, A3 ] --- The baselines of these three items are carefully
+	chosen so that names appear to flow across the vertical bar and
+	then into the page number regardless of where line breaks are
+	placed.  However, see C1 and C2.
+
+\item[B1, B2 ] --- The \verb|\noindent| starts \Tex's horizontal mode,
+	i.e., its paragraph building mode.  The paragraph completes at
+	the closing curly bracket.
+
+\item[C1, C2, C3 ] --- The penalties prevent unwanted line breaks that
+	occured during development.
+
+\item[D1, D2, D3, D4 ] --- The \verb|\strut| makes sure that the top
+	and bottom lines of both sides have at least the normal height
+	and depth for the currect baseline setting.
+
+\item[E1, E2, E3, E4 ] --- Discretionary line breaking is wanted at
+	various places, the arguments to macro \verb|\LINE| include
+	calls of~`\verb|\-|' where it is allowed.
+
+\item[F1, F2 ] --- Calls of \verb|\relax| are included to prevent
+	getting the equivalent of~`\$\$' (i.e., start of display math)
+	when an argument is empty.
+
+\item[G1, G2 ] --- A zero width box sticks out to the right of the
+	right hand text to include the page number.  The \verb|\hss|
+	consumes the width of the included box.  Space for the included
+	box was carefully allocated in the width calculations before
+	the macro.
+
+\item[H1 ] --- A final \verb|\hfill| fills out the space occupied by
+	the page number to make the box \verb|\COLWD| wide.
+
+\end{description}
+
+=IGN
+Each indentifier in the index of the previous section has multiple
+entries in this `KeyWord In Context' index, one entry per word or
+significant component of the identifier, which are determined as
+follows.  A word starts: (1)~after an underscore or a prime; (2)~with a
+capital letter followed by a lower case letter; (3)~with a capital
+letter which is preceded by a lower case letter.
+
+Each `keyword in context' index entry has three parts: (1)~the
+characters before the indexing word are shown to the left of the
+vertical line; (2)~the indexing word plus any following characters are
+shown to the right of the vertical line; (3)~the page number where the
+indentifier is
+defined.
+=TEX
+{\makeatletter \let\CAN@text=\CANtext
+\let\DN@text=\DNtext
+\let\UP@text=\UPtext
+\def\UL@begin{\underline{(}}
+\def\UL@end{\underline{)}}
+\makeatother
+\input{0kwic}}
+}
+
+\end{document}
+

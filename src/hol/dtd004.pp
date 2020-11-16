@@ -1,0 +1,1364 @@
+=IGN
+********************************************************************************
+dtd004.doc: this file is part of the PPHol system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+%  dtd004.doc  ℤ $Date: 2007/03/04 14:17:49 $ $Revision: 2.17 $ $RCSfile: dtd004.doc,v $
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design for Derived Terms}
+
+\def\AbstractText{This document gives a detailed design for functions concerning derived terms that are not used in defining the type $THM$.}
+
+\def\Reference{DS/FMU/IED/DTD004}
+
+\def\Author{K. Blackburn}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: \ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: \TPPproject{FST PROJECT}  %% Mandatory field
+%% LaTeX2e port: \TPPtitle{Detailed Design for Derived Terms}  %% Mandatory field
+%% LaTeX2e port: \def\TPPheadtitle{Detailed Design for Derived Terms}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD004}  %% Mandatory field
+%% LaTeX2e port: \def\SCCSversion{$Revision: 2.17 $
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSversion}  %% Mandatory field
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2007/03/04 14:17:49 $%
+%% LaTeX2e port: }}  %% Mandatory field
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPtype{SML Literate Script}
+%% LaTeX2e port: \TPPkeywords{}
+%% LaTeX2e port: \TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%% LaTeX2e port: %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%% LaTeX2e port: \TPPauthorisation{R.D.Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document gives a detailed design for functions concerning derived terms that are not used in defining the type $THM$.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	    Project Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: %\TPPclass{CLASSIFICATION}
+%% LaTeX2e port: %\def\TPPheadlhs{}
+%% LaTeX2e port: %\def\TPPheadcentre{}
+%% LaTeX2e port: %def\TPPheadrhs{}
+%% LaTeX2e port: %\def\TPPfootlhs{}
+%% LaTeX2e port: %\def\TPPfootcentre{}
+%% LaTeX2e port: %\def\TPPfootrhs{}
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{centering}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{centering}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+\pagebreak
+\section{Document Control}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 2.1 (1991/08/16) (16th August 1991)]
+Approved version of issue 1.16.
+
+\item[Issue 2.2 (1992/01/20), \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 2.3 (1992/02/11), (11th February 1992)]
+Added functions $list\_mk\_→\_type$, $strip\_→\_type$,
+$is\-\_empty\-\_list$, $dest\-\_empty\-\_list$,
+$dest\-\_t$, $dest\-\_f$,
+$is\-\_∅$, and $dest\-\_∅$.
+\item [Issue 2.4 (1992/03/18) (16th March 1992)]
+Added stripping combinators.
+\item [Issue 2.5 (1992/04/09) (2nd April 1992)]
+Changes required by CR0016.
+\item [Issue 2.6 (1992/04/14) (13th April 1992)]
+Changes due to CR0017.
+\item[Issue 2.7 (1992/05/14) (14 May 1992)] Use correct quotation symbols.
+\item[Issue 2.8 (1992/05/22) (21st May 1992)]
+Clarified documentation.
+\item [Issue 2.9 (1992/06/03) (3rd June 1992)]
+Added literals to $DEST\_TERM$.
+\item [Issue 2.10 (1992/07/20) (20th July 1992)]
+Reworded an ``=DOC'' section to remove reference.
+\item [Issue 2.11 (1997/04/28) (28th April 1997)]
+Corrected enumerated set display and list descriptions.
+\item [Issue 2.12 (1999/03/06)] Use of new INTEGER type.
+\item[Issue 2.13 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 2.14 (2002/10/17)] PPHol-specific updates for open source release
+\item[Issue 2.15 (2005/12/16)] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 2.16 (2006/12/02)] Support for floating point literals.
+\item[Issue 2.17 (2007/03/04)] Floating point literals with no mantisssa are now supported.
+\item[Issue 2.18 (2010/09/02)] Added new section on type and term utilities.
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+% \subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document gives the detailed design of the subsystem TypesAndTerms called for in  \cite{DS/FMU/IED/HLD007}.
+
+The high-level specification for some of the code may be considered
+to be given in \cite{DS/FMU/IED/SPC001}.
+The design is
+implemented in \cite{DS/FMU/IED/IMP004}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains a detailed design of certain derived terms of ICL HOL, and functions to handle them.
+\subsubsection{Dependencies}
+Loading this document is dependent on \cite{DS/FMU/IED/IMP003}.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+\subsubsection{Terminology}
+In may be necessary when using the following terminology to remove ambiguity by prefixing some of the following with the word ``term'' or ``HOL''.
+This will prevent confusions with
+Standard ML terminology, or, for instance, theorems
+whose conclusions are describable in the same terms.
+
+\begin{tabular}{p{1.3in} p{4.9in}}
+pair & A term of the form $⌜(x,\ y)⌝$, as constructed by $mk\_pair$: a tuple of two elements. \\
+pair type & A HOL type of the form $ⓣty_1\ ×\ ty_2⌝$, as constructed by $mk\_×\_type$: an instance of the HOL type of pairs. \\
+conjunction & A term of the form $⌜x\ ∧\ y⌝$, as constructed by $mk\_∧$. \\
+disjunction & A term of the form $⌜x\ ∨\ y⌝$, as constructed by $mk\_∨$. \\
+negation & A term of the form $⌜¬ x⌝$, as constructed by $mk\_¬$. \\
+bi-implication & A term of the form $⌜x\ ⇔\ y⌝$, as constructed by $mk\_⇔$. \\
+conditional & A term of the form $⌜if\ x\ then\ y\ else\ z⌝$, as constructed by $mk\_if$. \\
+$let$-term & A term of the form $⌜let\ x\ =\ y\ in\ z[x]⌝$, as constructed by $mk\_let$: it provides local definition within a term. \\
+enumerated set & A term of the form
+$⌜{a;\ b;\ ...}⌝$, as constructed by $mk\_enum\_set$: a set defined by the enumeration of its elements. \\
+set comprehension & A term of the form
+$⌜SetComp\ x\ ⦁\ P[x]⌝$, as constructed by $mk\_set\_comp$: a set defined to be those elements of a type that satisfy a predicate. \\
+list-term & A term of the form $⌜[a;\ b;\ ...]⌝$, as constructed by $mk\_list$: a list within the HOL object language. \\
+$∃_1$-term & A term of the form $⌜∃_1\ x\ ⦁\ P[x]⌝$ or $⌜∃_1\ (x,y)\ ⦁\ P[x,y]⌝$, as constructed by $mk\_simple\_∃_1$ or $mk\_∃_1$. \\
+$ε$-term & A term of the form $⌜ε\ x\ ⦁\ P[x]⌝$, as constructed by $mk\_ε$: a choice from those elements of a type that satisfy a predicate. \\
+an allowed variable structure & A term composed from variables and pairing operations, as allowed by the ICL HOL concrete syntax. \\
+\end{tabular}
+
+\section{DERIVED TERMS}
+=DOC
+signature ⦏TypesAndTerms⦎ = sig
+=DESCRIBE
+This provides various functions on derived $TERM$s, which are not considered necessary to create the abstract data type $THM$.
+It also contains, by inclusion, the types, and functions on the types $TERM$ and $TYPE$ from structure $pp'TypesAndTerms$(q.v.).
+=ENDDOC
+We wish to have this signature as the one source of type and term functions, to allow a seamless movement of items from
+this signature to $pp'TypesAndTerms$.
+=SML
+include pp'TypesAndTerms;
+=TEX
+\subsection{Utilities}
+=DOC
+val ⦏term_fold⦎ : ((TERM list) -> (TERM * 'a) -> 'a) -> (TERM * 'a) -> 'a;
+=DESCRIBE
+$term\_fold$ $tmfun$ $(tm,\,e)$ traverses
+$tm$ (depth first) and folds $tmfun$ on the
+subterms for which it does not fail.
+$term\_fold$ does not traverse a subterm on
+which $tmfun$ did not fail.
+$tmfun$ has as its first argument a list giving
+the bound variables which are in scope at the point of use.
+It does not attempt to apply $tmfun$ to a bound variable of an abstraction.
+=ENDDOC
+\subsection{Destroyed Terms}
+The following data type may act as a summary of all of the derived term constructors
+provided by this document and \cite{DS/FMU/IED/DTD003},
+which are in turn called for by \cite{DS/FMU/IED/HLD007}.
+The names of those constructors may be derived from these value constructors by stripping off ``D'', making the
+names lower case and using $\_$ as a separator for different atoms in a name, if appropriate, and prefixing each result by ``mk$\_$''.
+The value constructors also follow the same typing of their single arguments
+as the constructors.
+=DOC
+datatype ⦏DEST_TERM⦎ = ⦏DVar⦎ of string * TYPE |
+	⦏DConst⦎ of string * TYPE |
+	⦏DApp⦎ of TERM * TERM |
+	⦏Dλ⦎ of TERM * TERM |
+	⦏DEq⦎ of TERM * TERM |
+	⦏D⇒⦎ of TERM * TERM |
+	⦏DT⦎ |
+	⦏DF⦎ |
+	⦏D¬⦎ of TERM |
+	⦏DPair⦎ of TERM * TERM |
+	⦏D∧⦎ of TERM * TERM |
+	⦏D∨⦎ of TERM * TERM |
+	⦏D⇔⦎ of TERM * TERM |
+	⦏DLet⦎ of ((TERM * TERM)list * TERM) |
+	⦏DEnumSet⦎ of TERM list |
+	⦏D∅⦎ of TYPE |
+	⦏DSetComp⦎ of TERM * TERM |
+	⦏DList⦎ of TERM list |
+	⦏DEmptyList⦎ of TYPE |
+	⦏D∀⦎ of TERM * TERM |
+	⦏D∃⦎ of TERM * TERM |
+	⦏D∃⋎1⦎ of TERM * TERM |
+	⦏Dε⦎ of TERM * TERM |
+	⦏DIf⦎ of (TERM * TERM * TERM) |
+	⦏Dℕ⦎ of INTEGER |
+	⦏DFloat⦎ of INTEGER * INTEGER * INTEGER |
+	⦏DChar⦎ of string |
+	⦏DString⦎ of string;
+=DESCRIBE
+This type is that of a term destroyed using the appropriate derived destructor functions (e.g. $dest\_eq$) as well as the primitive ones.
+The type given to $D∅$ and $DEmptyList$ is the type of an element of the associated set or list.
+The type is related to $TERM$ by $mk\_term$ (q.v.) and $dest\_term$ (q.v.)
+=SEEALSO
+$DEST\_SIMPLE\_TERM$
+=ENDDOC
+=DOC
+val ⦏dest_term⦎ : TERM -> DEST_TERM
+=DESCRIBE
+This function returns the ``best'' interpretation of a term in the form of an object of type $DEST\_TERM$.
+E.g. it will return $DEq(\ 1\ 2)$ rather than $DComb ((\$=\ 1), 2)$.
+It will also use the paired abstraction forms of functions in preference to the simple forms, e.g., it uses $dest\_λ$ not $dest\_simple\_λ$.
+
+The function assumes that the name of a constant is sufficient
+to identify it without checking the type, as with, e.g., $dest\_bin\_op$(q.v.).
+=SEEALSO
+$mk\_term$
+=ENDDOC
+=DOC
+val ⦏mk_term⦎ : DEST_TERM -> TERM
+=DESCRIBE
+Create a term from a derived term.
+It is an inverse to $dest\_term$ (q.v.), and therefore understands how to handle paired abstractions.
+
+The function is implemented using the individual primitive and derived term constructors (e.g. $mk\_const$ and $mk\_∀$), with what checks they use.
+=FAILUREC
+\paragraph{Failure}
+This function will fail with the same messages as the appropriate term constructor functions.
+=ENDDOC
+\subsection{Derived Type Functions}
+=DOC
+val ⦏list_mk_→_type⦎ : TYPE list -> TYPE;
+=DESCRIBE
+Create the type of a multi-argument function.
+=GFT Definition
+list_mk_→_type [ⓣty1⌝,...,⌜tyn⌝] =
+	ⓣty1 → ... → tyn⌝
+=TEX
+The supplied list may not be empty.
+=FAILURE
+3017	An empty list argument is not allowed
+=ENDDOC
+=DOC
+val ⦏strip_→_type⦎ : TYPE -> TYPE list;
+=DESCRIBE
+Strip the type of a  multi-argument function into its
+constituent types, only descending into the right hand result
+of $dest\_→\_type$.
+=GFT Definition
+strip_→_type ⓣty1 → ... → tyn⌝ =
+	[ⓣty1⌝,...,⌜tyn⌝]
+=TEX
+=ENDDOC
+\subsection{Boolean Constants}
+=DOC
+val ⦏mk_t⦎ : TERM;
+=DESCRIBE
+The term $⌜T : BOOL⌝$.
+=ENDDOC
+$mk\_t$ is a bit of an anomaly amongst other $mk\_$ functions,
+as it would be more proper for it to take $()$ as an argument.
+This ``proper'' approach is, by local convention, not adopted.
+=DOC
+val ⦏is_t⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is $⌜T : BOOL⌝$, and false otherwise: no exceptions can be raised.
+=ENDDOC
+=DOC
+val ⦏dest_t⦎ : TERM -> unit;
+=DESCRIBE
+This will return $()$ if given the term $⌜T⌝$, and otherwise fail.
+=FAILURE
+4036	?0 is not: ⌜T⌝
+=ENDDOC
+=DOC
+val ⦏mk_f⦎ : TERM;
+=DESCRIBE
+The term $⌜F : BOOL⌝$.
+=ENDDOC
+$mk\_f$ is a bit of an anomaly amongst other $mk\_$ functions,
+as it would be more proper for it to take $()$ as an argument.
+This ``proper'' approach is, by local convention, not adopted.
+=DOC
+val ⦏dest_f⦎ : TERM -> unit;
+=DESCRIBE
+This will return $()$ if given the term $⌜F⌝$, and otherwise fail.
+=FAILURE
+4037	?0 is not: ⌜F⌝
+=ENDDOC
+
+=DOC
+val ⦏is_f⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is $⌜F : BOOL⌝$, and false otherwise: no exceptions can be raised.
+=ENDDOC
+Destructor and list versions of these functions are not necessary.
+\subsection{Generic Stripping Functions}
+=DOC
+val ⦏strip_leaves⦎ : ('a -> 'a * 'a) -> 'a -> 'a list;
+=DESCRIBE
+Given a function that destroys an object into a pair of objects (and here we are thinking of, for example, $dest\_∧$),
+recursively descend the results of destruction down both
+branches, destroying until failure.
+=EXAMPLE
+strip_leaves dest_∧ ⌜(a ∧ b) ∧ c ∧ d⌝ =
+	[⌜a⌝, ⌜b⌝, ⌜c⌝, ⌜d⌝]
+=ENDDOC
+=DOC
+val ⦏strip_spine_left⦎ : ('a -> 'a * 'a) -> 'a -> 'a list;
+=DESCRIBE
+Given a function that destroys an object into a pair of objects (and here we are thinking of, for example, $dest\_∧$),
+recursively descend the left results of destruction, destroying until failure.
+=EXAMPLE
+strip_spine_left dest_∧ ⌜(a ∧ b) ∧ c ∧ d⌝ =
+	[⌜a⌝, ⌜b⌝, ⌜c ∧ d⌝]
+=ENDDOC
+=DOC
+val ⦏strip_spine_right⦎ : ('a -> 'a * 'a) -> 'a -> 'a list;
+=DESCRIBE
+Given a function that destroys an object into a pair of objects (and here we are thinking of, for example, $dest\_∧$),
+recursively descend the right results of destruction, destroying until failure.
+=SEEALSO
+$strip\_bin\_op$ for stripping terms formed by binary (constant) term operators.
+=EXAMPLE
+strip_spine_left dest_∧ ⌜(a ∧ b) ∧ c ∧ d⌝ =
+strip_∧ ⌜(a ∧ b) ∧ c ∧ d⌝ =
+	[⌜a ∧ b⌝, ⌜c⌝, ⌜d⌝]
+=ENDDOC
+We will use $strip\_spine\_right$ form of stripping in
+any declared stripping of binary operators (e.g. $strip\_∧$),
+using $strip\_bin\_op$ by preference on terms as it is a more efficient.
+\subsection{Generic Binder Functions}
+The following provide a standard pattern for implementing
+constructor and destructor functions for binders.
+=DOC
+val ⦏mk_binder⦎ : string -> int -> (TYPE -> TYPE -> TERM) ->
+	(TERM * TERM) -> TERM;
+=DESCRIBE
+A generic method of implementing binder constructor functions:
+=GFT Definition
+mk_binder area msg binder_nm (⌜varstruct⌝, ⌜body⌝) =
+	⌜binder'(λ varstruct⦁ body)⌝ =
+	⌜binder' varstruct⦁ body⌝
+=TEX
+$binder'$ is formed by applying $binder$ to the types of the
+$varstruct$ and $body$.
+$varstruct$ may be any allowed variable structure.
+=SEEALSO
+$mk\_simple\_binder$
+=FAILURE
+4016	?0 is not an allowed variable structure
+=FAILUREC
+\paragraph{Failure}
+If the term cannot be made, then the error will be from $area$, with a message indexed by $msg$.
+If the first term argument is not an allowed variable structure
+then failure 4016 is raised from area $area$.
+=ENDDOC
+=DOC
+val ⦏dest_binder⦎ : string -> int -> string -> TERM -> TERM * TERM;
+=DESCRIBE
+A generic method of implementing binder destructor functions:
+=GFT Definition
+dest_binder area msg binder_nm ⌜binder(λ varstruct⦁ body)⌝ =
+	(⌜varstruct⌝, ⌜body⌝)
+=TEX
+where $binder$ is a constant whose name is $binder\_nm$.
+The $varstruct$ may be any allowed variable structure.
+=SEEALSO
+$dest\_simple\_binder$
+=FAILUREC
+\paragraph{Failure}
+If the term cannot be destroyed, then the error will be from $area$, with a message indexed by $msg$.
+=ENDDOC
+=DOC
+val ⦏is_binder⦎ : string -> TERM -> bool;
+=DESCRIBE
+$is\_binder$ $binder\_nm$ $tm$ is true only when $tm$
+is of the form $⌜binder(λ\ vs⦁\ body)⌝$,
+where $binder$ is a constant whose name is $binder\_nm$,
+and $vs$ an allowed variable structure,
+and false otherwise.
+It cannot raise an exception.
+=SEEALSO
+$is\_simple\_binder$
+=ENDDOC
+=DOC
+val ⦏strip_binder⦎ : string -> TERM -> TERM list * TERM;
+=DESCRIBE
+$strip\_binder$ $binder$ applied to
+\[⌜binder(λ vs_1⦁ binder(λ vs_2⦁ \ldots ⦁ body)\ldots)⌝\]
+will return
+\[[⌜vs_1⌝, ⌜vs_2⌝, \ldots], ⌜body⌝\]
+where the $vs_i$ are allowed variable structures.
+The function acts as $dest\_binder$ (q.v.), and will handle paired abstraction terms.
+It will return an empty list and the original term if the
+supplied term is not formed using the binder.
+=SEEALSO
+$strip\_simple\_binder$
+=ENDDOC
+=DOC
+val ⦏strip_simple_binder⦎ : string -> TERM -> TERM list * TERM;
+=DESCRIBE
+$strip\_simple\_binder$ $binder$ applied to
+\[⌜binder(λ v_1⦁ binder(λ v_2⦁ \ldots ⦁ body)\ldots)⌝\]
+will return
+\[[⌜v_1⌝, ⌜v_2⌝, \ldots], ⌜body⌝\]
+where the $v_i$ are simple variables.
+The function acts as $dest\_simple\_binder$ (q.v.), and will not handle paired abstraction terms.
+It will return an empty list and the original term if the
+supplied term is not formed using the binder.
+=SEEALSO
+$strip\_binder$
+=ENDDOC
+=DOC
+val ⦏list_mk_binder⦎ : (TERM * TERM -> TERM) -> (TERM list * TERM)
+	-> TERM;
+=DESCRIBE
+If
+=INLINEFT
+maker (⌜vs⌝,⌜b⌝)
+=TEX
+{} makes an abstraction
+=INLINEFT
+⌜bind vs ⦁ b⌝
+=TEX
+, then
+=GFTSHOW
+list_mk_binder maker ([⌜vs_1⌝, ⌜vs_2⌝, ...],⌜body⌝)
+=TEX
+returns
+=INLINEFT
+⌜bind vs_1⦁ bind vs_2⦁ ... ⦁ body⌝
+=TEX
+Notice that this can be used for implementing both simple and paired abstractions, with the $vs_i$ being variable structures when so allowed, and otherwise variables.
+=ENDDOC
+\subsection{Pairs}
+=DOC
+val ⦏mk_×_type⦎ : (TYPE * TYPE) -> TYPE
+=DESCRIBE
+$mk\_×\_type$ $(ⓣty_1⌝, ⓣty_2⌝)$ returns a pair type: $ⓣty_1\ ×\ ty_2⌝$.
+=ENDDOC
+=DOC
+val ⦏dest_×_type⦎ : TYPE -> (TYPE * TYPE)
+=DESCRIBE
+$dest\_×\_type$ $ⓣty_1\ ×\ ty_2⌝$ returns $(ⓣty_1⌝, ⓣty_2⌝)$.
+=FAILURE
+4018	?0 is not of the form ⓣty1 × ty2⌝
+=ENDDOC
+=DOC
+val ⦏is_×_type⦎ : TYPE -> bool;
+=DESCRIBE
+Return true only when the type is a pair type, i.e. of the form: $ⓣty_1\ ×\ ty_2⌝$, and false otherwise: no exceptions can be raised.
+=ENDDOC
+=DOC
+val ⦏mk_pair⦎ : (TERM * TERM) -> TERM;
+=DESCRIBE
+A derived term constructor function for generating pairs.
+=GFT Definition
+mk_pair(⌜t1⌝, ⌜t2⌝) = ⌜(t1, t2)⌝
+=TEX
+=ENDDOC
+It should always be possible to form a pair, but the implementation method gives a hook for a possible error so:
+=FAILURE
+4033	DESIGN ERROR : failed to form a pair from ?0 and ?1
+=TEX
+=DOC
+val ⦏dest_pair⦎ : TERM -> (TERM * TERM);
+=DESCRIBE
+A derived term destructor function for pairs.
+=GFT Definition
+dest_pair ⌜(t1, t2)⌝ = (⌜t1⌝, ⌜t2⌝)
+=TEX
+=FAILURE
+4003	?0 is not of form: ⌜(t1,t2)⌝
+=ENDDOC
+=DOC
+val ⦏is_pair⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a pair
+(i.e. of the form
+=INLINEFT
+⌜(a, b)⌝
+=TEX
+{}), and false otherwise: no exceptions can be raised.
+=ENDDOC
+\subsection{(Paired) λ-abstractions}
+=DOC
+val ⦏mk_λ⦎ : TERM * TERM -> TERM
+=DESCRIBE
+This creates a $λ$-abstraction of an allowed variable structure from a term.
+=EXAMPLE
+mk_λ (⌜x⌝ , ⌜x + y⌝) = ⌜λ x⦁ x + y⌝
+mk_λ (⌜(x, y)⌝, ⌜x + y⌝) = ⌜λ (x, y)⦁ x + y⌝
+mk_λ (⌜((x1,x2), (y1,y2))⌝, ⌜x2 + y2⌝) = ⌜λ ((x1,x2), (y1,y2))⦁ x2 + y2⌝
+=SEEALSO
+$mk\_simple\_λ$
+=FAILURE
+4016	?0 is not an allowed variable structure
+=ENDDOC
+=DOC
+val ⦏dest_λ⦎: TERM -> (TERM * TERM);
+=DESCRIBE
+Destroys a $λ$-abstraction.
+It can destroy paired $λ$-abstractions, being an inverse of $mk\_λ$.
+=GFT Definition
+dest_λ ⌜λ vs⦁ t⌝ = (⌜vs⌝, ⌜t⌝)
+=TEX
+=SEEALSO
+$dest\_simple\_λ$
+=FAILURE
+4002	?0 is not of form: ⌜λ vs⦁ t⌝
+=FAILUREC
+Further details of the errors will be given, before the above exceptions are raised.
+=ENDDOC
+=DOC
+val ⦏is_λ⦎ : TERM -> bool;
+=DESCRIBE
+This function returns true iff. the term is of the form $⌜λ\ vs\ ⦁\ t⌝$.
+It cannot raise exceptions.
+=SEEALSO
+$is\_simple\_λ$
+=ENDDOC
+=DOC
+val ⦏list_mk_λ⦎ : (TERM list * TERM) -> TERM;
+=DESCRIBE
+Repeatedly $λ$-abstract from a term.
+=GFT Definition
+list_mk_λ ([⌜a⌝,⌜b⌝,⌜c⌝,...], ⌜body⌝) = ⌜λ a b c ...⦁ body⌝
+=TEX
+This function is implemented using $mk\_λ$, not $mk\_simple\_λ$.
+=SEEALSO
+$list\_mk\_simple\_λ$
+=FAILUREC
+\paragraph{Failure}
+May give rise to the error message from $mk\_λ$.
+=ENDDOC
+=DOC
+val ⦏strip_λ⦎ : TERM -> (TERM list * TERM);
+=DESCRIBE
+Strip a multiple $λ$-abstraction.
+=GFT Definition
+strip_λ ⌜λ a b c ...⦁ body⌝ = [⌜a⌝,⌜b⌝,⌜c⌝,...], ⌜body⌝
+=TEX
+This uses $dest\_λ$ (q.v.) rather than $dest\_simple\_λ$.
+=ENDDOC
+\subsection{Conjunctions}
+=DOC
+val ⦏mk_∧⦎ : (TERM * TERM) -> TERM;
+=DESCRIBE
+A derived term constructor function for generating conjunctions.
+=GFT Definition
+mk_∧ (⌜t1⌝, ⌜t2⌝) = ⌜t1 ∧ t2⌝
+=TEX
+=FAILURE
+3015	?1 is not of type ⓣBOOL⌝
+3031	?0 is not of type ⓣBOOL⌝
+=ENDDOC
+Message 3015, when processed, throws away its first argument:
+this is so because of the implementation of $mk\_bin\_op$.
+=DOC
+val ⦏dest_∧⦎ : TERM -> (TERM * TERM);
+=DESCRIBE
+A derived term destructor function for conjunctions.
+=GFT Definition
+dest_∧  ⌜t1 ∧ t2⌝ = (⌜t1⌝, ⌜t2⌝)
+=TEX
+=FAILURE
+4032	?0 is not of form: ⌜t1 ∧ t2⌝
+=ENDDOC
+=DOC
+val ⦏is_∧⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a conjunction
+(i.e. of form
+=INLINEFT
+⌜a ∧ b⌝
+=TEX
+), and false otherwise: no exceptions can be raised.
+=ENDDOC
+=DOC
+val ⦏list_mk_∧⦎ : TERM list -> TERM;
+=DESCRIBE
+Conjoin a list of terms:
+=GFT Definition
+list_mk_∧ [⌜a⌝, ⌜b⌝, ⌜c⌝,...] = ⌜a ∧ b ∧ c ...⌝
+=TEX
+=FAILURE
+3017	An empty list argument is not allowed
+3031	?0 is not of type ⓣBOOL⌝
+=ENDDOC
+=DOC
+val ⦏strip_∧⦎ : TERM -> TERM list
+=DESCRIBE
+Break a term into its constituent conjuncts, descending recursively only to the right.
+=EXAMPLE
+strip_∧ ⌜a ∧ (b ∧ c) ∧ d⌝ = [ ⌜a⌝,⌜b ∧ c⌝, ⌜d⌝]
+=ENDDOC
+\subsection{Disjunctions}
+=DOC
+val ⦏mk_∨⦎ : (TERM * TERM) -> TERM;
+=DESCRIBE
+A derived term constructor function for generating disjunctions.
+=GFT Definition
+mk_∨ (⌜t1⌝, ⌜t2⌝) = ⌜t1 ∨ t2⌝
+=TEX
+=FAILURE
+3015	?1 is not of type ⓣBOOL⌝
+3031	?0 is not of type ⓣBOOL⌝
+=ENDDOC
+=DOC
+val ⦏dest_∨⦎ : TERM -> (TERM * TERM);
+=DESCRIBE
+A derived term destructor function for disjunctions.
+=GFT Definition
+dest_∨ ⌜t1 ∨ t2⌝ = (⌜t1⌝, ⌜t2⌝)
+=TEX
+=FAILURE
+4027	?0 is not of form: ⌜t1 ∨ t2⌝
+=ENDDOC
+=DOC
+val ⦏is_∨⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a disjunction
+(i.e. of form
+=INLINEFT
+⌜a ∨ b⌝
+=TEX
+{}), and false otherwise: no exceptions can be raised.
+=ENDDOC
+=DOC
+val ⦏list_mk_∨⦎ : TERM list -> TERM;
+=DESCRIBE
+A function to make a disjunction of a list of terms.
+=GFT Definition
+list_mk_∨ [⌜a⌝, ⌜b⌝, ⌜c⌝,...] = ⌜a ∨ b ∨ c ...⌝
+=TEX
+=FAILURE
+3017	An empty list argument is not allowed
+3031	?0 is not of type ⓣBOOL⌝
+=ENDDOC
+=DOC
+val ⦏strip_∨⦎ : TERM -> TERM list
+=DESCRIBE
+Break a term into its constituent disjuncts, descending recursively only to the right.
+=EXAMPLE
+strip_∨ ⌜a ∨ (b ∨ c) ∨ d⌝ = [⌜a⌝,⌜b ∨ c⌝, ⌜d⌝]
+=ENDDOC
+\subsection{Negations}
+=DOC
+val ⦏mk_¬⦎ : TERM -> TERM;
+=DESCRIBE
+A derived term constructor function for generating negations.
+=GFT Definition
+mk_¬ ⌜t⌝ = ⌜¬ t⌝
+=TEX
+=FAILURE
+3031	?0 is not of type ⓣBOOL⌝
+=ENDDOC
+=DOC
+val ⦏dest_¬⦎ : TERM -> TERM;
+=DESCRIBE
+A derived term destructor function for negations.
+=GFT Definition
+dest_¬ ⌜¬ t⌝ = ⌜t⌝
+=TEX
+=FAILURE
+4029	?0 is not of form: ⌜¬ t⌝
+=ENDDOC
+=DOC
+val ⦏is_¬⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a negation
+(i.e. of form
+=INLINEFT
+⌜¬ x⌝
+=TEX
+{}), and false otherwise: no exceptions can be raised.
+=ENDDOC
+=DOC
+val ⦏mk_multi_¬⦎ : (int * TERM) -> TERM;
+=DESCRIBE
+$mk\_multi\_¬$ $(n,t)$ will apply the constructor $mk\_¬$ n times to $t$.
+=EXAMPLE
+mk_multi_¬ (2, ⌜T⌝) = ⌜¬(¬ T)⌝
+=FAILURE
+3031	?0 is not of type ⓣBOOL⌝
+4030	?0 is negative
+=ENDDOC
+=DOC
+val ⦏dest_multi_¬⦎ : TERM -> (int * TERM);
+=DESCRIBE
+$dest\_multi\_¬$ $t$ will strip $¬$ from $t$, returning the
+number of times, as well as the result.
+It will return $(0,t)$ if $t$ is either not boolean, or
+has no negations.
+=EXAMPLE
+dest_multi_¬ ⌜¬(¬ T)⌝ = (2, ⌜T⌝)
+=ENDDOC
+
+\subsection{Bi-implications}
+=DOC
+val ⦏mk_⇔⦎ : (TERM * TERM) -> TERM;
+=DESCRIBE
+A derived term constructor function for generating bi-implications.
+=GFT Definition
+mk_⇔ (⌜t1⌝, ⌜t2⌝) = ⌜t1 ⇔ t2⌝
+=TEX
+=FAILURE
+3015	?1 is not of type ⓣBOOL⌝
+3031	?0 is not of type ⓣBOOL⌝
+=ENDDOC
+=DOC
+val ⦏dest_⇔⦎ : TERM -> (TERM * TERM);
+=DESCRIBE
+A derived term destructor function for bi-implications.
+N.B. this may be successfully applied to boolean equalities.
+=GFT Definition
+dest_⇔ ⌜t1 ⇔ t2⌝ = (⌜t1⌝, ⌜t2⌝)
+=TEX
+=FAILURE
+4031	?0 is not of form: ⌜t1 ⇔ t2⌝
+=ENDDOC
+=DOC
+val ⦏is_⇔⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a bi-implication
+(i.e. of form
+=INLINEFT
+⌜a ⇔ b⌝
+=TEX
+{}), and false otherwise: no exceptions can be raised.
+N.B. this may be successfully applied to boolean equations.
+=ENDDOC
+\subsection{Conditionals}
+=DOC
+val ⦏mk_if⦎ : (TERM * TERM * TERM) -> TERM;
+=DESCRIBE
+Make a conditional.
+=GFT Definition
+mk_if (⌜c⌝, ⌜y⌝, ⌜n⌝) = ⌜if c then y else n⌝
+=TEX
+=FAILURE
+3012	?0 and ?1 do not have the same types
+3031	?0 is not of type ⓣBOOL⌝
+=ENDDOC
+=DOC
+val ⦏dest_if⦎ : TERM -> (TERM * TERM * TERM);
+=DESCRIBE
+Destroy a conditional.
+=GFT Definition
+dest_if ⌜if c then y else n⌝ = (⌜c⌝, ⌜y⌝, ⌜n⌝)
+=TEX
+=FAILURE
+4006	?0 is not of form: ⌜if c then y else n⌝
+=ENDDOC
+=DOC
+val ⦏is_if⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a conditional
+(i.e. of form
+=INLINEFT
+⌜if a then b else c⌝
+=TEX
+{}), and false otherwise: no exceptions can be raised.
+=ENDDOC
+\subsection{Let-terms}
+=DOC
+val ⦏mk_let⦎ : ((TERM * TERM)list * TERM) -> TERM
+=DESCRIBE
+A derived term constructor function for generating $let$-terms.
+The arguments may have any form allowed by ICL HOL Concrete Syntax.
+Thus they may be variable structures formed by pairing, or single clause, non-recursive functions, whose arguments may only be variable structures formed by pairing.
+=EXAMPLE
+mk_let ([],⌜x⌝) = ⌜x⌝
+mk_let([(⌜x⌝, ⌜1⌝)], ⌜x+1⌝) = ⌜let x = 1 in x + 1⌝
+mk_let([(⌜x⌝, ⌜1⌝),(⌜y⌝, ⌜2⌝)], ⌜x+y⌝) =
+	⌜let x = 1 and y = 2 in x + y⌝
+mk_let([(⌜(x,y)⌝, ⌜(1,2)⌝)], ⌜x+y⌝) =
+	⌜let (x,y) = (1,2) in x + y⌝
+mk_let([(⌜(x,y)⌝, ⌜(1,2)⌝)], ⌜x+y⌝) =
+	 ⌜let (x,y) = (1,2) in x + y⌝
+mk_let([(⌜f (x,y)⌝, ⌜(1,2)⌝)], ⌜x+y⌝) =
+	⌜let f = λ (x,y)⦁ (1,2) in x + y⌝
+=FAILURE
+3012	?0 and ?1 do not have the same types
+4007	?0 is not a well-formed LHS for mk_let
+=ENDDOC
+=DOC
+val ⦏dest_let⦎ : TERM -> ((TERM * TERM)list * TERM);
+=DESCRIBE
+A derived term destructor function for $let$-terms.
+See $mk\_let$ for details of format.
+The distinction between a local function definition,
+and a variable structure bound to an abstraction is lost,
+with both being destroyed to the second form.
+=EXAMPLE
+dest_let(mk_let([(⌜f x⌝, ⌜y⌝)],⌜bdy⌝)) =
+	([(⌜f⌝, ⌜λ x⦁ y⌝)], ⌜bdy⌝)
+dest_let(mk_let([(⌜f⌝, ⌜λ x⦁ y⌝)],⌜bdy⌝)) =
+	([(⌜f⌝, ⌜λ x⦁ y⌝)], ⌜bdy⌝)
+=FAILURE
+4009	?0 is not of form: ⌜let ... in ...⌝
+=FAILUREC
+$dest\_let$ $(mk\_let([],term))$ will actually fail (unless $term$ is already a $let$-term),
+as apply $mk\_let$ to $([],term))$ will just return $term$.
+=ENDDOC
+=DOC
+val ⦏is_let⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a $let$-term
+(i.e. of form
+=INLINEFT
+⌜let x = y in z⌝
+=TEX
+{}), and false otherwise: no exceptions can be raised.
+=ENDDOC
+=DOC
+val ⦏list_mk_let⦎ : (((TERM * TERM)list)list * TERM) -> TERM
+=DESCRIBE
+This generates a nested $let$-term.
+=EXAMPLE
+list_mk_let ([[(⌜x⌝,⌜1⌝)],[(⌜y⌝,⌜2⌝)]],⌜x+y⌝) =
+	⌜let x = 1 in let y = 2 in x+y⌝
+=ENDDOC
+=DOC
+val ⦏strip_let⦎ : TERM -> ((TERM * TERM)list)list * TERM
+=DESCRIBE
+This destroys a sequence of nested $let$ constructs.
+=GFT Example
+strip_let ⌜let x = 1 in let y = 2 in x+y⌝ =
+	([[(⌜x⌝,⌜1⌝)],[(⌜y⌝,⌜2⌝)]],⌜x+y⌝)
+=ENDDOC
+\subsection{Enumerated Sets}
+=DOC
+val ⦏mk_enum_set⦎ : TERM list -> TERM
+=DESCRIBE
+A derived term constructor function for generating enumerated sets.
+The argument is a list of the members of the set.
+The type of a set of elements of type $ⓣTY⌝$ is $ⓣTY\ SET⌝$.
+If the term list is empty the function will fail
+(see $mk\_∅$).
+The set must be of terms with the same HOL type.
+=GFT Definition
+mk_enum_set [⌜a⌝, ⌜b⌝, ...] = ⌜{a; b; ...}⌝
+=TEX
+=FAILURE
+3012	?0 and ?1 do not have the same types
+3017	An empty list argument is not allowed
+=ENDDOC
+=DOC
+val ⦏mk_∅⦎ : TYPE -> TERM;
+=DESCRIBE
+A derived term constructor function for generating an empty (enumerated) set with elements of a given type.
+=GFT Definition
+mk_∅  ⓣ ty⌝ = ⌜∅ : ty SET⌝
+=TEX
+=SEEALSO
+$mk\_enum\_set$
+=ENDDOC
+=DOC
+val ⦏dest_enum_set⦎ : TERM -> (TERM list);
+=DESCRIBE
+A derived term destructor function for enumerated sets.
+=GFT Definition
+dest_enum_set ⌜{a; b; ...}⌝ = [⌜a⌝, ⌜b⌝, ...]
+=TEX
+=FAILURE
+4011	?0 is not of form: ⌜{t1, ...}⌝
+=ENDDOC
+=DOC
+val ⦏dest_∅⦎ : TERM -> TYPE;
+=DESCRIBE
+A derived term destructor function for empty enumerated sets.
+=GFT Definition
+dest_∅ ⌜∅:ty SET⌝ = ⓣty⌝
+=TEX
+=FAILURE
+4035	?0 is not of form: ⌜∅⌝
+=ENDDOC
+=DOC
+val ⦏is_enum_set⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is an enumerated set
+(i.e. of form
+=INLINEFT
+⌜{a; b; ...}⌝
+=TEX
+{}), and false otherwise: no exceptions can be raised.
+=ENDDOC
+=DOC
+val ⦏is_∅⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is an empty enumerated set, $⌜∅⌝$, and false otherwise: no exceptions can be raised.
+=ENDDOC
+\subsection{Set Comprehensions}
+=DOC
+val ⦏mk_set_comp⦎ : (TERM * TERM) -> TERM
+=DESCRIBE
+A derived term constructor function for generating set comprehensions.
+=EXAMPLE
+mk_set_comp (⌜x⌝, ⌜x > 5⌝) = ⌜{ x | x > 5}⌝
+=FAILURE
+3015	?1 is not of type ⓣBOOL⌝
+4016	?0 is not an allowed variable structure
+=ENDDOC
+=DOC
+val ⦏dest_set_comp⦎ : TERM -> (TERM * TERM);
+=DESCRIBE
+A derived term destructor function for set comprehensions.
+=EXAMPLE
+dest_set_comp ⌜{ x | x > 5}⌝ = (⌜x⌝, ⌜x > 5⌝)
+=FAILURE
+4013	?0 is not of form: ⌜{v | p}⌝
+=ENDDOC
+=DOC
+val ⦏is_set_comp⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a set comprehension
+(i.e. of form
+=INLINEFT
+⌜{v | p}⌝
+=TEX
+{}), and false otherwise: no exceptions can be raised.
+=ENDDOC
+\subsection{List-terms}
+=DOC
+val ⦏mk_list⦎ : TERM list -> TERM
+=DESCRIBE
+A derived term constructor function for generating list-terms.
+The argument is a list of the members of the list.
+If the term list is empty the function will fail
+(see $mk\_empty\_list$).
+The list must be of terms with the same HOL type.
+=GFT Definition
+mk_list [⌜a⌝, ⌜b⌝, ...] = ⌜[a; b; ...]⌝
+=TEX
+=FAILURE
+3012	?0 and ?1 do not have the same types
+3017	An empty list argument is not allowed
+=ENDDOC
+=DOC
+val ⦏mk_empty_list⦎ : TYPE -> TERM
+=DESCRIBE
+A derived term constructor function for generating an empty list term with elements of a given type.
+=GFT Definition
+mk_empty_list  ⓣ ty⌝ = ⌜[] : ty LIST⌝
+=TEX
+=SEEALSO
+$mk\_list$
+=ENDDOC
+=DOC
+val ⦏dest_list⦎ : TERM -> (TERM list);
+=DESCRIBE
+A derived term destructor function for list-terms.
+=GFT Definition
+dest_list ⌜[a; b; ...]⌝ = [⌜a⌝, ⌜b⌝, ...]
+dest_list ⌜[]⌝ = []
+=TEX
+=FAILURE
+4015	?0 is not of form: ⌜[t1,...]⌝
+=ENDDOC
+=DOC
+val ⦏dest_empty_list⦎ : TERM -> TYPE;
+=DESCRIBE
+A derived term destructor function for empty lists.
+=GFT Definition
+dest_list ⌜[]:ty LIST⌝ = ⓣty⌝
+=TEX
+=FAILURE
+4034	?0 is not of form: ⌜[]⌝
+=ENDDOC
+=DOC
+val ⦏is_list⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a list-term
+(i.e. of form
+=INLINEFT
+⌜[a; b; ...]⌝
+=TEX
+{}), and false otherwise: no exceptions can be raised.
+=ENDDOC
+=DOC
+val ⦏is_empty_list⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is an empty list-term, $⌜[]⌝$, and false otherwise: no exceptions can be raised.
+=ENDDOC
+\subsection{(Paired) ∀-terms}
+=DOC
+val ⦏mk_∀⦎ : (TERM * TERM) -> TERM;
+=DESCRIBE
+A derived term constructor function for generating $∀$-terms.
+=GFT Definition
+mk_∀ (⌜varstruct⌝, ⌜body⌝) = ⌜∀ varstruct⦁ body⌝
+=TEX
+$varstruct$ may be any allowed variable structure.
+=FAILURE
+3015	?1 is not of type ⓣBOOL⌝
+4016	?0 is not an allowed variable structure
+=SEEALSO
+$mk\_simple\_∀$
+=ENDDOC
+=DOC
+val ⦏dest_∀⦎ : TERM -> (TERM * TERM);
+=DESCRIBE
+A derived term destructor function for $∀$-terms.
+It may destroy a paired abstraction $∀$-term, being the inverse of $mk\_∀$.
+=GFT Definition
+dest_∀  ⌜∀ varstruct⦁ body⌝ = (⌜varstruct⌝, ⌜body⌝)
+=TEX
+=FAILURE
+4017	?0 is not of form: ⌜∀ vs⦁ t⌝
+=ENDDOC
+=DOC
+val ⦏is_∀⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a $∀$-term
+(i.e. of form
+=INLINEFT
+⌜∀ vs ⦁ t⌝
+=TEX
+{}), possibly formed with paired abstraction, and false otherwise: no exceptions can be raised.
+=SEEALSO
+$is\_simple\_∀$
+=ENDDOC
+=DOC
+val ⦏list_mk_∀⦎ : TERM list * TERM -> TERM;
+=DESCRIBE
+Repeatedly universally quantify a term.
+=GFT Definition
+list_mk_∀ ([⌜a⌝,⌜b⌝,⌜c⌝,...], ⌜body⌝) = ⌜∀ a b c ...⦁ body⌝
+=TEX
+This uses $mk\_∀$ to generate its result.
+=FAILUREC
+\paragraph{Failure}
+This may give the errors of $mk\_∀$.
+=ENDDOC
+=DOC
+val ⦏strip_∀⦎ : TERM -> (TERM list * TERM);
+=DESCRIBE
+Strip a multiply universally quantified term
+(perhaps with paired abstractions).
+=GFT Definition
+strip_∀ ⌜∀ a b c ...⦁ body⌝ = [⌜a⌝,⌜b⌝,⌜c⌝,...], ⌜body⌝
+=TEX
+=ENDDOC
+=DOC
+val ⦏strip_simple_∀⦎ : TERM -> (TERM list * TERM);
+=DESCRIBE
+Strip a multiply universally simply quantified term.
+=GFT Definition
+strip_simple_∀ ⌜∀ a b c ...⦁ body⌝ = [⌜a⌝,⌜b⌝,⌜c⌝,...], ⌜body⌝
+=TEX
+=ENDDOC
+\subsection{(Paired) ∃-terms}
+=DOC
+val ⦏mk_∃⦎ : (TERM * TERM) -> TERM;
+=DESCRIBE
+A derived term constructor function for generating $∃$-terms.
+=GFT Definition
+mk_∃ (⌜varstruct⌝, ⌜body⌝) = ⌜∃ varstruct⦁ body⌝
+=TEX
+$varstruct$ may be any allowed variable structure.
+=FAILURE
+3015	?1 is not of type ⓣBOOL⌝
+4016	?0 is not an allowed variable structure
+=SEEALSO
+$mk\_simple\_∃$
+=ENDDOC
+=DOC
+val ⦏dest_∃⦎ : TERM -> (TERM * TERM);
+=DESCRIBE
+A derived term destructor function for $∃$-terms.
+It may destroy paired abstraction $∃$-terms, being the inverse of $mk\_∃$.
+=GFT Definition
+dest_∃ ⌜∃ varstruct⦁ body⌝ = (⌜varstruct⌝, ⌜body⌝)
+=TEX
+=FAILURE
+4020	?0 is not of form: ⌜∃ vs⦁ t⌝
+=SEEALSO
+$dest\_simple\_∃$
+=ENDDOC
+=DOC
+val ⦏is_∃⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a $∃$-term
+(i.e. of form
+=INLINEFT
+⌜∃ vs ⦁ t⌝
+=TEX
+{}), possibly formed with paired abstraction, and false otherwise: no exceptions can be raised.
+=SEEALSO
+$is\_simple\_∃$
+=ENDDOC
+=DOC
+val ⦏list_mk_∃⦎ : TERM list * TERM -> TERM;
+=DESCRIBE
+Repeatedly existentially quantify a term.
+=GFT Definition
+list_mk_∃ ([⌜a⌝,⌜b⌝,⌜c⌝,...], ⌜body⌝) = ⌜∃ a b c ...⦁ body⌝
+=TEX
+This uses $mk\_∃$ to generate its result.
+=FAILUREC
+\paragraph{Failure}
+This may give the errors of $mk\_∃$.
+=ENDDOC
+=DOC
+val ⦏strip_∃⦎ : TERM -> (TERM list * TERM);
+=DESCRIBE
+Strip a repeatedly existentially quantified term, possibly formed with paired abstractions.
+=GFT Definition
+strip_∃ ⌜∃ a b c ...⦁ body⌝ = [⌜a⌝,⌜b⌝,⌜c⌝,...], ⌜body⌝
+=TEX
+=ENDDOC
+=DOC
+val ⦏strip_simple_∃⦎ : TERM -> (TERM list * TERM);
+=DESCRIBE
+Strip a repeatedly existentially simply quantified term.
+=GFT Definition
+strip_simple_∃ ⌜∃ a b c ...⦁ body⌝ = [⌜a⌝,⌜b⌝,⌜c⌝,...], ⌜body⌝
+=TEX
+=ENDDOC
+\subsection{Simple and Paired ∃$_1$-terms}
+=DOC
+val ⦏mk_simple_∃⋎1⦎ : (TERM * TERM) -> TERM;
+=DESCRIBE
+A derived term constructor function for generating simply abstracted $∃_1$-terms.
+=GFT Definition
+mk_simple_∃⋎1 (⌜var⌝, ⌜body⌝) =
+	⌜∃⋎1 var⦁ body⌝
+=TEX
+$var$ must be a variable.
+=FAILURE
+3007	?0 is not a term variable
+3015	?1 is not of type ⓣBOOL⌝
+=SEEALSO
+$mk\_∃_1$
+=ENDDOC
+=DOC
+val ⦏dest_simple_∃⋎1⦎ : TERM -> (TERM * TERM);
+=DESCRIBE
+A derived term destructor function for simply abstracted $∃_1$-terms.
+It may destroy only simple abstraction $∃_1$-terms, being the inverse of $mk\_simple\_∃_1$.
+=GFT Definition
+dest_simple_∃⋎1 ⌜∃⋎1 var⦁ body⌝ = (⌜var⌝, ⌜body⌝)
+=TEX
+=FAILURE
+4019	?0 is not of form: ⌜∃⋎1 v⦁ t⌝
+=SEEALSO
+$dest\_∃_1$
+=ENDDOC
+=DOC
+val ⦏is_simple_∃⋎1⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a $∃_1$-term
+(i.e. of form
+=INLINEFT
+⌜∃⋎1 x ⦁ t⌝
+=TEX
+{}), formed only by simple abstraction, and false otherwise: no exceptions can be raised.
+=SEEALSO
+$is\_∃_1$
+=ENDDOC
+=DOC
+val ⦏mk_∃⋎1⦎ : (TERM * TERM) -> TERM;
+=DESCRIBE
+A derived term constructor function for generating $∃_1$-terms.
+=GFT Definition
+mk_∃⋎1 (⌜varstruct⌝, ⌜body⌝) =
+	⌜∃⋎1 varstruct⦁ body⌝
+=TEX
+$varstruct$ may be any allowed variable structure.
+=FAILURE
+3015	?1 is not of type ⓣBOOL⌝
+4016	?0 is not an allowed variable structure
+=SEEALSO
+$mk\_∃_1$
+=ENDDOC
+=DOC
+val ⦏dest_∃⋎1⦎ : TERM -> (TERM * TERM);
+=DESCRIBE
+A derived term destructor function for $∃_1$-terms.
+It may destroy paired abstraction $∃_1$-terms, being the inverse of $mk\_∃_1$.
+=GFT Definition
+dest_∃⋎1 ⌜∃⋎1 varstruct⦁ body⌝ =
+	(⌜varstruct⌝, ⌜body⌝)
+=TEX
+=FAILURE
+4021	?0 is not of form: ⌜∃⋎1 vs⦁ t⌝
+=SEEALSO
+$dest\_simple\_∃_1$
+=ENDDOC
+=DOC
+val ⦏is_∃⋎1⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a $∃_1$-term
+(i.e. of form
+=INLINEFT
+⌜∃⋎1 vs ⦁ t⌝
+=TEX
+{}), possibly formed with paired abstraction, and false otherwise: no exceptions can be raised.
+=SEEALSO
+$is\_simple\_∃_1$
+=ENDDOC
+``list'' and ``stripping'' forms of unique existence seem
+unnecessary.
+\subsection{ε-terms}
+=DOC
+val ⦏mk_ε⦎ : (TERM * TERM) -> TERM;
+=DESCRIBE
+A derived term constructor function for generating $ε$-terms.
+=GFT Definition
+mk_ε (⌜varstruct⌝, ⌜body⌝) = ⌜ε varstruct⦁ body⌝
+=TEX
+$varstruct$ may be any allowed variable structure.
+=FAILURE
+3015	?1 is not of type ⓣBOOL⌝
+4016	?0 is not an allowed variable structure
+=ENDDOC
+=DOC
+val ⦏dest_ε⦎ : TERM -> (TERM * TERM);
+=DESCRIBE
+A derived term destructor function for $ε$-terms.
+=GFT Definition
+dest_ε ⌜ε varstruct⦁ body⌝ = (⌜varstruct⌝, ⌜body⌝)
+=TEX
+=FAILURE
+4023	?0 is not of form: ⌜ε vs⦁ t⌝
+=ENDDOC
+=DOC
+val ⦏is_ε⦎ : TERM -> bool;
+=DESCRIBE
+Return true only when the term is a $ε$-term
+(i.e. of form
+=INLINEFT
+⌜ε vs ⦁ t⌝
+=TEX
+{}), possibly formed with paired abstraction, and false otherwise: no exceptions can be raised.
+=ENDDOC
+The following two functions are only present for completeness,
+rather than likely use.
+=DOC
+val ⦏list_mk_ε⦎ : TERM list * TERM -> TERM;
+=DESCRIBE
+Repeatedly apply $ε$ to a term.
+=GFT Definition
+list_mk_ε ([⌜a⌝,⌜b⌝,⌜c⌝,...], ⌜body⌝) = ⌜ε a b c ...⦁ body⌝
+=TEX
+=FAILUREC
+\paragraph{Failure}
+This may give the errors of $mk\_ε$.
+=ENDDOC
+=DOC
+val ⦏strip_ε⦎ : TERM -> (TERM list * TERM);
+=DESCRIBE
+Strip multiple $ε$'s.
+=GFT Definition
+strip_ε ⌜ε a b c ...⦁ body⌝ = [⌜a⌝,⌜b⌝,⌜c⌝,...], ⌜body⌝
+=TEX
+=ENDDOC
+=ENDDOC
+\subsection{Floating Point Literas}
+=DOC
+val ⦏mk_float⦎ : INTEGER * INTEGER * INTEGER -> TERM;
+=DESCRIBE
+Make a floating point literal.
+=GFT Definition
+mk_float (⌜x⌝, 0, ⌜0⌝) = ⌜XX.⌝
+mk_float (⌜x⌝, ⌜p⌝, ⌜0⌝) = ⌜XX.YY⌝
+mk_float (⌜x⌝, ⌜p⌝, ⌜z⌝) = ⌜XX.YYeZZ⌝
+=TEX
+where $XX.YY$ is the decimal representation of $x \times 10^{-p}$
+and $ZZ$ is the decimal representation of $z$ (with $p=z=0$ in the first case and $z=0$ in the second).
+=FAILURE
+4041	the mantissa of a HOL floating point literal must be non-negative
+=ENDDOC
+=DOC
+val ⦏dest_float⦎ : TERM -> INTEGER * INTEGER * INTEGER;
+=DESCRIBE
+Destroy a floating point literal.
+=GFT Definition
+dest_float ⌜XXYY.⌝ = (⌜x⌝, ⌜0⌝, ⌜0⌝)
+dest_float ⌜XX.YYeZZ⌝ = (⌜x⌝, ⌜p⌝, ⌜0⌝)
+dest_float ⌜XX.YYeZZ⌝ = (⌜x⌝, ⌜p⌝, ⌜z⌝)
+=TEX
+where $x$ is the natural number with decimal representation $XXYY$, $p$ is the number of digits after the point in $XX.YY$ and $z$ is the integer represented by $ZZ$ (with $p=z=0$ in the first case and $z=0$ in the second).
+=FAILURE
+4042	?0 is not a floating point literal
+=ENDDOC
+=DOC
+val ⦏is_float⦎ : TERM -> bool;
+=DESCRIBE
+Return true when the term is a floating point literal.
+and false otherwise: no exceptions are raised.
+=ENDDOC
+=SML
+end(* signature of TypesAndTerms *);
+=TEX
+\section{TEST POLICY}
+The functions in this document should be tested as described in
+\cite{DS/FMU/IED/PLN008}.
+
+One facet that should receive attention is the handling of unusually formed terms. For instance, $Cons\ h\ t$, where $h$ and $t$ are variables, should not be recognised as a list for the purposes of $dest\_list$.
+We claim that $mk\_term$ $o$ $dest\_term$ is the identity function on terms,
+and this should be put to the test.
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+

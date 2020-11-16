@@ -1,0 +1,283 @@
+=IGN
+********************************************************************************
+dtd064.doc: this file is part of the PPZed system
+
+Copyright (c) 2002 Lemma 1 Ltd.
+
+See the file LICENSE for your rights to use and change this file.
+
+Contact: Rob Arthan < rda@lemma-one.com >
+********************************************************************************
+% dtd064.doc   ℤ $Date: 2002/10/17 15:10:58 $ $Revision: 1.3 $ $RCSfile: dtd064.doc,v $
+
+=TEX
+%%%%% YOU MAY WANT TO CHANGE POINT SIZE IN THE FOLLOWING:
+\documentclass[a4paper,11pt]{article}
+
+%%%%% YOU CAN ADD OTHER PACKAGES AS NEEDED BELOW:
+\usepackage{A4}
+\usepackage{Lemma1}
+\usepackage{ProofPower}
+\usepackage{latexsym}
+\usepackage{epsf}
+\makeindex
+
+%%%%% YOU WILL WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
+
+\def\Title{Detailed Design of the Z Pretty Printer}
+
+\def\AbstractText{This document contains the detailed design of the pretty printer for the Z proof support system.}
+
+\def\Reference{DS/FMU/IED/DTD064}
+
+\def\Author{A.J. Hammon}
+
+
+\def\EMail{C/O {\tt rda@lemma-one.com}}
+
+\def\Phone{C/O +44 7497 030682}
+
+\def\Abstract{\begin{center}{\bf Abstract}\par\parbox{0.7\hsize}
+{\small \AbstractText}
+\end{center}}
+
+%%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
+\def\FrontPageTitle{ {\huge \Title } }
+\def\FrontPageHeader{\raisebox{16ex}{\begin{tabular}[t]{c}
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year\\\strut\\
+\end{tabular}}}
+
+%%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
+
+\def\Version{\VCVersion}
+\def\Date{\FormatDate{\VCDate}}
+
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: % dtd064.doc   ℤ $Date: 2002/10/17 15:10:58 $ $Revision: 1.3 $ $RCSfile: dtd064.doc,v $
+%% LaTeX2e port: \documentstyle[hol1,11pt,TQ]{article}
+%% LaTeX2e port: 
+%% LaTeX2e port: \TPPtitle{Detailed Design of the Z Pretty Printer}
+%% LaTeX2e port: \TPPref{DS/FMU/IED/DTD064}
+%% LaTeX2e port: \def\SCCSissue{$Revision: 1.3 $%
+%% LaTeX2e port: }
+%% LaTeX2e port: \TPPissue{\SCCSissue}
+%% LaTeX2e port: \TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+%% LaTeX2e port: }}
+%% LaTeX2e port: \TPPproject{FST PROJECT}
+%% LaTeX2e port: 
+%% LaTeX2e port: =IGN
+%% LaTeX2e port: 
+%% LaTeX2e port: Commands to process this document in various ways.
+%% LaTeX2e port: 
+%% LaTeX2e port: make -f rel001.mkf dtd064.dvi
+%% LaTeX2e port: doctex dtd064
+%% LaTeX2e port: texdvi dtd064
+%% LaTeX2e port: bibtex dtd064
+%% LaTeX2e port: doctex dtd064 ; texdvi dtd064
+%% LaTeX2e port: doctex dtd064 ; texdvi dtd064 ; bibtex dtd064
+%% LaTeX2e port: dvipage dtd064 &
+%% LaTeX2e port: 
+%% LaTeX2e port: 
+%% LaTeX2e port: docsml dtd064
+%% LaTeX2e port: use_file "dtd064.sml";
+%% LaTeX2e port: 
+%% LaTeX2e port: lasp -s dtd064.doc > zz1
+%% LaTeX2e port: lasp -s -u dtd064.OKwords dtd064.doc > zz1
+%% LaTeX2e port: 
+%% LaTeX2e port: =TEX
+%% LaTeX2e port: %\TPPstatus{Approved}
+%% LaTeX2e port: \TPPstatus{Draft}
+%% LaTeX2e port: \TPPtype{Standard}
+%% LaTeX2e port: \TPPkeywords{HOL}
+%% LaTeX2e port: \TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
+%% LaTeX2e port: \TPPauthorisation{R.D.~Arthan & FST Team Leader}
+%% LaTeX2e port: \TPPabstract{This document contains the detailed design of the
+%% LaTeX2e port: 	pretty printer for the Z proof support system.}
+%% LaTeX2e port: \TPPdistribution{\parbox[t]{4.0in}{%
+%% LaTeX2e port: 	Library
+%% LaTeX2e port: }}
+%% LaTeX2e port: 
+%% LaTeX2e port: %\ftlinepenalty=9999
+%% LaTeX2e port: \makeindex
+%% LaTeX2e port: 
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: 
+\underscoreoff
+%% LaTeX2e port: 
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LaTeX2e port: 
+%% LaTeX2e port: \begin{document}
+%% LaTeX2e port: \makeTPPfrontpage
+%% LaTeX2e port: 
+%% LaTeX2e port: \vfill
+%% LaTeX2e port: \begin{center}
+%% LaTeX2e port: \bf Copyright \copyright\ : Lemma 1 Ltd. \number\year
+%% LaTeX2e port: \end{center}
+
+\begin{document}
+
+\headsep=0mm
+\FrontPage
+\headsep=10mm
+
+\setcounter{section}{-1}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{DOCUMENT CONTROL}
+
+%********************************************************************
+
+\subsection{Contents List}
+\tableofcontents
+% \listoftables
+
+%********************************************************************
+
+\subsection{Document Cross References}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+%********************************************************************
+
+\subsection{Changes History}
+
+\begin{description}
+
+\item[Issues 1.1, 1.2] Initial drafts.
+\item[Issue 1.3 (2002/10/17)] Copyright and banner updates for open source release.
+\item[Issue 1.4 (2002/10/17)] PPZed-specific updates for open source release
+\item[2014/07/23]
+Augmented old RCS version numbers in the changes history with dates.
+Dates will be used in place of version numbers in future.
+
+\item[2015/04/17]
+Ported PPZed to Lemma 1 document template.
+%%%% END OF CHANGES HISTORY %%%%
+\end{description}
+
+%********************************************************************
+
+\subsection{Changes Forecast} \label{ChangesForecast}
+
+Provide proper support for the outermost parts of a Z~term, so that the
+various Z~paragraph forms are properly formatted.  This may require new
+facilities in~\cite{DS/FMU/IED/DTD031}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{GENERAL}
+
+%********************************************************************
+
+\subsection{Scope}
+
+This document contains the detailed design for the pretty printer of
+the Z proof support system.  The high-level design for this document
+in~\cite{DS/FMU/IED/HLD018}.
+
+%********************************************************************
+
+\subsection{Introduction}
+
+%--------------------------------------------------------------------
+
+\subsubsection{Purpose and Background}
+
+%--------------------------------------------------------------------
+
+\subsubsection{Dependencies}
+
+The Z pretty printer uses the facilities offered by the
+pretty printing support systems~\cite{DS/FMU/IED/DTD024,DS/FMU/IED/DTD031}.
+
+%--------------------------------------------------------------------
+
+\subsubsection{Interface}
+
+Thew Z pretty printer is accesses via the pretty printing
+routines of~\cite{DS/FMU/IED/DTD025}.
+
+%--------------------------------------------------------------------
+
+\subsubsection{Algorithms}
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Possible Enhancements}
+%\subsubsection{Deficiencies}
+%\subsubsection{Terminology}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\newpage
+\section{SIGNATURE} \label{StartSignature}
+
+=DOC
+signature ⦏ZPrettyPrinter⦎ = sig
+
+	val ⦏dec_of⦎ : TERM -> TERM;
+
+	val ⦏decl_of⦎ : TERM -> TERM;
+
+end (* of signature PrettyPrinter *);
+=DESCRIBE
+This is the signature of a structure which supports pretty-printing of
+Z constructs. The two functions it declares are used in Z output to
+represent certain constructs which are represented as HOL terms but which
+do not have a parser associated with them.
+
+The argument for both $dec\_of$ and $decl\_of$ is intended to be
+a horizontal schema expression. For such an argument, $s$ say:
+$decl\_of\,s$ is the declaration part of $s$, as might be constructed
+with $mk\_z\_decl$; $dec\_of$ is the first declaration in the declaration
+part of $s$, as might be constructed with $mk\_z\_dec$.
+
+=FAILURE
+64001	The declaration list in ?0 is empty
+=ENDDOC
+
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{TEST POLICY}
+
+A statement of the general principle of testing to be adopted is given
+in~\cite{DS/FMU/IED/PLN008}.
+
+The pretty printer tests are oriented to the Z~concrete syntax, they
+will exercise all of the clauses in the Z~concrete syntax
+of~\cite{DS/FMU/IED/DEF007} and will contain a large number of nested
+clauses.  The bracket elimination code must be carefully tested to
+ensure that all the necessary brackets are present.  This will be done
+by creating many~Z terms, formatting them into a string using the
+pretty printer, parsing these strings back to form new terms and
+testing that they are the same as the originals.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%********************************************************************
+%--------------------------------------------------------------------
+
+\makeatletter
+\def\refstepcounter#1{\stepcounter{#1}\global\edef\@currentlabel{\csname
+	p@#1\endcsname\csname the#1\endcsname}}
+\makeatother
+
+%\twocolumn[\section{INDEX}] \label{Index}
+\section{INDEX}
+
+\footnotesize
+\printindex
+
+\onecolumn
+
+\end{document}
+
+
