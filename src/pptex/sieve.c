@@ -3684,7 +3684,7 @@ read_view_file(char *name)
 
 	initialize_table();
 
-	actname = find_steering_file(name, "keyword file");
+	actname = find_steering_file(name, "view file");
 
 	if( (view_F.fp = fopen(actname, "r")) == NULL ) {
 		unix_error("cannot open steering file '%s'", actname);
