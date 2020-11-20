@@ -52,18 +52,21 @@ typedef struct {
 }	PaletteConfig;
 
 typedef struct {
-	Widget text_w, palette_w;
+	Widget text_w;
+	int num_palettes;
+	struct {char *title; Widget w;} palettes [MAXPALETTES];
 } PaletteData;
 
-char *too_many_rows_msg = "too many rows in the palette (maximum is %d)";
-char *too_many_cols_msg = "too many columns in the palette (maximum is %d)";
-char *binary_data_msg = "Binary data in palette resource at row %d column %d";
-static char *no_config_msg = "Unable to set up the palette";
+static char *too_many_rows_msg = "too many rows in the palette (maximum is %d)";
+static char *too_many_cols_msg = "too many columns in the palette (maximum is %d)";
+static char *binary_data_msg = "Binary data in palette resource at row %d column %d";
+static char *no_config_msg = "unable to set up the palette with title \"%s\"; this palette will be ignored";
+static char *missing_palette_msg = "missing palette data for palette with title \"%s\"; this palette will be ignored";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static PaletteData palette_info = { NULL, NULL };
+static PaletteData palette_info = { NULL, 0 };
 
 static int gcd(int x, int y)
 {
@@ -91,23 +94,24 @@ static Boolean check_limits(int row, int col)
 	if(row >= MAX_ROWS || col >= MAX_COLS) {
 		char buf[100];
 		sprintf(buf, too_many_rows_msg, MAX_ROWS);
-		ok_dialog(root, buf);
+		msg("xpp", buf);
 		return False;
 	} else if(col >= MAX_COLS) {
 		char buf[100];
 		sprintf(buf, too_many_cols_msg, MAX_COLS);
-		ok_dialog(root, buf);
+		msg("xpp", buf);
 		return False;
 	} else {
 		return True;
 	}
 }
 
-static void get_labels(PaletteConfig *palette_config)
+static void get_labels(
+	char *p,
+	PaletteConfig *palette_config)
 {
 	wchar_t wc;
 	int col = 0;
-	char *p = xpp_resources.palette;
 	int r, l = strlen(p);
 	palette_config->num_rows = 0;
 	palette_config->num_cols = 0;
@@ -117,7 +121,7 @@ static void get_labels(PaletteConfig *palette_config)
 			char buf[100];
 			sprintf(buf, binary_data_msg,
 				palette_config->num_rows + 1, col + 1);
-			ok_dialog(root, buf);
+			msg("xpp palette set", buf);
 			break;
 		}
 		switch(wc) {
@@ -156,14 +160,15 @@ static void get_labels(PaletteConfig *palette_config)
 	}
 }
 
-static PaletteConfig *get_palette_config(void)
+static PaletteConfig *get_palette_config(
+	char *palette)
 {
 	PaletteConfig *palette_config =
 		(void *)XtMalloc(sizeof(PaletteConfig));
 	if(palette_config == 0) { /* out of memory */
 		return 0;
 	} /* else */
-	get_labels(palette_config);
+	get_labels(palette, palette_config);
 	if(	palette_config->num_rows == 0
 	|| 	palette_config->num_cols == 0) {
 		XtFree((char*)palette_config);
@@ -179,13 +184,13 @@ static PaletteConfig *get_palette_config(void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * popup_palette: pop up the palette widget (creating it if
- * necessary). The widget argument is the text widget to
- * which the palette will write in the first instance (see
- * register_palette_client for how this changes when input focus
- * transfers to a different text widget client).
+ * setup_palette: set up one palette widget.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void popup_palette(Widget w)
+
+void setup_palette(
+	char *title,
+	char *palette,
+	Widget w)
 {
 	XmString lab;
 	char *label_buf, name_buf[sizeof "glyphXXXXXXXX"];
@@ -194,18 +199,10 @@ void popup_palette(Widget w)
 			button, dismiss_btn, help_btn;
 	PaletteConfig *palette_config;
 	wchar_t wc, cbdata;
-	
-	palette_info.text_w = w;
-	if((paned = palette_info.palette_w) != NULL) {
-		XtManageChild(paned);
-		XtPopup(XtParent(paned), XtGrabNone);
-		set_input_focus(paned);
-		return;
-	} /* else ... */
 
 	shell = XtVaCreatePopupShell("xpp-Palette",
-		xmDialogShellWidgetClass, w,
-		XmNtitle,			"Palette",
+		xmDialogShellWidgetClass,	w,
+		XmNtitle,			title,
 		NULL);
 #ifdef EDITRES
 	add_edit_res_handler(shell);
@@ -216,61 +213,61 @@ void popup_palette(Widget w)
 		XMPANEDCLASS, 	shell,
 		NULL);
 
-	palette_info.palette_w = paned;
-
-	palette_config = get_palette_config();
+	palette_config = get_palette_config(palette);
 
 	if(palette_config == 0) {
-		lab = XmStringCreateSimple(no_config_msg);
-		palette_form = XtVaCreateWidget("message",
-			xmLabelWidgetClass, paned,
-			XmNlabelString, lab,
-			NULL);
-		XmStringFree(lab);
-	} else {
-
-		palette_form = XtVaCreateWidget("palette-buttons",
-			xmFormWidgetClass, paned,
-			XmNfractionBase, 	palette_config->fraction_base,
-			NULL);
-
-		label_buf = XtMalloc(MB_CUR_MAX + 1);
-
-		for(i = 0; i < palette_config->num_rows; i += 1) {
-			for(	j = 0;
-					palette_config->labels[i][j] != 0
-				&&	j < palette_config->num_cols;
-				j += 1) {
-				wc = palette_config->labels[i][j];
-				if(wc == '.') {
-					continue;
-				} /* else */
-				(void) wctomb(label_buf, wc);
-				sprintf(name_buf, "glyph%08X", wc);
-				lab = XmStringCreateSimple(label_buf);
-				x = (palette_config->x_units)*j;
-				y = (palette_config->y_units)*i;
-				button = XtVaCreateManagedWidget(name_buf,
-					xmPushButtonGadgetClass, palette_form,
-					XmNlabelString, lab,
-					XmNleftAttachment,	XmATTACH_POSITION,
-					XmNleftPosition,	x,
-					XmNrightAttachment,	XmATTACH_POSITION,
-					XmNrightPosition,	x + palette_config->x_units,
-					XmNtopAttachment,	XmATTACH_POSITION,
-					XmNtopPosition,		y,
-					XmNbottomAttachment,	XmATTACH_POSITION,
-					XmNbottomPosition,	y + palette_config->y_units,
-					NULL);
-				XmStringFree(lab);
-				cbdata = wc;
-				XtAddCallback(button, XmNactivateCallback, type_char_cb,
-					(XtPointer) (uintptr_t) cbdata);
-			}
-		}
-		XtFree((void*)palette_config);
-		XtFree(label_buf);
+		char *buf = XtMalloc(strlen(no_config_msg) + strlen(title));
+		sprintf(buf, no_config_msg, title);
+		msg("xpp", buf);
+		XtFree(buf);
+		return;
 	}
+
+	palette_info.palettes[palette_info.num_palettes].title = title;
+	palette_info.palettes[palette_info.num_palettes].w = paned;
+	palette_info.num_palettes += 1;
+
+	palette_form = XtVaCreateWidget("palette-buttons",
+		xmFormWidgetClass, paned,
+		XmNfractionBase, 	palette_config->fraction_base,
+		NULL);
+
+	label_buf = XtMalloc(MB_CUR_MAX + 1);
+
+	for(i = 0; i < palette_config->num_rows; i += 1) {
+		for(	j = 0;
+				palette_config->labels[i][j] != 0
+			&&	j < palette_config->num_cols;
+			j += 1) {
+			wc = palette_config->labels[i][j];
+			if(wc == '.') {
+				continue;
+			} /* else */
+			(void) wctomb(label_buf, wc);
+			sprintf(name_buf, "glyph%08X", wc);
+			lab = XmStringCreateSimple(label_buf);
+			x = (palette_config->x_units)*j;
+			y = (palette_config->y_units)*i;
+			button = XtVaCreateManagedWidget(name_buf,
+				xmPushButtonGadgetClass, palette_form,
+				XmNlabelString, lab,
+				XmNleftAttachment,	XmATTACH_POSITION,
+				XmNleftPosition,	x,
+				XmNrightAttachment,	XmATTACH_POSITION,
+				XmNrightPosition,	x + palette_config->x_units,
+				XmNtopAttachment,	XmATTACH_POSITION,
+				XmNtopPosition,		y,
+				XmNbottomAttachment,	XmATTACH_POSITION,
+				XmNbottomPosition,	y + palette_config->y_units,
+				NULL);
+			XmStringFree(lab);
+			cbdata = wc;
+			XtAddCallback(button, XmNactivateCallback, type_char_cb,
+				(XtPointer) (uintptr_t) cbdata);
+		}
+	}
+	XtFree((void*)palette_config);
+	XtFree(label_buf);
 
 	bottom_form = XtVaCreateWidget("bottom-form",
 		xmFormWidgetClass, paned,
@@ -316,12 +313,131 @@ void popup_palette(Widget w)
 	XtManageChild(palette_form);
 	XtManageChild(bottom_form);
 	XtManageChild(paned);
-	XtPopup(shell, XtGrabNone);
+	XtPopup(shell, XtGrabNone); /* to ensure fix_pane_height works */
 
 	fix_pane_height(bottom_form, bottom_form);
 
 	remove_sashes(paned);
 
+	XtPopdown(shell); /* don't want it popped up till user asks */
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * setup_palettes: set up the palette widgets.
+ * The widget argument is the text widget to
+ * which the palettes will write in the first instance (see
+ * register_palette_client for how this changes when input focus
+ * transfers to a different text widget client).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+void setup_palettes(Widget w) {
+	enum {IN_TITLE, AFTER_TITLE, BEGINNING_ROW, IN_ROW, AFTER_DOT} state;
+	char *q, *last_nl, *title, *palette;
+	palette_info.text_w = w;
+	title = q = xpp_resources.palette;
+	palette = last_nl = 0;
+	state = IN_TITLE;
+	while(*q != '\0') {
+		switch(state) {
+			case IN_TITLE:
+				if(*q == '\n') {
+					*q = '\0';
+					q += 1;
+					palette = q;
+					state = AFTER_TITLE;
+				} else {
+					q += 1;
+				}
+				break;
+			case AFTER_TITLE:
+			case BEGINNING_ROW:
+				if(*q == '.') {
+					state = AFTER_DOT;
+					q += 1;
+				} else if (*q == '\n') {
+					last_nl = q;
+					q += 1;
+				} else {
+					q += 1;
+					state = IN_ROW;
+				}
+				break;
+			case IN_ROW:
+				if (*q == '\n') {
+					last_nl = q;
+					q += 1;
+					state = BEGINNING_ROW;
+				} else if (*q != 0) {
+					q += 1;
+				}
+				if (*q == '\0') {
+					if(*title != '!') {
+						setup_palette(title, palette, w);
+					}
+					title = palette = 0;
+				}
+				break;
+			case AFTER_DOT:
+				if(*q == '\n') {
+					if(last_nl != 0) *last_nl = '\0';
+					last_nl = 0;
+					if(*title != '!') {
+						setup_palette(title, palette, w);
+					}
+					q += 1;
+					title = q;
+					palette = 0;
+					state = IN_TITLE;
+				} else {
+					q += 1;
+					state = IN_ROW;
+				}
+				break;
+		}
+	}
+	if(title != 0 && *title != '!' && palette != 0) {
+		setup_palette(title, palette, w);
+		title = palette = 0;
+	}
+	if(title != 0 && *title != '\0' && palette == 0) {
+		char *buf = XtMalloc(strlen(missing_palette_msg) + strlen(title));
+		sprintf(buf, missing_palette_msg, title);
+		msg("xpp", buf);
+		XtFree(buf);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * get_palette_title: pop up the title of a palette identified
+ * by its index. setup_palettes should be called before calling this.
+ * The returned value should not be freed. The return value is 0
+ * if the index is out of range.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+char * get_palette_title(int i)
+{
+	if(i >= 0 && i < palette_info.num_palettes)  {
+		return palette_info.palettes[i].title;
+	} else {
+		return 0;
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * popup_palette: pop up the palette widget identified by
+ * by its index. setup_palettes should be called before calling this.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+void popup_palette(int i)
+{
+	Widget paned;
+	if(i >= 0 && i < palette_info.num_palettes &&
+		(paned = palette_info.palettes[i].w) != NULL) {
+		XtManageChild(paned);
+		XtPopup(XtParent(paned), XtGrabNone);
+		set_input_focus(paned);
+		return;
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
