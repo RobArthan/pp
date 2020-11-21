@@ -297,20 +297,21 @@ static MenuItem edit_menu_items[] = {
 };
 
 /*
- * The pull-right menu for the palettes is build dynamically after
- * the setup_palettes has been called using the following template
+ * The pull-right menu for the palettes is built dynamically after
+ * setup_palettes has been called using the following template
  * with the label and callback_data members suitable updated.
  */
 static MenuItem palette_item_template =
     { "", &xmPushButtonGadgetClass, '\0', NULL, NULL,
         popup_palette_cb, (XtPointer)0, (MenuItem *)NULL, False };
 
-static MenuItem palette_items[MAXPALETTES+1];
+static MenuItem palette_items[MAX_PALETTES+1];
 
 /*
- * In the following, the templates tool item is desensitized if the tool
- * initialisation fails.
+ * If there are problems setting up the palette or templates menu
+ * then these items will be desensitized.
  */
+#define TOOLS_MENU_PALETTE 0
 #define TOOLS_MENU_TEMPLATES 1
 
 static MenuItem tools_menu_items[] = {
@@ -1065,6 +1066,9 @@ static Boolean setup_main_window(
 
 	toolsmenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "Tools", 'T', False, tools_menu_items);
+	if(i == 0) {
+		set_menu_item_sensitivity(toolsmenu, TOOLS_MENU_PALETTE, False);
+	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Window menu:

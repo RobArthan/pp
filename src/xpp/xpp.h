@@ -55,9 +55,9 @@
 #define EDITRES
 #endif
 
-#define MBSBUFSIZ 4000
+enum{MBSBUFSIZ = 4000};
 
-#define MAXPALETTES 12
+enum{MAX_PALETTES = 20};
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * TYPE DEFS

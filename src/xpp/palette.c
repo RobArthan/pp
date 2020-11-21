@@ -54,11 +54,12 @@ typedef struct {
 typedef struct {
 	Widget text_w;
 	int num_palettes;
-	struct {char *title; Widget w;} palettes [MAXPALETTES];
+	struct {char *title; Widget w;} palettes [MAX_PALETTES];
 } PaletteData;
 
 static char *too_many_rows_msg = "too many rows in the palette (maximum is %d)";
 static char *too_many_cols_msg = "too many columns in the palette (maximum is %d)";
+static char *too_many_palettes_msg = "too many palette definitions (maximum is %d)";
 static char *binary_data_msg = "Binary data in palette resource at row %d column %d";
 static char *no_config_msg = "unable to set up the palette with title \"%s\"; this palette will be ignored";
 static char *missing_palette_msg = "missing palette data for palette with title \"%s\"; this palette will be ignored";
@@ -184,10 +185,11 @@ static PaletteConfig *get_palette_config(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * setup_palette: set up one palette widget.
+ * setup_palette: set up one palette widget. Return value is False
+ * if adding this palette would exceed the limit on the number of palettes.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void setup_palette(
+static Boolean setup_palette(
 	char *title,
 	char *palette,
 	Widget w)
@@ -199,6 +201,13 @@ void setup_palette(
 			button, dismiss_btn, help_btn;
 	PaletteConfig *palette_config;
 	wchar_t wc, cbdata;
+
+	if(palette_info.num_palettes == MAX_PALETTES) {
+		char buf[100];
+		sprintf(buf, too_many_palettes_msg, MAX_PALETTES);
+		msg("xpp", buf);
+		return False;
+	}
 
 	shell = XtVaCreatePopupShell("xpp-Palette",
 		xmDialogShellWidgetClass,	w,
@@ -220,7 +229,7 @@ void setup_palette(
 		sprintf(buf, no_config_msg, title);
 		msg("xpp", buf);
 		XtFree(buf);
-		return;
+		return True;
 	}
 
 	palette_info.palettes[palette_info.num_palettes].title = title;
@@ -320,6 +329,8 @@ void setup_palette(
 	remove_sashes(paned);
 
 	XtPopdown(shell); /* don't want it popped up till user asks */
+
+	return True;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -372,7 +383,9 @@ void setup_palettes(Widget w) {
 				}
 				if (*q == '\0') {
 					if(*title != '!') {
-						setup_palette(title, palette, w);
+						if(!setup_palette(title, palette, w)) {
+							return;
+						}
 					}
 					title = palette = 0;
 				}
@@ -382,7 +395,9 @@ void setup_palettes(Widget w) {
 					if(last_nl != 0) *last_nl = '\0';
 					last_nl = 0;
 					if(*title != '!') {
-						setup_palette(title, palette, w);
+						if(!setup_palette(title, palette, w)) {
+							return;
+						}
 					}
 					q += 1;
 					title = q;
@@ -408,7 +423,7 @@ void setup_palettes(Widget w) {
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * get_palette_title: pop up the title of a palette identified
+ * get_palette_title: return the title of a palette identified
  * by its index. setup_palettes should be called before calling this.
  * The returned value should not be freed. The return value is 0
  * if the index is out of range.
