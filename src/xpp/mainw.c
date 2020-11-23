@@ -297,13 +297,26 @@ static MenuItem edit_menu_items[] = {
 };
 
 /*
- * In the following, the templates tool item is desensitized if the tool
- * initialisation fails.
+ * The pull-right menu for the palettes is built dynamically after
+ * setup_palettes has been called using the following template
+ * with the label and callback_data members suitable updated.
  */
+static MenuItem palette_item_template =
+    { "", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        popup_palette_cb, (XtPointer)0, (MenuItem *)NULL, False };
+
+static MenuItem palette_items[MAX_PALETTES+1];
+
+/*
+ * If there are problems setting up the palette or templates menu
+ * then these items will be desensitized.
+ */
+#define TOOLS_MENU_PALETTE 0
 #define TOOLS_MENU_TEMPLATES 1
+
 static MenuItem tools_menu_items[] = {
     { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
-        popup_palette_cb, (XtPointer)0, (MenuItem *)NULL, False },
+        popup_palette_cb, (XtPointer)0, palette_items, False },
     { "Templates", &xmPushButtonGadgetClass, 'T', NULL, NULL,
         popup_templates_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Options", &xmPushButtonGadgetClass, 'O', NULL, NULL,
@@ -735,6 +748,7 @@ static Boolean setup_main_window(
 	Arg args[12];
 	Cardinal i;
 	XmString s1;
+	char *p;
 	Atom WM_DELETE_WINDOW;
 	Widget *wp;
 	OpenOutcome outcome = NO_ACTION;
@@ -1024,7 +1038,7 @@ static Boolean setup_main_window(
 
 /*
  * edit_menu_items gets changed here and later on so be careful if moving this
- * code
+ * code around.
  */
 	if(using_ext_char_set) {
 /* Don't want Identify Unicode item */
@@ -1041,8 +1055,20 @@ static Boolean setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+	setup_palettes(script);
+
+	for(i = 0; (p = get_palette_title(i)) != 0; i += 1) {
+		palette_items[i] = palette_item_template;
+		palette_items[i].label = p;
+		palette_items[i].callback_data = (XtPointer) (uintptr_t) i;
+	}
+	palette_items[i].label = NULL;
+
 	toolsmenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "Tools", 'T', False, tools_menu_items);
+	if(i == 0) {
+		set_menu_item_sensitivity(toolsmenu, TOOLS_MENU_PALETTE, False);
+	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Window menu:
@@ -1618,7 +1644,7 @@ static void popup_palette_cb(
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	popup_palette(script);
+	popup_palette((int)cbd);
 }
 
 /*

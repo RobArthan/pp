@@ -465,12 +465,26 @@ Values outside the range $0.2\ldots0.9$ are mapped to the nearest value in that 
 
 \subsubsection{Other Settings}\label{OtherSettings}
 The following settings are processed when {\Xpp} first starts running
-and are not changeable via the Options Tool later.
+and are not changeable via the Options Tool.
+The values of some of these resource strings are given as lists of text lines.
+The new-lines ending the lines in the strings in the string are inserted using the escape sequence  ``\verb|\n|''
+(this is optional on the last line).
+To split a string over multiple lines in the resource file, one uses ``\verb|\|''
+to escape the new-lines in the resource file, as shown in the following example.
+
+\begin{verbatim}
+Xpp*commandLineList:    \
+print_current_goal();\n\
+print_status();\n\
+save_and_quit();\n\
+undo 1;
+\end{verbatim}
+
 
 \begin{description}
 
-\item[{\tt Xpp.commandLineList}] Allowed values: a list of text strings
-separated by ``\verb"\n"''.  The Command Line Tool maintains a list of useful
+\item[{\tt Xpp.commandLineList}] Allowed values: a list of lines each giving the text of
+a {\Product} command (see above for an example).  The Command Line Tool maintains a list of useful
 commands that you can add to as you go along. This resource specifies the
 initial contents of the list.
 
@@ -504,19 +518,31 @@ starts up displaying a dialogue box asking you to type in the command to run.
 This resource gives a default value for the command line, which you can edit or
 just accept when you see this dialogue.
 
+\item[{\tt Xpp.palette}] Allowed values: a list of pairs each defining a palette tool.
+Each palette definition comprises a line giving the title for the palette and then one or more lines
+each giving a list of glyphs that will appear as a row in the grid of
+push-buttons that make up the palette.
+A ``.'' character in a list of glyphs indicates a position in the grid that will be left blank.
+Spaces and tabs may be interleaved in the glyphs for readability and empty lines are ignored.
+A palette definition is terminated by a line containing a single ``.'' 
+(optional in the last definition).
+If the palette title begins with a ``!" character, then the palette is ignored.
+
+The Palette Menu is limited to a maximum of 20 palettes. Palette definitions that would
+exceed this limit are ignored. The maximum dimension of the grid of push-buttons
+ in a palette is $100\times100$.
 
 \item[{\tt Xpp.templates}] Allowed
 values: a list of triples each comprising a bitmap file name, an insertion text
 string and a description text string; the values within each triple and the
-triples are separated by slash characters.  This resource defines the behaviour
+triples are separated by ``/'' characters.  This resource defines the behaviour
 of the Templates Tool.  Each triple defines one button in the Templates Tool.
 The bitmap gives the icon used as the label for the button, the insertion text
 is the text that is entered into the script window when the button is pressed,
 and the description string is the descriptive text associated with that icon in
 the Templates Tool help dialogue.
 
-The Templates Tool is limited to a maximum of 100 template buttons. If you
-specify more, entries after the first 100 will be ignored.  The library
+The library
 function {\tt XmGetPixmap} used to load the bitmap files has a rather complex
 search algorithm.  If the environment variable {\tt XBMLANGPATH} is set, then
 it gives a search path listing directories to be searched.  If this environment
@@ -527,6 +553,9 @@ set, then the directories \verb"$HOME" and \verb"$HOME/bitmaps" will be
 searched as well as some other directories in the X Windows installation.
 If all else fails, {\Xpp} will look for the bitmaps in the bitmaps subdirectory
 of the {\Product} installation directory.
+
+The Templates Tool is limited to a maximum of 100 template buttons. If you
+specify more, entries after the first 100 will be ignored.
 
 \item[{\tt Xpp.textTranslations}]
 Allowed values: a string representing what is known a translation table in the

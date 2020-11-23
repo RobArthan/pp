@@ -55,7 +55,9 @@
 #define EDITRES
 #endif
 
-#define MBSBUFSIZ 4000
+enum{MBSBUFSIZ = 4000};
+
+enum{MAX_PALETTES = 20};
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * TYPE DEFS
@@ -271,7 +273,9 @@ typedef enum {
 	extern void set_file_type(FileType file_type);
 	extern GlobalOptions orig_global_options;
 /* Module: palette */
-	extern void popup_palette(Widget w);
+	extern void setup_palettes(Widget w);
+	extern char *get_palette_title(int i);
+	extern void popup_palette(int i);
 	extern void register_palette_client(Widget w);
 /* Module: pixmaps */
 	extern Pixmap get_pp_pixmap(void);
@@ -405,7 +409,7 @@ typedef struct {
 #ifdef _xpp
 #define	extern
 #endif
-	GlobalOptions		global_options;
+	extern GlobalOptions global_options;
 	extern XppResources xpp_resources;
 	extern char *title;
 	extern char *argv0;
