@@ -395,22 +395,24 @@ typedef struct {
 } XppResources;
 
 #ifdef _xpp
-#define	extern
+#define	EXTERN
+#else
+#define	EXTERN extern
 #endif
-	GlobalOptions		global_options;
-	extern XppResources xpp_resources;
-	extern char *title;
-	extern char *argv0;
-	extern char *pp_home;
-	extern Boolean pp_env_debug;
-	extern Boolean updating_journal;
-	extern const char *const file_type_names[]
+	EXTERN GlobalOptions global_options;
+	EXTERN XppResources xpp_resources;
+	EXTERN char *title;
+	EXTERN char *argv0;
+	EXTERN char *pp_home;
+	EXTERN Boolean pp_env_debug;
+	EXTERN Boolean updating_journal;
+	EXTERN const char *const file_type_names[]
 #ifdef _xpp
 	= {"Unix", "MS-DOS", "Macintosh" };
 #else
 	;
 #endif
-	extern const char control_chars[256]
+	EXTERN const char control_chars[256]
 #ifdef _xpp
 	= {
 /*00*/ 1, /*01*/ 1, /*02*/ 1, /*03*/ 1, /*04*/ 1, /*05*/ 1, /*06*/ 1, /*07*/ 1,
@@ -448,9 +450,7 @@ typedef struct {
 #else
 	;
 #endif
-#ifdef _xpp
-#undef extern
-#endif
+#undef EXTERN
 /* **** **** **** **** **** **** **** **** **** **** **** ****
 * end of xpp.h
 **** **** **** **** **** **** **** **** **** **** **** **** */
