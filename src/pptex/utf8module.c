@@ -2231,7 +2231,7 @@ get_hol_kw(wchar_t *str,
 	int ch;
 	int ans;
 
-	wchar_t kw[MAX_KW_LEN+1];
+	wchar_t kw[MAX_KW_LEN+2];
 
 	kw[kwlen++] = L'%';
 	while(			kwlen<=MAX_KW_LEN
