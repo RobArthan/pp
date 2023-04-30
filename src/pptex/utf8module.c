@@ -2303,7 +2303,7 @@ get_hol_kw_uni(unicode *str,
 	unicode ch;
 	int ans;
 
-	wchar_t kw[MAX_KW_LEN+1];
+	wchar_t kw[MAX_KW_LEN+2];
 
 	kw[kwlen++] = L'%';
 	while(			kwlen<=MAX_KW_LEN
