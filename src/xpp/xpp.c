@@ -48,6 +48,8 @@
 #define XtCEditOnlyRows		"EditOnlyRows"
 #define XtNeditOnlyColumns	"editOnlyColumns"
 #define XtCEditOnlyColumns	"EditOnlyColumns"
+#define XtNbracketPairs		"bracketPairs"
+#define XtCBracketPairs		"BracketPairs"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files:
@@ -269,6 +271,15 @@ static XtResource resources[] = {
 		XtOffsetOf(XppResources, edit_only_columns),
 		XtRImmediate,
 		(XtPointer)80
+	},
+	{
+		XtNbracketPairs,
+		XtCBracketPairs,
+		XtRString,
+		sizeof(char *),
+		XtOffsetOf(XppResources, bracket_pairs),
+		XtRString,
+		"()[]{}"
 	}
 };
 
@@ -284,7 +295,7 @@ void usage (void)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * PPHOME environment variable.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void set_pp_home(void)
+static void set_pp_home(void)
 {
 	char *env_val, *dir, *base, *real_name, *env_entry, *unix_path, *x_search_path;
 /*
@@ -397,7 +408,7 @@ void set_pp_home(void)
  * Check for our fonts - must call after XtOpenDisplay
  * Returns true if caller should close and reopen.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-Boolean get_pp_fonts(void)
+static Boolean get_pp_fonts(void)
 {
 	char **fonts, **old_font_path, **new_font_path, *pp_font_dir;
 	int nfonts, npaths, i;
@@ -437,7 +448,7 @@ Boolean get_pp_fonts(void)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Check whether a command line option matches a given keyword
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-Boolean check_option(char *option,  char*keyword)
+static Boolean check_option(char *option,  char*keyword)
 {
 	int l = strlen(option);
 	return	l > 1
@@ -580,7 +591,7 @@ static char *get_command_line(int argc, char **argv, Boolean *use_default_comman
  * the default command string (and a space). Return the command line.
  * cmd_line argument must have been malloced and may be re-alloced.
  * **** **** **** **** **** **** **** **** **** **** **** ****/
-char *default_command_line(char *cmd_line)
+static char *default_command_line(char *cmd_line)
 {
 	char *tmp;
 	if(xpp_resources.argument_checker && *xpp_resources.argument_checker) {
@@ -602,6 +613,25 @@ char *default_command_line(char *cmd_line)
 		return tmp;
 	} else {
 		return cmd_line;
+	}
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Report on and work around bad value for the braacketPairs resource.
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+
+static void check_bracket_pairs(void)
+{
+	size_t bp_len =
+		xpp_resources.bracket_pairs ? 
+		strlen(xpp_resources.bracket_pairs) : 0;
+	if(bp_len %2 != 0) {
+		msg("warning",
+			"the bracketPairs string should have an even "
+			"number of characters. The last character "
+			"will be ignored.");
+		xpp_resources.bracket_pairs[bp_len - 1] = 0;
 	}
 }
 
@@ -697,6 +727,8 @@ int main(int argc, char **argv)
 	LIMIT_RANGE(xpp_resources.edit_only_rows, 2, 1000)
 
 	LIMIT_RANGE(xpp_resources.edit_only_columns, 2, 1000)
+
+	check_bracket_pairs();
 
 	cmd_line = get_command_line(argc, argv, &use_default_command);
 	

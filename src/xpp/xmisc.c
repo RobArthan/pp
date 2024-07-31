@@ -360,15 +360,13 @@ void text_field_verify_cb(
 	XmTextVerifyCallbackStruct *cbs = xtp;
 	int i, j;
 	char *p = cbs->text->ptr;
-	Boolean has_crs = False, has_controls = False;
+	Boolean has_controls = False;
 	if(cbs->text->format != XmFMT_8_BIT) {
 		cbs -> doit = False;
 		return;
 	}
 	for(i = 0; i < cbs->text->length; ++i) {
-		if(p[i] == '\r') {
-			has_crs = True;
-		} else if(control_chars[p[i] & 0xff]) {
+		if(control_chars[p[i] & 0xff]) {
 			has_controls = True;
 			p[i] = '?';
 		}
@@ -737,6 +735,8 @@ static MenuItem rw_edit_menu_items[] = {
         edit_copy_cb, NULL, (MenuItem *)NULL, False },
     { "Paste", &xmPushButtonGadgetClass, '\0', NULL, NULL,
         edit_paste_cb, NULL, (MenuItem *)NULL, False },
+    { "Match Brackets", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_match_bracket_cb, NULL, (MenuItem *)NULL, False },
     {NULL}
 };
 void attach_rw_edit_popup(Widget text_w)
@@ -755,6 +755,8 @@ void attach_rw_edit_popup(Widget text_w)
 static MenuItem ro_edit_menu_items[] = {
     { "Copy", &xmPushButtonGadgetClass, '\0', NULL, NULL,
         edit_copy_cb, NULL, (MenuItem *)NULL, False },
+    { "Match Brackets", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_match_bracket_cb, NULL, (MenuItem *)NULL, False },
     {NULL}
 };
 void attach_ro_edit_popup(Widget text_w)
@@ -791,6 +793,92 @@ void edit_paste_cb(
 {
 	Widget text_w = (Widget) cbd;
 	(void) XmTextPaste(text_w);
+}
+void edit_match_bracket(
+		Widget		text_w)
+{
+	XmTextPosition left, right, start, end;
+	int brk_ind, nesting;
+	char lbrk, rbrk;
+	char *text_buf = XmTextGetString(text_w);
+	Boolean found_brk = False, going_right, found_match = False;
+	if(!text_buf || text_buf[0] == 0) {
+		return;
+	}
+	if (XmTextGetSelectionPosition(text_w, &left, &right)) {
+		start = left;
+	} else {
+		start = XmTextGetInsertionPosition(text_w);
+	}
+	while(text_buf[start] != 0 && !found_brk) {
+		for(brk_ind  = 0; xpp_resources.bracket_pairs[brk_ind] != 0; brk_ind += 1) {
+			if(text_buf[start] == xpp_resources.bracket_pairs[brk_ind]) {
+				found_brk = True;
+				break;
+			}
+		}
+		if(found_brk) {
+			break;
+		}
+		start += 1;
+	}
+	if(found_brk) {
+		going_right = (brk_ind + 1) % 2;
+		if(going_right && xpp_resources.bracket_pairs[brk_ind+1] == 0) {
+			return;
+		}
+	} else {
+		flash_widget(text_w);
+		return;
+	}
+	if(going_right) {
+		lbrk = xpp_resources.bracket_pairs[brk_ind];
+		rbrk = xpp_resources.bracket_pairs[brk_ind+1];
+		nesting = 1;
+		for(end = start + 1; text_buf[end] != 0; end += 1) {
+			char ch = text_buf[end];
+			if(ch == lbrk) {
+				nesting += 1;
+			} else if(ch == rbrk) {
+				nesting -= 1;
+				if(nesting == 0) {
+					found_match = True;
+					break;
+				}
+			}
+		}
+	} else {
+		lbrk = xpp_resources.bracket_pairs[brk_ind-1];
+		rbrk = xpp_resources.bracket_pairs[brk_ind];
+		nesting = 1;
+		end = start;
+		for(start = end - 1; start >= 0; start -= 1) {
+			char ch = text_buf[start];
+			if(ch == rbrk) {
+				nesting += 1;
+			} else if(ch == lbrk) {
+				nesting -= 1;
+				if(nesting == 0) {
+					found_match = True;
+					break;
+				}
+			}
+		}
+	}
+	if(found_match) {
+		text_show_position(text_w, going_right ? end : start);
+		XmTextSetSelection(text_w, start, end + 1, CurrentTime);
+	} else {
+		flash_widget(text_w);
+	}
+	XtFree(text_buf);
+}
+void edit_match_bracket_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	edit_match_bracket((Widget) cbd);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Event handler for posting a popup menu

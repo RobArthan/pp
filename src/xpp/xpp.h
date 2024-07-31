@@ -360,6 +360,8 @@ typedef enum {
 	extern void edit_cut_cb(CALLBACK_ARGS);
 	extern void edit_copy_cb(CALLBACK_ARGS);
 	extern void edit_paste_cb(CALLBACK_ARGS);
+	extern void edit_match_bracket(Widget text_w);
+	extern void edit_match_bracket_cb(CALLBACK_ARGS);
 	extern void register_selection_source(
 		Widget w);
 	extern void attach_popup_menu(Widget work_w, Widget menu_w);
@@ -392,6 +394,7 @@ typedef struct {
 	int total_columns;
 	int edit_only_rows;
 	int edit_only_columns;
+	char *bracket_pairs;
 } XppResources;
 
 #ifdef _xpp
