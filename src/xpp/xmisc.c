@@ -803,6 +803,7 @@ void edit_match_bracket(
 	char *text_buf = XmTextGetString(text_w);
 	Boolean found_brk = False, going_right, found_match = False;
 	if(!text_buf || text_buf[0] == 0) {
+		flash_widget(text_w);
 		return;
 	}
 	if (XmTextGetSelectionPosition(text_w, &left, &right)) {
