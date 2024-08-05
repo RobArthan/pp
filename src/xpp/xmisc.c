@@ -244,7 +244,7 @@ static Boolean flash_widget_work_proc(XtPointer xtp)
 		XmNbackground, old_fg,
 		NULL);
 	XtAppAddTimeOut(app,
-		500,
+		200,
 		(XtTimerCallbackProc)flash_widget_timeout_proc,
 		xtp);
 	return True;
