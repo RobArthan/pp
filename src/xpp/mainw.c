@@ -2259,10 +2259,6 @@ static void command_line_action(
     String*	unused_params,
     Cardinal*	unused_num_params)
 {
-	printf("Widget = %lx; script = %lx; journal = %lx\n",
-		(unsigned long) unused_widget,
-		(unsigned long) script,
-		(unsigned long) journal);
 	if(!global_options.edit_only) {
 		add_command_line_tool(script);
 	}
