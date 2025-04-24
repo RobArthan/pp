@@ -301,7 +301,7 @@ void text_verify_cb(
 	for(i = 0; i < cbs->text->length; ++i) {
 		if(p[i] == '\r') {
 			has_crs = True;
-		} else if(control_chars[p[i] & 0xff]) {
+		} else if(0 <= p[i] && p[i] <= 0xff && control_chars[p[i]]) {
 			has_controls = True;
 			p[i] = '?';
 		}
