@@ -80,6 +80,9 @@ Run the test suite for the package by making the target test, e.g., in hol:
 
     make -f hol.mkf test
 
+There is also a Makefile in $HOME/git/pp/src that will do all the
+installations and run the tests for you.
+
 ## tools directory
 
 The tools directory is where you build releases. It also contains
