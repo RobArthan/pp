@@ -80,18 +80,23 @@ Run the test suite for the package by making the target test, e.g., in hol:
 
     make -f hol.mkf test
 
+There is also a Makefile in $HOME/git/pp/src that will do all the
+installations and run the tests for you.
+
 ## tools directory
 
 The tools directory is where you build releases. It also contains
 other odds and ends, currently just comprising a blank Lemma 1 document.
 
-You construct a release in $HOME/git/tools using make_rel.
+You construct a release in $HOME/git/pp/tools (assuming the ProofPower
+repository was cloned into $HOME/git/pp) using make_rel.
 In simple use you just run it with the version number as parameter:
 
-    make_rel 1.1w53
+    make_rel -v 1.1w53
 
 This will create the installation directory and the tarball for
-the release as children of $HOME/bgit/pp/rel.
+the release as children of $HOME/git/pp/rel, and will save this latest
+release number in $HOME/git/pp/version (unless -u).
 make_rel has other parameters that are for use when including
 the ProofPower repository as a submodule of another repo.
 
