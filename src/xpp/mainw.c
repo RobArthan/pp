@@ -182,6 +182,8 @@ static void execute_line_action(ACTION_PROC_ARGS);
 static void file_menu_op(int op, Boolean *success);
 static void goto_line_action(ACTION_PROC_ARGS);
 static void interrupt_action(ACTION_PROC_ARGS);
+static void match_bracket_action(ACTION_PROC_ARGS);
+static void interrupt_action(ACTION_PROC_ARGS);
 static void journal_resize_handler (EVENT_HANDLER_ARGS);
 static void quit_action(ACTION_PROC_ARGS);
 static void script_open_action(ACTION_PROC_ARGS);
@@ -267,8 +269,8 @@ static MenuItem file_menu_items[] = {
  * undo and redo entries. (Used to set the sensitivity).
  */
 
-#define EDIT_MENU_UNDO  4
-#define EDIT_MENU_REDO  5
+#define EDIT_MENU_UNDO  6
+#define EDIT_MENU_REDO  7
 /*
  * Identify Unicode must come last (so we can easily remove it
  * when using the ext encodint.
@@ -280,6 +282,9 @@ static MenuItem edit_menu_items[] = {
         edit_copy_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Paste", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         edit_paste_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
+    { "Match Bracket", &xmPushButtonGadgetClass, 'B', NULL, NULL,
+        edit_match_bracket_cb, (XtPointer)0, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
     { "Undo", &xmPushButtonGadgetClass, 'U', NULL, NULL,
         script_undo_cb, (XtPointer)0, (MenuItem *)NULL, False },
@@ -434,6 +439,7 @@ static XtActionsRec actions[] = {
 	{ "execute-line", execute_line_action },
 	{ "goto-line", goto_line_action },
 	{ "interrupt", interrupt_action },
+	{ "match-bracket", match_bracket_action },
 	{ "quit", quit_action },
 	{ "script-open", script_open_action },
 	{ "script-redo", script_redo_action },
@@ -2390,6 +2396,18 @@ static void interrupt_action(
     Cardinal*	unused_num_params)
 {
 	interrupt_application();
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * match-bracket action function; call match_bracket on the widget
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void match_bracket_action(
+    Widget 	text_w,
+    XEvent*	unused_event,
+    String*	unused_params,
+    Cardinal*	unused_num_params)
+{
+	edit_match_bracket(text_w);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

@@ -230,7 +230,7 @@ static Boolean flash_widget_work_proc(XtPointer xtp)
 		XmNbackground, old_fg,
 		NULL);
 	XtAppAddTimeOut(app,
-		500,
+		200,
 		(XtTimerCallbackProc)flash_widget_timeout_proc,
 		xtp);
 	return True;
@@ -297,11 +297,11 @@ void text_verify_cb(
 	XmTextVerifyCallbackStructWcs *cbs = xtp;
 	int i, j;
 	wchar_t *p = cbs->text->wcsptr;
-	Boolean has_crs = False, has_controls = False;
+	Boolean has_controls = False, has_crs = False;;
 	for(i = 0; i < cbs->text->length; ++i) {
-		if(p[i] == L'\r') {
+		if(p[i] == '\r') {
 			has_crs = True;
-		} else if(0 <= p[i] && p[i] <= 0xff && control_chars[p[i]]) {
+		} else if(control_chars[p[i] & 0xff]) {
 			has_controls = True;
 			p[i] = '?';
 		}
@@ -715,8 +715,11 @@ static MenuItem rw_edit_menu_items[] = {
         edit_copy_cb, NULL, (MenuItem *)NULL, False },
     { "Paste", &xmPushButtonGadgetClass, '\0', NULL, NULL,
         edit_paste_cb, NULL, (MenuItem *)NULL, False },
+    { "Match Brackets", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_match_bracket_cb, NULL, (MenuItem *)NULL, False },
     {NULL}
 };
+
 void attach_rw_edit_popup(Widget text_w)
 {
 	MenuItem *mip = rw_edit_menu_items;
@@ -733,6 +736,8 @@ void attach_rw_edit_popup(Widget text_w)
 static MenuItem ro_edit_menu_items[] = {
     { "Copy", &xmPushButtonGadgetClass, '\0', NULL, NULL,
         edit_copy_cb, NULL, (MenuItem *)NULL, False },
+    { "Match Brackets", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_match_bracket_cb, NULL, (MenuItem *)NULL, False },
     {NULL}
 };
 void attach_ro_edit_popup(Widget text_w)
@@ -742,6 +747,126 @@ void attach_ro_edit_popup(Widget text_w)
 		(mip++)->callback_data = text_w;
 	}
 	attach_edit_popup(text_w, ro_edit_menu_items);
+}
+
+size_t mbslen(char *p) {
+	wchar_t wc;
+	int l = strlen(p), t;
+	int res = 0;
+	while(l) {
+		t = mbtowc(&wc, p, l);
+		if(t == -1) {
+			return 0;
+		}
+		res += 1;
+		p += t;
+		l -= t;
+	}
+	return res;
+}
+
+static wchar_t *bracket_pairs = NULL;
+void set_bracket_pairs(void)
+{
+	size_t bp_len = mbslen(xpp_resources.bracket_pairs);
+	bracket_pairs = (wchar_t *)XtMalloc(
+                                       (bp_len + 1)*(sizeof(wchar_t)));
+	mbstowcs(bracket_pairs, xpp_resources.bracket_pairs, bp_len + 1);
+	if(bp_len %2 != 0) {
+		msg("warning",
+			"the bracketPairs string should have an even "
+			"number of characters. The last character "
+			"will be ignored.");
+		bracket_pairs[bp_len - 1] = 0;
+	}
+}
+
+void edit_match_bracket(
+		Widget		text_w)
+{
+	XmTextPosition left, right, start, end;
+	int brk_ind, nesting;
+	wchar_t lbrk, rbrk;
+	wchar_t *text_buf = XmTextGetStringWcs(text_w);
+	Boolean found_brk = False, going_right, found_match = False;
+	if(!text_buf || text_buf[0] == 0) {
+		flash_widget(text_w);
+		return;
+	}
+	if (XmTextGetSelectionPosition(text_w, &left, &right)) {
+		start = left;
+	} else {
+		start = XmTextGetInsertionPosition(text_w);
+	}
+	while(text_buf[start] != L'\0' && !found_brk) {
+		for(brk_ind  = 0; bracket_pairs[brk_ind] != 0; brk_ind += 1) {
+			if(text_buf[start] == bracket_pairs[brk_ind]) {
+				found_brk = True;
+				break;
+			}
+		}
+		if(found_brk) {
+			break;
+		}
+		start += 1;
+	}
+	if(found_brk) {
+		going_right = (brk_ind + 1) % 2;
+		if(going_right && bracket_pairs[brk_ind+1] == L'\0') {
+			return;
+		}
+	} else {
+		flash_widget(text_w);
+		return;
+	}
+	if(going_right) {
+		lbrk = bracket_pairs[brk_ind];
+		rbrk = bracket_pairs[brk_ind+1];
+		nesting = 1;
+		for(end = start + 1; text_buf[end] != 0; end += 1) {
+			wchar_t ch = text_buf[end];
+			if(ch == lbrk) {
+				nesting += 1;
+			} else if(ch == rbrk) {
+				nesting -= 1;
+				if(nesting == 0) {
+					found_match = True;
+					break;
+				}
+			}
+		}
+	} else {
+		lbrk = bracket_pairs[brk_ind-1];
+		rbrk = bracket_pairs[brk_ind];
+		nesting = 1;
+		end = start;
+		for(start = end - 1; start >= 0; start -= 1) {
+			wchar_t ch = text_buf[start];
+			if(ch == rbrk) {
+				nesting += 1;
+			} else if(ch == lbrk) {
+				nesting -= 1;
+				if(nesting == 0) {
+					found_match = True;
+					break;
+				}
+			}
+		}
+	}
+	if(found_match) {
+		text_show_position(text_w, going_right ? end : start);
+		XmTextSetSelection(text_w, start, end + 1, CurrentTime);
+	} else {
+		flash_widget(text_w);
+	}
+	XtFree((char*)text_buf);
+}
+void edit_match_bracket_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	edit_match_bracket((Widget) cbd);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Callback routines for the edit menus:

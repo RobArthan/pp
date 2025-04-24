@@ -113,11 +113,16 @@ static void get_labels(
 {
 	wchar_t wc;
 	int col = 0;
-	int r, l = strlen(p);
+	int r, l = strlen(p) + 1;
 	palette_config->num_rows = 0;
 	palette_config->num_cols = 0;
 	while(l) {
-		r = mbtowc(&wc, p, l);
+		if(*p != '\0') {
+			r = mbtowc(&wc, p, l);
+		} else {
+			r = 1;
+			wc = L'\0';
+		}
 		if(r == -1) {
 			char buf[100];
 			sprintf(buf, binary_data_msg,
@@ -127,6 +132,7 @@ static void get_labels(
 		}
 		switch(wc) {
 			case L'\n': /* end of row */
+			case L'\0': /* end of palette */
 				palette_config->labels
 					[palette_config->num_rows]
 						[col] = L'\0';

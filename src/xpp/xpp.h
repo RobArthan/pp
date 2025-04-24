@@ -370,6 +370,9 @@ typedef enum {
 	extern void edit_cut_cb(CALLBACK_ARGS);
 	extern void edit_copy_cb(CALLBACK_ARGS);
 	extern void edit_paste_cb(CALLBACK_ARGS);
+	extern void set_bracket_pairs(void);
+	extern void edit_match_bracket(Widget text_w);
+	extern void edit_match_bracket_cb(CALLBACK_ARGS);
 	extern void register_selection_source(
 		Widget w);
 	extern void attach_popup_menu(Widget work_w, Widget menu_w);
@@ -391,6 +394,7 @@ typedef enum {
 typedef struct {
 	int  add_new_line_mode;
 	char *argument_checker;
+	char *bracket_pairs;
 	char *command_line_list;
 	char *default_command;
 	int edit_only_columns;
@@ -407,23 +411,25 @@ typedef struct {
 } XppResources;
 
 #ifdef _xpp
-#define	extern
+#define	EXTERN
+#else
+#define EXTERN extern
 #endif
-	extern GlobalOptions global_options;
-	extern XppResources xpp_resources;
-	extern char *title;
-	extern char *argv0;
-	extern char *pp_home;
-	extern Boolean pp_env_debug;
-	extern Boolean updating_journal;
-	extern Boolean using_ext_char_set;
-	extern const char *const file_type_names[]
+	EXTERN GlobalOptions global_options;
+	EXTERN XppResources xpp_resources;
+	EXTERN char *title;
+	EXTERN char *argv0;
+	EXTERN char *pp_home;
+	EXTERN Boolean pp_env_debug;
+	EXTERN Boolean updating_journal;
+	EXTERN Boolean using_ext_char_set;
+	EXTERN const char *const file_type_names[]
 #ifdef _xpp
 	= {"Unix", "MS-DOS", "Macintosh" };
 #else
 	;
 #endif
-	extern const char control_chars[256]
+	EXTERN const char control_chars[256]
 #ifdef _xpp
 	= {
 /*00*/ 1, /*01*/ 1, /*02*/ 1, /*03*/ 1, /*04*/ 1, /*05*/ 1, /*06*/ 1, /*07*/ 1,
@@ -460,9 +466,6 @@ typedef struct {
 /*f8*/ 0, /*f9*/ 0, /*fa*/ 0, /*fb*/ 0, /*fc*/ 0, /*fd*/ 0, /*fe*/ 0, /*ff*/ 0};
 #else
 	;
-#endif
-#ifdef _xpp
-#undef extern
 #endif
 /* **** **** **** **** **** **** **** **** **** **** **** ****
 * end of xpp.h

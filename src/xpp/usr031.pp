@@ -483,6 +483,11 @@ undo 1;
 
 \begin{description}
 
+\item[{\tt Xpp.bracketPairs}] Allowed values: a list identifying characters to be treated
+as brackets in the bracket-matching function in the Edit menus. The list should give a sequence
+of left-right bracket pairs. The resource file provided with {\Product}
+provides this as  ``()[]\{\}⦇⦈⟨⟩⟦⟧\StartIndex\EndIndex''.
+
 \item[{\tt Xpp.commandLineList}] Allowed values: a list of lines each giving the text of
 a {\Product} command (see above for an example).  The Command Line Tool maintains a list of useful
 commands that you can add to as you go along. This resource specifies the
@@ -497,7 +502,7 @@ exeuted. To allow you to scroll through this history, {\Xpp} provides actions
 ``{\tt command-history-down}'' and ``{\tt command-history-up}'' in addition to
 the repertoire of standard Motif actions for a text field widget.  These
 actions are assigned to the Page Down and Page Up keys in the example resource
-files.
+files (in addition to the translation table entries discussed under {\tt Xpp.textTranslations} below).
 
 \item[{\tt Xpp*journal.editable}] Allowed values: ``True'' or ``False''.  In a
 command session, this resource controls what happens if you try to enter text
@@ -565,13 +570,12 @@ used to override the translation table for all the various text areas used for
 text that may include mathematical symbols.
 
 This resource is used in {\Xpp} to give keyboard short-cuts for entering text
-(typically mathematical symbols) and for executing commands.  For the latter
-purpose, {\Xpp} adds an additional action ``{\tt execute}'' to the repertoire
-of standard Motif actions in the script window widget.  With no parameters this
-action causes the text selected in the script window to be executed (just like
+(typically mathematical symbols) and for executing commands. {\Xpp}
+adds several actions to the repertoire of standard Motif actions to its text
+widgets. For example an action ``{\tt execute}'' is included.  With no parameters this
+action causes the current text selection to be executed (just like
 Execute Selection in the Command menu).  With parameters, the action executes
 the text given as parameters.
-
 The example resource file uses a \verb"#include" directive to include the file named {\tt XppKeyboard}.
 See section~\ref{KeyboardLayout} below for more
 information.

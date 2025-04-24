@@ -26,6 +26,8 @@
 #define XtCAddNewlineMode	"AddNewlineMode"
 #define XtNargumentChecker	"argumentChecker"
 #define XtCArgumentChecker	"ArgumentChecker"
+#define XtNbracketPairs		"bracketPairs"
+#define XtCBracketPairs		"BracketPairs"
 #define XtNcommandLineList	"commandLineList"
 #define XtCCommandLineList	"CommandLineList"
 #define XtNdefaultCommand	"defaultCommand"
@@ -164,6 +166,15 @@ static XtResource resources[] = {
 		 "pp -V"
 	},
 	{
+		XtNbracketPairs,
+		XtCBracketPairs,
+		XtRString,
+		sizeof(char *),
+		XtOffsetOf(XppResources, bracket_pairs),
+		XtRString,
+		"()[]{}"
+ 	},
+	{
 		 XtNcommandLineList,
 		 XtCCommandLineList,
 		 XtRString,
@@ -294,7 +305,7 @@ void usage (void)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * PPHOME environment variable.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void set_pp_home(void)
+static void set_pp_home(void)
 {
 	char *env_val, *dir, *base, *real_name, *env_entry, *unix_path, *x_search_path;
 /*
@@ -407,7 +418,7 @@ void set_pp_home(void)
  * Check for our fonts - must call after XtOpenDisplay
  * Returns true if caller should close and reopen.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-Boolean get_pp_fonts(void)
+static Boolean get_pp_fonts(void)
 {
 	char **fonts, **old_font_path, **new_font_path, *pp_font_dir;
 	int nfonts, npaths, i;
@@ -442,17 +453,6 @@ Boolean get_pp_fonts(void)
 	XtFree((void*)pp_font_dir);
 	XFlush(XtDisplay(root));
 	return nfonts == 1;
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Check whether a command line option matches a given keyword
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-Boolean check_option(char *option,  char*keyword)
-{
-	int l = strlen(option);
-	return	l > 1
-	&&	*option == '-'
-	&&	!strncmp(option + 1, keyword, l - 1);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -590,7 +590,7 @@ static char *get_command_line(int argc, char **argv, Boolean *use_default_comman
  * the default command string (and a space). Return the command line.
  * cmd_line argument must have been malloced and may be re-alloced.
  * **** **** **** **** **** **** **** **** **** **** **** ****/
-char *default_command_line(char *cmd_line)
+static char *default_command_line(char *cmd_line)
 {
 	char *tmp;
 	if(xpp_resources.argument_checker && *xpp_resources.argument_checker) {
@@ -614,6 +614,7 @@ char *default_command_line(char *cmd_line)
 		return cmd_line;
 	}
 }
+
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * choose_app_class: choose app_class and set using_ext_char_set based
@@ -786,6 +787,8 @@ int main(int argc, char **argv)
 	command_line_list = xpp_resources.command_line_list;
 
 	(void) fcntl(x_fd, F_SETFD, 0);
+
+	set_bracket_pairs();
 
 	if (using_ext_char_set && !havefonts && get_pp_fonts())  {
 		/* Need to restart to pick up the fonts added to the path by get_pp_fonts */
