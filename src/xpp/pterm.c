@@ -1214,7 +1214,7 @@ static void sig_panic_handler(int sig)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * xt_error_handler also calls panic_exit ...
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void xt_error_handler(char * m)
+static _X_NORETURN void xt_error_handler(char * m)
 {
 	msg(xt_error_handled_message, m);
 	(void) panic_exit("exiting", 16);
