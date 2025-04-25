@@ -717,12 +717,18 @@ static MenuItem rw_edit_menu_items[] = {
         edit_paste_cb, NULL, (MenuItem *)NULL, False },
     { "Match Brackets", &xmPushButtonGadgetClass, '\0', NULL, NULL,
         edit_match_bracket_cb, NULL, (MenuItem *)NULL, False },
+    { "Identify Unicode ...", &xmPushButtonGadgetClass, 'I', NULL, NULL,
+        identify_unicode_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
 
 void attach_rw_edit_popup(Widget text_w)
 {
 	MenuItem *mip = rw_edit_menu_items;
+	if(using_ext_char_set) {
+/* Don't want Identify Unicode item */
+		rw_edit_menu_items[XtNumber(rw_edit_menu_items)-2].label = NULL;
+	}
 	while(mip->label != NULL) {
 		(mip++)->callback_data = text_w;
 	}
@@ -738,11 +744,17 @@ static MenuItem ro_edit_menu_items[] = {
         edit_copy_cb, NULL, (MenuItem *)NULL, False },
     { "Match Brackets", &xmPushButtonGadgetClass, '\0', NULL, NULL,
         edit_match_bracket_cb, NULL, (MenuItem *)NULL, False },
+    { "Identify Unicode ...", &xmPushButtonGadgetClass, 'I', NULL, NULL,
+        identify_unicode_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
 void attach_ro_edit_popup(Widget text_w)
 {
 	MenuItem *mip = ro_edit_menu_items;
+	if(using_ext_char_set) {
+/* Don't want Identify Unicode item */
+		ro_edit_menu_items[XtNumber(ro_edit_menu_items)-2].label = NULL;
+	}
 	while(mip->label != NULL) {
 		(mip++)->callback_data = text_w;
 	}
