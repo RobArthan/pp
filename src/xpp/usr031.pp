@@ -488,8 +488,8 @@ as brackets in the bracket-matching function in the Edit menus. The list should 
 of left-right bracket pairs. The resource file provided with {\Product}
 provides this as  ``()[]\{\}⦇⦈⟨⟩⟦⟧\StartIndex\EndIndex''.
 
-\item[{\tt Xpp.commandLineList}] Allowed values: a list of lines each giving the text of
-a {\Product} command (see above for an example).  The Command Line Tool maintains a list of useful
+\item[{\tt Xpp.commandLineList}] Allowed values: a list of text strings
+separated by ``\verb"\n"''.  The Command Line Tool maintains a list of useful
 commands that you can add to as you go along. This resource specifies the
 initial contents of the list.
 
@@ -498,7 +498,7 @@ representing what is known a translation table in the X Toolkit Intrinsics
 library (see the example files for the format).  A translation table associates
 ``actions'' with key strokes.  The text field containing the command in the
 Command Line Tool maintains a history of up to 40 commands that have been
-exeuted. To allow you to scroll through this history, {\Xpp} provides actions
+executed. To allow you to scroll through this history, {\Xpp} provides actions
 ``{\tt command-history-down}'' and ``{\tt command-history-up}'' in addition to
 the repertoire of standard Motif actions for a text field widget.  These
 actions are assigned to the Page Down and Page Up keys in the example resource
@@ -572,16 +572,17 @@ text that may include mathematical symbols.
 This resource is used in {\Xpp} to give keyboard short-cuts for entering text
 (typically mathematical symbols) and for executing commands. {\Xpp}
 adds several actions to the repertoire of standard Motif actions to its text
-widgets. For example an action ``{\tt execute}'' is included.  With no parameters this
+widgets. For example include an action ``{\tt execute}''.  With no parameters this
 action causes the current text selection to be executed (just like
 Execute Selection in the Command menu).  With parameters, the action executes
 the text given as parameters.
+
 The example resource file uses a \verb"#include" directive to include the file named {\tt XppKeyboard}.
-See section~\ref{KeyboardLayout} below for more
-information.
+See section~\ref{KeyboardLayout} below for more information on the keyboard layout and on the actions
+supported by the {\Xpp} text widgets that can be accessed via keyboard short-cuts.
 
 \item[{\tt Xpp.defaultCommand}]
-Allowed values: a string giving a UNIX command line to
+Allowed values: a string giving a UN*X command line to
 be executed if {\Xpp} is invoked with command line options other than
 the X WIndows toolkit options or the options defined for {\Xpp}.
 The example resource file sets this to {\tt pp}, so that, for example,
@@ -589,11 +590,11 @@ if called with the command line \verb"xpp -d hol", {\Xpp} will take
 \verb"pp -d hol" as the command line to run.
 
 \item[{\tt Xpp.argumentChecker}]
-Allowed values: a string giving a UNIX command line to
+Allowed values: a string giving a UN*X command line to
 be executed if {\Xpp} is invoked with command line options other than
 the X WIndows toolkit options or the options defined for {\Xpp}.
 The other options are appended to this string and the result is
-executed as a UNIX command line before bringing up the graphical
+executed as a UN*X command line before bringing up the graphical
 user interface. {\Xpp} exits if the command line exits with a non-zero response
 code. The intention is that the command line supplied should validate
 the options and exit with a non-zero response if the command line specified
@@ -658,6 +659,47 @@ you will need for this purpose are shown in the table in section~\ref{FONTS} bel
 \caption{Example Keyboard Layout: {\tt XppKeyboard}}\label{fig5}
 \end{figure}
 
+In addition to the keyboard mappings for entering mathematical sumbols, the file {\tt XppKeyboard} also 
+maps some combinations of the form ``Ctrl+key'' to actions that carry out various editing and command functions.
+Most of these mappings give short-cuts to actions that can also be invoked from the menus, e.g., ``Ctrl+c'' has
+the same effect as the menu item Edit:Copy.  
+With most of these ``Ctrl+key'' and ``Ctrl+Shift+Key'' are equivalent, the exception being ``Ctrl+z'', which is the same as Edit:Undo, while ``Ctrl+Shift+z'' is the same as Edit:Redo.
+The following table lists each of the ``Ctrl+key'' combinations together with a description of the action it invokes. 
+
+\begin{center}
+\begin{tabular}{|l|l|}\hline
+\bf \begin{tabular}[t]{@{}l@{}}Key\\Combination\end{tabular} & \bf Action \\\hline
+Ctrl+; &  Execute a semi-colon followed by a newline \\\hline
+Ctrl+Space &  Same as Command:Execute Selection \\\hline
+Ctrl+Return &  Same as Command:Execute Selection \\\hline
+Ctrl+a &  Select all the text in the text widget \\\hline
+Ctrl+b &  Same as Edit:Match Bracket. \\\hline
+Ctrl+c &  Same as Edit:Copy \\\hline
+Ctrl+d &  Same as Command:Command Line \\\hline
+Ctrl+f &  Same as Edit:Search and Replace \\\hline
+Ctrl+g &  Execute ``\verb|print_current_goal ();| followed by a newline. \\\hline
+Ctrl+h &  Same as Window:Show/hide Script \\\hline
+Ctrl+j &  Same as Window:Show/hide Journal \\\hline
+Ctrl+i &  Same as Command:Interrupt \\\hline
+Ctrl+l &  Same as Edit:Goto Line \\\hline
+Ctrl+m &  Execute a newline. \\\hline
+Ctrl+n &  Same as Command:Execute Line \\\hline
+Ctrl+o &  Same as File:Open \\\hline
+Ctrl+p &  Execute ``\verb|print_status ();| followed by a newline \\\hline
+Ctrl+q &  Same as: File:Quit \\\hline
+Ctrl+r &  Execute ``\verb|redo ();| followed by a newline \\\hline
+Ctrl+s &  Same as File:Save \\\hline
+Ctrl+t &  Same as Window:Toggle Geometry \\\hline
+Ctrl+u &  Execute ``\verb|undo 1;| followed by a newline \\\hline
+Ctrl+v &  Same as Edit:Paste \\\hline
+Ctrl+w &  Same Window:Show Geometry \\\hline
+Ctrl+x &  Same as Edit:Cut \\\hline
+Ctrl+y &  Same as Edit:Redo \\\hline
+Ctrl-Shift+z &  Same as Edit:Undo \\\hline
+Ctrl+Shift+z &  Same as Edit:Redo \\\hline
+\end{tabular}
+\end{center}
+
 \section{SYSTEM INTERFACES}
 
 Section~\ref{InvocationAndEnvironment} to~\ref{RegularExpressions} below
@@ -707,16 +749,16 @@ will delete the backup file if your file has been successfully
 overwritten. The backup file will not be deleted if {\Xpp}
 was unable to overwrite your file (e.g., if the file system is full).
 
-Some Unix and Linux file system types, e.g., MS-DOS file systems,
+Some UN*X file system types, e.g., MS-DOS file systems,
 may not support the file names that {\Xpp} uses for its backup files.
 {\Xpp} will detect this situation and prompt you for confirmation
 if the backup cannot be taken for this reason.
 
 \subsection{Signals}\label{Signals}
-This section assumes you know a little about Unix and Linux signals.
+This section assumes you know a little about UN*X signals.
 E.g., see the {\tt man} page for {\tt kill(1)}.
 {\XPP} recognises all the signals supported on your operating
-sytem that are defined by the Single UNIX Standard (SUS V3)
+system that are defined by the Single UNIX Standard (SUS V3)
 and also some others that are specific to particular operating systems.
 The response of {\Xpp} to various types of signal is shown in the following
 table.
@@ -825,10 +867,9 @@ If you open a file containing binary data, you will be warned that the uneditabl
 changed and the read-only option will be set to remind you that saving the file may cause problems.
 
 \subsection{Regular Expressions}\label{RegularExpressions}
-
-When the option {\tt Xpp*use-regular-expressions.set} is ``True'',
+If the the ``Use wildcard'' button in the Search and Replace is checked,
 {\Xpp} treats the search pattern in the Search and Replace Tool as
-a regular expression. {\Xpp} uses the POSIX-compliant regular
+a regular expression (this can be set as the default by setting the resource {\tt Xpp*use-regular-expressions.set} to ``True''). {\Xpp} uses the POSIX-compliant regular
 expression library supplied with your system. Some of the more useful
 regular expressions forms are shown in the following table:
 
@@ -839,7 +880,7 @@ regular expressions forms are shown in the following table:
 $c$ &
 	matches the character $c$,
 	provided $c$ is a character, such as a letter, digit, space, tab or
-	new-line that does not have a special meaning.
+	new-line, that does not have a special meaning.
 \\\hline
 \verb"\"$c$ &
 	matches the character $c$, whether or not $c$ is a character
@@ -909,7 +950,7 @@ If $c$ is not a decimal digit, then
 can include a backslash or an ampersand in your replacement using `\verb"\\"' or `\verb"&"'.
 
 
-Consult your local UNIX or Linux manual pages (typically under
+Consult your local UN*X pages (typically under
 {\tt regex(5)} or {\tt regex(7)}) for more information on the
 regular expression syntax supported on your system. {\Xpp} uses
 the POSIX extended regular expression syntax.
@@ -1165,4 +1206,5 @@ and their corresponding images are shown in the following table:
 } % end of font display stuff.
 
 \end{document}
+
 
