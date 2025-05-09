@@ -178,6 +178,10 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported to Lemma 1 document template.
+\item[2025/04/0]
+Now uses sort command to output a properly sorted list
+of theory names, when that option applies.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -1338,7 +1342,10 @@ Check that the program exited with status 0:
 EXIT_STATUS=$?
 if test $EXIT_STATUS -ne 0
 then
-	cat "$TEMP_FILE"
+	if "$PPLISTPRINTTHEORIES" eq "just names,"
+	then sort "$TEMP_FILE"
+	else cat "$TEMP_FILE"S
+	fi
 	rm -f "$TEMP_FILE"
 	diag "\"pp -d $DBN\" exited with status $EXIT_STATUS"
 	exit_status=1
