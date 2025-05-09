@@ -643,8 +643,10 @@ uses the logical modifier keys ``Mod4'', ``Mod5'' and ``Shift'' to give four ext
 See the comments in the file {\tt XppKeyboard} for some hints on how to proceed on systems with keyboards that offer more limited possibilities for
 the modifier keys.
 You may wish to change the details of the assignments of
-symbols to key combinations in {\tt XppKeyboard}. The octal codes
-you will need for this purpose are shown in the table in section~\ref{FONTS} below.
+symbols to key combinations in {\tt XppKeyboard}.
+
+%The octal codes
+%you will need for this purpose are shown in the table in section~\ref{FONTS} below.
 
 %\clearpage
 
@@ -664,8 +666,9 @@ maps some combinations of the form ``Ctrl+key'' to actions that carry out variou
 Most of these mappings give short-cuts to actions that can also be invoked from the menus, e.g., ``Ctrl+c'' has
 the same effect as the menu item Edit:Copy.  
 With most of these ``Ctrl+key'' and ``Ctrl+Shift+Key'' are equivalent, the exception being ``Ctrl+z'', which is the same as Edit:Undo, while ``Ctrl+Shift+z'' is the same as Edit:Redo.
-The following table lists each of the ``Ctrl+key'' combinations together with a description of the action it invokes. 
+Table \ref{fig6} lists each of the ``Ctrl+key'' combinations together with a description of the action it invokes. 
 
+\begin{figure}[h]
 \begin{center}
 \begin{tabular}{|l|l|}\hline
 \bf \begin{tabular}[t]{@{}l@{}}Key\\Combination\end{tabular} & \bf Action \\\hline
@@ -699,6 +702,8 @@ Ctrl-Shift+z &  Same as Edit:Undo \\\hline
 Ctrl+Shift+z &  Same as Edit:Redo \\\hline
 \end{tabular}
 \end{center}
+\caption{Example Keyboard Layout: {\tt XppKeyboard}}\label{fig6}
+\end{figure}
 
 \section{SYSTEM INTERFACES}
 
