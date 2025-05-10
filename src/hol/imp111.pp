@@ -178,7 +178,7 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported to Lemma 1 document template.
-\item[2025/04/0]
+\item[2025/04/30 corrected 2025/05/10]
 Now uses sort command to output a properly sorted list
 of theory names, when that option applies.
 
