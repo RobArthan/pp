@@ -193,6 +193,9 @@ now works so SML/NJ and Poly/ML can use the same code.
 \item[2019/12/13]
 Added {\em translate\_for\_output\_temp}.
 
+\item[2024/03/05]
+Added timeout function.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 
@@ -1739,7 +1742,59 @@ fun ⦏read_stopwatch⦎ (units : TIMER_UNITS) : int = (
 	|	Seconds => Time.toSeconds))
 	(Time.-(Time.now(), !stopwatch))
 );
+(*
+=POLYML
+*)
+fun app_with_timeout (timeout : int, units : TIMER_UNITS) (f : 'a -> ''b) (x : 'a) : ''b OPT = (
+	let	open Thread;
+		val  res : ''b OPT ref = ref Nil; 
+		val cond_var = ConditionVar.conditionVar ();
+		val mut = Mutex.mutex ();
+		val attrs = [
+			Thread.MaximumMLStack NONE,
+			Thread.EnableBroadcastInterrupt false,
+			Thread.InterruptState Thread.InterruptSynch];
+		fun worker () = (
+			let	val r = f x;
+				val () = Thread.setAttributes[
+						Thread.InterruptState Thread.InterruptDefer]
+				val () = Mutex.lock mut;
+				val () = res := Value r;
+				val () = ConditionVar.signal cond_var;
+				val () = Mutex.unlock mut
+			in	()
+			end
+		);
+		val thr = Thread.fork(worker, attrs);
+		val start_time = Time.now ();
+		val from_units =
+			case units of
+				Seconds => Time.fromSeconds
+			|	Milliseconds => Time.fromMilliseconds
+			|	Microseconds => Time.fromMicroseconds;
+		val end_time = Time.+ (from_units (LargeInt.fromInt
+				(if timeout < 1
+				then 1
+				else timeout)), start_time)
+					handle Overflow => fail "time_app" 1021 [];
+		val interval = Time.fromMilliseconds (LargeInt.fromInt 100);
+		fun check_return () = (
+			ConditionVar.waitUntil (cond_var, mut, interval);
+			if	Thread.isActive thr
+			then	(if	Time.>(Time.now (), end_time)
+				then	(Thread.interrupt thr
+						handle Thread _ => ();
+					!res (* it will be Nil *))
+				else	check_return ())
+			else	!res
+		);
+	in	check_return ()
+	end	
+);
+=POLYML
+(*
 =SML
+*)
 end(* of Timing structure *);
 open Timing;
 =TEX

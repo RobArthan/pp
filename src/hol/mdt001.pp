@@ -167,6 +167,9 @@ Ported to Lemma 1 document template.
 \item[2017/03/05]
 Fixed incorrect test name.
 
+\item[2024/03/05]
+Added timeout function.
+
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1696,20 +1699,25 @@ mt_run_fail [
 	];
 =TEX
 \section{CODE TIMING}
+=SML
+fun snooze (t : int) : int = (
+	ExtendedIO.system ("sleep " ^ string_of_int t);
+	t
+);
+=TEX
 We offer the following for interactive testing to anyone with just over 15 seconds to spend:
 =GFT
 time_app Seconds(ExtendedIO.system)  "sleep 1";
 time_app Milliseconds(ExtendedIO.system)  "sleep 1";
 time_app Microseconds(ExtendedIO.system)  "sleep 1";
 reset_stopwatch();
-(ExtendedIO.system "sleep 2"); read_stopwatch Seconds;
-(ExtendedIO.system "sleep 2"); read_stopwatch Milliseconds;
-(ExtendedIO.system "sleep 2"); read_stopwatch Microseconds;
+snooze 2; read_stopwatch Seconds;
+snooze 2; read_stopwatch Milliseconds;
+snooze 2; read_stopwatch Microseconds;
 reset_stopwatch();
-(ExtendedIO.system "sleep 2"); read_stopwatch Seconds;
-(ExtendedIO.system "sleep 2"); read_stopwatch Milliseconds;
-(ExtendedIO.system "sleep 2"); read_stopwatch Microseconds;
-
+snooze 2; read_stopwatch Seconds;
+snooze 2; read_stopwatch Milliseconds;
+snooze 2; read_stopwatch Microseconds;
 =TEX
 There is not a great deal we can do in batch here. The error is system dependent
 and we would have to wait forever on a system like Poly/ML which represent
@@ -1740,6 +1748,27 @@ mt_run [
 	(fn _ => (read_stopwatch Seconds:int; ())),
 	(),
 	())
+	];
+=TEX
+Adding 1.5 seconds to the test run-time is not excessive, so we can do a bit more for
+=INLINEF
+app_with_timeout
+=TEX
+.
+store_mt_results
+mt_run [
+	("timing 5",
+	app_with_timeout(500000, Microseconds) snooze,
+	0,
+	Value 0),
+	("timing 6",
+	app_with_timeout(500, Milliseconds) snooze,
+	1,
+	Nil),
+	("timing 7",
+	app_with_timeout(2, Seconds) snooze,
+	1,
+	Value 1)
 	];
 =TEX
 \section{ORDERS AND SORTING}

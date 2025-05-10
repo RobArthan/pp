@@ -176,6 +176,9 @@ Added {\tt integer\_interval} to support testing when default integers are fixed
 \item[2019/12/13]
 Added {\tt translate\_for\_output\_temp} to allow {\em raw\_diag...} functions to invoke {\em translate\_for_output}.
 
+\item[2024/03/05]
+Added timeout function.
+
 %%%% END OF CHANGES HISTORY %%%%
 
 \end{description}
@@ -1490,6 +1493,37 @@ system load and other system-dependent factors.
 =FAILURE
 1021	Arithmetic overflow in time conversion
 =ENDDOC
+=SML
+(*
+=POLYML
+*)
+=DOC
+val ⦏app_with_timeout⦎ : int * TIMER_UNITS -> ('a -> ''b) -> 'a -> ''b OPT;
+=DESCRIBE
+This function applies a function subject to a specified limit on the execution time.
+The call
+=INLINEFT
+app_with_timeout (t, units) f x
+=TEX
+\ applies function $f$ to argument $x$ and returns
+=INLINEFT
+Value (f x)
+=TEX
+, if the function returns within the time limit specified by
+=INLINEFT
+(t, units)
+=TEX
+.
+If the function does not return within the specified time limit,
+execution of the function is aborted and $Nil$ is returned.
+The check for continuing execution is made at 100 millisecond intervals.
+
+This function is only available if the system is compiled with the Poly/ML compiler.
+=ENDDOC
+=POLYML
+(*
+=SML
+*)
 =SML
 end(* of Timing signature *);
 =TEX

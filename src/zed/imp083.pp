@@ -147,6 +147,8 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported PPZed to Lemma 1 document template.
+\item[2025/03/05]
+Added theorem about the domain of a relational inverse.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -1119,7 +1121,13 @@ val _ = merge_pcs ["z_sets_ext","'z_∈_rel",
 	"'z_rel_alg"] "z_rel_ext";
 val _ = commit_pc "z_rel_ext";
 =TEX
-
+=SML
+val ⦏z_dom_rel_inv_thm⦎ : THM = (
+set_goal([], ⓩ∀r : 𝕌⦁ dom (r ↗~↕) = ran r⌝);
+a(PC_T1 "z_rel_ext" prove_tac[]);
+save_pop_thm "z_dom_rel_inv_thm"
+);
+=TEX
 \section{EPILOGUE}
 =SML
 end; (* of structure ZRelations *)
@@ -1130,3 +1138,4 @@ open ZRelations;
 \printindex
 \end{document}
 =IGN
+

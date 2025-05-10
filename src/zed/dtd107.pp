@@ -162,6 +162,14 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported PPZed to Lemma 1 document template.
+
+\item[2018/09/21]
+Added
+=INLINEFT
+z_string_eq_conv
+=TEX
+.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -862,6 +870,18 @@ z_seqd_eq_conv
 107021	?0 is not of the form ⌜#⟨t1, ...⟩⌝
 =ENDDOC
 
+=DOC
+val ⦏z_string_eq_conv⦎ : CONV;
+=DESCRIBE
+$z\_string\_eq\_conv$ proves theorems of the form:
+=GFT
+	⊢ b = c ⇔ t
+=TEX
+Where $⌜b⌝$ and $⌜c⌝$ are string literals and where $⌜t⌝$ is either
+$ⓩtrue⌝$ or $ⓩfalse⌝$.
+=FAILURE
+107030	?0 is not of the form: ⓩb = c⌝ where b and c are Z string literals.
+=ENDDOC
 
 \subsection{EPILOGUE OF ZSequences1}
 =SML
@@ -882,5 +902,4 @@ laid down in the quality plan~\cite{DS/FMU/IED/PLN008}.
 \printindex
 
 \end{document}
-
 

@@ -125,6 +125,13 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported PPZed to Lemma 1 document template.
+\item[2018/09/18]
+Added tests for
+=INLINEFT
+z_string_conv
+=TEX
+.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -520,6 +527,37 @@ mt_run_fail [
 	gen_fail_msg "z_𝔽_induction_tac"  86403 ["ⓩa⌝"])
 ];
 =TEX
+\section{STRING EQUALITY}
+=SML
+fun tzsec tm1 tm2 = (
+	let	val thm = z_string_eq_conv tm1;
+		val res = mk_eq (tm1, tm2);
+	in	asms thm = [] andalso concl thm = res
+	end
+);
+
+store_mt_results
+mt_run
+[
+	("2.7.1", tzsec ⓩ"" = ""⌝, ⓩtrue⌝, true),
+	("2.7.2", tzsec ⓩ"a" = "a"⌝, ⓩtrue⌝, true),
+	("2.7.3", tzsec ⓩ"abcd" = "abcd"⌝, ⓩtrue⌝, true),
+	("2.7.4", tzsec ⓩ"abcd" = "abce"⌝, ⓩfalse⌝, true),
+	("2.7.5", tzsec ⓩ"abcd" = "bbcd"⌝, ⓩfalse⌝, true),
+	("2.7.6", tzsec ⓩ"abcd" = "accd"⌝, ⓩfalse⌝, true)
+];
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+("2.7.7",
+	z_string_eq_conv,
+	ⓩ(s ⦂ seq 𝕊) = "abc"⌝,
+	gen_fail_msg "z_string_eq_conv"  107030 ["ⓩs = \"abc\"⌝"])
+];
+
+
+=TEX
 \section{END OF TESTS}
 =SML
 (* set_flag("subgoal_package_quiet",false); *)
@@ -527,44 +565,3 @@ diag_string(summarize_mt_results ());
 =TEX
 \end{document}
 =IGN
-***********COPY**************
-store_mt_results (mt_runf (op =$)) [("",
-	tac_res ,
-	ⓩ⌝,
-	ⓩ⌝)];
-store_mt_results (mt_runf (op =$)) [("",
-	snd o dest_eq o concl o  ,
-	ⓩ⌝,
-	ⓩ⌝)];
-store_mt_results mt_run_fail [("",
-	,
-	,
-	gen_fail_msg ""  [])];
-store_mt_results (mt_runf (op =#)) [("",
-	tac_res1 ,
-	([ⓩ⌝],ⓩ⌝),
-	([ⓩ⌝],ⓩ⌝))];
-store_mt_results (mt_runf (list_eq(op =#))) [("",
-	tac_ress  2,
-	([ⓩ⌝],ⓩ⌝),
-	[([ⓩ⌝],ⓩ⌝),([ⓩ⌝],ⓩ⌝)])];
-store_mt_results mt_runf [
-	("",
-	tac_solve ,
-	([],ⓩ⌝),
-	true),
-];
-store_mt_results mt_run_fail [("",
-	tac_fail ,
-	([],ⓩ⌝),
-	gen_fail_msg ""  [])];
-
-store_mt_results mt_run [("",
-	,
-	,
-	)];
-store_mt_results mt_run_fail [("",
-	,
-	,
-	gen_fail_msg ""  [])];
-

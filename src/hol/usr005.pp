@@ -88,9 +88,9 @@ Though it is not strictly prerequisite, the user may find this volume easier to 
 
 \section{Acknowledgements}
 
-ICL gratefully acknowledges its debt to the many researchers (both academic and industrial) who have provided intellectual capital on which ICL has drawn in the development of \Product.
+The developers of {\Product} gratefully acknowledges its debt to the many researchers (both academic and industrial) who have provided intellectual capital on which we have drawn in the development of \Product.
 
-We are particularly indebted to Mike Gordon of The University of Cambridge, for his leading role in some of the research on which the development of \Product\ has built, and for his positive attitude towards industrial exploitation of his work.
+We are particularly indebted to the late Mike Gordon of The University of Cambridge, for his leading role in some of the research on which the development of \Product\ has built, and for his positive attitude towards industrial exploitation of his work.
 
 The \Product\ system is a proof tool for Higher Order Logic which builds upon ideas arising from research carried out at the Universities of Cambridge and Edinburgh, and elsewhere.
 
@@ -166,15 +166,15 @@ The contents of this section will be as indicated below.
 
 \chapter{THE METALANGUAGE}
 
-{\Product} has been implemented using Standard ML of New Jersey (SML-NJ), an implementation of Standard ML \cite{milner97} developed by Lucent Technologies.
+{\Product} is implemented in Standard ML. It can be compiled using two implementations of this language: Poly/ML and Standard ML of New Jersey (SML-NJ).
 
-SML-NJ provides some extensions to the standard which have been used in the implementation of {\Product}.
+Both Poly/ML and SML-NJ provides some extensions to the standard which have been used in the implementation of {\Product}.
 
 These include:
 
 \begin{itemize}
 \item
-A means for storing the state of an ML session in a `heap image'.
+A means for storing the state of an ML session in a `heap image' or `object file'.
 \item
 Programmable control over the compiler's input and output streams.
 \end{itemize}
@@ -192,8 +192,7 @@ These extensions to the character set are mainly treated as new alphabetic chara
 Facilities have been provided for quotation of object language expressions and for automatic pretty-printing of values which represent such expressions.
 \end{itemize}
 
-To ensure that the {\Product} theory hierarchy is properly maintained, some of the effects normally obtained by commands supplied with SML-NJ should be obtained using alternative commands supplied with {\Product}.
-Users of ProofPower should only use the supplied {\Product} function instead of the corresponding SML-NJ function whenever they are operating on a {\Product} database.
+To ensure that the {\Product} theory hierarchy is properly maintained, some of the effects normally obtained by commands supplied with the Standard ML compiler should be obtained using the alternative commands supplied with {\Product} listed in the table below. Full details of the {\Product} versions of these commands may be found in the {\REFERENCE}.
 
 {\Product} users should use the UNIX command $⦏pp\_make\_database⦎$ instead of
 the SML-NJ commands $⦏exportML⦎$ or $⦏exportFN⦎$ to make a new database.
@@ -204,18 +203,20 @@ do not use the SML-NJ versions when working with {\Product}.
 \begin{centering}
 
 \begin{tabular}{l | l}
-Use ProofPower Command & Instead of	SML-NJ command\\\hline
-$⦏save\_and\_quit⦎$ & $⦏exportML⦎$ \\
+Use ProofPower Command & Instead of	Poly/ML or SML-NJ command\\\hline
+$⦏save\_and\_quit⦎$ & $⦏exportML⦎$, $⦏export⦎$ \\
 $⦏quit⦎$ & $⦏OS.Process.exit⦎$ \\
 $⦏use\_file⦎$ & $⦏use⦎$
 \end{tabular}
 
 \end{centering}
 
-Full details of the {\Product} versions of these commands may be found in the {\REFERENCE}.
+{\Product} users are recommended to use the UNIX command $⦏pp\_make\_database⦎$ instead of
+the Poly/ML or SML-NJ commands to make a new database or object file.
+
 
 {\Product} was originally developed for the 1990 version of Standard ML.
-SML-NJ implements the 1997 revision to the standard. For backwards compatibility,
+Poly/ML and SML-NJ now implement the 1997 revision to the standard. For backwards compatibility,
 {\Product} provides many of the 1990 basis library functions in addition to the new standard
 basis library functions.
 
@@ -227,7 +228,7 @@ There are three types of control, according to the type of the Standard ML value
 The value may have type {\tt bool}, {\tt int} or {\tt string}.
 Boolean controls are often referred to as ``flags''.
 
-The procedures available for manipulating controls are shown in table~\ref{ProceduresManipulatingControls}.
+The functions available for working with controls are shown in table~\ref{ProceduresManipulatingControls}.
 
 \hfill
 
@@ -265,6 +266,7 @@ set_string_controls & set all string control values \\ \hline
 \end{tabular}
 
 \end{centering}
+\hfill
 
 \caption{ML Procedures for Manipulating Control Values}
 \label{ProceduresManipulatingControls}
@@ -401,7 +403,7 @@ strings.
 
 \begin{tabular}{|| l | l | p{3.35in} ||} \hline
 {\bf name} & {\bf default} & {\bf purpose} \\ \hline \hline
-⦏compactification_mask⦎ & 0 & Controls the compactification algorithms. \\ \hline
+⦏compactification_mask⦎ & \begin{tabular}{c} 0 (SML-NJ) \\ 63 (Poly/ML)\end{tabular} & Controls the compactification algorithms. \\ \hline
 ⦏line_length⦎ & - & The number of characters per line to be used by the pretty printer. The default is the number of characters per line in the controlling terminal at the start of the session.\\ \hline
 ⦏listing_indent⦎ & 2 & Used to control the formatting of theory listings.\\ \hline
 ⦏pp_format_depth⦎ & \verb!~!1 & Influences the formatting produced by the pretty printer.\\ \hline
@@ -427,7 +429,9 @@ strings.
 \begin{tabular}{|| l | l | p{3.35in} ||} \hline
 {\bf name} & {\bf default} & {\bf purpose} \\ \hline \hline
 ⦏prompt1⦎ & \verb!":) "! &
-This is the prompt used by ProofPower to invite you to type some input. \\ \hline
+This is the prompt used by ProofPower to invite you to begin typing some input. \\ \hline
+⦏prompt2⦎ & \verb!":# "! &
+This is the prompt used by ProofPower to invite you to continue typing after typing a newline, if the text you have typed so far is syntactically incomplete. \\ \hline
 ⦏variant_suffix⦎ & \verb!"'"! &
 This is the character used to decorate a variable name when alpha conversion takes place. \\ \hline
 \end{tabular}
@@ -529,7 +533,7 @@ calling function.
 $Error$ indicating an unrecoverable error condition which should not be
 handled. Either the input is so seriously flawed that the condition should
 be reported to the user immediately, or an unexpected failure has occurred
-(and should be reported to ICL).
+(and should be reported to the {\Product} development team).
 \item[Text]
 In the absence of the optional explanatory text,
 this is the main description of the error condition.
@@ -552,7 +556,7 @@ It is intended that errors raised following the above format
 will either give the user a pointer to the solution of the
 problem, or, if necessary, assist support staff understanding
 the problem.
-If you contact ICL concerning a problem with \Product{},
+If you contact the {\Product} development team concerning a problem with \Product{},
 it will be helpful to have available the text of any
 relevant error messages. At least the function name and the
 error number should be noted.

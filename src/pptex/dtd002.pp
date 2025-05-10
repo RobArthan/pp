@@ -152,6 +152,9 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported to Lemma 1 document template.
+\item[2022/03/13]
+Added functions to get the insertion strings and id of a fail message.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes forecast}
@@ -297,7 +300,7 @@ the associated message is suppressed).
 $Error$ is intended to ensure that the message will be reported
 and, by convention, should not be trapped.
 =USES
-Obscure debugging situations.
+Programming error-handling and some low-level debugging situations.
 =ENDDOC
 \subsection{Error Message Database}
 The structure will contain the database of error messages.
@@ -506,6 +509,25 @@ val ⦏area_of⦎ : exn -> string
 This returns the name of the function which raised an exception
 (provided the exception was raised with $fail$
 following the usual conventions). If the exception was not
+the one raised by $fail$ then it is raised again.
+=USES
+For use when coding new facilities to add to the system.
+=ENDDOC
+=DOC
+val ⦏insertions_of⦎ : exn -> string list
+=DESCRIBE
+This returns the insertion strings associated with an exception
+(provided the exception was raised with $fail$
+following the usual conventions). If the exception was not
+the one raised by $fail$ then it is raised again.
+=USES
+For use when coding new facilities to add to the system.
+=ENDDOC
+=DOC
+val ⦏id_of⦎ : exn -> int
+=DESCRIBE
+This returns the numeric id of an exception raised with $fail$
+following the usual conventions. If the exception was not
 the one raised by $fail$ then it is raised again.
 =USES
 For use when coding new facilities to add to the system.

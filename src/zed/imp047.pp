@@ -169,6 +169,9 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported PPZed to Lemma 1 document template.
+\item[2022/03/05]
+Fixed error-handling in {\it mk_z_dec}.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 %\subsection{Changes Forecast}
@@ -2108,18 +2111,16 @@ fun	⦏is_z_rename⋎s⦎ (t:TERM) :bool =
 =SML
 fun 	⦏mk_z_dec⦎ ((varl,set):TERM list * TERM) :TERM =
 	let	val sty = type_of set;
-		val ety = dest_z_power_type sty;
+		val ety = dest_z_power_type sty
+			handle X => divert X "mk_z_dec"
+				"dest_z_power_type" 47060 [fn() => string_of_term set];
 		val vl = mk_list varl
 			handle X => reraise X "mk_z_dec";
 		val decty = mk_→_type(mk_×_type(type_of vl,sty),⌜:BOOL⌝);
 		val dec = mk_const("Z'Dec",decty);
 	in
-		mk_app(dec,mk_pair(vl,set))
-	end
-	handle X => (divert X "mk_z_dec"
-			"dest_z_power_type" 47060 [fn() => string_of_term set]
-
-	);
+		mk_app(dec, mk_pair(vl,set))
+	end;
 =TEX
 =SML
 fun	⦏mk_z_schema_dec⦎ ((sch,d):TERM * string) :TERM =

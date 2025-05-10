@@ -137,6 +137,9 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported PPZed to Lemma 1 document template.
+
+\item[2025/03/05]
+Added theorem about the domain of a relational inverse.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -454,6 +457,8 @@ req_thm(⦏"z_rel_inv_thm"⦎, ([],ⓩ∀ x: 𝕌; R: 𝕌⦁
 req_thm(⦏"z_rel_inv_clauses"⦎, ([],ⓩ
 	𝕌 ↗~↕ = 𝕌 ∧
 	{} ↗~↕ = {}⌝));
+req_thm(⦏"z_dom_rel_inv_thm"⦎, ([],ⓩ∀r : 𝕌⦁
+	dom (r ↗~↕) = ran r⌝));
 =DESCRIBE
 Relational inversion.
 =ENDDOC
@@ -985,37 +990,38 @@ It requires the theory ``z$\_$relations''.
 =TEX
 \section{Theorems in the Signature}
 =DOC
-val z_↔_thm: THM;
-val z_↦_thm: THM;
-val z_dom_thm: THM;
-val z_ran_thm: THM;
-val z_id_thm: THM;
-val z_⨾_thm: THM;
-val z_∘_thm: THM;
-val z_◁_thm: THM;
-val z_▷_thm: THM;
-val z_⩤_thm: THM;
-val z_⩥_thm: THM;
-val z_rel_inv_thm: THM;
-val z_rel_image_thm: THM;
-val z_trans_closure_thm: THM;
-val z_reflex_trans_closure_thm: THM;
-val z_⊕_thm: THM;
-val z_↔_clauses: THM;
-val z_dom_clauses: THM;
-val z_ran_clauses: THM;
-val z_id_clauses: THM;
-val z_⨾_clauses: THM;
-val z_∘_clauses: THM;
-val z_◁_clauses: THM;
-val z_▷_clauses: THM;
-val z_⩤_clauses: THM;
-val z_⩥_clauses: THM;
-val z_rel_inv_clauses: THM;
-val z_rel_image_clauses: THM;
-val z_trans_closure_clauses: THM;
-val z_reflex_closure_clauses: THM;
-val z_⊕_clauses: THM;
+val ⦏z_↔_thm⦎ : THM;
+val ⦏z_↦_thm⦎ : THM;
+val ⦏z_dom_thm⦎ : THM;
+val ⦏z_ran_thm⦎ : THM;
+val ⦏z_id_thm⦎ : THM;
+val ⦏z_⨾_thm⦎ : THM;
+val ⦏z_∘_thm⦎ : THM;
+val ⦏z_◁_thm⦎ : THM;
+val ⦏z_▷_thm⦎ : THM;
+val ⦏z_⩤_thm⦎ : THM;
+val ⦏z_⩥_thm⦎ : THM;
+val ⦏z_rel_inv_thm⦎ : THM;
+val ⦏z_rel_image_thm⦎ : THM;
+val ⦏z_trans_closure_thm⦎ : THM;
+val ⦏z_reflex_trans_closure_thm⦎ : THM;
+val ⦏z_⊕_thm⦎ : THM;
+val ⦏z_↔_clauses⦎ : THM;
+val ⦏z_dom_clauses⦎ : THM;
+val ⦏z_ran_clauses⦎ : THM;
+val ⦏z_id_clauses⦎ : THM;
+val ⦏z_⨾_clauses⦎ : THM;
+val ⦏z_∘_clauses⦎ : THM;
+val ⦏z_◁_clauses⦎ : THM;
+val ⦏z_▷_clauses⦎ : THM;
+val ⦏z_⩤_clauses⦎ : THM;
+val ⦏z_⩥_clauses⦎ : THM;
+val ⦏z_rel_inv_clauses⦎ : THM;
+val ⦏z_dom_rel_inv_thm⦎ : THM;
+val ⦏z_rel_image_clauses⦎ : THM;
+val ⦏z_trans_closure_clauses⦎ : THM;
+val ⦏z_reflex_closure_clauses⦎ : THM;
+val ⦏z_⊕_clauses⦎ : THM;
 =DESCRIBE
 The ML bindings of the theorems (other than consistency ones)
 in theory $z\-\_relations$.
@@ -1057,3 +1063,4 @@ The functions in this document should be tested as described in
 \small
 \printindex
 \end{document}
+

@@ -173,9 +173,11 @@ Augmented old RCS version numbers in the changes history with dates.
 Dates will be used in place of version numbers in future.
 \item[2014/09/07]
 Now uses ``.sml'' suffix for temporary ML source files.
-
 \item[2015/04/17]
 Ported daz source documents onto the Lemma 1 document template
+\item[2017/11/26]
+Fixed incompatibility with recent versions of gcc/gnat.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -1113,7 +1115,7 @@ and (b) behaves strangely (e.g., hangs) when not called from {\tt csh}.
 #!/bin/sh
 PROBLEMS=
 #GNATARGS='-gnatlvs'
-GNATARGS='-gnatlcv'
+GNATARGS='-gnatclv'
 MLFILE=int511.errorfiles.sml
 GNATFILEPFX=`echo int511 | dd conv=lcase 2>/dev/null`
 if	test -f `findfile gnatchop $PATH`
@@ -1128,7 +1130,7 @@ then
 	done
 	for src in $GNATFILEPFX?*.ads
 	do	echo checking file $src
-		if	gcc -c $GNATARGS $src 2>&1
+		if	gcc $GNATARGS -c $src 2>&1
 		then	echo $src syntax-checked OK
 		else	echo $src failed to syntax-check
 			PROBLEMS="$PROBLEMS $src"$file"(gcc)"
@@ -1136,7 +1138,7 @@ then
 	done
 	for src in $GNATFILEPFX?*.adb
 	do	echo checking file $src
-		if	gcc -c $GNATARGS $src 2>&1
+		if	gcc $GNATARGS -c $src 2>&1
 		then	echo $src syntax-checked OK
 		else	echo $src failed to syntax-check
 			PROBLEMS="$PROBLEMS $src""(gcc)"

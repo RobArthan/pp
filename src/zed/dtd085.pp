@@ -151,6 +151,9 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported PPZed to Lemma 1 document template.
+
+\item[2025/03/05]
+Added theorem for pushing function application through a conditional.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -440,6 +443,14 @@ a(all_fc_tac[z_fun_ran_clauses]);
 =TEX
 =ENDDOC
 
+=THDOC
+req_thm("⦏z_fun_app_if_thm⦎", ([],
+ⓩ∀f : 𝕌; c : 𝕌; x, y : 𝕌⦁
+	f(if c then x else y) = if c then f x else f y⌝));
+=DESCRIBE
+A useful fact about applying a function to a conditional.
+=ENDDOC
+
 \subsection{Definitions of the Theory}
 
 =DOC
@@ -457,12 +468,12 @@ val ⦏z_⤀_thm⦎ : THM;			val ⦏z_↠_thm⦎ : THM;
 val ⦏z_⤖_thm⦎ : THM;			val ⦏z_∈_first_thm⦎ : THM;
 val ⦏z_∈_second_thm⦎ : THM;		val ⦏z_→_app_∈_rel_thm⦎ : THM;
 val ⦏z_→_app_eq_⇔_∈_rel_thm⦎ : THM;	val ⦏z_→_∈_rel_⇔_app_eq_thm⦎ : THM;
-val ⦏z_⇸_clauses⦎ : THM; 		val ⦏z_→_clauses⦎ : THM;
+val ⦏z_⇸_clauses⦎ : THM; 			val ⦏z_→_clauses⦎ : THM;
 val ⦏z_⤔_clauses⦎ : THM;			val ⦏z_↣_clauses⦎ : THM;
 val ⦏z_⤀_clauses⦎ : THM;			val ⦏z_↠_clauses⦎ : THM;
-val ⦏z_⤖_clauses⦎ : THM; 		val ⦏z_fun_app_clauses⦎ : THM;
-val ⦏z_fun_∈_clauses⦎ : THM;		val ⦏z_fun_dom_clauses⦎ : THM;
-val ⦏z_fun_ran_clauses⦎ : THM;
+val ⦏z_⤖_clauses⦎ : THM; 			val ⦏z_fun_app_clauses⦎ : THM;
+val ⦏z_fun_∈_clauses⦎ : THM;		val ⦏z_fun_app_if_thm⦎ : THM;
+val ⦏z_fun_ran_clauses⦎ : THM;		val ⦏z_fun_dom_clauses⦎ : THM;
 =DESCRIBE
 These are the ML bindings of the theorems in the theory $z\_functions$.
 =ENDDOC
@@ -594,5 +605,6 @@ laid down in the quality plan~\cite{DS/FMU/IED/PLN008}.
 \printindex
 
 \end{document}
+
 
 

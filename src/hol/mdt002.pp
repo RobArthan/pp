@@ -156,6 +156,10 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported to Lemma 1 document template.
+
+\item[2022/03/13]
+Added tests for functions to get the insertion strings and id of a fail message.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -203,7 +207,7 @@ of the insertion functions
 This group test the text form of the exceptions raised by
 $fail$ and $error$.
 \item[Group BE.4]
-This group tests $area\_of$, $reraise$ and $pass\_on$.
+This group tests $area\_of$, $insertions\_of$, $reraise$ and $pass\_on$.
 \item[Group BE.5]
 Tests for {\it pending\_reset\_error\_messages}.
 \item[Group BE.6]
@@ -373,6 +377,7 @@ store_mt_results_show mt_run
 =SML
 val ex1 = (fail "area" 99991 []) handle ex => ex;
 val ex2 = (error "area" 99991 []) handle ex => ex;
+val ex3 = (fail "area" 99991 [fn _ => "a", fn _ => "b"]) handle ex => ex;
 =TEX
 =SML
 store_mt_results_show mt_run
@@ -444,6 +449,18 @@ store_mt_results_show mt_run
  ("mdt002.BE.4.14",  checkpo2, (), "OK"),
  ("mdt002.BE.4.15",  checkpo3, (), "OK")
 ];
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.4.16",  insertions_of, ex3, ["a", "b"])];
+store_mt_results_show mt_run
+[("mdt002.BE.4.17",  check2 insertions_of, ex2, true)];
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.4.18",  id_of, ex1, 99991)];
+store_mt_results_show mt_run
+[("mdt002.BE.4.19",  check2 id_of, ex2, true)];
 =TEX
 \subsubsection{Group BE.5}
 Make a couple of changes:

@@ -139,6 +139,9 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported PPZed to Lemma 1 document template.
+
+\item[2025/03/05]
+Added theorem for pushing function application through a conditional.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -821,6 +824,15 @@ a(contr_tac THEN all_asm_fc_tac[]);
 pop_thm()));
 =TEX
 =SML
+val ⦏z_fun_app_if_thm⦎ : THM = (
+set_goal([], ⓩ∀f : 𝕌; c : 𝕌; x, y : 𝕌⦁
+	f(if c then x else y) = if c then f x else f y⌝);
+a(REPEAT strip_tac);
+a(cases_tac ⓩc⌝ THEN asm_rewrite_tac[]);
+save_pop_thm "z_fun_app_if_thm"
+);
+=TEX
+=SML
 val _ = pop_pc();
 =TEX
 \section{EPILOG}
@@ -833,3 +845,4 @@ open ZFunctions;
 \printindex
 
 \end{document}
+

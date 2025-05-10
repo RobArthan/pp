@@ -165,6 +165,9 @@ Ported to Lemma 1 document template.
 \item[2015/11/19]
 Fixed problem with SML/NJ and infix operators.
 
+\item[2022/03/13]
+Added functions to get the insertion strings and id of a fail message.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -464,8 +467,17 @@ fun ⦏elaborate⦎ (exn : exn) (old_id : int)
 );
 =TEX
 =SML
-fun ⦏area_of⦎ ((Fail(Message {area, ...})) : exn) : string= area
+fun ⦏area_of⦎ ((Fail(Message {area, ...})) : exn) : string = area
 |   area_of Other = raise Other;
+=TEX
+=SML
+fun ⦏insertions_of⦎ ((Fail(Message {inserters, ...})) : exn) : string list = (
+	map (fn i => i()) inserters
+) |   insertions_of Other = raise Other;
+=TEX
+=SML
+fun ⦏id_of⦎ ((Fail(Message {id, ...})) : exn) : int = id
+|   id_of Other = raise Other;
 =TEX
 =SML
 fun ⦏reraise⦎ ((Fail(Message {area, id, inserters})) : exn) (new_area: string) : 'a = (

@@ -141,6 +141,8 @@ Dates will be used in place of version numbers in future.
 Ported to Lemma 1 document template.
 \item[2015/06/15]
 Removed hol\_list and zed\_list.
+\item[2025/04/08]
+Fixed typo in pp documentation.
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 None.
@@ -274,7 +276,10 @@ to the cache theory for the database.
 The files identified by any {\tt [-i files]} options are then
 executed in turn. $files$ is a comma-separated list of files.
 
-If {\tt -f files} is provided, then the files specified in the list $files$ are loaded in batch mode. Once loading is complete the database is saved and the batch session is terminated. The saving of the database can be suppress by providing the {\tt -n} flag. The default action if any of the files fails to load is for the session to terminate at that point and the database is not saved. By providing the {\tt -s} flag, the user can indicate to the system to save the database in batch mode upon failure. The {\tt -n} and {\tt -s} flags are mutually exclusive. If they are both provided, a warning message is issued and the {\tt -s} flag is ignored.
+If {\tt -f files} is provided, then the files specified in the list
+$files$ are loaded in batch mode. Once loading is complete the database
+is saved and the batch session is terminated. The saving of the database
+can be suppressed by providing the {\tt -n} flag. The default action if any of the files fails to load is for the session to terminate at that point and the database is not saved. By providing the {\tt -s} flag, the user can indicate to the system to save the database in batch mode upon failure. The {\tt -n} and {\tt -s} flags are mutually exclusive. If they are both provided, a warning message is issued and the {\tt -s} flag is ignored.
 
 By default, the production of subgoal package output in a batch load is as determined by the value of the flag {\em subgoal\_package\_quiet} stored in the  database.
 If the {\tt -v} flag is specified to {\tt pp}, the subgoal package output is produced whereas if the {\tt -q} flag  is  specified, it  is  suppressed.

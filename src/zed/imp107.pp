@@ -163,6 +163,13 @@ Dates will be used in place of version numbers in future.
 
 \item[2015/04/17]
 Ported PPZed to Lemma 1 document template.
+\item[2018/09/21]
+Added
+=INLINEFT
+z_string_eq_conv
+=TEX
+.
+
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}
 \subsection{Changes Forecast}
@@ -3496,6 +3503,22 @@ val ⦏z_seqd_eq_conv⦎ : CONV = (
 	end
 );
 end;
+
+local
+	val equal_string_conv = (simple_eq_match_conv o all_∀_intro o ⇔_t_intro o refl_conv) ⓩs ⦂ seq 𝕊⌝;
+	val prop_simp_conv = (REPEAT_C o FIRST_C o map (simple_eq_match_conv o taut_rule))
+								[⌜∀p⦁ T ∧ p ⇔ p⌝, ⌜∀p⦁ F ∧ p ⇔ F⌝];
+in
+	val z_string_eq_conv : CONV = (fn tm =>
+		(((dest_z_string ** dest_z_string) o dest_eq) tm
+			handle Fail _ => term_fail "z_string_eq_conv" 107030 [tm];
+		(equal_string_conv
+			ORELSE_C
+				(RANDS_C z_string_conv THEN_C z_seqd_eq_conv
+					THEN_TRY_C (ONCE_MAP_C char_eq_conv THEN_C prop_simp_conv))) tm)
+);
+end;
+
 =TEX
 \subsection{EPILOG OF ZSequences1}
 =TEX

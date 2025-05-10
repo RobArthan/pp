@@ -3454,7 +3454,7 @@ ns{name="VC_PROCEDURE_CALL", unit_type="proc"};
  procedure vc_procedure_call
  is
     procedure PROC (A : in out INTEGER)
-     Δ [PRE1 A, PRE1 (A⋎0, A)]
+     Δ [PRE1 A, POST1 (A⋎0, A)]
     is separate;
     X : INTEGER;
  begin
@@ -4018,4 +4018,5 @@ and so on up to {\it array\_agg20}.
 =SML
 val _ = diag_line "All module tests passed (by dint of reaching this output statement)."
 =TEX
+
 
