@@ -46,6 +46,17 @@ String Utilities
 ================
 */
 
+
+/*
+----------
+test for ascii
+----------
+*/
+
+static inline int my_iswascii(int c) {
+  return (c >= 0 && c <= 127);
+}
+
 /*
 ----------
 skip_space
@@ -79,7 +90,7 @@ wskip_space(wchar_t *str)
 	wchar_t *p = str;
 
 	if(p != NULL) {
-		while( iswascii(*p) && iswspace(*p) ) {
+		while( my_iswascii(*p) && iswspace(*p) ) {
 		  p = &p[1];
 		}
 	}
@@ -100,7 +111,7 @@ wcount_spaces(wchar_t *str)
 	int count = 0;
 
 	if(p != NULL) {
-		while( iswascii(*p) && iswspace(*p) ) {
+		while( my_iswascii(*p) && iswspace(*p) ) {
 		  p = &p[1]; ++count;
 		}
 	}
@@ -139,7 +150,7 @@ wfind_space(wchar_t *str)
 	wchar_t *p = str;
 
 	if(p != NULL) {
-		while( (*p) && !(iswascii(*p) && iswspace(*p)) ) {
+		while( (*p) && !(my_iswascii(*p) && iswspace(*p)) ) {
 			p = &p[1];
 		}
 	}
@@ -160,7 +171,7 @@ wcount_to_space(wchar_t *str)
 	int count = 0;
 
 	if(p != NULL) {
-		while( (*p) && !(iswascii(*p) && iswspace(*p)) ) {
+		while( (*p) && !(my_iswascii(*p) && iswspace(*p)) ) {
 		  p = &p[1]; ++count;
 		}
 	}
@@ -2237,7 +2248,7 @@ get_hol_kw(wchar_t *str,
 	while(			kwlen<=MAX_KW_LEN
 			&&	(ch = str[kwlen]) != L'\0'
 			&&	ch != L'%'
-			&&	iswascii(ch)
+			&&	my_iswascii(ch)
 			&&	iswgraph(ch)
 	) {
 	  kw[kwlen++] = ch;
@@ -2309,7 +2320,7 @@ get_hol_kw_uni(unicode *str,
 	while(			kwlen<=MAX_KW_LEN
 			&&	(ch = str[kwlen]) != 0
 			&&	ch != L'%'
-			&&	iswascii(ch)
+			&&	my_iswascii(ch)
 			&&	iswgraph(ch)
 	) {
 	  kw[kwlen++] = ch;

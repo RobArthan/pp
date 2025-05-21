@@ -5,7 +5,7 @@
  * ProofPower extended character is done by an associative lookup
  * in the following sorted array of records:
  */
-typedef int unicode;
+typedef wchar_t unicode;
 typedef struct {
 	unicode code_point;
 	char pp_char;} unicode_to_pp_entry;
