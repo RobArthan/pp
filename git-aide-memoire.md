@@ -65,6 +65,13 @@ This is a list of example git command lines each with a potted explanation.
 (In case of conflicts, resolve them by changing the conflicted files to be as you want them to be, add them and then commit):  
     `git merge fix-3.1w6`
 
+* To merge changes into current branch without committing the changes
+so they can be inspected (see next):
+    `git merge --no-commit --no-ff fix-3.1w6`
+
+* ... and then to inspect the changes:
+    `git diff --cached`
+
 * To squash a sequence of commits starting at commit XYZ into one:
 
     `git reset -soft XYZ`
