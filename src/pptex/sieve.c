@@ -2688,7 +2688,7 @@ main_convert_uni(
 			    else if(kwi.char_code[chext] != NULL &&
 				    kwi.char_code[chext]->act_kind == KW_WHITE)
 			      { /* Do nothing */ }
-			    else if(iswascii(ch) && iswspace(ch))
+			    else if(my_iswascii(ch) && iswspace(ch))
 			      { found_white_space = 1; }
 			    else all_alone = 0;
 			  }

@@ -68,6 +68,8 @@ enum {False = 0, True = 1};
 
 /* String Utilities */
 
+extern int my_iswascii(int c);
+
 int copy_keyword(
 	wchar_t *kw,
 	int kwlen,
@@ -188,18 +190,16 @@ struct keyword_information{
   short seq;   /* sequence number */
 };
 
-struct kw_information {
+extern struct kw_information {
   int num_keywords;
   int num_unicodes;
   int max_kw_len;
   struct keyword_information *char_code[256];
   struct keyword_information *unicode_code[MAX_KEYWORDS];
   struct keyword_information keyword[MAX_KEYWORDS];
-};
+} kwi;
 
-struct kw_information kwi;
-
-bool utf8_stdin;
+extern bool utf8_stdin;
 
 int get_hol_kw(wchar_t *str,
 	       int * len,
@@ -241,7 +241,7 @@ and pp_file_conv applications.
 
 void read_keyword_files(char *keyword_files[]);
 
-struct limits{
+extern struct limits{
 	int opt_list;
 	int file_name_area;
 	int non_copy_length;

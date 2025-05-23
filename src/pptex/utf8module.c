@@ -40,12 +40,15 @@
 #define PPENVDEBUG "PPENVDEBUG"
 #define SLASH_ETC "/etc"
 
+struct kw_information kwi;
+
+bool utf8_stdin;
+
 /*
 ================
 String Utilities
 ================
 */
-
 
 /*
 ----------
@@ -53,7 +56,7 @@ test for ascii
 ----------
 */
 
-static inline int my_iswascii(int c) {
+inline int my_iswascii(int c) {
   return (c >= 0 && c <= 127);
 }
 
@@ -858,21 +861,9 @@ Many of the limiting values are declared near the data structures
 they refer to.  A few are declared here.
 */
 
-/*
-struct limits{
-	int opt_list;
-	int file_name_area;
-	int non_copy_length;
-	int process_line_len;
-	int filter_len;
-	int view_file;
-	int keyword_file;
-	int source_file;
-	int num_keyword_files;
-} limits = {
+struct limits limits = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0
 };
-*/
 
 #define MAX_KEYWORD_FILES 20
 
