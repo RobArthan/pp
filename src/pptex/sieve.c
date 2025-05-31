@@ -217,34 +217,20 @@ struct debug_data{
 	int flag;
 	char *purpose;
 } debug_data [] = {
-#define D_SHOW_SIEVE_TABLE 1
 	{D_SHOW_SIEVE_TABLE,		"sieving table"},
-#define D_SHOW_KEYWORD_TABLE 2
 	{D_SHOW_KEYWORD_TABLE,		"keyword table"},
-#define D_INIT_TABLES 4
 	{D_INIT_TABLES,			"actions available"},
-#define D_READ_SOURCE_LINE 8
 	{D_READ_SOURCE_LINE,		"source lines read"},
-#define D_DECODE_DIR_LINE 16
 	{D_DECODE_DIR_LINE,		"decoded directive lines"},
-#define D_ACTIONS 32
 	{D_ACTIONS,			"filter actions"},
-#define D_SHOW_FULL_SIEVE_TABLE 64
 	{D_SHOW_FULL_SIEVE_TABLE,	"whole sieving table"},
-#define D_GET_KW 128
 	{D_GET_KW,			"percent keywords read"},
-#define D_OPEN_OUTPUT 256
 	{D_OPEN_OUTPUT,			"open output for write or append"},
-#define D_MAIN_CONVERT_CH 512
 	{D_MAIN_CONVERT_CH,		"char by char in main convert"},
-#define D_PROCESS_LINE 1024
 	{D_PROCESS_LINE,		"source line processing"},
-#define D_EXPAND 2048
 	{D_EXPAND,			"macro expansions"},
-#define D_READ_STEER_LINE 4096
 	{D_READ_STEER_LINE,		"view and keyword file lines read"},
-#define D_8192 8192
-#define D_UTF8 16384
+	{D_8192,		        "??"},
 	{D_UTF8,		        "unicode/utf8 processing"},
 };
 /*
@@ -1327,7 +1313,7 @@ initialize(void)
 	int i;
 	wchar_t pr_test[PrNN_SIZE+PrNN_SIZE];
 #ifdef __CYGWIN__
-	setlocale(LC_ALL, "C.ISO88591");
+	my_setlocale(LC_ALL, EXTLOCALE);
 #endif
 	for(i=1; i<256; i++) character_flags[i] = 0;
 
@@ -3982,10 +3968,7 @@ and failing that defaults to utf8.
 
 	if(debug) message("Processing for view %s", view_option);
 
-	setlocale(LC_ALL, main_F.utf8 ?  "en_GB.UTF-8" : "C.ISO88591");
-
-	if(debug) message("Locale set to %s",
-			  (main_F.utf8 ? "en_GB.UTF-8" : "C.ISO88591"));
+	my_setlocale(LC_ALL, main_F.utf8 ?  UTF8LOCALE : EXTLOCALE);
 
 	read_keyword_files(keyword_files);
 

@@ -120,13 +120,9 @@ struct debug_data{
 	int flag;
 	char *purpose;
 } debug_data [] = {
-#define D_SHOW_KEYWORD_TABLE 2
 	{D_SHOW_KEYWORD_TABLE,		"keyword table"},
-#define D_GET_KW 128
 	{D_GET_KW,			"percent keywords read"},
-#define D_READ_STEER_LINE 4096
 	{D_READ_STEER_LINE,		"view and keyword file lines read"},
-#define D_UTF8 16384
 	{D_UTF8,		        "unicode/utf8 processing"},
 };
 
@@ -204,10 +200,8 @@ initialize(int argc, char **argv, int option, int *ascii_out, int *nokw,
 	   char *keyword_files[MAX_KEYWORD_FILES])
 {
 #ifdef __CYGWIN__
-	setlocale(LC_ALL, "C.ISO88591");
+  my_setlocale(LC_ALL, EXTLOCALE);
 #endif
-
-
 	main_F.utf8 = False;
 	keyword_F.utf8 = False;
 	*ascii_out = False;
@@ -313,10 +307,10 @@ main(int argc, char **argv)
   initialize(argc, argv, option, &ascii_out, &nokw, keyword_files);
   
   if (keyword_F.utf8) {
-    setlocale(LC_ALL, "en_GB.UTF-8");
+    my_setlocale(LC_ALL, UTF8LOCALE);
     keyword_files[limits.num_keyword_files++] = UKEYWORD_FILE;
   } else {
-    setlocale(LC_ALL, "C.ISO88591");
+    my_setlocale(LC_ALL, EXTLOCALE);
     keyword_files[limits.num_keyword_files++] = KEYWORD_FILE;
   };
   

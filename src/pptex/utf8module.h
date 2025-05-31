@@ -60,11 +60,18 @@
 #define NOT_FOUND (-1)
 #define U_NOT_FOUND 0xFFFFFF
 
+/* utf8 things */
+
+#define UTF8LOCALE "en_GB.UTF-8"
+#define EXTLOCALE "en_GB.ISO8859-1"
+
 typedef wchar_t unicode;
 #define UNICODE_TO_PP_LEN 128
 
 typedef char bool;
 enum {False = 0, True = 1};
+
+extern char *my_setlocale(int cat, const char *loc);
 
 /* String Utilities */
 
@@ -153,9 +160,20 @@ void *malloc_and_check(unsigned size, int err);
 
 extern int debug;
 
+#define D_SHOW_SIEVE_TABLE 1
 #define D_SHOW_KEYWORD_TABLE 2
+#define D_INIT_TABLES 4
+#define D_READ_SOURCE_LINE 8
+#define D_DECODE_DIR_LINE 16
+#define D_ACTIONS 32
+#define D_SHOW_FULL_SIEVE_TABLE 64
 #define D_GET_KW 128
+#define D_OPEN_OUTPUT 256
+#define D_MAIN_CONVERT_CH 512
+#define D_PROCESS_LINE 1024
+#define D_EXPAND 2048
 #define D_READ_STEER_LINE 4096
+#define D_8192 8192
 #define D_UTF8 16384
 
 /* files */

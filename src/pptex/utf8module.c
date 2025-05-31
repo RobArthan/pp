@@ -821,6 +821,8 @@ find_file(char *name, char *dirs, int is_reg)
 Diagnostic Flags 
 ================
 
+The D_... macros are now in utfhmodule.h
+
 This is the full set of flags originally in sieve because some of
 them are relevant to keyword file processing.
 This arrangement to be slimmed down and made compatible with xpp
@@ -831,19 +833,6 @@ int unicodepp_error = 0;
 int line;
 char * program_name = "";
 int debug = 0;
-
-/*
-#define D_SHOW_SIEVE_TABLE 1
-#define D_INIT_TABLES 4
-#define D_READ_SOURCE_LINE 8
-#define D_DECODE_DIR_LINE 16
-#define D_ACTIONS 32
-#define D_SHOW_FULL_SIEVE_TABLE 64
-#define D_OPEN_OUTPUT 256
-#define D_MAIN_CONVERT_CH 512
-#define D_PROCESS_LINE 1024
-#define D_EXPAND 2048
-*/
 
 struct file_data dummy_F = {"dummy file", NULL, 0, 0, NULL, {0, 0, 0}};
 
@@ -2360,10 +2349,27 @@ UNICODE and utf8 handling
 =========================
 
 -----------------------
+Setting Locales
+-----------------------
+*/
+
+char *my_setlocale(int cat, const char *loc) {
+	char *locres = setlocale(cat, loc);
+	if (locres){
+	  return(locres);
+	} else {locres = setlocale(cat, NULL);
+		PRINTF("Failed to set locale to %s (it is %s)", loc, locres);
+		return(locres);
+	}
+}
+
+/*
+-----------------------
 Unicode <-> ext mapping
 -----------------------
 
-Convert a unicode code point to a 6-digit hexadecimal in percents */
+Convert a unicode code point to a 6-digit hexadecimal in percents
+*/
 
 wchar_t *unicode_to_hex(unicode code_point)
 {
