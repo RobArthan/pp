@@ -136,9 +136,6 @@ Select default keyword file appropriate to encoding.
 #define MAX_ACTION 20
 #define NOT_FOUND (-1)
 
-#define KEYWORD_FILE "sievekeyword"
-#define UKEYWORD_FILE "utf8skw"
-
 #define PPHOME "PPHOME"
 #define PPETCPATH "PPETCPATH"
 #define PPENVDEBUG "PPENVDEBUG"
@@ -3862,7 +3859,7 @@ main(int argc, char **argv)
 	
 	initialize();
 	
-	keyword_files[0] = UKEYWORD_FILE;
+	keyword_files[0] = UKEYWORD_FILE; /* default to utf8 */
 	limits.num_keyword_files = 1;
 	
 	check_program_initializations();
@@ -3888,8 +3885,8 @@ main(int argc, char **argv)
 			error1("too many keyword files");
 			EXIT(2);						/* EXIT */
 		    }
-
 		    keyword_files[limits.num_keyword_files++] = strdup(optarg);
+		    /* it is assumed that all input files have same encoding */
 		    break;							/* BREAK */
 		case 'l':
 		    limits.opt_list = 1;
@@ -3920,7 +3917,7 @@ otherwise
 3) if the PPCHARSET environment variable is "ext" then the default view for ext is selected.
 otherwise that for utf8
 
-The defaults are, for ext: sieveview sievekeyword, for utf8: utf8svf utf8svf.
+The defaults are, for ext: sieveview sievekeyword, for utf8: utf8svf utf8skw.
 
 The character set for reading and writing is determined by the command line flags or,
 if not thus determined, by the $PPCHARSET environment,
@@ -3935,10 +3932,10 @@ and failing that defaults to utf8.
 	keyword_F.utf8 = main_F.utf8;
 	
 	if(*steering_file == 0)
-	  steering_file = view_F.utf8 ? "utf8svf" : "sieveview";
+	  steering_file = view_F.utf8 ? UVIEW_FILE : VIEW_FILE;
 	
 	if (keyword_files[0] != NULL && !keyword_F.utf8)
-	  keyword_files[0] = KEYWORD_FILE;
+	  keyword_files[0] = KEYWORD_FILE; /* otherwise leave UKEYWORD_FILE */
 
 	if(debug) {
 		int i;

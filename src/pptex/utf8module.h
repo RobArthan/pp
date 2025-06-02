@@ -65,6 +65,12 @@
 #define UTF8LOCALE "en_GB.UTF-8"
 #define EXTLOCALE "en_GB.ISO8859-1"
 
+#define KEYWORD_FILE "sievekeyword"
+#define UKEYWORD_FILE "utf8skw"
+
+#define VIEW_FILE "sieveview"
+#define UVIEW_FILE "utf8svf"
+
 typedef wchar_t unicode;
 #define UNICODE_TO_PP_LEN 128
 

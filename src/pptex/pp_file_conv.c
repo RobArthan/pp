@@ -66,8 +66,6 @@ Amend to read keyword files in utf8 when the standard input is in utf8.
 #include <locale.h>
 
 #define NOT_FOUND (-1)
-#define KEYWORD_FILE "sievekeyword"
-#define UKEYWORD_FILE "utf8skw"
 
 #define PPHOME "PPHOME"
 #define PPETCPATH "PPETCPATH"
