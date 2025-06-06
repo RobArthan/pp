@@ -1649,11 +1649,6 @@ simple_wread_ext_line(wchar_t *line, int max_len, struct file_data *file_F)
 	wchar_t whatgot;
 	int i = 0;
 
-	/*	if(debug & D_UTF8) {
-	  (void)printf("simple_wread_ext_line: ");
-	}
-	*/
-
 	while(i < max_len
 	      && (whatgot = getc(file_F->fp)) != '\n'
 	      && whatgot != WEOF){
@@ -1701,15 +1696,10 @@ simple_wread_line(wchar_t *line, int max_len, struct file_data *file_F)
 	int whatgot;
 	int i = 0;
 
-	/*	if(debug & D_UTF8) (void)printf("simple_wread_line"); */
-	if(debug & D_UTF8) (void)printf("%s\n", file_F->file_name);
-
 	while(i < max_len && (whatgot = getwc(file_F->fp)) != L'\n' && whatgot != WEOF) {
-	  /* 	if(debug & D_UTF8)(void)printf(":%x", whatgot); */
+	  /*  if(debug & D_UTF8)(void)printf("simple_wread_line %s :%x\n", file_F->file_name, whatgot); */
 	  line[i++] = whatgot;
 	}
-
-	/*	if(debug & D_UTF8) (void)printf("!%x\n", whatgot); */
 
 	if(i >= max_len) {
 		error_top();
@@ -1745,7 +1735,7 @@ read_steering_line(wchar_t *line, struct file_data *file_F)
 	(void)wcscpy(file_F->cur_line, line);
 
 	if(debug & D_READ_STEER_LINE) {
-		(void)printf("%s %d: %S\n", file_F->name,
+		(void)PRINTF("%s %d: %S\n", file_F->name,
 			file_F->line_no, file_F->cur_line);
 	}
 }
@@ -2615,9 +2605,7 @@ The value returned is the unicode code point or else zero.
  unicode extract_code_point(char *buff, int *pos){
    int r, l;
    int whatgot = buff[(*pos)++];
-   
-   /*   if (debug & D_UTF8) {PRINTF("extract_code_point: whatgot = %i\n", whatgot);}; */
- 
+
    r = whatgot;
 
    if(r <= 0x7f) {return r;};
@@ -2635,7 +2623,6 @@ The value returned is the unicode code point or else zero.
      };
      r = (r << 6) | (whatgot & 0x3f);
    };
-   /*  if (debug & D_UTF8) {PRINTF("extract_code_point: r = %i\n", r);}; */
    return r;
  }
 

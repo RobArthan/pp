@@ -1984,6 +1984,8 @@ for those cases where the action does not state its own output stream.
 
 
 */
+
+
 int
 do_non_copy_actions(dir_info *di)
 {
@@ -2035,14 +2037,20 @@ do_non_copy_actions(dir_info *di)
 
 		switch(tab->cfa[di->cur_act_index].action_type) {
 		case ECHO_ACT :
-			(void)fputws(op_text, di->cur_fp);
-			break;							/* BREAK */
+		  if(debug & D_UTF8)
+		    PRINTF("ECHO_ACT - op_text: %S, cur_fp_class %d\n",
+			   op_text, di->cur_fp_class);
+		  (void)FPRINTF(di->cur_fp, "%S", op_text);
+		  break;							/* BREAK */
 
 		case ECHONL_ACT :
-			(void)fputws(op_text, di->cur_fp);
+		  if(debug & D_UTF8)
+		    PRINTF("ECHONL_ACT - op_text: %S, locale: %s\n",
+			   op_text, setlocale(LC_ALL, NULL));
+		  (void)fprintf(di->cur_fp, "%S", op_text);
 									/* FALL THROUGH */
 		case NL_ACT :
-			(void)fputws(L"\n", di->cur_fp);
+		  (void)FPRINTF(di->cur_fp, "\n");
 			break;							/* BREAK */
 
 		default:
@@ -3122,7 +3130,8 @@ set_up_for_copy_action(dir_info *di)
 	if(debug & D_ACTIONS) {
 	  wchar_t acts[3];
 	  swprintf(acts, 3, L"%i", cur_action); 
-	  wmessage(L"set up for copy action: %S", acts);
+	  wmessage(L"set up for copy action: %S\n", acts);
+	  PRINTF("set up for copy action: %S\n", acts);
 	};
 	
 	switch(cur_action) {
@@ -3927,7 +3936,7 @@ and failing that defaults to utf8.
 	if (eu_flags > 0) main_F.utf8 = (eu_flags > 1);
 	else if (ppcharset == NULL || !strcmp(ppcharset,"ext"))  main_F.utf8 = True;
 	else main_F.utf8 = False;
-	
+
 	view_F.utf8 = main_F.utf8;
 	keyword_F.utf8 = main_F.utf8;
 	
