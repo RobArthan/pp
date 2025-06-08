@@ -1730,7 +1730,7 @@ read_steering_line(wchar_t *line, struct file_data *file_F)
 		len_read = simple_wread_line(&line[len_so_far],
 			MAX_LINE_LEN - len_so_far, file_F) - 1;
 		len_so_far += len_read;
-	} while( (len_read > 0) && (line[len_so_far] == L'\\') );
+	} while( (len_read > 0) && (line[len_so_far-1] == L'\\') );
 
 	(void)wcscpy(file_F->cur_line, line);
 
