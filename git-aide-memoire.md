@@ -65,6 +65,13 @@ This is a list of example git command lines each with a potted explanation.
 (In case of conflicts, resolve them by changing the conflicted files to be as you want them to be, add them and then commit):  
     `git merge fix-3.1w6`
 
+* To merge changes into current branch without committing the changes
+so they can be inspected (see next):
+    `git merge --no-commit --no-ff fix-3.1w6`
+
+* ... and then to inspect the changes:
+    `git diff --cached`
+
 * To see an earlier version of a file. E.g., src/xpp/xmisc.c at revision matching 36c11a (path name must be relative to the root of the repo):
 
     `git show 36c11a:src/xpp/xmisc.c`
