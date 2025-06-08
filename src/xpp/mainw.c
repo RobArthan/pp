@@ -1876,8 +1876,8 @@ static void show_geometry(void)
 					journal_columns;
 			ratio = ((float) journal_rows)/total_rows;
 		} else {/* horizontal */
-/* the setup needs total_rows = script_rows (always < journal_rows here) */
-			total_rows = script_rows;
+/* the setup needs total_rows = journal_rows */
+			total_rows = journal_rows;
 			total_columns = script_columns + journal_columns;
 			ratio = ((float) journal_columns)/total_columns;
 		}
