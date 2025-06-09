@@ -856,8 +856,7 @@ struct limits limits = {
 
 #define MAX_KEYWORD_FILES 20
 
-void
-EXIT(int n)
+void EXIT(int n)
 {
   if(debug) FPRINTF(stderr, "%s: exiting with code %d\n", program_name, n);
 
