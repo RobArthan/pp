@@ -2828,7 +2828,8 @@ char* unicode_seq_to_utf8(unicode *useq)
   if (debug & D_UTF8) {
     PRINTF("unicode_seq_to_utf8: wcslen(useq)=%lu\n", wcslen(useq));
     PRINTF("unicode_seq_to_utf8: useq = %S\n", useq);
-  }; 
+  };
+  if (ip == NULL) return NULL;
   while (*ip >0) {
     len += strlen(unicode_to_utf8(*ip));
     ip++;
@@ -2860,12 +2861,11 @@ terminated unicode sequence (allocated my malloc).
 unicode* utf8_seq_to_unicode(char *utf8seq)
 { int len = 0, pos = 0, op = 0;
   unicode *out;
-  if (debug & D_UTF8) {PRINTF("utf8_seq_to_unicode: utf8seq = %s, pos = %i\n", utf8seq, pos);}; 
+  if (debug & D_UTF8) {PRINTF("utf8_seq_to_unicode: utf8seq = %s, pos = %i\n", utf8seq, pos);};
+  if (utf8seq == NULL) return NULL;
   while (utf8seq[pos] >0) {
     (void)extract_code_point(utf8seq, &pos); len++;
-    /*  if (debug & D_UTF8) {PRINTF("utf8_seq_to_unicode: pos = %i, len = %i\n", pos, len);}; */
   };
-  /*  if (debug & D_UTF8) {PRINTF("utf8_seq_to_unicode, len: %i\n", len);}; */
   out = malloc_and_check(sizeof(unicode)*(len+1), 110);
   pos = 0;
   while (utf8seq[pos] >0) {
