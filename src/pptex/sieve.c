@@ -3778,14 +3778,14 @@ read_view_file(char *name)
 
 
 			if (debug & D_UTF8) {
-			  WPRINTF(L"read_view_file: cat = %S\n", cat);
+			  PRINTF("read_view_file: cat = %S\n", cat);
 			};
 
 			/* See what we know about this view */
 			tab_ent = look_up(cat);
 
 			if (debug & D_UTF8) {
-			  WPRINTF(L"read_view_file: cat = %S, tab_ent = %i, filt = %S\n",
+			  PRINTF("read_view_file: cat = %S, tab_ent = %i, filt = %S\n",
 				  cat, tab_ent, filt);
 			};
 

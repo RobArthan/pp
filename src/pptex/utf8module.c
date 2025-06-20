@@ -2403,6 +2403,9 @@ struct keyword_information *unicode_to_kwi(unicode cp)
   /*  int i; */
   key.uni = cp;
   keyr = &key;
+
+  if (kwi.num_keywords <= 1) return NULL;	  
+
   search_result = bsearch(&keyr, kwi.unicode_code,
 			  kwi.num_unicodes, sizeof(search_result), compare_keyword_unicode);
   if (search_result == NULL) return NULL;
