@@ -79,7 +79,15 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \subsection{Changes History}
 \begin{description}
 
-\item[2019"10:10] First draft.
+\item[2019/11/04] Add mdt096.pp - initial module test framework for sieve and pptex.
+\item[2019/11/05] Adjustment to mdt096, re-instate conv\_ascii in sieve functionality.
+\item[2019/11/18] Minor changes during work on mdt096 test development.
+\item[2019/11/20] More keyword related adjustments for sieve testing.
+\item[2019/11/20] Ensure math mode for all keywords in pptex.skw, work on mdt096.pp test cases.
+\item[2019/11/22] Module test for sieve \& test reporting for pptex - comprehensive test framework implementation.
+\item[2019/11/22] Further amendments to pptex.skw, mdt096.pp test coverage improvements.
+\item[2019/11/24] Remove arrow keywords from test cases and keyword processing.
+\item[2019/12/29] Changes for utf8 keyword files - updated test framework for utf8 transition.
 
 %%%% END OF CHANGES HISTORY %%%%
 \end{description}

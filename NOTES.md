@@ -1,6 +1,5 @@
 # ProofPower Developer Notes
 
-
 ## Files
 
 The  top-level of the git repository contains
@@ -103,5 +102,35 @@ the ProofPower repository as a submodule of another repo.
 Releases should be tagged with their version number:
 
     git tag -a 1.1w53
+
+## Notes on Building ProofPower on Linux
+
+The following notes describe the steps for building ProofPower on Fedora 41.
+
+### Run the commands:
+
+sudo dnf install <package-or-program> for the following list of packages/programs:
+
+polyml.aarch64
+polyml-doc.noarch
+texlive
+texlive-epsf
+motif.aarch64
+motif-devel
+groff.aarch64
+mkfontdir
+xfig
+git
+xmodmap
+redhat-rpm-config
+
+### Clone the ProofPower git repo git@github.com:RobArthan/pp.
+
+You will need to import or create SSH keys to allow you to do this, see the GitHub documentation.
+I've assumed you made the clone in $HOME/git/pp.
+Adjust as appropriate below.
+(If you needed to create SSH keys, then make sure you export them to somewhere safer on your host than the .ssh directory in the VM.)
+
+Now you can go back to the top of this document and follow the instructions there.
 
 Rob Arthan (rda@lemma-one.com) 18 April 2015

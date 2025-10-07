@@ -45,8 +45,30 @@
  translation facilities.
 */
 
-#ifndef UTF8MODULE
-#define UTF8MODULE
+/* utf8module.h
+ *
+ * Header file for UTF-8/Unicode support module.
+ * Extracted from sieve.c (originally imp096.c) during UTF-8 transition.
+ *
+ * CHANGE HISTORY:
+ *
+ * 2017/04/03: Slimmed utf8module.h - initial header creation.
+ * 2017/11/29: Mainly commentary in utf8module.h but also cosmetic changes.
+ * 2017/12/01: More entry points in utf8module.h.
+ * 2017/12/04: Extending utf8module.h for xpp integration.
+ * 2017/12/05: More tidying and commentary in utf8module(.c, .h).
+ * 2017/12/05: Eliminate true and false from utf8module and its clients.
+ * 2019/04/30: Switch sieve et. al. to use unicode more internally.
+ * 2019/08/18: Clean(ish) build after rework of utf8 support in sieve.
+ * 2019/12/29: Changes for utf8 keyword files.
+ * 2025/05/23: Corrections to declarations for Linux, pushed for check on MacOS.
+ * 2025/05/31: Changes to handling of LOCALEs in pptex, and to declaration of debug types.
+ * 2025/06/02: Some tidying of selection of steering files.
+ *
+ */
+
+#ifndef UTF8MODULE_H
+#define UTF8MODULE_H
 
 #define FPRINTF (void)fprintf
 #define PRINTF (void)printf

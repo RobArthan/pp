@@ -1,14 +1,40 @@
 /* utf8module.c
  * 
- * extracted from what sieve during the transition to support for utf8 so that more than one program 
- * could use the features herein.   Initially intended to be findfioe, sieve, pp_file_conv and xpp.
+ * Extracted from sieve.c (originally imp096.c) during the transition to support UTF-8
+ * so that multiple programs could use the Unicode/UTF-8 features herein.
+ * Initially intended for findfile, sieve, pp_file_conv and xpp.
  * xpp was later transitioned independently.
  *
- * A late starting change history starts here.
+ * COMPREHENSIVE CHANGE HISTORY:
  *
- * 9/7/2019 A wholesale transition to wchar_t is undertaken. Boundary initially envisaged as excluding
- * findfile and anything exclusively concerned with filenames, and including everything else.
- * Not immediately obvious which string utilities 
+ * 2017/04/03: Slimmed utf8module.h - initial separation of UTF-8 functionality.
+ * 2017/04/08: Intermediate stage in changes to keyword file processing.
+ * 2017/07/08: Add -n option to pp_file_conv.
+ * 2017/11/29: Mainly commentary in utf8module.h but also cosmetic changes to utf8module.c.
+ * 2017/12/01: More entry points in utf8module.h.
+ * 2017/12/04: Extending utf8module.h for xpp integration.
+ * 2017/12/05: More tidying and commentary in utf8module(.c, .h).
+ * 2017/12/05: Eliminate true and false from utf8module and its clients.
+ * 2018/08/23: pp_file_conv bug fixes.
+ * 2019/04/30: Switch sieve et. al. to use unicode more internally.
+ * 2019/07/09: Wholesale transition to wchar_t undertaken. Boundary initially envisaged as excluding
+ *            findfile and anything exclusively concerned with filenames, and including everything else.
+ * 2019/08/18: Clean(ish) build after rework of utf8 support in sieve.
+ * 2019/10/12: Updates to USR001.
+ * 2019/10/25: Cosmetic & diagnostic changes.
+ * 2019/11/18: Minor changes during work on mdt096.
+ * 2019/11/19: Updates to keyword files, correction to pp_file_conv.
+ * 2019/12/29: Changes for utf8 keyword files.
+ * 2023/04/30: Fixed buffer overrun in get_hol_kew.
+ * 2023/05/01: Fixed buffer overrun in get_hol_kw_uni.
+ * 2025/05/21: Fix inconsistent unicode defs and define wascii test.
+ * 2025/05/23: Corrections to declarations for Linux, pushed for check on MacOS.
+ * 2025/05/31: Changes to handling of LOCALEs in pptex, and to declaration of debug types.
+ * 2025/06/02: Some tidying of selection of steering files.
+ * 2025/06/06: Corrections to problems arising in Fedora Linux, changing sieve ECHO to use fprintf.
+ * 2025/06/08: Correction to steering file line continuation code.
+ * 2025/06/08: Correct EXIT code for my_setlocale.
+ * 2025/06/09: Update last EXIT code.
  *
  */
 
