@@ -121,6 +121,7 @@ groff.aarch64
 mkfontdir
 xfig
 git
+gawk
 xmodmap
 redhat-rpm-config
 
