@@ -127,11 +127,6 @@ redhat-rpm-config
 
 ### Clone the ProofPower git repo git@github.com:RobArthan/pp.
 
-You will need to import or create SSH keys to allow you to do this, see the GitHub documentation.
-I've assumed you made the clone in $HOME/git/pp.
-Adjust as appropriate below.
-(If you needed to create SSH keys, then make sure you export them to somewhere safer on your host than the .ssh directory in the VM.)
-
 Now you can go back to the top of this document and follow the instructions there.
 
 Rob Arthan (rda@lemma-one.com) 18 April 2015
