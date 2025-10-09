@@ -64,51 +64,6 @@ Reference: DS/FMU/IED/SPC001; Git revision: {\VCVersion}
 \bibliographystyle{fmu}
 \bibliography{fmu}
 
-\subsection{Changes History}
-\begin{description}
-\item[1989/10/05] Initial version.
-\item[1989/10/11] Another day another \$. RDA
-\item[1989/10/13] Another week, another \$7 ?
-\item[1989/10/17] Daily checkpoint.
-\item[1989/10/19] Regular update
-\item[1989/10/19] First draft for comment. RDA
-\item[1989/10/20] Fixed first draft.
-\item[1989/10/25] Corrected errors in Equality, aconv and inst\_loc1. RDA
-\item[1989/11/01] Fixed `rename'. RDA
-\item[1989/11/02] Reprint with corrections for RBJ. RDA
-\item[1989/11/07] Second draft. RDA
-\item[1989/11/15] Some minor corrections.
-\item[1989/11/21] About to make new document structure. RDA
-\item[1989/12/04] Reissue.
-\item[1990/01/31] Tidy up. RDA
-\item[1990/04/20] Various fixes. RDA
-\item[1990/07/17] Adapted for ICL prototype HOL. RDA
-\item[1990/12/21] Back to bed for XMAS. RDA
-\item[1991/01/09] Amended for reissue after reorganisation. RDA
-\item[1991/01/10] Corrected typos etc. RDA
-\item[1991/01/15] Updated in light of RBJ's comments. RDA
-\item[1992/06/19] Port to new HOL. RDA
-\item[1992/07/10] Put back for safe keeping. RDA
-\item[1992/09/29] Update by approve program
-\item[1996/02/29] About to change document style. RDA
-\item[1996/02/29] Recast front page. RDA
-\item[1996/03/01] Issue for the web server. RDA
-\item[1996/03/04] Amended reference on front page. RDA
-\item[2000/04/30] Lemma 1 update.
-\item[2000/04/30] Simplified document control section.
-\item[2002/10/17] Copyright and banner updates for open source release
-\item[2002/10/17] PPTex-specific updates for open source release
-\item[2014/02/02] Improved idioms for dealing with partial functions.
-\item[2014/03/08] Fixed another bug spotted by Ramana Kumar.
-\item[2014/04/27] Fixed typo.
-\item[2014/04/27] Added definition of L(T)
-\item[2014/06/12] Removed trailing whitespaces passim
-\item[2014/08/13] Typos: double 'the the'
-\item[2015/04/15] Work in progress on using new date and version macros from doctex
-\item[2019/02/12] UTF8 transition progress: pptex,dev build; hol files transcribed to pp but build not yet repaired.
-\item[2019/04/21] Ported user documentation to LaTeX2e
-\end{description}
-
 % \subsection{Changes forecast}
 % If the necessary support for recursive types is provided
 % then it will probably be used instead of the constructions
