@@ -2375,6 +2375,7 @@ char *my_setlocale(int cat, const char *loc) {
 	} else {locres = setlocale(cat, NULL);
 		PRINTF("Failed to set locale to %s (it is %s)", loc, locres);
 		EXIT(42);
+		return NULL; /* not reached */
 	}
 }
 
