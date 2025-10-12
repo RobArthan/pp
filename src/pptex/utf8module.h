@@ -85,7 +85,7 @@
 /* utf8 things */
 
 #define UTF8LOCALE "en_US.UTF-8"
-#define EXTLOCALE "en_US.ISO-8859-1"
+#define EXTLOCALE "C"
 
 #define KEYWORD_FILE "sievekeyword"
 #define UKEYWORD_FILE "utf8skw"
