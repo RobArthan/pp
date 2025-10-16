@@ -84,8 +84,13 @@
 
 /* utf8 things */
 
-#define UTF8LOCALE "en_US.UTF-8"
-#define EXTLOCALE "en_US.ISO8859-1"
+#define UTF8LOCALE True
+#define EXTLOCALE False
+
+#define UTF8LOCNAME "en_US.UTF-8"
+#define EXTLOCNAME1 "en_US.ISO-8859-1"
+#define EXTLOCNAME2 "en_US.ISO8859-1"
+#define EXTLOCNAME3 "C"
 
 #define KEYWORD_FILE "sievekeyword"
 #define UKEYWORD_FILE "utf8skw"
@@ -103,7 +108,7 @@ enum
 	True = 1
 };
 
-extern char *my_setlocale(int cat, const char *loc);
+extern char *my_setlocale(int cat, bool utf8_flag);
 
 /* String Utilities */
 
