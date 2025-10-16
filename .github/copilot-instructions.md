@@ -1,5 +1,9 @@
 # ProofPower Copilot Instructions
 
+## Interaction Guidelines
+Do not make changes to files, run commands, or take any actions unless explicitly requested by the user. 
+Once you have been asked to do something, the normal conventions for seeking confirmation should apply.
+
 ## Project Overview
 ProofPower is a suite of tools for specification and proof in Higher-Order Logic (HOL) and Z notation. The system supports formal specification and theorem proving with multiple ML compilers (Poly/ML, SML/NJ, MLton).
 
